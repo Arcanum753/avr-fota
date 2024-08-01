@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>FSBrowserNG NTP Settings</title>
+    <meta http-equiv="Content-type" content="text/html; charset=utf-8">
+	<link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+    <markup>./head.html</markup>
+    <h2 class="title" style="background: #7D8EE2">  NTP Configuration </h2>
+    <form action="" method="get">
+        <table border="0" cellspacing="0" cellpadding="3">
+            <tr> <td align="right">NTP Server0:</td> <td> <input type="text" id="ntpserver0" name="ntpserver0" maxlength="172" value=""></td> </tr>
+            <tr> <td align="right">NTP Server1:</td> <td> <input type="text" id="ntpserver1" name="ntpserver1" maxlength="172" value=""></td> </tr>
+            <tr> <td align="right">NTP Server2:</td> <td> <input type="text" id="ntpserver2" name="ntpserver2" maxlength="172" value=""></td> </tr>
+            <tr> <td align="right">Update:</td> <td> <input type="text" id="update" name="update" size="3" maxlength="6" value=""> minutes (0=disable)</td> </tr>
+            <tr> <td>Timezone</td>  <td>
+                    <select id="tz" name="tz">
+						<option value="-120">(GMT-12:00)</option>
+						<option value="-110">(GMT-11:00)</option>
+						<option value="-100">(GMT-10:00)</option>
+						<option value="-90">(GMT-09:00)</option>
+						<option value="-80">(GMT-08:00)</option>
+						<option value="-70">(GMT-07:00)</option>
+						<option value="-60">(GMT-06:00)</option>
+						<option value="-50">(GMT-05:00)</option>
+						<option value="-40">(GMT-04:00)</option>
+						<option value="-35">(GMT-03:30)</option>
+						<option value="-30">(GMT-03:00)</option>
+						<option value="-20">(GMT-02:00)</option>
+						<option value="-10">(GMT-01:00)</option>
+						<option value="0">(GMT+00:00)</option>
+						<option value="10">(GMT+01:00)</option>
+						<option value="20">(GMT+02:00)</option>
+						<option value="30">(GMT+03:00)</option>
+						<option value="35">(GMT+03:30)</option>
+						<option value="40">(GMT+04:00)</option>
+						<option value="45">(GMT+04:30)</option>
+						<option value="50">(GMT+05:00)</option>
+						<option value="55">(GMT+05:30)</option>
+						<option value="57">(GMT+05:45)</option>
+						<option value="60">(GMT+06:00)</option>
+						<option value="65">(GMT+06:30)</option>
+						<option value="70">(GMT+07:00)</option>
+						<option value="80">(GMT+08:00)</option>
+						<option value="90">(GMT+09:00)</option>
+						<option value="95">(GMT+09:30)</option>
+						<option value="100">(GMT+10:00)</option>
+						<option value="110">(GMT+11:00)</option>
+						<option value="120">(GMT+12:00)</option>
+						<option value="120">(GMT+12:00)</option>
+						<option value="130">(GMT+13:00)</option>
+					</select> </td> </tr>
+            <tr>  <td align="right">Daylight saving:</td> <td> <input type="checkbox" id="dst" name="dst"></td>  </tr>
+            <tr> <td colspan="2" align="center"> <input type="submit"  value="Save"></td> </tr>
+        </table>
+    </form>
+
+	<markup>./bottom.html</markup>
+	<script src="GetJson.js" defer></script>
+	<script src="GetMarkup.js" defer></script>
+	<script>
+		window.onload = function() {
+			ApplyJson("config.json");
+			setTimeout(() => {
+				ApplyCVT("/admin/devconf");
+                ApplyCVT("/admin/ntpvalues");
+			}, 1000);
+			
+		};
+		</script>
+</body>
+
+</html>

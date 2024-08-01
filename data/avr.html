@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<title>AVR Firmware Update</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta http-equiv="Content-type" content="text/html; charset=utf-8">
+	<link rel="stylesheet" href="style.css">
+
+</head>
+<body>
+    <markup>./head.html</markup>
+    <h2 class="title" style="background: #7D8EE2; padding: 8px;">Info &amp update AVR firmware </h2>
+    <hr>
+    
+  	<table border="0" cellspacing="0" cellpadding="3" align="center" >
+  	  <tr><td><strong>Avr main info.</strong></td></tr>
+  	  <tr><td>Avr project name</td>	    <td><div id="proj">N/A</div>	</td></tr>
+  	  <tr><td>Avr chip signature</td>	  <td><div id="sign">N/A</div>	</td></tr>
+  	  <tr><td>Avr chip memory size</td>	<td><div id="chsize">N/A</div>	</td></tr>
+  	  
+  	  <tr><td colspan="2"><hr></td></tr>	
+  	  <tr><td><strong>Current hex file firmware</strong></td></tr>
+  	  
+	    <tr><td>Hex filename</td>   <td><div id="hnamen">N/A</div>	</td></tr>
+	    <tr><td>Version</td>	      <td><div id="hvern">N/A</div>	</td></tr>
+	    <tr><td>Build time</td>	    <td><div id="htimen">N/A</div>	</td></tr>
+	    
+  	  <tr><td colspan="2"><hr></td></tr>	
+  	  
+  	  <tr><td><strong>Old hex file firmware</strong></td></tr>
+  	  <tr><td>Hex filename</td> <td><div id="hnameo">N/A</div>	</td></tr>
+	    <tr><td>Version</td>      <td><div id="hvero">N/A</div>	</td></tr>
+	    <tr><td>Build time</td>   <td><div id="htimeo">N/A</div>	</td></tr>
+	    <tr><td></td>
+	        <td align="right"> 
+	        <span title="Rollback chip flash to previous version">
+	        <button onclick="flashPrevFile();">Rollback version</button>
+	        </span></td></tr>
+  	  <tr><td colspan="2"><span><hr></span></td></tr>	
+  	  
+  	  <tr><td>Last time firmware uploaded</td><td><div id="flashtime">N/A</div>	</td></tr>
+  	</table>
+    
+    
+    
+    <form id="upload" onsubmit="event.preventDefault(); uploadFiles()" enctype="multipart/form-data" autocomplete="off">
+       <table align="center"> 
+            <tr><td align="center"> <input id="files" name="update" type="file" accept=".hex" onchange="checkFile()"> </td> </tr>
+            <tr><td align="center"> <button id="submitFile" type="submit" disabled>Upload *.hex file</button> </td> </tr>
+            <tr><td align="center"> <span id="uploadtext"></span> </td> </tr>
+        </table>
+    </form>
+    <table id="metatable" align="center" hidden> 
+            <tr><td align="center">  <span id="metastatus"></span> </td></tr>
+            <tr><td align="center">  <span id="cmpsign"></span> </td></tr>
+            <tr><td align="center">  <span id="cmpproj"></span> </td></tr>
+            <tr><td align="center">  <span id="metasize"></span> </td></tr>
+            <tr><td align="center">  <span id="metaver"></span> </td></tr>
+            <tr><td align="center">  <span id="metatimebuild"></span> </td></tr>
+            <tr><td align="center">  <span id="metabody"></span> </td></tr>
+    </table>
+            	
+    
+    <form id="upload" onsubmit="event.preventDefault(); flashAvr()" enctype="multipart/form-data" autocomplete="off">
+        <table align="center">
+            <tr><td colspan="2"><hr></td></tr>
+            <tr><td align="center">  <span id="flashtext"></span> </td></tr>
+            <tr><td><span title="Flash hex file as is."><input id="igrnoreMeta" name="igrnoreMeta" type='checkbox' onclick="OverrideigrnoreMeta()">
+              <label for="igrnoreMeta"> Ignore meta checking  </label>
+              </span></tr></td>
+            <tr><td><input id="updateFirmware" type='submit' value='Update firmware' disabled ></td> </tr>
+        </table>
+    </form>
+    
+    
+    <markup>./bottom.html</markup>
+
+    <script src="GetMarkup.js" defer></script>
+    <script src="GetJson.js" defer></script>
+    
+    <script>
+    	window.onload = function() {
+    	 // document.getElementById("remupd").innerHTML = 'Choose *.hex file.';
+
+    		ApplyJson("config.json");
+
+    		setTimeout(() => {
+    		  ApplyCVT("/avr/info");
+    			ApplyCVT("/admin/infovalues");
+    			ApplyCVT("/admin/connectionstate");
+    			ApplyCVT("/admin/devconf");
+    		}, 1000);
+    	}
+    	
+    	function checkFile() {
+    	  const haveFiles = document.getElementById("files").files.length > 0;
+    	   document.getElementById("submitFile").disabled = !haveFiles;
+    	}
+    	
+      
+      
+      
+      function uploadFiles() {
+          const xhr = new XMLHttpRequest();
+      	  const form = document.querySelector('#upload');
+        
+          const data = new FormData(form);
+        
+          xhr.open('post', '/avr/uploadfile');
+          xhr.send(data);
+          
+          xhr.addEventListener('loadend', () => {
+          const fieldsRows = ParseCVT(xhr.response);
+          const _uploadtext = document.getElementById("uploadtext");
+           _uploadtext.innerHTML = 'File upload begin...';
+          // for (fields of fieldsRows) {
+          //   const components = document.querySelectorAll("#" + fields[0]);
+  
+          //     for (comp of components) {
+          //       if (fields[2] == "input") {
+          //         comp.value = fields[1];
+          //       } else if (fields[2] == "div") {
+          //         comp.innerHTML = fields[1];
+    
+          //       } else if (fields[2] == "chk") {
+          //         comp.checked = fields[1];
+          //       }
+          //     }
+          //   }
+            
+          
+            
+           setTimeout(uploadFilesStat, 3000);
+          });
+      }
+      
+      function uploadFilesStat() {
+        
+          const xhr = new XMLHttpRequest();
+      
+          xhr.open('get', '/avr/uploadstatus');
+          xhr.send();
+          
+          xhr.addEventListener('loadend', () => {
+            const fieldsRows = ParseCVT(xhr.response).reverse();
+            
+            const _statup = document.getElementById("statup");
+            const _uploadtext = document.getElementById("uploadtext");
+            let _filename;
+            let _filesize ;
+            console.log(fieldsRows);
+            for (fields of fieldsRows) {
+              
+                if (fields[0] == "uploadstatus" && fields[1] == "error") {
+                  _uploadtext.innerHTML = 'File uploaded failed!';
+                }  
+                
+                if (fields[0] == "file" ) {
+                  _filename = fields[1];
+                } 
+                if (fields[0] == "fileSize" ) {
+                  _filesize = fields[1];
+                } 
+            
+                if (fields[0] == "uploadstatus" && fields[1] == "ok") {
+                  _uploadtext.innerHTML = `File ${_filename} <br> of ${_filesize} bytes uploaded successful!`;
+                  checkMetaStat();
+                } 
+                
+               
+            }
+          });
+        
+      }
+      function checkMetaStat() {
+          document.getElementById('metatable').hidden = false;
+      
+          const xhr = new XMLHttpRequest();
+          xhr.open('get', '/avr/checkmeta');
+          xhr.send();
+          xhr.addEventListener('loadend', () => {
+            const signcmp         = document.getElementById("cmpsign");
+            const cmpproj         = document.getElementById("cmpproj");
+            const updateFirmware  = document.getElementById("updateFirmware"); 
+            const metastatus      = document.getElementById("metastatus");
+            const metasize        = document.getElementById("metasize"); 
+            const metatimebuild   = document.getElementById("metatimebuild");
+            const metaver         = document.getElementById("metaver");
+            const metabody        = document.getElementById("metabody");
+            
+            
+            
+            var is_signcmp = false;
+            var is_cmpproj = false;
+            var is_dataok  = false;
+            
+            
+            for (row of ParseCVT(xhr.response)) {
+               if (row[0] == "sign") {
+                 signcmp.innerHTML = `Hex file chip signature: ${row[1]}`;
+              }
+            }
+            
+            for (row of ParseCVT(xhr.response)) {
+               if (row[0] == "proj") {
+                 cmpproj.innerHTML = `Hex file project name: ${row[1]}`;
+              }  
+            }
+            
+            for (row of ParseCVT(xhr.response)) {
+               if (row[0] == "size") {
+                 metasize.innerHTML =  `Firmware size is ${row[1]} bytes.`;
+              }  
+            }
+            for (row of ParseCVT(xhr.response)) {
+               if (row[0] == "time") {
+                 metatimebuild.innerHTML =  `Time build ${row[1]}.`;
+              }  
+            }
+            
+            for (row of ParseCVT(xhr.response)) {
+               if (row[0] == "vers") {
+                 metaver.innerHTML =  `version ${row[1]}`;
+              }  
+            }
+            for (row of ParseCVT(xhr.response)) {
+               if (row[0] == "bodyerror") {
+                 if (row[1] == "ok") {is_dataok = true;    }
+                 metabody.style = `color: ${row[1] == "ok" ? "green" : "red"}`;
+                 metabody.innerHTML =  `hex file bin data is ${row[1]}.`;
+              }  
+            }
+          
+            for (row of ParseCVT(xhr.response)) {
+              if (row[0] == "cmpsign") {
+                signcmp.style = `color: ${row[1] == "1" ? "green" : "red"}`;
+                 
+                is_signcmp = row[1] == "1";
+              }
+              
+
+              if (row[0] == "cmpproj") {
+                cmpproj.style = `color: ${row[1] == "1" ? "green" : "red"}`;
+                 
+                  is_cmpproj = row[1] == "1";
+              }
+            }
+            
+            if (is_signcmp && is_cmpproj && is_dataok) {
+              metastatus.style = `color: green`;
+              metastatus.innerHTML = `Hex file is correct.`;
+            } else {
+              metastatus.style = `color: red`;
+              metastatus.innerHTML = `Hex file is incorrect!`;
+            }
+            updateFirmware.disabled = !is_signcmp || !is_cmpproj || !is_dataok;
+          });
+      }
+    	function flashAvr() {
+          const xhr = new XMLHttpRequest();
+      
+          OverrideigrnoreMeta();
+      
+          xhr.open('POST', '/avr/flashrun');
+          xhr.send();
+    	    xhr.addEventListener('loadend', () => {
+    	      const flashtext = document.getElementById("flashtext");
+
+    	      for (row of ParseCVT(xhr.response)) {
+               if (row[0] == "avrprog") {
+                 flashtext.innerHTML = row[1];
+              }
+            }
+            
+    	    });
+          setTimeout(flashAvrStatus, 3000);
+    	}
+    	
+    	function flashAvrStatus() {
+          const xhr = new XMLHttpRequest();
+      
+          xhr.open('get', '/avr/flashstatus');
+          xhr.send();
+    	    xhr.addEventListener('loadend', () => {
+    	      const flashtext = document.getElementById("flashtext");
+
+    	      for (row of ParseCVT(xhr.response)) {
+    	         if (row[0] == "avrprogver" ) {
+    	           
+                 flashtext.innerHTML = row[1];
+                 alert(row[1]); 
+              }
+            }
+            
+            ApplyCVT("/avr/info");
+    	    });
+    	}
+	  	function flashPrevFile(){
+	  	   
+	  	    
+    	    const xhr = new XMLHttpRequest();
+      
+          xhr.open('POST', '/avr/flashrollback');
+          xhr.send();
+    	    xhr.addEventListener('loadend', () => {
+    	      const flashtext = document.getElementById("flashtext");
+
+    	      for (row of ParseCVT(xhr.response)) {
+               if (row[0] == "avrprog") {
+                 flashtext.innerHTML = row[1];
+                 alert(row[1]); 
+              }
+            }
+            
+    	    });
+    	    setTimeout(flashAvrStatus, 3000);
+    	}
+    	
+    	function OverrideigrnoreMeta() {
+          const igrnoreMeta = document.getElementById("igrnoreMeta");
+          const updateFirmware  = document.getElementById("updateFirmware"); 
+
+          if (igrnoreMeta && igrnoreMeta.checked) {
+            updateFirmware.disabled = !igrnoreMeta.checked;
+          }
+    	}
+    	
+    	
+    	</script>
+  
+</body>
+</html>

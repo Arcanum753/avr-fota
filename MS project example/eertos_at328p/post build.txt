@@ -1,0 +1,24 @@
+srec_cat "$(OutputDirectory)\$(OutputFileName).hex" -intel  -o "$(OutputFileName)_esp.hex" -intel -line-length=44
+
+del temp.txt
+echo $ver 1.10 >> temp.txt
+echo $chip mega8 >> temp.txt
+echo. >> temp.txt
+copy /b temp.txt+firm.hex release.hex
+
+del $(OutputDirectory)\$(OutputFileName)_ota.hex
+echo $$(avrdeviceexpectedsignature)$ >> temp.txt
+echo $ver 1.10$ >> temp.txt
+copy /b temp.txt+"$(OutputDirectory)\$(OutputFileName)_ota.hex" 
+ren temp.txt $(OutputDirectory)\$(OutputFileName)_ota.hex
+
+
+
+copy $(OutputDirectory)\$(OutputFileName).hex $(OutputDirectory)\$(OutputFileName)_ota.hex
+
+
+
+if exist "$(OutputDirectory)\$(OutputFileName)_ota.hex" del "$(OutputDirectory)\$(OutputFileName)_ota.hex"
+echo $$(avrdeviceexpectedsignature)$ >> "$(OutputDirectory)\$(OutputFileName)_ota.hex"
+echo $ver 1.10$ >> "$(OutputDirectory)\$(OutputFileName)_ota.hex"
+copy /b "$(OutputDirectory)\$(OutputFileName)_ota.hex"+"$(OutputDirectory)\$(OutputFileName).hex" "$(OutputDirectory)\$(OutputFileName)_ota.hex"

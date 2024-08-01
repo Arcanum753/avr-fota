@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html>	<head>
+	<title>Main ESP8266 page.</title>
+	<meta http-equiv="Content-type" content="text/html; charset=utf-8">
+	<link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+	<markup>./head.html</markup>
+	<div class="c">
+		<h2 class="title" style="background: #7D8EE2">  <span id="devicename2">  </span> main page.  </h2>	
+	</div>
+	<div class="c">
+	  <table border="0" cellspacing="0" cellpadding="3" align="center">
+	  	<tr><td>Device name</td>	<td> <span id="devicename2">  </span> </td></tr>
+		  <tr><td>Device ESP firmware version</td>	          <td><span id="versionapp"> </span></td></tr>
+		  <tr><td>Device serial number</td>	<td> <span id="deviceserial">  </span> </td></tr>
+		  <tr><td colspan="2"><span><hr></span></td></tr>		
+			<tr><td><strong>WiFi Connection state:</strong></td>	<td><div id="connectionstate">N/A</div>	</td></tr>
+			<tr><td>SSID:</td>										<td><span id="x_ssid">	</span> </td></tr>
+			<tr><td>IP:</td>										<td><span id="x_ip">	</span></td></tr>
+			<tr><td>Netmask:</td>									<td><span id="x_netmask"></span></td></tr>
+			<tr><td>Gateway:</td>									<td><span id="x_gateway"></span></td>	</tr>
+			<tr><td>DNS:</td>										<td><span id="x_dns">	</span></td></tr>
+			<tr><td colspan="2"><span><hr></span></td></tr>		
+			<tr><td><strong>NTP Information:</strong></td></tr>
+			<tr><td>NTP Date:</td>									<td><span id="x_ntp_date"></span></td></tr>
+			<tr><td>NTP Time:</td>									<td><span id="x_ntp_time"></span></td></tr>
+			<tr><td>Last sync:</td>									<td><span id="x_ntp_sync"></span></td></tr>
+			<tr><td>NTP Server:</td>								<td><span id="x_ntp_adr"></span></td></tr>
+			<tr><td colspan="2"><span><hr></span></td></tr>		
+			<tr><td>Uptime:</td>									<td><span id="x_uptime"></span></td></tr>
+			<tr><td>Last boot:</td>									<td><span id="x_last_boot"></span></td></tr>
+			<tr><td colspan="2"><span><hr></span></td></tr>		
+			<tr><td><strong>Esp8266:</strong></td></tr>
+			<tr><td>ChipID:</td><td><span id="x_chipid"></span></td></tr>
+			<tr><td>Mac:</td><td><span id="x_mac"></span></td></tr>
+			<tr><td>CPU Freq:</td><td><span id="x_mhz"></span> MHz</td></tr>
+			<tr><td>esp8266 Sdk version:</td><td><span id="x_sdk"></span></td></tr>
+		</table>
+	</div>
+
+	<markup>./bottom.html</markup>
+	<script src="GetJson.js" defer></script>
+	<script src="GetMarkup.js" defer></script>
+	<script>
+		window.onload = function() {
+			ApplyJson("config.json");
+			setTimeout(() => {
+				ApplyCVT("/admin/infovalues");
+				ApplyCVT("/admin/connectionstate");
+				ApplyCVT("/admin/devconf");
+				
+			}, 1000);
+			
+		};
+		</script>
+
+</body>
+
+</html>

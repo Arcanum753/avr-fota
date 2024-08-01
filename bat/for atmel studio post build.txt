@@ -1,0 +1,1 @@
+postbuild_top.bat "$(OutputDirectory)" "$(OutputFileName)" "$(avrdeviceexpectedsignature)" "$(AssemblyName)"  "$(MSBuildProjectDirectory)\ver.h"
