@@ -11,9 +11,13 @@
     <h2 class="title" style="background: #7D8EE2">Device configuration</h2>
     
     <form action="" method="post">
-        <table border="0" cellspacing="0" cellpadding="3">
-            <tr><td align="right">Name of Device</td>   <td><input type="text" id="devicename" name="devicename" value=""></td></tr>
-            <tr><td align="left" colspan="2"><hr></td> </tr>
+        <table border="0" cellspacing="0" cellpadding="3" align="center">
+            <tr><td align="left">Name of Device</td>       <td><input type="text" id="devicename"   name="devicename" value=""></td></tr>
+            <tr><td align="left">Device serial number</td> <td><input type="text" id="deviceserial" name="deviceserial" value=""></td></tr>
+            <tr><td align="left">Avr chip signature</td>   <td><input type="text" id="devicesign"   name="devicesign" value=""></td></tr>
+            <tr><td align="left">Avr project name</td>     <td><input type="text" id="deviceproj"   name="deviceproj" value=""></td></tr>
+            <tr><td align="left">Avr chip mem size</td>    <td><input type="text" id="devicemem"    name="devicemem" value=""></td></tr>
+            <tr><td align="center" colspan="2"><hr></td> </tr>
             <tr><td colspan="2" align="center"> <input type="submit" value="Save"></td></tr>
         </table>
     </form>
