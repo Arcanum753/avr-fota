@@ -1,5 +1,5 @@
-#define VERSION_APP "1.0.0"
-#define VERSION_WEB "1.0.0"
+#define VERSION_APP "1.1.1"
+#define VERSION_WEB "1.1.1"
 #define SERIAL_NUMBER "0"
 #define APP_BUILDDATE  __DATE__
 #define APP_BUILDTIME  __TIME__

@@ -14,31 +14,63 @@
     
   	<table border="0" cellspacing="0" cellpadding="3" align="center" >
   	  <tr><td><strong>Avr main info.</strong></td></tr>
-  	  <tr><td>Avr project name</td>	    <td><div id="proj">N/A</div>	</td></tr>
-  	  <tr><td>Avr chip signature</td>	  <td><div id="sign">N/A</div>	</td></tr>
-  	  <tr><td>Avr chip memory size</td>	<td><div id="chsize">N/A</div>	</td></tr>
-  	  
+  	  <tr><td>Avr project name</td>	    <td><div id="proj" class="align-right">N/A</div>	</td></tr>
+  	  <tr><td>Avr chip signature</td>	  <td><div id="sign" class="align-right">N/A</div>	</td></tr>
+  	  <tr><td>Avr chip memory size</td>	<td><div id="chsize" class="align-right">N/A</div>	</td></tr>
   	  <tr><td colspan="2"><hr></td></tr>	
-  	  <tr><td><strong>Current hex file firmware</strong></td></tr>
   	  
-	    <tr><td>Hex filename</td>   <td><div id="hnamen">N/A</div>	</td></tr>
-	    <tr><td>Version</td>	      <td><div id="hvern">N/A</div>	</td></tr>
-	    <tr><td>Build time</td>	    <td><div id="htimen">N/A</div>	</td></tr>
-	    
+  	  <tr><td><strong>Avr chip fuses</strong>
+          <span title="Flash hex file as is.">
+            (<input id="expandfuse" name="confirm" type='checkbox' onclick="fusesExpandSection()">
+            <label for="confirm">Expand)</label>
+          </span>
+        </td>
+      </tr>
+    </table>
+    <table id="fuse_bits" border="0" cellspacing="0" cellpadding="3" align="center" style="display: none">
+
+      <tr><td>Fuse HIGH       </td><td align="center" >0x <input type="text"  id="avrfusehigh" name="ip_0" size="3"></td></tr>
+      <tr><td>Fuse LOW        </td><td align="center" >0x <input type="text"  id="avrfuselow"  name="ip_1" size="3"></td></tr>
+      <tr><td>Fuse PROTECTION </td><td align="center" >0x <input type="text"  id="avrfuseprot" name="ip_2" size="3"></td></tr>
+      <tr><td>Fuse EXTENTION  </td><td align="center" >0x <input type="text"  id="avrfuseext"  name="ip_3" size="3"></td></tr>
+      <tr><td>  </td>
+        <td align="center"> 
+        <span title="Read fuses and AVR chip signature">
+        <button onclick="readFuses();">Read fuses</button>
+        </span>  </td></tr>
+
+        <tr><td align="center">
+          <span title="Flash hex file as is.">
+            <input id="confirmfuse" name="confirm" type='checkbox' onclick="fusesConfirmWriting()">
+            <label for="confirm"> I understand how to work <br> with AVR fuses bits <br> and by clicking this checkbox I take full responsibility <br> if avr chip will brake</label>
+          </span>
+        </td>
+          <td align="center"> 
+          <span title="Write fuses"> <button  id="writeFusesId"  onclick="writeFuses();" disabled>Write fuses</button> </span>  
+        </td></tr>    
+        
+    </table>
+    <table border="0" cellspacing="0" cellpadding="3" align="center" >
+  	  <tr><td colspan="2"><hr></td></tr>	
+  
+  	  <tr><td><strong>Current hex file firmware</strong></td></tr>
+	    <tr><td>Hex filename</td>   <td><div id="hnamen" class="align-right">N/A</div>	</td></tr>
+	    <tr><td>Version</td>	      <td><div id="hvern" class="align-right">N/A</div>	</td></tr>
+	    <tr><td>Build time</td>	    <td><div id="htimen" class="align-right">N/A</div>	</td></tr>
   	  <tr><td colspan="2"><hr></td></tr>	
   	  
   	  <tr><td><strong>Old hex file firmware</strong></td></tr>
-  	  <tr><td>Hex filename</td> <td><div id="hnameo">N/A</div>	</td></tr>
-	    <tr><td>Version</td>      <td><div id="hvero">N/A</div>	</td></tr>
-	    <tr><td>Build time</td>   <td><div id="htimeo">N/A</div>	</td></tr>
+  	  <tr><td>Hex filename</td> <td><div id="hnameo" class="align-right">N/A</div>	</td></tr>
+	    <tr><td>Version</td>      <td><div id="hvero" class="align-right">N/A</div>	</td></tr>
+	    <tr><td>Build time</td>   <td><div id="htimeo" class="align-right">N/A</div>	</td></tr>
 	    <tr><td></td>
-	        <td align="right"> 
+	        <td align="center"> 
 	        <span title="Rollback chip flash to previous version">
 	        <button onclick="flashPrevFile();">Rollback version</button>
 	        </span></td></tr>
-  	  <tr><td colspan="2"><span><hr></span></td></tr>	
-  	  
-  	  <tr><td>Last time firmware uploaded</td><td><div id="flashtime">N/A</div>	</td></tr>
+      <tr><td colspan="2"><hr></td></tr>	
+          <tr><td>Last time firmware uploaded</td><td><div id="flashtime" class="align-right">N/A</div>	</td></tr>
+      <tr><td colspan="2"><hr></td></tr>	
   	</table>
     
     
@@ -60,15 +92,14 @@
             <tr><td align="center">  <span id="metabody"></span> </td></tr>
     </table>
             	
-    
     <form id="upload" onsubmit="event.preventDefault(); flashAvr()" enctype="multipart/form-data" autocomplete="off">
         <table align="center">
             <tr><td colspan="2"><hr></td></tr>
             <tr><td align="center">  <span id="flashtext"></span> </td></tr>
-            <tr><td><span title="Flash hex file as is."><input id="igrnoreMeta" name="igrnoreMeta" type='checkbox' onclick="OverrideigrnoreMeta()">
-              <label for="igrnoreMeta"> Ignore meta checking  </label>
-              </span></tr></td>
-            <tr><td><input id="updateFirmware" type='submit' value='Update firmware' disabled ></td> </tr>
+            <tr><td><span title="Flash hex file as is."><input id="pohuy" name="pohuy" type='checkbox' onclick="overridePohuy()">
+              <label for="pohuy"> Ignore meta checking  </label></span>
+            </td></tr>
+            <tr><td align="center"><input id="updateFirmware" type='submit' value='Update firmware' disabled ></td> </tr>
         </table>
     </form>
     
@@ -97,9 +128,6 @@
     	   document.getElementById("submitFile").disabled = !haveFiles;
     	}
     	
-      
-      
-      
       function uploadFiles() {
           const xhr = new XMLHttpRequest();
       	  const form = document.querySelector('#upload');
@@ -259,7 +287,7 @@
     	function flashAvr() {
           const xhr = new XMLHttpRequest();
       
-          OverrideigrnoreMeta();
+          overridePohuy();
       
           xhr.open('POST', '/avr/flashrun');
           xhr.send();
@@ -316,16 +344,63 @@
     	    setTimeout(flashAvrStatus, 3000);
     	}
     	
-    	function OverrideigrnoreMeta() {
-          const igrnoreMeta = document.getElementById("igrnoreMeta");
+    	function overridePohuy() {
+          const pohuy = document.getElementById("pohuy");
           const updateFirmware  = document.getElementById("updateFirmware"); 
 
-          if (igrnoreMeta && igrnoreMeta.checked) {
-            updateFirmware.disabled = !igrnoreMeta.checked;
-          }
+          updateFirmware.disabled = !pohuy.checked;
     	}
-    	
-    	
+
+      function readFuses(){
+        ApplyCVT("/avr/fuseread");
+        
+      }
+
+      function writeFuses(){
+        
+        const avrfusehigh = document.getElementById("avrfusehigh");
+        const avrfuselow  = document.getElementById("avrfuselow");
+        const avrfuseprot = document.getElementById("avrfuseprot");
+        const avrfuseext  = document.getElementById("avrfuseext");
+        
+        const avrfusehighVal = Math.max(Math.min(parseInt("0x" + avrfusehigh.value), 255), 0);
+        const avrfuselowVal  = Math.max(Math.min(parseInt("0x" + avrfuselow.value), 255), 0);
+        const avrfuseprotVal = Math.max(Math.min(parseInt("0x" + avrfuseprot.value), 255), 0);
+        const avrfuseextVal  = Math.max(Math.min(parseInt("0x" + avrfuseext.value), 255), 0);
+        
+        if (isNaN(avrfusehighVal) || isNaN(avrfuselowVal) || isNaN(avrfuseprotVal) || isNaN(avrfuseextVal)) {
+          alert("Values not valid");
+          return;
+        }
+        
+        const xhr = new XMLHttpRequest();
+        var formData = new FormData();
+
+        formData.append("avrfusehigh", avrfusehighVal.toString(16));
+        formData.append("avrfuselow",  avrfuselowVal.toString(16));
+        formData.append("avrfuseprot", avrfuseprotVal.toString(16));
+        formData.append("avrfuseext",  avrfuseextVal.toString(16));
+        
+
+        xhr.open('POST', '/avr/fusewrite');
+        xhr.send(formData);
+        // alert("writeFuses"); 
+        
+      }
+      function fusesConfirmWriting() {
+        const confirmfuse = document.getElementById("confirmfuse");
+        const writeFusesId  = document.getElementById("writeFusesId"); 
+
+        writeFusesId.disabled = !confirmfuse.checked;
+      }
+
+      function fusesExpandSection() {
+        const fuse_bits = document.getElementById("fuse_bits");
+        const expandfuse  = document.getElementById("expandfuse"); 
+        
+        fuse_bits.style = expandfuse.checked ? "" : "display: none";
+    }
+    	   	
     	</script>
   
 </body>

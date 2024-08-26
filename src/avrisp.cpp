@@ -155,6 +155,43 @@ void ESP8266_AVRISP::pmode_end() {
 	DEBUGLOGISP("\r\n");
 }
 
+void ESP8266_AVRISP::chipFusesWrite( uint8_t _high, uint8_t _low, uint8_t _lock, uint8_t _ext) {
+    AVRISP_fuses_t AVRISP_fuses;
+    chipFusesRead(AVRISP_fuses);
+   
+    if (!_lock) _lock = AVRISP_fuses.lock;
+    if (!_low)  _low = AVRISP_fuses.low;
+    if (!_high) _high = AVRISP_fuses.high;
+    if (!_ext)  _ext = AVRISP_fuses.ext;
+
+    pmode_begin();
+    SPI.beginTransaction(fuses_spisettings);
+    if (_lock) {chipSpiTransaction(STK_CHIPFUSELOCK_WR, _lock);     chipBusyWaitPolling();}
+    if (_low)  {chipSpiTransaction(STK_CHIPFUSELOW_WR, _low);       chipBusyWaitPolling();}
+    if (_high) {chipSpiTransaction(STK_CHIPFUSEHIGH_WR, _high);     chipBusyWaitPolling();}
+    if (_ext)  {chipSpiTransaction(STK_CHIPFUSEEXT_WR, _ext);       chipBusyWaitPolling();}
+    SPI.endTransaction();
+    pmode_end();
+    
+    DEBUGLOGISP("avr high 0x%02x low  0x%02x  lock  0x%02x ext  0x%02x\r\n",
+    _high, _low, _lock, _ext);
+    DEBUGLOGISP(__PRETTY_FUNCTION__);
+    DEBUGLOGISP("\r\n"); 
+}
+
+
+void ESP8266_AVRISP::chipFusesRead( AVRISP_fuses_t &_AVRISP_fuses ) {
+    pmode_begin();
+    SPI.beginTransaction(fuses_spisettings);
+    _AVRISP_fuses.lock  = chipSpiTransaction(STK_CHIPFUSELOCK);
+    _AVRISP_fuses.low   = chipSpiTransaction(STK_CHIPFUSELOW);
+    _AVRISP_fuses.high  = chipSpiTransaction(STK_CHIPFUSEHIGH);
+    _AVRISP_fuses.ext   = chipSpiTransaction(STK_CHIPFUSEEXT);
+    SPI.endTransaction();
+    pmode_end();
+    DEBUGLOGISP(__PRETTY_FUNCTION__);
+    DEBUGLOGISP("\r\n"); 
+}
 
 String ESP8266_AVRISP::chipSignRead() {
     char _ret [10] = {0};
@@ -600,7 +637,7 @@ uint8_t ESP8266_AVRISP::hex2bin (uint8_t h)    {
 // return addr where is mistake
 String ESP8266_AVRISP::chipFlashVerification() {
     String _ret = "";
-    char strbuf[128];
+    char strbuf[256];
     uint32_t addr = 0;
     uint8_t bytebuf = 0;
     uint8_t bytespi = 0;
@@ -628,8 +665,12 @@ String ESP8266_AVRISP::chipFlashVerification() {
         }
     }
     pmode_end();
-    sprintf(strbuf, "Verification succesfull! <br> All %d bytes are correct!", addr);
-    
+    sprintf(strbuf, "Verification succesfull! <br> All %d bytes are correct!<br>", addr);
+    AVRISP_fuses_t AVRISP_fuses ;
+    chipFusesRead(AVRISP_fuses);
+    sprintf(strbuf, "Fuses: HIGH 0x%02x LOW 0x%02x LOCK 0x%02x EXT 0x%02x<br>", 
+        AVRISP_fuses.high, AVRISP_fuses.low, AVRISP_fuses.lock, AVRISP_fuses.ext
+        );
     verificationResult = _ret;
     DEBUGLOGISP("%s \n\r", strbuf);
     DEBUGLOGISP(__PRETTY_FUNCTION__); DEBUGLOGISP("\r\n");

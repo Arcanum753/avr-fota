@@ -77,6 +77,14 @@ h2.title {
     background: #d6d9da;
 }
 
+table {
+    min-width: 400px;
+}
+
+table .align-right {
+    text-align: right;
+}
+
 table.form select {
     width: 143px;
 }

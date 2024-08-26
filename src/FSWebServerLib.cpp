@@ -19,7 +19,12 @@ Please Wait....Configuring and Restarting.
 
 const char Page_GeneralRefresh[] = R"=====(
 <meta http-equiv="refresh" content="10; URL=/general.html">
-Please Wait....Configuring and Restarting.
+Please Wait....Configuring.
+)=====";
+
+const char Page_AvrRefresh[] = R"=====(
+<meta http-equiv="refresh" content="10; URL=/avr.html">
+Please Wait....Configuring.
 )=====";
 
 String _Version_App = VERSION_APP;
@@ -153,6 +158,73 @@ void  AsyncFSWebServer::avrProgStatus(AsyncWebServerRequest *request) {
 	DEBUGLOG(__PRETTY_FUNCTION__);
 	DEBUGLOG("\r\n");
 }
+
+void  AsyncFSWebServer::avrFusesRead(AsyncWebServerRequest *request) {
+	String values = "";
+	AVRISP_fuses_t AVRISP_fuses ;
+	
+	avrprog.chipFusesRead(AVRISP_fuses);
+	char strbuf[256];
+
+	// sprintf(strbuf, "avrfusehigh|%02x|div\n", AVRISP_fuses.high);
+	// values+= String(strbuf);
+	// sprintf(strbuf, "avrfuselow|%02x|div\n", AVRISP_fuses.low);
+	// values+= String(strbuf);
+	// sprintf(strbuf, "avrfuseprot|%02x|div\n", AVRISP_fuses.prot);
+	// values+= String(strbuf);
+	// sprintf(strbuf, "avrfuseext|%02x|div\n", AVRISP_fuses.ext);
+	// values+= String(strbuf);
+
+	sprintf(strbuf, "avrfusehigh|%02x|input\n", AVRISP_fuses.high);
+	values+= String(strbuf);
+	sprintf(strbuf, "avrfuselow|%02x|input\n", AVRISP_fuses.low);
+	values+= String(strbuf);
+	sprintf(strbuf, "avrfuseprot|%02x|input\n", AVRISP_fuses.lock);
+	values+= String(strbuf);
+	sprintf(strbuf, "avrfuseext|%02x|input\n", AVRISP_fuses.ext);
+	values+= String(strbuf);
+
+	request->send(200, "text/plain", values);
+	DEBUGLOG(__PRETTY_FUNCTION__);
+	DEBUGLOG("\r\n");
+}
+void  AsyncFSWebServer::avrWebFusesWrite(AsyncWebServerRequest *request) {
+	if (!checkAuth(request))
+		return request->requestAuthentication();
+		// AVRISP_fuses_t AVRISP_fuses ;
+	String s_high = "";  	uint8_t high = 0;
+	String s_low  = "";		uint8_t low  = 0;
+	String s_lock = "";		uint8_t lock = 0;
+	String s_ext  = "";		uint8_t ext  = 0;
+	if (request->args() > 0)  // Save Settings
+	{
+		for (uint8_t i = 0; i < request->args(); i++) {
+			DEBUGLOG("Arg %d: %s %s\r\n", i, request->argName(i).c_str() ,request->arg(i).c_str() );
+			if (request->argName(i) == "avrfusehigh") 	{ s_high = urldecode(request->arg(i));	continue; }
+			if (request->argName(i) == "avrfuselow") 	{ s_low  = urldecode(request->arg(i));	continue; }
+			if (request->argName(i) == "avrfuseprot") 	{ s_lock = urldecode(request->arg(i));	continue; }
+			if (request->argName(i) == "avrfuseext") 	{ s_ext  = urldecode(request->arg(i));	continue; }
+		}
+		request->send_P(200, "text/html", Page_AvrRefresh);
+		
+		high =        		hex2bin(s_high[0]);
+		if (s_high[1])     	high = (high<<4) + 	hex2bin(s_high[1]);
+		low =        		hex2bin(s_low[0]);
+    	if (s_low[1])     	low = (low<<4) + 	hex2bin(s_low[1]);
+		lock =        		hex2bin(s_lock[0]);
+    	if (s_lock[1])     	lock = (lock<<4) + 	hex2bin(s_lock[1]);
+		ext =        		hex2bin(s_ext[0]);
+    	if (s_ext[1])     	ext = (ext<<4) + 	hex2bin(s_ext[1]);
+	
+		avrprog.chipFusesWrite(high, low, lock, ext);
+	}
+	else {
+		handleFileRead(request->url(), request);
+	}
+	DEBUGLOG(__PRETTY_FUNCTION__);
+	DEBUGLOG("\r\n");
+}
+
 
 
 void AsyncFSWebServer::sendTimeData() {
@@ -848,7 +920,7 @@ void AsyncFSWebServer::configureWifiAP() {
 	String APname = _generalConfig.deviceName + "_" + _generalConfig.deviceSerial;
 
 	if (_httpAuth.auth) {
-		WiFi.softAP(APname.c_str(), _httpAuth.wwwPassword.c_str());
+		WiFi.softAP(APname, _httpAuth.wwwPassword);
 		DEBUGLOG("AP Pass enabled: %s \r\n", _httpAuth.wwwPassword.c_str());
 	}
 	else {
@@ -1420,7 +1492,7 @@ void AsyncFSWebServer::send_network_configuration_html(AsyncWebServerRequest *re
 	DEBUGLOG("\r\n");
 }
 
-void AsyncFSWebServer::send_general_configuration_html(AsyncWebServerRequest *request) {
+void AsyncFSWebServer::get_general_configuration_html(AsyncWebServerRequest *request) {
 	if (!checkAuth(request))
 		return request->requestAuthentication();
 		AVRISP_CfgFile_t AVRISP_HexFiles_Web;
@@ -1437,10 +1509,6 @@ void AsyncFSWebServer::send_general_configuration_html(AsyncWebServerRequest *re
 		request->send_P(200, "text/html", Page_GeneralRefresh);
 		save_configGeneral();
 		avrprog.cfgFileLoadWeb(AVRISP_HexFiles_Web);
-#if (NO_RST > 0)
-		_fs->end();
-		ESP.restart();
-#endif
 	}
 	else {
 		handleFileRead(request->url(), request);
@@ -1885,7 +1953,7 @@ void AsyncFSWebServer::serverInit() {
 	on("/general.html", [this](AsyncWebServerRequest *request) {
 		if (!this->checkAuth(request))
 			return request->requestAuthentication();
-		this->send_general_configuration_html(request);
+		this->get_general_configuration_html(request);
 	});
 	on("/ntp.html", [this](AsyncWebServerRequest *request) {
 		if (!this->checkAuth(request))
@@ -1989,6 +2057,19 @@ void AsyncFSWebServer::serverInit() {
 		if (!this->checkAuth(request))
 			return request->requestAuthentication();
 		this->avrProgStatus(request);
+	});
+	
+
+	on("/avr/fuseread", [this](AsyncWebServerRequest *request) {
+		if (!this->checkAuth(request))
+			return request->requestAuthentication();
+		this->avrFusesRead(request);
+	});
+
+	on("/avr/fusewrite", HTTP_POST, [this](AsyncWebServerRequest *request) {
+		if (!this->checkAuth(request))
+			return request->requestAuthentication();
+		this->avrWebFusesWrite(request);
 	});
 
 	on("/rconfig", HTTP_GET, [this](AsyncWebServerRequest *request) {
@@ -2161,3 +2242,19 @@ void AsyncFSWebServer::serialShowInfo() {
 	Serial.printf("local DNS hostname  http://%s.local \n\r", hostname.c_str());
 	Serial.printf("or you can connect directly  http://%s \n\r", WiFi.localIP().toString().c_str());
 }
+
+/*
+ * hex2bin
+ * Turn a Hex digit (0..9, A..F) into the equivalent binary value (0-16)
+ * returns 0xFF if bad hex digit.
+ */
+uint8_t AsyncFSWebServer::hex2bin (uint8_t h)    {
+    if (h >= '0' && h <= '9')
+        return(h - '0');
+    if (h >= 'A' && h <= 'F')
+        return((h - 'A') + 10);
+	if (h >= 'a' && h <= 'f')
+        return((h - 'a') + 10);
+    DEBUGLOGISP("Bad hex digit! %x \n\r", h);
+    return 0xff;
+} 

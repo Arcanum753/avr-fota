@@ -200,6 +200,10 @@ protected:
     void avrProg(AsyncWebServerRequest *request);
     void avrProgRollback(AsyncWebServerRequest *request);
     void avrProgStatus(AsyncWebServerRequest *request) ;
+    void avrFusesRead(AsyncWebServerRequest *request) ;
+    void avrWebFusesWrite(AsyncWebServerRequest *request) ;
+    
+    
 
     bool load_configGeneral();
     bool save_configGeneral();
@@ -240,7 +244,7 @@ protected:
     void send_information_values_html(AsyncWebServerRequest *request);
     void send_NTP_configuration_values_html(AsyncWebServerRequest *request);
     void send_network_configuration_html(AsyncWebServerRequest *request);
-    void send_general_configuration_html(AsyncWebServerRequest *request);
+    void get_general_configuration_html(AsyncWebServerRequest *request);
     void send_NTP_configuration_html(AsyncWebServerRequest *request);
     void restart_esp(AsyncWebServerRequest *request);
     void send_wwwauth_configuration_values_html(AsyncWebServerRequest *request);
@@ -255,6 +259,7 @@ protected:
  //   static String urldecode(String input); // (based on https://code.google.com/p/avr-netino/)
     static unsigned char h2int(char c);
     static boolean checkRange(String Value);
+    uint8_t hex2bin (uint8_t h) ;
 };
 
 extern AsyncFSWebServer ESPHTTPServer;

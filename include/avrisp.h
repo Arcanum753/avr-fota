@@ -32,25 +32,35 @@
 #define JSON_FILESIZEMAX 1024
 
 // STK cmd's
-#define STK_PROGMODE    0xAC, 0x53, 0x00, 0x00
-#define STK_READSIGN1   0x30, 0x00, 0x00, 0x00
-#define STK_READSIGN2   0x30, 0x00, 0x01, 0x00
-#define STK_READSIGN3   0x30, 0x00, 0x02, 0x00
+#define STK_PROGMODE        0xAC, 0x53, 0x00, 0x00
+#define STK_READSIGN1       0x30, 0x00, 0x00, 0x00
+#define STK_READSIGN2       0x30, 0x00, 0x01, 0x00
+#define STK_READSIGN3       0x30, 0x00, 0x02, 0x00
 
 
-#define STK_POLLCHIP    0xF0, 0x00, 0x00, 0x00
-#define STK_ERASECHIP   0xAC, 0x80, 0x00, 0x00;	// chip erase 
-
-#define STK_ERASECHIP   0xAC, 0x80, 0x00, 0x00 // ALARM!
+#define STK_POLLCHIP        0xF0, 0x00, 0x00, 0x00
+#define STK_ERASECHIP       0xAC, 0x80, 0x00, 0x00	// chip erase  // ALARM!
 
 #define STK_VERIFYADDRHIGH 0x28 
 #define STK_VERIFYADDRLOW  0x20
 
+//read fuses
+#define STK_CHIPFUSELOCK    0x58, 0x00, 0x00, 0x00 	/* memory protection read*/
+#define STK_CHIPFUSELOW     0x50, 0x00, 0x00, 0x00	/* Low fuse read*/
+#define STK_CHIPFUSEHIGH    0x58, 0x08, 0x00, 0x00	/* High fuse read*/
+#define STK_CHIPFUSEEXT     0x50, 0x08, 0x00, 0x00	/* Extended fuse read*/
+
+
+//fuses write
+#define STK_CHIPFUSELOCK_WR 0xAC, 0xE0, 0x00         /* memory protection read*/    
+#define STK_CHIPFUSELOW_WR  0xAC, 0xA0, 0x00         /* Low fuse read*/ 
+#define STK_CHIPFUSEHIGH_WR 0xAC, 0xA8, 0x00         /* High fuse read*/    
+#define STK_CHIPFUSEEXT_WR  0xAC, 0xA4, 0x00         /* Extended fuse read*/    
 
 #define DEFAULT_PROG_JSON  "/avrisp.json"
 
-#define HEX_PARSE_STRNUM      4 // number of strings with params
-#define HEX_PARSE_METALINEBEGIN       '$'    //spec synb for delimiter   
+#define HEX_PARSE_STRNUM      4             // number of strings with params
+#define HEX_PARSE_METALINEBEGIN       '$'    //spec symb for delimiter   
 #define HEX_PARSE_WORD_SIGN  "sign"
 #define HEX_PARSE_WORD_PROJ  "proj"
 #define HEX_PARSE_WORD_VER   "vers"
@@ -60,7 +70,7 @@
 #define HEX_PARSE_LINEBEGIN      ':'
 
 
-#define HEX_PARSE_CHAR_SPACE       ' '    //spec synb for delimiter   
+#define HEX_PARSE_CHAR_SPACE       ' '    //spec symb for delimiter   
 
 // atmega 328p and all about firmwares hex files
 #define DEFAULT_HEXFILENAME     ""
@@ -87,6 +97,15 @@
 
 //mem page size for isp prog
 #define MEM_PAGE_SIZE       128
+
+
+
+typedef struct {
+ uint8_t high;
+ uint8_t low;
+ uint8_t lock;
+ uint8_t ext;
+} AVRISP_fuses_t;
 
 typedef enum avrsip_err_e{
      ERROR_OK           =  0
@@ -153,11 +172,13 @@ public:
     String          chipFlashVerificationResultGet();
     String          fsDirListGet(); //DEBUG
 
-
+    void            chipFusesRead(AVRISP_fuses_t &AVRISP_fuses);
+    void            chipFusesWrite( uint8_t _high, uint8_t _low, uint8_t _lock, uint8_t _ext);
     AVRISP_CfgFile_t _AVRISP_CfgFile;
 
 protected:    
     String          chipSignRead();
+    
     avrsip_err_t    chipErase();
     void            chipBusyWaitPolling();
    
@@ -185,7 +206,6 @@ protected:
     String                      verificationResult ;
 
 // avr chip spi + rst
-
     void pmode_begin();     // enter program mode
     void pmode_end();       // exit program mode
     
