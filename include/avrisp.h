@@ -1,31 +1,17 @@
 
 #include <vector>
+#include "debug.h"
 
+#if defined(ESP32)
+#define PIN_MISO  19   // d19 miso
+#define PIN_MOSI  23   // d23 mosi
+#define PIN_SCK   18   // d18 sck
+#define PIN_RST   5    // d5 rst
+#elif defined(ESP8266)
 #define PIN_MISO  12   // d6 miso
 #define PIN_MOSI  13   // d7 mosi
 #define PIN_SCK   14   // d5 sck
-#define PIN_RST   5    // rst
-
-
-#define DEBUG_SHOWHEXBUF 2    // 0 disable showing debug // 1 show logic debug // 2 - show all bufs
-
-#define DBG_ISP_OUTPUT_PORT Serial
-
-// #ifndef RELEAS_AVRISP
-#if (DEBUG_SHOWHEXBUF > 1)
-#define DEBUGLOGISP(...) DBG_ISP_OUTPUT_PORT.printf(__VA_ARGS__)
-
-#else
-#define DEBUGLOGISP(...)
-#endif
-
-
-// #ifndef RELEAS_AVRISP
-#if (DEBUG_SHOWHEXBUF > 2)
-#define DEBUGLOGISPBUF(...) DBG_ISP_OUTPUT_PORT.printf(__VA_ARGS__)
-
-#else
-#define DEBUGLOGISPBUF(...)
+#define PIN_RST   5    // d1 rst
 #endif
 
 #define JSON_STR_LEN    512
@@ -59,7 +45,6 @@
 
 #define DEFAULT_PROG_JSON  "/avrisp.json"
 
-#define HEX_PARSE_STRNUM      4             // number of strings with params
 #define HEX_PARSE_METALINEBEGIN       '$'    //spec symb for delimiter   
 #define HEX_PARSE_WORD_SIGN  "sign"
 #define HEX_PARSE_WORD_PROJ  "proj"
@@ -70,7 +55,10 @@
 #define HEX_PARSE_LINEBEGIN      ':'
 
 
-#define HEX_PARSE_CHAR_SPACE       ' '    //spec symb for delimiter   
+#define HEX_PARSE_CHAR_SPACE       ' '    //spec symb for delimiter  
+
+#define  FILE_TYPE_COMMA    '.'
+#define  FILE_TYPE     "hex"
 
 // atmega 328p and all about firmwares hex files
 #define DEFAULT_HEXFILENAME     ""
@@ -145,21 +133,27 @@ typedef struct {
     String hex_buildtime_old;
 
     String fwTS;
-    String avr_signature;
+    //String avr_signature;
     String project_name;
     uint32_t chipsize;
     uint32_t pagesize;
+    bool cleanFS;
 
 } AVRISP_CfgFile_t;
 
 class ESP8266_AVRISP {
 public:
     ESP8266_AVRISP(uint8_t reset_pin
-    , bool reset_state=false
-    , bool reset_activehigh=false);
+    , bool reset_state = false
+    , bool reset_activehigh = false);
 
     void setReset(bool);
-    void setFs (FS* fs);
+#if ESP32
+    void setFs(fs::SPIFFSFS* fs);
+#elif defined(ESP8266)
+    void setFs(FS* fs)  ;                       // esp8266/esp32 flash file system
+#endif
+    
     bool begin ();
         
     avrsip_err_t    avrChipProgrammDBG(String _in);
@@ -174,11 +168,13 @@ public:
 
     void            chipFusesRead(AVRISP_fuses_t &AVRISP_fuses);
     void            chipFusesWrite( uint8_t _high, uint8_t _low, uint8_t _lock, uint8_t _ext);
+    void            filesClean ();
+    String           avrChipSignGet();
     AVRISP_CfgFile_t _AVRISP_CfgFile;
 
 protected:    
     String          chipSignRead();
-    
+    String          chipNow;
     avrsip_err_t    chipErase();
     void            chipBusyWaitPolling();
    
@@ -193,7 +189,11 @@ protected:
     int _error = 0;
 
 //fs + hex file
-    FS* _fs; // esp8266 flash file system
+#if ESP32
+    fs::SPIFFSFS*               _fs;
+#elif defined(ESP8266)
+    FS*                         _fs;                        // esp8266/esp32 flash file system
+#endif
     avrsip_err_t                hexFileOpen(String _in);
     std::vector<char>           _hexFileBuf;
     std::vector<char>           _hexFileBinDataBuf;

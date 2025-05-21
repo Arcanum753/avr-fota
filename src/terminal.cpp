@@ -1,12 +1,20 @@
+/*!
+ * \file ErriezSerialTerminal.cpp
+ * \brief Serial terminal library for Arduino.
+ * \details
+ *      Source:         https://github.com/Erriez/ErriezSerialTerminal
+ *      Documentation:  https://erriez.github.io/ErriezSerialTerminal
+ */
 #include <Arduino.h>
-#include <ArduinoJson.h>
-#include <ESPAsyncTCP.h>
-#include <ESPAsyncWebServer.h>
 
+#include "main.h"
+
+#include <ESPAsyncWebServer.h>
 #include "FSWebServerLib.h"
 #include "ErriezSerialTerminal.h"
 #include "terminal.h"
 #include "avrisp.h"
+#include "udphelper.h"
 
 // Newline character '\r' or '\n'
 char newlineChar = '\r';
@@ -15,49 +23,59 @@ char delimiterChar = ' ';
 
 SerialTerminal term(newlineChar, delimiterChar);
 
-// ESP8266_AVRISP avrprog( PIN_RST);
+void TerminalInit(){
+    term.addCommand("help", TerminalHelp );
+    term.addCommand ("echo", TerminalEcho);
+    term.addCommand("?", InfoShow );
 
-void ledInit(){
-    
-    pinMode(PIN_MISO, OUTPUT);
-    pinMode(PIN_MOSI, OUTPUT);
-    pinMode(PIN_SCK, OUTPUT);
-    pinMode(PIN_RST, OUTPUT);
-
-}
-
-void terminalInit(){
-    term.addCommand("?", showInfo );
 
     term.addCommand("1", test );
-    term.addCommand("reset", resetEsp );
+    term.addCommand("reset", EspReset );
 
     
-    term.addCommand("dir", dir);
+    term.addCommand("dir", DirsShow);
     term.addCommand("check", check );
     term.addCommand("flash", flash1 );
     term.addCommand("flash2", flash2 );
+    term.addCommand ("udpp", udpp);
+    term.addCommand ("udpc", udpc);
 
     Serial.println("\n\r Serial terminal inited.");
-
+    term.setSerialEcho(true);
+    term.helpShow();
 }
 
-void terminalLoop(){
-    term.readSerial();
+// main Loop func for Terminal
+void TerminalLoop() {    term.readSerial(); }
+// function for Terminal to show available commands
+void TerminalHelp (void)    {   term.helpShow();}
+void TerminalEcho (void)    {   term.EchoOnOff();  }
+// Terminals shows actual net info
+void InfoShow() {    ESPHTTPServer.serialShowInfo();  }
+// show list of files at SPIFS
+void DirsShow() {   
+    Serial.printf("list of files: \n\r %s \n\r", avrprog.fsDirListGet().c_str()); 
+    avrprog.filesClean(); 
 }
-void test()     {  Serial.printf("\n\r test ok! \n\r");    }
 
-void showInfo(){
-    ESPHTTPServer.serialShowInfo();
-}
-
-void resetEsp(){
-    Serial.printf("\n\r resetting! \n\r");
+// Reset Esp
+void EspReset(){
+    #ifdef ESP32
+    Serial.printf("\n\rESP32 reset now! \n\r");
+    delay (1000);
+    ESP.restart();
+    #elif defined(ESP8266)
+    Serial.printf("\n\rESP8266 reset now! \n\r");
     delay (1000);
     ESP.reset();
+#endif
+  
 }
 
-void dir()      {  Serial.printf("list of files: \n\r %s \n\r", avrprog.fsDirListGet().c_str()); }
+void test()     {  Serial.printf("\n\r test ok! \n\r");    }
+
+
+
 void check()    {  /*avrprog.avrCheckHex(0); */  }
 
 void flash1   (){ 
@@ -72,6 +90,27 @@ void flash2   (){
     if (arg1 == NULL) return;
      Serial.printf("%d \n\r", avrprog.avrChipProgrammDBG(arg1));   
      
+}
+
+void udpp (){
+    String arg1;
+    arg1 = term.getNext();
+    if (arg1 == NULL) {
+        Serial.println("Please set port. ");
+        return; 
+    }
+    uint16_t port = arg1.toInt();
+    if (port < 10000 || port >= 65536) {
+        Serial.println("Please set port 10000 < port <= 65536");
+        return; 
+    }
+    String str = ESPHTTPServer.udpJsonBroadcast();
+    udpBroadcast.udpBroadcastSend(port, str);
+
+}
+
+void udpc (){
+     udpBroadcast.udpBroadcastSend(ESPHTTPServer.getUpdPortTx(), ESPHTTPServer.udpJsonBroadcast());
 }
 
 

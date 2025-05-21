@@ -1,21 +1,21 @@
 <!DOCTYPE html>
 <html>
 <head>
-	<title>AVR Firmware Update</title>
+	<title>AVR OTA</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta http-equiv="Content-type" content="text/html; charset=utf-8">
 	<link rel="stylesheet" href="style.css">
 
 </head>
 <body>
-    <markup>./head.html</markup>
+    <markup>./page_head.html</markup>
     <h2 class="title" style="background: #7D8EE2; padding: 8px;">Info &amp update AVR firmware </h2>
-    <hr>
+    
     
   	<table border="0" cellspacing="0" cellpadding="3" align="center" >
   	  <tr><td><strong>Avr main info.</strong></td></tr>
   	  <tr><td>Avr project name</td>	    <td><div id="proj" class="align-right">N/A</div>	</td></tr>
-  	  <tr><td>Avr chip signature</td>	  <td><div id="sign" class="align-right">N/A</div>	</td></tr>
+      <tr><td>Avr connected chip signature </td>	  <td><div id="signcon" class="align-right">N/A</div>	</td></tr>
   	  <tr><td>Avr chip memory size</td>	<td><div id="chsize" class="align-right">N/A</div>	</td></tr>
   	  <tr><td colspan="2"><hr></td></tr>	
   	  
@@ -68,6 +68,7 @@
 	        <span title="Rollback chip flash to previous version">
 	        <button onclick="flashPrevFile();">Rollback version</button>
 	        </span></td></tr>
+	        
       <tr><td colspan="2"><hr></td></tr>	
           <tr><td>Last time firmware uploaded</td><td><div id="flashtime" class="align-right">N/A</div>	</td></tr>
       <tr><td colspan="2"><hr></td></tr>	
@@ -77,8 +78,8 @@
     
     <form id="upload" onsubmit="event.preventDefault(); uploadFiles()" enctype="multipart/form-data" autocomplete="off">
        <table align="center"> 
-            <tr><td align="center"> <input id="files" name="update" type="file" accept=".hex" onchange="checkFile()"> </td> </tr>
-            <tr><td align="center"> <button id="submitFile" type="submit" disabled>Upload *.hex file</button> </td> </tr>
+            <tr><td align="center"> <input id="fileHex" name="update" type="file" accept=".hex" onchange="checkFileMeta()"> </td> </tr>
+            <tr><td align="center"> <button id="uploadHexFileBtn" type="submit" disabled>Upload *.hex file</button> </td> </tr>
             <tr><td align="center"> <span id="uploadtext"></span> </td> </tr>
         </table>
     </form>
@@ -104,98 +105,145 @@
     </form>
     
     
-    <markup>./bottom.html</markup>
+    <markup>./page_bottom.html</markup>
 
     <script src="GetMarkup.js" defer></script>
     <script src="GetJson.js" defer></script>
+    <script src="check_meta.js" defer></script>
+    <script src="microajax.js" defer></script>
     
     <script>
     	window.onload = function() {
-    	 // document.getElementById("remupd").innerHTML = 'Choose *.hex file.';
-
-    		ApplyJson("config.json");
-
     		setTimeout(() => {
     		  ApplyCVT("/avr/info");
     			ApplyCVT("/admin/infovalues");
     			ApplyCVT("/admin/connectionstate");
-    			ApplyCVT("/admin/devconf");
-    		}, 1000);
+    			ApplyCVT("/system/info");
+    		}, 500);
     	}
-    	
-    	function checkFile() {
-    	  const haveFiles = document.getElementById("files").files.length > 0;
-    	   document.getElementById("submitFile").disabled = !haveFiles;
+    
+      var blobSlice = File.prototype.slice || File.prototype.mozSlice || File.prototype.webkitSlice,
+                  input = document.getElementById('files'),
+                  running = false,
+                  ua = navigator.userAgent.toLowerCase();
+
+    	function checkFileMeta() {
+        console.log('checkFileMeta begin');
+    	  const haveFiles = document.getElementById("fileHex").files.length > 0;
+    	  //document.getElementById("uploadHexFileBtn").disabled = !haveFiles;
+        
+        input = document.getElementById("fileHex");
+        if (running) { return; }
+        if (!input.files.length) {
+            console.error('Please select a file');
+            return;
+        }
+        var fileReader = new FileReader(),
+                file = input.files[0],
+                time;
+        fileReader.onload = function (e) {
+          running = false;
+            if (file.size != e.target.result.length) {
+                console.error('ERROR:Browser reported success but could not read the file until the end');
+            } else {
+              postmeta = hexFileHeadCheck(e.target.result);
+              //uploadFileCompareMeta(postmeta);
+               setTimeout(uploadFileCompareMeta(postmeta), 1500);
+            }
+        };
+        fileReader.onerror = function () {
+            running = false;
+            console.error('ERROR: FileReader onerror was triggered, maybe the browser aborted due to high memory usage');
+        };
+        running = true;
+        console.info('Starting normal test (' + file.name + ')');
+        fileReader.readAsBinaryString(file);
+
     	}
+
+      function uploadFileCompareMeta( _str) {
+        console.log('uploadFileCompareMeta');
+        var fileIN_signture = '';
+        var fileIN_project = '';
+        var esp_signture = '';
+        var esp_project = '';
+        const xhr = new XMLHttpRequest();
+        xhr.open('get', '/avr/info');
+        xhr.send(); 
+        xhr.addEventListener('loadend', () => {
+          const fieldsRowsMeta = ParseCVT(xhr.response).reverse();
+          for (fields of fieldsRowsMeta) {
+            if (fields[0] == "signcon" )  { esp_signture = fields[1];  } 
+            if (fields[0] == "proj" )     { esp_project = fields[1]; } 
+          }
+          const fieldsRowsFile = ParseCVT(_str).reverse();
+          for (fields of fieldsRowsFile) {
+            if (fields[0] == "sign" ) { fileIN_signture = fields[1];  } 
+            if (fields[0] == "proj" ) { fileIN_project = fields[1]; } 
+          }
+
+          if ((fileIN_signture == esp_signture) && (fileIN_project == esp_project) ) {
+            document.getElementById("uploadHexFileBtn").disabled = false;
+          } else {
+            document.getElementById("uploadHexFileBtn").disabled = true;
+          }
+
+          const signcmp         = document.getElementById("cmpsign");
+          const cmpproj         = document.getElementById("cmpproj");
+          document.getElementById('metatable').hidden = false;
+          signcmp.innerHTML = `Hex file chip signature: ${fileIN_signture}`;
+          cmpproj.innerHTML = `Hex file project name: ${fileIN_project}`;
+          signcmp.style = `color: ${(fileIN_signture == esp_signture) ? "green" : "red"}`;
+          cmpproj.style = `color: ${(fileIN_project == esp_project) ? "green" : "red"}`;
+
+          console.log(fileIN_signture);
+          console.log(fileIN_project);
+          console.log(esp_signture);
+          console.log(esp_project);
+        });
+        
+      }
     	
       function uploadFiles() {
           const xhr = new XMLHttpRequest();
       	  const form = document.querySelector('#upload');
-        
           const data = new FormData(form);
-        
           xhr.open('post', '/avr/uploadfile');
           xhr.send(data);
-          
           xhr.addEventListener('loadend', () => {
           const fieldsRows = ParseCVT(xhr.response);
           const _uploadtext = document.getElementById("uploadtext");
            _uploadtext.innerHTML = 'File upload begin...';
-          // for (fields of fieldsRows) {
-          //   const components = document.querySelectorAll("#" + fields[0]);
-  
-          //     for (comp of components) {
-          //       if (fields[2] == "input") {
-          //         comp.value = fields[1];
-          //       } else if (fields[2] == "div") {
-          //         comp.innerHTML = fields[1];
-    
-          //       } else if (fields[2] == "chk") {
-          //         comp.checked = fields[1];
-          //       }
-          //     }
-          //   }
-            
-          
-            
-           setTimeout(uploadFilesStat, 3000);
+           setTimeout(uploadFilesStat, 1500);
           });
       }
       
       function uploadFilesStat() {
-        
           const xhr = new XMLHttpRequest();
-      
           xhr.open('get', '/avr/uploadstatus');
           xhr.send();
-          
           xhr.addEventListener('loadend', () => {
-            const fieldsRows = ParseCVT(xhr.response).reverse();
-            
             const _statup = document.getElementById("statup");
             const _uploadtext = document.getElementById("uploadtext");
             let _filename;
             let _filesize ;
+
+            const fieldsRows = ParseCVT(xhr.response).reverse();
             console.log(fieldsRows);
             for (fields of fieldsRows) {
-              
                 if (fields[0] == "uploadstatus" && fields[1] == "error") {
                   _uploadtext.innerHTML = 'File uploaded failed!';
                 }  
-                
                 if (fields[0] == "file" ) {
                   _filename = fields[1];
                 } 
                 if (fields[0] == "fileSize" ) {
                   _filesize = fields[1];
                 } 
-            
                 if (fields[0] == "uploadstatus" && fields[1] == "ok") {
                   _uploadtext.innerHTML = `File ${_filename} <br> of ${_filesize} bytes uploaded successful!`;
                   checkMetaStat();
                 } 
-                
-               
             }
           });
         
@@ -215,8 +263,6 @@
             const metatimebuild   = document.getElementById("metatimebuild");
             const metaver         = document.getElementById("metaver");
             const metabody        = document.getElementById("metabody");
-            
-            
             
             var is_signcmp = false;
             var is_cmpproj = false;
@@ -309,25 +355,19 @@
       
           xhr.open('get', '/avr/flashstatus');
           xhr.send();
+          const flashtext = document.getElementById("flashtext");
     	    xhr.addEventListener('loadend', () => {
-    	      const flashtext = document.getElementById("flashtext");
-
     	      for (row of ParseCVT(xhr.response)) {
     	         if (row[0] == "avrprogver" ) {
-    	           
                  flashtext.innerHTML = row[1];
                  alert(row[1]); 
               }
             }
-            
             ApplyCVT("/avr/info");
     	    });
     	}
 	  	function flashPrevFile(){
-	  	   
-	  	    
     	    const xhr = new XMLHttpRequest();
-      
           xhr.open('POST', '/avr/flashrollback');
           xhr.send();
     	    xhr.addEventListener('loadend', () => {
@@ -397,7 +437,6 @@
       function fusesExpandSection() {
         const fuse_bits = document.getElementById("fuse_bits");
         const expandfuse  = document.getElementById("expandfuse"); 
-        
         fuse_bits.style = expandfuse.checked ? "" : "display: none";
     }
     	   	

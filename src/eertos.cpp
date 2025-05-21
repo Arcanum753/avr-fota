@@ -62,34 +62,33 @@ void SetTimerTask(TPTR TS, uint32_t NewTime)	{
 	uint32_t      Idle_i = 0;
 	for(index=0;index!=MainTimerQueueSize+1;++index)   				//Прочесываем очередь таймеров
 	   {
-	   if(MainTimer[index].GoToTask == TS)            				// Если уже есть запись с таким адресом
+			if(MainTimer[index].GoToTask == TS)            				// Если уже есть запись с таким адресом
+				{
+					MainTimer[index].Time = NewTime;         					// Перезаписываем ей выдержку
+					return;                              					// Выходим. Раньше был код успешной операции. Пока убрал
+				}
+			else
 		  {
-		  MainTimer[index].Time = NewTime;         					// Перезаписываем ей выдержку
-		   return;                              					// Выходим. Раньше был код успешной операции. Пока убрал
-		  }
-	   else
-		  {
-		  if ((MainTimer[index].GoToTask == Idle_task) && (Idle_i == 0))
-			 {
-			 Idle_i = index;
-			 }
+			if ((MainTimer[index].GoToTask == Idle_task) && (Idle_i == 0))
+				{
+					Idle_i = index;
+				}
 		  }
 	   }
 
 	for(index=0;index!=MainTimerQueueSize+1;++index)   				// Если не находим похожий таймер, то ищем любой пустой
 	   {
-	   if (MainTimer[index].GoToTask == Idle_task)
-		  {
-            MainTimer[index].GoToTask = TS;         					// Заполняем поле перехода задачи
-            MainTimer[index].Time = NewTime;      					// И поле выдержки времени
-            return;                           						// Выход.
-		  }
-
+			if (MainTimer[index].GoToTask == Idle_task)
+				{
+					MainTimer[index].GoToTask = TS;         					// Заполняем поле перехода задачи
+					MainTimer[index].Time = NewTime;      					// И поле выдержки времени
+					return;                           						// Выход.
+				}
 	   }                                    						// тут можно сделать return c кодом ошибки - нет свободных таймеров
 }
 
 /*
-// функция удаления задачи из очереди  таймеров. // Sam_Arcanum 
+*	функция удаления задачи из очереди  таймеров. // Sam_Arcanum 
 */
 void DelTimerTask(TPTR TS)	{
 	uint8_t		index=0;
@@ -106,7 +105,7 @@ void DelTimerTask(TPTR TS)	{
 }
 
 /*=================================================================================
-Диспетчер задач ОС. Выбирает из очереди задачи и отправляет на выполнение.
+*	Диспетчер задач ОС. Выбирает из очереди задачи и отправляет на выполнение.
 */
 
 void TaskManager(void)	{

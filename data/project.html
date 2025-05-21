@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Programmer project configuration</title>
+    <meta http-equiv="Content-type" content="text/html; charset=utf-8">
+	<link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+    <markup>./page_head.html</markup>
+    <h2 class="title" style="background: #7D8EE2">Programmer project configuration</h2>
+
+    <form action="" method="post">
+        <table border="0" cellspacing="0" cellpadding="3" align="center">
+            <tr><td align="left">Avr project name</td>     <td><input type="text" id="deviceproj"   name="deviceproj" value=""></td></tr>
+            <tr><td align="left">Avr chip mem size</td>    <td><input type="text" id="devicemem"    name="devicemem" value=""></td></tr>
+            <tr><td>Delete other *.hex files: </td>        <td><input type="checkbox"  id="cleanfs" name="cleanfs"></td> </tr>
+            <tr><td colspan="2" align="center"> <input type="submit" value="Save"></td></tr>
+        </table>
+    </form>    
+    
+	<markup>./page_bottom.html</markup>
+	<script src="GetJson.js" defer></script>
+	<script src="GetMarkup.js" defer></script>
+    <script src="microajax.js" defer></script>
+	<script>
+		window.onload = function() {
+			ApplyCVT("/system/info");
+            ApplyCVT("/project/info");
+		};
+
+
+        function setMinMax() {
+            const el = document.getElementById("udptime");
+            if (el.value != "") {
+                if (parseInt(el.value) < parseInt(el.min)) {
+                    el.value = el.min;
+                }
+                if (parseInt(el.value) > parseInt(el.max)) {
+                    el.value = el.max;
+                }
+            }
+        }
+	</script>
+
+</body>
+
+</html>

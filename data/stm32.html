@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html>	<head>
+	<title>STM32 OTA</title>
+	<meta http-equiv="Content-type" content="text/html; charset=utf-8">
+	<link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+	<markup>./page_head.html</markup>
+	<div class="c">
+		<h2 class="title" style="background: #7D8EE2">  <span id="devicename">  </span> STM32 Firmware Update  </h2>	
+	</div>
+	<div class="c">
+	  
+		</table>
+	</div>
+
+	<markup>./page_bottom.html</markup>
+	<script src="GetJson.js" defer></script>
+	<script src="GetMarkup.js" defer></script>
+	<script src="microajax.js" defer></script>
+	<script>
+		window.onload = function() {
+			setTimeout(() => {
+				ApplyCVT("/admin/infovalues");
+				ApplyCVT("/admin/connectionstate");
+				ApplyCVT("/system/info");
+				
+			}, 250);
+			
+		};
+		</script>
+
+</body>
+
+</html>

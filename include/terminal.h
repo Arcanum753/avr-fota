@@ -1,13 +1,16 @@
-void ledInit();
-void terminalInit();
-void terminalLoop();
+void TerminalInit();
+void TerminalLoop();
+void TerminalHelp (void);
+void TerminalEcho (void) ;
 
 
 void test  ();
-void showInfo ();
-void resetEsp();
+void InfoShow ();
+void EspReset();
 
-void dir  ();
+void DirsShow  ();
 void check  ();
 void flash1  ();
 void flash2  ();
+void udpp ();
+void udpc ();

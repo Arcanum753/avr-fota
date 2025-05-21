@@ -52,6 +52,16 @@
         "stdexcept": "cpp",
         "streambuf": "cpp",
         "cinttypes": "cpp",
-        "variant": "cpp"
-    }
+        "variant": "cpp",
+        "regex": "cpp",
+        "bitset": "cpp",
+        "condition_variable": "cpp",
+        "unordered_set": "cpp",
+        "fstream": "cpp",
+        "iomanip": "cpp",
+        "mutex": "cpp",
+        "sstream": "cpp",
+        "thread": "cpp"
+    },
+    "C_Cpp.errorSquiggles": "disabled"
 }

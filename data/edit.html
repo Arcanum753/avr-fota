@@ -128,6 +128,8 @@
         }
       }
 
+    
+
       #uploader { 
         position: absolute;
         top: 0;
@@ -142,10 +144,21 @@
       #tree { 
         position: absolute;
         top: 28px;
-        bottom: 0;
+        bottom: 400px;
         left: 0;
-        width:200px;
-        padding: 8px;
+        width: 192px;
+        height: 396px;
+        padding: 4px;
+        overflow: auto;
+      }
+      #properties {
+        position: absolute;
+        top: 428px;
+        bottom: 0px;
+        left: 0;
+        width: 192px;
+        height: 188px;
+        padding: 4px;
       }
       #editor, #preview { 
         position: absolute;
@@ -162,35 +175,62 @@
     <script>
       function createFileUploader(element, tree, editor){
         var xmlHttp;
+        var btnHome = document.createElement("button");
+        btnHome.innerHTML = 'Main page';
+        
         var input = document.createElement("input");
         input.type = "file";
         input.multiple = false;
         input.name = "data";
-        document.getElementById(element).appendChild(input);
+        
         var path = document.createElement("input");
         path.id = "upload-path";
         path.type = "text";
         path.name = "path";
         path.defaultValue = "/";
-        document.getElementById(element).appendChild(path);
-        var button = document.createElement("button");
-        button.innerHTML = 'Upload';
-        document.getElementById(element).appendChild(button);
+        
+        var uploadButton = document.createElement("button");
+        uploadButton.innerHTML = 'Upload';
+        
         var mkdir = document.createElement("button");
         mkdir.innerHTML = 'MkDir';
-        document.getElementById(element).appendChild(mkdir);
+        
         var mkfile = document.createElement("button");
         mkfile.innerHTML = 'MkFile';
-        document.getElementById(element).appendChild(mkfile);
-		var saveFile = document.createElement("button");
+		    
+        var saveFile = document.createElement("button");
         saveFile.innerHTML = 'Save';
-        document.getElementById(element).appendChild(saveFile);
+        
         var undoButton = document.createElement("button");
         undoButton.innerHTML = 'Undo';
-        document.getElementById(element).appendChild(undoButton);
+        
         var redoButton = document.createElement("button");
         redoButton.innerHTML = 'Redo';
+        
+        var themeCombobox = document.createElement("select");
+        themeCombobox.innerHTML = 'Theme';
+        var option0 = document.createElement("option");
+        var option1 = document.createElement("option");
+        
+        option0.text = option0.value = "Dark theme";
+        option1.text = option1.value = "Light theme";
+        themeCombobox.appendChild (option0);
+        themeCombobox.appendChild (option1);
+        
+        
+        document.getElementById(element).appendChild(btnHome);
+        document.getElementById(element).appendChild(input);
+        document.getElementById(element).appendChild(path);
+        document.getElementById(element).appendChild(uploadButton);
+        document.getElementById(element).appendChild(mkdir);
+        document.getElementById(element).appendChild(mkfile);
+        document.getElementById(element).appendChild(saveFile);
+        document.getElementById(element).appendChild(undoButton);
         document.getElementById(element).appendChild(redoButton);
+        document.getElementById(element).appendChild(themeCombobox);
+        
+        
+        
   
         function httpPostProcessRequest(){
           if (xmlHttp.readyState == 4){
@@ -209,6 +249,22 @@
           xmlHttp.send(formData);
         }
         
+        themeCombobox. onchange = function (e) {
+          var value = themeCombobox.value;
+          var theme;
+          if (value == 'Dark theme') {
+            theme =  'tomorrow_night_bright';
+          }
+          if (value == 'Light theme') {
+            theme = 'github_light_default';
+          }
+          editor.setTheme("ace/theme/" + theme);
+          
+        };
+
+        btnHome. onclick = function (e) {
+           location.href ='index.html';
+        };
         saveFile.onclick = function (e) {
             editor.execCommand("saveCommand");
         };
@@ -232,7 +288,7 @@
           }
           createPath(dir);
         };
-        button.onclick = function(e){
+        uploadButton.onclick = function(e){
           if(input.files.length === 0){
             return;
           }
@@ -572,13 +628,14 @@
               case "txt": lang = "plain"; break;
               case "htm": lang = "html"; break;
               case "js": lang = "javascript"; break;
-              case "c": lang = "c_cpp"; break;
+              case "c":  lang = "c_cpp"; break;
               case "cpp": lang = "c_cpp"; break;
-              case "css":
-              case "scss":
+              case "css": lang = "css";  break;
+              case "html": lang = "html";  break;
+              case "json": lang = "json";  break;
+              case "hex": lang = "plain"; break;
               case "php":
-              case "html":
-              case "json":
+              case "scss":
               case "xml":
                 lang = ext;
             }
@@ -586,7 +643,7 @@
           return lang;
         }
   
-        if(typeof file === "undefined") file = "/index.htm";
+        if(typeof file === "undefined") file = "/index.html";
   
         if(typeof lang === "undefined"){
           lang = getLangFromFilename(file);
@@ -674,19 +731,24 @@
         }
         return editor;
       }
+      function createProps(element, tree, editor){
+
+      }
       function onBodyLoad(){
         var vars = {};
         var parts = window.location.href.replace(/[?&]+([^=&]+)=([^&]*)/gi, function(m,key,value) { vars[key] = value; });
         var editor = createEditor("editor", vars.file, vars.lang, vars.theme);
         var tree = createTree("tree", editor);
         createFileUploader("uploader", tree, editor);
+        createProps("properties", tree, editor);
       };
     </script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.2.5/ace.js" type="text/javascript" charset="utf-8"></script>
+    <script src="ace.js" type="text/javascript" charset="utf-8"></script>
   </head>
   <body onload="onBodyLoad();">
     <div id="uploader"></div>
     <div id="tree"></div>
+    <div id="properties"></div>
     <div id="editor"></div>
     <div id="preview" style="display:none;"></div>
     <iframe id=download-frame style='display:none;'></iframe>

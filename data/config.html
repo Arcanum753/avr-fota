@@ -2,52 +2,51 @@
 <html>
 
 <head>
-    <title>Esp8266 WiFi &amp Network Configuration.</title>
+    <title>WiFi &amp Network Configuration.</title>
     <meta http-equiv="Content-type" content="text/html; charset=utf-8">    
     <link rel="stylesheet" href="style.css">
 </head>
 
 <body>
-    <markup>./head.html</markup>
-    <h2 class="title" style="background: #7D8EE2">WiFi &amp; network configuration </h2>
+    <markup>./page_head.html</markup>
+    <h2 class="title" style="background: #7D8EE2"> <span id="devicename"></span> WiFi &amp; network configuration </h2>
     Connect to Router with these settings:<br>
-    <table border="1" cellspacing="10" cellpadding="3" align="center">
+    <table border="1" cellspacing="1" cellpadding="1" align="center">
         <tr><td>
-                    <form action="" method="get"> <table border="0" cellspacing="0" cellpadding="3">
-                        <tr><td align="right">SSID: </td>        <td><input type="text"  id="p0_ssid" name="ssid" value=""> </td></tr>
-                        <tr><td align="right">Password: </td>    <td><input type="password"  id="p0_password" name="password" value=""> </td></tr>
-                        <tr><td align="right">DHCP: </td>        <td><input type="checkbox"  id="p0_dhcp" name="dhcp"></td> </tr>
-                        <tr><td align="right">IP: </td>
-                            <td><input type="text"  id="p0_ip_0" name="ip_0" size="3">.<input type="text"  id="p0_ip_1" name="ip_1" size="3">.<input type="text"  id="p0_ip_2" name="ip_2" size="3">.<input type="text"  id="p0_ip_3" name="ip_3" value="" size="3"></td></tr>
-                        <tr><td align="right">Netmask:</td>
-                            <td><input type="text"  id="p0_nm_0" name="nm_0" size="3">.<input type="text"  id="p0_nm_1" name="nm_1" size="3">.<input type="text"  id="p0_nm_2" name="nm_2" size="3">.<input type="text"  id="p0_nm_3" name="nm_3" size="3"></td></tr>
-                        <tr><td align="right">Gateway:</td>
-                            <td><input type="text"  id="p0_gw_0" name="gw_0" size="3">.<input type="text"  id="p0_gw_1" name="gw_1" size="3">.<input type="text"  id="p0_gw_2" name="gw_2" size="3">.<input type="text"  id="p0_gw_3" name="gw_3" size="3"></td></tr>
-                        <tr><td align="right">DNS:</td>
-                            <td><input type="text"  id="p0_dns_0" name="dns_0" size="3">.<input type="text"  id="p0_dns_1" name="dns_1" size="3">.<input type="text"  id="p0_dns_2" name="dns_2" size="3">.<input type="text"  id="p0_dns_3" name="dns_3" size="3"></td> </tr>
-                            <input type="hidden" name="wificonf" value="0" />
-                        <tr><td colspan="2" align="center"><input type="submit" value="Save"></td></tr>
-                    </table></form>
+            <form action="" method="get"> <table border="0" cellspacing="0" cellpadding="2" >
+                <tr><td align="right">SSID1: </td>        <td><input type="text"  id="p0_ssid" name="ssid" value=""> </td></tr>
+                <tr><td align="right">Password: </td>    <td><input type="password"  id="p0_password" name="password" value=""> </td></tr>
+                <tr><td align="right">DHCP: </td>        <td><input type="checkbox"  id="p0_dhcp" name="dhcp"></td> </tr>
+                <tr><td align="right">IP: </td>
+                    <td ><input type="text"  id="p0_ip_0" name="ip_0" size="3">.<input type="text"  id="p0_ip_1" name="ip_1" size="3">.<input type="text"  id="p0_ip_2" name="ip_2" size="3">.<input type="text"  id="p0_ip_3" name="ip_3" value="" size="3"></td></tr>
+                <tr><td align="right">Netmask:</td>
+                    <td><input type="text"  id="p0_nm_0" name="nm_0" size="3">.<input type="text"  id="p0_nm_1" name="nm_1" size="3">.<input type="text"  id="p0_nm_2" name="nm_2" size="3">.<input type="text"  id="p0_nm_3" name="nm_3" size="3"></td></tr>
+                <tr><td align="right">Gateway:</td>
+                    <td><input type="text"  id="p0_gw_0" name="gw_0" size="3">.<input type="text"  id="p0_gw_1" name="gw_1" size="3">.<input type="text"  id="p0_gw_2" name="gw_2" size="3">.<input type="text"  id="p0_gw_3" name="gw_3" size="3"></td></tr>
+                <tr><td align="right">DNS:</td>
+                    <td><input type="text"  id="p0_dns_0" name="dns_0" size="3">.<input type="text"  id="p0_dns_1" name="dns_1" size="3">.<input type="text"  id="p0_dns_2" name="dns_2" size="3">.<input type="text"  id="p0_dns_3" name="dns_3" size="3"></td> </tr>
+                    <input type="hidden" name="wificonf" value="0" />
+                <tr><td colspan="2" align="center"><input type="submit" value="Save"></td></tr>
+            </table></form>
         </td><td>
-                <form action="" method="get"><table border="0" cellspacing="0" cellpadding="3">
-                        <tr><td align="right">SSID: </td>        <td><input type="text"  id="p1_ssid" name="ssid" value=""> </td></tr>
-                        <tr><td align="right">Password: </td>    <td><input type="password"  id="p1_password" name="password" value=""> </td></tr>
-                        <tr><td align="right">DHCP: </td>        <td><input type="checkbox"  id="p1_dhcp" name="dhcp"></td> </tr>
-                        <tr><td align="right">IP: </td>
-                            <td><input type="text"  id="p1_ip_0" name="ip_0" size="3">.<input type="text"  id="p1_ip_1" name="ip_1" size="3">.<input type="text"  id="p1_ip_2" name="ip_2" size="3">.<input type="text"  id="p1_ip_3" name="ip_3" value="" size="3"></td></tr>
-                        <tr><td align="right">Netmask:</td>
-                            <td><input type="text"  id="p1_nm_0" name="nm_0" size="3">.<input type="text"  id="p1_nm_1" name="nm_1" size="3">.<input type="text"  id="p1_nm_2" name="nm_2" size="3">.<input type="text"  id="p1_nm_3" name="nm_3" size="3"></td></tr>
-                        <tr><td align="right">Gateway:</td>
-                            <td><input type="text"  id="p1_gw_0" name="gw_0" size="3">.<input type="text"  id="p1_gw_1" name="gw_1" size="3">.<input type="text"  id="p1_gw_2" name="gw_2" size="3">.<input type="text"  id="p1_gw_3" name="gw_3" size="3"></td></tr>
-                        <tr><td align="right">DNS:</td>
-                            <td><input type="text"  id="p1_dns_0" name="dns_0" size="3">.<input type="text"  id="p1_dns_1" name="dns_1" size="3">.<input type="text"  id="p1_dns_2" name="dns_2" size="3">.<input type="text"  id="p1_dns_3" name="dns_3" size="3"></td> </tr>
-                            <input type="hidden"  name="wificonf" value="1" />
-                            <tr><td colspan="2" align="center"><input type="submit" value="Save"></td></tr>
-                        
+            <form action="" method="get"><table border="0" cellspacing="0" cellpadding="2">
+                    <tr><td align="right">SSID2: </td>        <td><input type="text"  id="p1_ssid" name="ssid" value=""> </td></tr>
+                    <tr><td align="right">Password: </td>    <td><input type="password"  id="p1_password" name="password" value=""> </td></tr>
+                    <tr><td align="right">DHCP: </td>        <td><input type="checkbox"  id="p1_dhcp" name="dhcp"></td> </tr>
+                    <tr><td align="right">IP: </td>
+                        <td><input type="text"  id="p1_ip_0" name="ip_0" size="3">.<input type="text"  id="p1_ip_1" name="ip_1" size="3">.<input type="text"  id="p1_ip_2" name="ip_2" size="3">.<input type="text"  id="p1_ip_3" name="ip_3" value="" size="3"></td></tr>
+                    <tr><td align="right">Netmask:</td>
+                        <td><input type="text"  id="p1_nm_0" name="nm_0" size="3">.<input type="text"  id="p1_nm_1" name="nm_1" size="3">.<input type="text"  id="p1_nm_2" name="nm_2" size="3">.<input type="text"  id="p1_nm_3" name="nm_3" size="3"></td></tr>
+                    <tr><td align="right">Gateway:</td>
+                        <td><input type="text"  id="p1_gw_0" name="gw_0" size="3">.<input type="text"  id="p1_gw_1" name="gw_1" size="3">.<input type="text"  id="p1_gw_2" name="gw_2" size="3">.<input type="text"  id="p1_gw_3" name="gw_3" size="3"></td></tr>
+                    <tr><td align="right">DNS:</td>
+                        <td><input type="text"  id="p1_dns_0" name="dns_0" size="3">.<input type="text"  id="p1_dns_1" name="dns_1" size="3">.<input type="text"  id="p1_dns_2" name="dns_2" size="3">.<input type="text"  id="p1_dns_3" name="dns_3" size="3"></td> </tr>
+                        <input type="hidden"  name="wificonf" value="1" />
+                        <tr><td colspan="2" align="center"><input type="submit" value="Save"></td></tr>
                 </table></form>
             </td></tr>
             <tr><td>
-                <form action="" method="get">   <table border="0" cellspacing="0" cellpadding="3">
+                <form action="" method="get">   <table border="0" cellspacing="0" cellpadding="2">
                     <tr><td align="right">SSID: </td>        <td><input type="text"  id="p2_ssid" name="ssid" value=""> </td></tr>
                     <tr><td align="right">Password: </td>    <td><input type="password"  id="p2_password" name="password" value=""> </td></tr>
                     <tr><td align="right">DHCP: </td>        <td><input type="checkbox"  id="p2_dhcp" name="dhcp"></td> </tr>
@@ -63,7 +62,7 @@
                     <tr><td colspan="2" align="center"><input type="submit" value="Save"></td></tr>
                 </table> </form>
             </td><td>
-                <form action="" method="get">   <table border="0" cellspacing="0" cellpadding="3">
+                <form action="" method="get">   <table border="0" cellspacing="0" cellpadding="2">
                         <tr><td align="right">SSID: </td>        <td><input type="text"  id="p3_ssid" name="ssid" value=""> </td></tr>
                         <tr><td align="right">Password: </td>    <td><input type="password"  id="p3_password" name="password" value=""> </td></tr>
                         <tr><td align="right">DHCP: </td>        <td><input type="checkbox"  id="p3_dhcp" name="dhcp"></td> </tr>
@@ -101,16 +100,13 @@
                 </table>
             </td>
         </tr>
-        <tr>
-            <td align="center">
-                <a href="javascript: getNetwork();" >Refresh</a>
-            </td>
-        </tr>
+        <tr><td align="center"><a href="javascript: getNetwork();" >Refresh</a></td></tr>
     </table>
 
-    <markup>./bottom.html</markup>
+    <markup>./page_bottom.html</markup>
 	<script src="GetJson.js" defer></script>
 	<script src="GetMarkup.js" defer></script>
+    <script src="microajax.js" defer></script>
 	<script>
 		window.onload = function() {
             getNetwork();
@@ -123,8 +119,9 @@
                 .then(() => ApplyCVT("/admin/values/3", "p3_"))
 
             setTimeout(() => {
-                ApplyCVT("/admin/devconf");
-			}, 1000);
+                
+                ApplyCVT("/system/info");
+			}, 500);
 		};
 	</script>
 
