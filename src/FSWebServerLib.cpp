@@ -1178,7 +1178,7 @@ int AsyncFSWebServer::scanWifi() {
 		}
 		WiFi.scanDelete();
 	}
-	if (_scanNum > 0) {	
+	if (_scanNum >= 0) {
 		WifiScan = WF_STAT_SCANED;	
 	}
 
