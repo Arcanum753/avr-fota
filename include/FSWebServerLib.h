@@ -23,7 +23,7 @@
 #include <Ticker.h>
 #include <ArduinoOTA.h>
 
-
+#include <ArduinoJson.h>
 
 
 
@@ -57,14 +57,20 @@
 #define JSON_STR_LEN    512
 // #define HIDE_CONFIG
 
-#define WIFI_CONFIG_FILE0 "/config_wifi0.json"
+
+#define WIFI_CONFIG_FILE_NAME "config_wifi"
 #define WIFI_CONFIGS    4
 
+//WIFI_CONFIG_FILEx is deprecated option
+
+#define WIFI_CONFIG_FILE0 "/config_wifi0.json"
 #if (USE_RESERV_WIFI > 0)
 #define WIFI_CONFIG_FILE1           "/config_wifi1.json"
 #define WIFI_CONFIG_FILE2           "/config_wifi2.json"
-#define WIFI_CONFIG_FILE3           "/config_wifi3.json"  
+#define WIFI_CONFIG_FILE3           "/config_wifi3.json"
 #endif
+
+#define CONFIG_FILE_METAR             "/config_metar.json"
 
 #define CONFIG_FILE_SYS             "/config_sys.json"
 #define CONFIG_FILE_NTP             "/config_ntp.json"
@@ -92,7 +98,7 @@
 #define OTA_FILENAME_FILESYSTEM         "spiffs.bin"
 #define OTA_FIRMWARE                    "FIRMWARE"
 #define OTA_FILESYSTEM                  "FILESYSTEM"
-#define OTA_UNSUPPORTED                 "UNSUPPORTED"  
+#define OTA_UNSUPPORTED                 "UNSUPPORTED"
 
 #define HTML_INDEX  "index.html"
 
@@ -124,7 +130,9 @@ typedef struct {
     String keyword;
 } strUdpConfig;
 
-
+typedef struct {
+    String icao;
+} strMetarConfig;
 
 typedef struct {
     String ssid;
@@ -194,7 +202,7 @@ public:
     //Clear the user configuration data (not the Wifi config!) and optional reset the device
     void clearUserConfig(bool reset);
     void serialShowInfo();
-    void showDBG();        
+    void showDBG();
     String      udpJsonBroadcast();
     uint16_t    getUpdPortTx() ;
     uint16_t    getUpdPortRx() ;
@@ -203,6 +211,7 @@ public:
     strSysConfig    _sysConfig; // SYS configuration
     strNtpConfig    _ntpConfig; // NTP configuration
     strUdpConfig    _udpConfig; // UDP configuration
+    strMetarConfig    _metarConfig; // METAR configuration
 
 private:
 	JSON_CALLBACK_SIGNATURE;
@@ -214,8 +223,8 @@ private:
     void ntpHandler(NTPSyncEvent_t event);
 
 protected:
-    
-    
+
+
 
     strWifiConfig       _wifiConfig;    //  WiFi configuration
     strApConfig         _apConfig;      // Static AP config settings
@@ -238,7 +247,7 @@ protected:
     String _updateFileName = "";
     bool updateTimeFromNTP = false;
 
-    
+
     #if defined(ESP32)
     // WiFiEventId_t eventID;
     WiFiEventId_t onStationModeConnectedHandler
@@ -249,7 +258,7 @@ protected:
     #endif
 
 
-    
+
     enWifiStatus wifiStatus;
     enWifiScan WifiScan;
     uint8_t connectionTimout;
@@ -260,7 +269,7 @@ protected:
     AsyncEventSource _evs = AsyncEventSource("/events");
 
     void sendTimeData();
-    
+
     // all about avr;
     String _hexfileProg;
     String _hexfileCheck;
@@ -274,13 +283,20 @@ protected:
     void avrProgStatus(AsyncWebServerRequest *request) ;
     void avrFusesRead(AsyncWebServerRequest *request) ;
     void avrWebFusesWrite(AsyncWebServerRequest *request) ;
-    
+
     // gpio
     void  gpioGetArgs(AsyncWebServerRequest *request);
 
     //udp
     void udpTest(AsyncWebServerRequest *request) ;
-    
+
+    bool save_jsonDoc(const JsonDocument& jsonDoc, const String& file);
+    bool load_jsonDoc(const String& file, JsonDocument& jsonDoc);
+    //metar
+    bool load_config_metar();
+    bool save_config_metar();
+    void default_config_metar();
+
     //sys
     bool load_config_Sys();
     bool save_configSys();
@@ -299,7 +315,7 @@ protected:
     bool load_configWifi(int _in);
     bool save_configWifi(int _in);
     void defaultConfigWifi(int _in);
-	
+
     // bool load_generic_config()
     bool loadHTTPAuth();
     bool saveHTTPAuth();
@@ -318,7 +334,7 @@ protected:
 	void onWiFiDisconnected     (WiFiEventStationModeDisconnected   data);
 	void onWiFiConnectedGotIP   (WiFiEventStationModeGotIP          data);
     #endif
-    
+
 
     static void s_secondTick(void* arg);
 
@@ -330,13 +346,13 @@ protected:
     bool handleFileRead(String path, AsyncWebServerRequest *request);
     void handleFileCreate(AsyncWebServerRequest *request);
     void handleFileDelete(AsyncWebServerRequest *request);
-    
+
     void handleFileUpload(AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final);
     void send_system_configuration_values_html(AsyncWebServerRequest *request);
     void send_device_values_html(AsyncWebServerRequest *request);
-    
+
     void send_udp_configuration_values_html(AsyncWebServerRequest *request);
-    
+
     void send_project_configuration_values_html(AsyncWebServerRequest *request);
     void send_network_configuration_values_html(AsyncWebServerRequest *request, int _index);
     void send_connection_state_values_html(AsyncWebServerRequest *request);
@@ -348,7 +364,7 @@ protected:
     void get_system_configuration_html(AsyncWebServerRequest *request);
     void get_udp_configuration_html(AsyncWebServerRequest *request);
     void get_project_configuration_html(AsyncWebServerRequest *request);
-    
+
     void restart_esp();
     void send_wwwauth_configuration_values_html(AsyncWebServerRequest *request);
     void send_wwwauth_configuration_html(AsyncWebServerRequest *request);
@@ -364,7 +380,7 @@ protected:
     void prepareSizesForUpdate();
     UpdateTypeFile  typeOTAfile;
     uint16_t percentLoadedPrev ;
-    
+
  //   static String urldecode(String input); // (based on https://code.google.com/p/avr-netino/)
     static unsigned char h2int(char c);
     static boolean checkRange(String Value);

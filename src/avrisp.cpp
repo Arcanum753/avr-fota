@@ -1,4 +1,4 @@
-#include <cstddef> 
+#include <cstddef>
 #include <Arduino.h>
 #include <ArduinoJson.h>
 #include <SPI.h>
@@ -24,13 +24,13 @@ ESP8266_AVRISP avrprog( PIN_RST);
 
 ESP8266_AVRISP::ESP8266_AVRISP( uint8_t reset_pin
                                     , bool reset_state
-                                    , bool reset_activehigh): 
+                                    , bool reset_activehigh):
                                         _reset_pin(reset_pin)
                                         , _reset_state(reset_state)
                                         , _reset_activehigh(reset_activehigh
-                                )   
+                                )
 {
-    
+
 }
 
 //all about spi and reset
@@ -50,7 +50,7 @@ void ESP8266_AVRISP::setReset(bool rst) {
 bool ESP8266_AVRISP::begin (){
     pinMode(_reset_pin, OUTPUT);
     setReset(true);
-    cfg_setDefault();  	
+    cfg_setDefault();
     chipNow = chipSignRead();
     if (cfgFileLoad() == false) {         cfgFileSave();    }
     filesClean();
@@ -69,7 +69,7 @@ avrsip_err_t  ESP8266_AVRISP:: avrChipProgrammDBG(String _in){
     if(!cfgFileLoad())  {   return ERR_CFG;   }
     if (_in == "1" ){ _in = _AVRISP_CfgFile.hex_filename;  }
     if (_in == "2" ){ _in = _AVRISP_CfgFile.hex_filename_old;  }
-    hexFileOpen(_in); 
+    hexFileOpen(_in);
 
     if (hexFileBinDataCheck() < ERROR_OK){ return ERR_INCORRECTFILE;    }
     chipSignRead();
@@ -82,7 +82,7 @@ avrsip_err_t  ESP8266_AVRISP:: avrChipProgrammDBG(String _in){
 
     // cfgFilSetUploadeAsNow ( NTP.getTimeDateString());
 
-    
+
     return ERROR_OK;
 }
 
@@ -103,12 +103,12 @@ avrsip_err_t  ESP8266_AVRISP:: avrChipProgrammMain(String _in, String _fwTime){
         return _res;
     }
     //open file
-    _res = hexFileOpen(_in); 
+    _res = hexFileOpen(_in);
     if (_res != ERROR_OK){ return _res;   }
 
     //check file before flashing
     int32_t _res32  = hexFileBinDataCheck();
-    if (_res32 < ERROR_OK){ 
+    if (_res32 < ERROR_OK){
         return _res = (avrsip_err_t) _res32;   }
     //erase chip
     _res = chipErase();
@@ -116,7 +116,7 @@ avrsip_err_t  ESP8266_AVRISP:: avrChipProgrammMain(String _in, String _fwTime){
     //flash chip
     _res = hexFile2flashByPages();
      if (_res != ERROR_OK){ return _res;   }
-    
+
     _res = cfgFileSetNowAsOld ();
     // if (_res != ERROR_OK){ return _res;   }
 
@@ -124,7 +124,7 @@ avrsip_err_t  ESP8266_AVRISP:: avrChipProgrammMain(String _in, String _fwTime){
     // if (_res != ERROR_OK){ return _res;   }
 
     chipFlashVerification();
-	
+
     DEBUGLOGISP(__PRETTY_FUNCTION__);
     DEBUGLOGISP("\r\n");
     return _res;
@@ -132,7 +132,7 @@ avrsip_err_t  ESP8266_AVRISP:: avrChipProgrammMain(String _in, String _fwTime){
 
 uint16_t ESP8266_AVRISP::chipSpiTransaction(uint8_t a, uint8_t b, uint8_t c, uint8_t d) {
     uint8_t n, m, r;
-    SPI.transfer(a); 
+    SPI.transfer(a);
     n = SPI.transfer(b);
     //if (n != a) error = -1;
     m = SPI.transfer(c);
@@ -169,7 +169,7 @@ void ESP8266_AVRISP::pmode_end() {
 void ESP8266_AVRISP::chipFusesWrite( uint8_t _high, uint8_t _low, uint8_t _lock, uint8_t _ext) {
     AVRISP_fuses_t AVRISP_fuses;
     chipFusesRead(AVRISP_fuses);
-   
+
     if (!_lock) _lock = AVRISP_fuses.lock;
     if (!_low)  _low = AVRISP_fuses.low;
     if (!_high) _high = AVRISP_fuses.high;
@@ -183,11 +183,11 @@ void ESP8266_AVRISP::chipFusesWrite( uint8_t _high, uint8_t _low, uint8_t _lock,
     if (_ext)  {chipSpiTransaction(STK_CHIPFUSEEXT_WR, _ext);       chipBusyWaitPolling();}
     SPI.endTransaction();
     pmode_end();
-    
+
     DEBUGLOGISP("avr high 0x%02x low  0x%02x  lock  0x%02x ext  0x%02x\r\n",
     _high, _low, _lock, _ext);
     DEBUGLOGISP(__PRETTY_FUNCTION__);
-    DEBUGLOGISP("\r\n"); 
+    DEBUGLOGISP("\r\n");
 }
 
 
@@ -201,7 +201,7 @@ void ESP8266_AVRISP::chipFusesRead( AVRISP_fuses_t &_AVRISP_fuses ) {
     SPI.endTransaction();
     pmode_end();
     DEBUGLOGISP(__PRETTY_FUNCTION__);
-    DEBUGLOGISP("\r\n"); 
+    DEBUGLOGISP("\r\n");
 }
 
 String ESP8266_AVRISP::chipSignRead() {
@@ -217,7 +217,7 @@ String ESP8266_AVRISP::chipSignRead() {
     sprintf (_ret, "0x%02X%02X%02X", high, middle, low);
     DEBUGLOGISP("\t%s \n\r", _ret);
     return String(_ret);
-    
+
 }
 
 avrsip_err_t ESP8266_AVRISP::chipErase() {
@@ -225,7 +225,7 @@ avrsip_err_t ESP8266_AVRISP::chipErase() {
     avrsip_err_t avrsip_err = ERROR_OK;
     pmode_begin();
     SPI.beginTransaction(fuses_spisettings);
-    chipSpiTransaction(STK_ERASECHIP);	// chip erase    
+    chipSpiTransaction(STK_ERASECHIP);	// chip erase
     SPI.endTransaction();
     chipBusyWaitPolling();
     pmode_end();
@@ -242,7 +242,7 @@ void ESP8266_AVRISP::chipBusyWaitPolling()  {
     SPI.endTransaction();
 }
 
-avrsip_err_t ESP8266_AVRISP::chipFlashPage (byte *pagebuff, uint16_t pageaddr, uint8_t pagesize) { 
+avrsip_err_t ESP8266_AVRISP::chipFlashPage (byte *pagebuff, uint16_t pageaddr, uint8_t pagesize) {
     DEBUGLOGISPBUF("%04x \n\r ", pageaddr);
     SPI.beginTransaction(flash_spisettings);
     for (uint16_t i=0; i < pagesize/2; i++) {
@@ -255,14 +255,14 @@ avrsip_err_t ESP8266_AVRISP::chipFlashPage (byte *pagebuff, uint16_t pageaddr, u
     }
     //page addr is in bytes, byt we need to convert to words (/2)
     pageaddr = (pageaddr/2) & (~(((pagesize/2)-1)));
-   
+
     uint16_t commitreply = chipSpiTransaction(0x4C, (pageaddr >> 8) & 0xFF, pageaddr & 0xFF, 0);
     SPI.endTransaction();
     chipBusyWaitPolling();
 
     DEBUGLOGISPBUF("\tCommit Page: 0x%04x -> 0x%04x\n\r", pageaddr, commitreply);
     if (commitreply != pageaddr) { return ERR_FLASH;  }
-    return ERROR_OK; 
+    return ERROR_OK;
 }
 
 // Send one byte to the page buffer on the chip
@@ -302,21 +302,21 @@ avrsip_err_t  ESP8266_AVRISP:: hexFileMetaStructGet(String _in, AVRISP_HexFileUp
     avrsip_err_t _ret = ERR_INCORRECTFILE;
     // avrsip_err_t _ret = ERROR_OK;
     AVRISP_HexFileUploaded.hex_filename = _in;
-    _ret = hexFileOpen( AVRISP_HexFileUploaded.hex_filename); 
+    _ret = hexFileOpen( AVRISP_HexFileUploaded.hex_filename);
     if (_ret != ERROR_OK){ return _ret;   }
     _ret = hexFileHeadCheck();
     if (_ret != ERROR_OK){ return _ret;   }
-    if(!cfgFileLoad()) { 
+    if(!cfgFileLoad()) {
         return ERR_CFG;
     }
-    if (AVRISP_HexFileUploaded.project_name == _AVRISP_CfgFile.project_name ) { 
-        AVRISP_HexFileUploaded.cmpproj = true; 
+    if (AVRISP_HexFileUploaded.project_name == _AVRISP_CfgFile.project_name ) {
+        AVRISP_HexFileUploaded.cmpproj = true;
     } else {
         AVRISP_HexFileUploaded.cmpproj = false;
     }
 
-    if (AVRISP_HexFileUploaded.signture == chipNow ) { 
-        AVRISP_HexFileUploaded.cmpsign = true; 
+    if (AVRISP_HexFileUploaded.signture == chipNow ) {
+        AVRISP_HexFileUploaded.cmpsign = true;
     } else {
         AVRISP_HexFileUploaded.cmpsign = false;
     }
@@ -329,8 +329,8 @@ avrsip_err_t  ESP8266_AVRISP:: hexFileMetaStructGet(String _in, AVRISP_HexFileUp
 
 avrsip_err_t ESP8266_AVRISP::hexFileHeadCheck() {
     avrsip_err_t _ret = ERROR_OK;
-    uint32_t _filesize = _hexFileBuf.size();  
-    
+    uint32_t _filesize = _hexFileBuf.size();
+
     AVRISP_HexFileUploaded.signture         = "";
     AVRISP_HexFileUploaded.project_name     = "";
     AVRISP_HexFileUploaded.version          = "";
@@ -339,30 +339,30 @@ avrsip_err_t ESP8266_AVRISP::hexFileHeadCheck() {
     char _c;
     bool _isParam = false;
 
-    bool _isValueSign = false; 
-    bool _isValueName = false; 
-    bool _isValueVers = false; 
-    // bool _isValueDate = false; 
-    bool _isValueTime = false; 
+    bool _isValueSign = false;
+    bool _isValueName = false;
+    bool _isValueVers = false;
+    // bool _isValueDate = false;
+    bool _isValueTime = false;
     String _strParam = "";
 
     for (uint32_t _index = 0; _index < _filesize; _index++) {
         _c = _hexFileBuf.at(_index);
 
-        if   (_c =='\n' || _c  ==  '\r' || _c  == '\t') { 
-            if (_isValueSign)  _isValueSign = false;  
-            if (_isValueName)  _isValueName = false; 
-            if (_isValueVers)  _isValueVers = false; 
-            // if (_isValueDate)  _isValueDate = false; 
-            if (_isValueTime)  _isValueTime = false; 
+        if   (_c =='\n' || _c  ==  '\r' || _c  == '\t') {
+            if (_isValueSign)  _isValueSign = false;
+            if (_isValueName)  _isValueName = false;
+            if (_isValueVers)  _isValueVers = false;
+            // if (_isValueDate)  _isValueDate = false;
+            if (_isValueTime)  _isValueTime = false;
         }
 
         // if ( _c != HEX_PARSE_CHAR_SPACE )    {
-            if(_isValueSign ) AVRISP_HexFileUploaded.signture       += _c;  
-            if(_isValueName ) AVRISP_HexFileUploaded.project_name   += _c;  
-            if(_isValueVers ) AVRISP_HexFileUploaded.version        += _c;  
-            // if(_isValueDate ) AVRISP_HexFileUploaded.buildDate      += _c;  
-            if(_isValueTime ) AVRISP_HexFileUploaded.buildtime      += _c;  
+            if(_isValueSign ) AVRISP_HexFileUploaded.signture       += _c;
+            if(_isValueName ) AVRISP_HexFileUploaded.project_name   += _c;
+            if(_isValueVers ) AVRISP_HexFileUploaded.version        += _c;
+            // if(_isValueDate ) AVRISP_HexFileUploaded.buildDate      += _c;
+            if(_isValueTime ) AVRISP_HexFileUploaded.buildtime      += _c;
         // }
 
 
@@ -376,7 +376,7 @@ avrsip_err_t ESP8266_AVRISP::hexFileHeadCheck() {
         if (_isParam && _c == HEX_PARSE_CHAR_SPACE)         { _isParam = false;  _strParam = ""; }
         if (_c == HEX_PARSE_METALINEBEGIN)                  { _isParam = true;   }
 
-    } 
+    }
 #if (DEBUG_SHOWHEXBUF > 2)
     DEBUGLOGISP("sign >%s<\n\r",  AVRISP_HexFileUploaded.signture.c_str());
     DEBUGLOGISP("proj >%s<\n\r",  AVRISP_HexFileUploaded.project_name.c_str());
@@ -387,7 +387,7 @@ avrsip_err_t ESP8266_AVRISP::hexFileHeadCheck() {
     return _ret;
 }
 int32_t  ESP8266_AVRISP::hexFileUploadedBodyCheck(String _in){
-    hexFileOpen(_in); 
+    hexFileOpen(_in);
     int32_t _ret  = hexFileBinDataCheck();
     DEBUGLOGISP(__PRETTY_FUNCTION__);    DEBUGLOGISP("\r\n");
     return _ret ;
@@ -398,16 +398,16 @@ int32_t  ESP8266_AVRISP::hexFileUploadedBodyCheck(String _in){
 int32_t ESP8266_AVRISP::hexFileBinDataCheck (  )   {
     int32_t _ret = ERROR_OK;
     if(_hexFileBuf.empty()){
-        return ERR_NOFILE; 
+        return ERR_NOFILE;
     }
     // filesize fo all file bufer
     uint32_t filesize = _hexFileBuf.size();
     //set size of bindata only
 
-    
+
     uint32_t hexTrueLineBegin = 0;     // pos of symbol after first ':'
     uint32_t numOfDotLines = 0;        // how many lines we have
-    char _c;  
+    char _c;
     // look for first ':' and remember position of next symb. now it is our new begin of file.
     for (uint32_t _index = 0; _index < filesize; _index++) {
         _c = _hexFileBuf.at(_index);
@@ -425,8 +425,8 @@ int32_t ESP8266_AVRISP::hexFileBinDataCheck (  )   {
     _hexFileBinDataBuf.resize(filesize);
     uint32_t binBufIndex = 0;
 
-    uint16_t pageaddr = 0;                          // read addr from hex file line 
-    uint16_t pageaddrPrev = 0;                          // read addr from hex file prev line 
+    uint16_t pageaddr = 0;                          // read addr from hex file line
+    uint16_t pageaddrPrev = 0;                          // read addr from hex file prev line
     uint32_t  pagesize = _AVRISP_CfgFile.pagesize;  // size of page buf.
     if (pagesize == 0) {pagesize = MEM_PAGE_SIZE;}
     uint32_t  chipmemsize = _AVRISP_CfgFile.chipsize;  // size of mem chip.
@@ -438,9 +438,9 @@ int32_t ESP8266_AVRISP::hexFileBinDataCheck (  )   {
     uint32_t  totalBins = 0;                        // how many symb's readed in this line
     for (uint32_t _linepos = 0; _linepos < numOfDotLines; _linepos++) {
         readedSyms = hexFileLineParser(hexTrueLineBegin, pageaddr, lineBuffer, chsum,  rtype, readedBins, totalBins);
-        DEBUGLOGISPBUF("pageaddr 0x%04x _linepos %d , readedSyms %d , chsum 0x%02x,  rtype 0x%02x, readedBins %d , totalBins %u \n\r ", 
+        DEBUGLOGISPBUF("pageaddr 0x%04x _linepos %d , readedSyms %d , chsum 0x%02x,  rtype 0x%02x, readedBins %d , totalBins %u \n\r ",
                         pageaddr,       _linepos,     readedSyms,     chsum,         rtype,        readedBins,     totalBins);
-        
+
         hexTrueLineBegin += readedSyms;
         if (pageaddrPrev > pageaddr && !rtype){
             DEBUGLOGISP("incorrect addr error!\n\r");
@@ -448,7 +448,7 @@ int32_t ESP8266_AVRISP::hexFileBinDataCheck (  )   {
             break;
         } else {
             pageaddrPrev = pageaddr;
-            
+
         }
         if (chsum && !rtype) {
              _ret = ERR_HEXCRC;
@@ -458,7 +458,7 @@ int32_t ESP8266_AVRISP::hexFileBinDataCheck (  )   {
             DEBUGLOGISP("hexFileLineParser %d   error\n\r", _linepos);
             _ret = ERR_INCORRECTFILE;
             break;
-        } 
+        }
         if (totalBins >= chipmemsize){
             _ret = ERR_HEXMEMOVER;
             break;
@@ -483,7 +483,7 @@ int32_t ESP8266_AVRISP::hexFileBinDataCheck (  )   {
     }
     if (binBufIndex == totalBins) {DEBUGLOGISP ("binBufIndex == totalBins\n\r");}
     AVRISP_HexFileUploaded.size = totalBins;
-    
+
     DEBUGLOGISP(__PRETTY_FUNCTION__);
     DEBUGLOGISP("\r\n");
     return _ret;
@@ -503,12 +503,12 @@ avrsip_err_t  ESP8266_AVRISP::hexFile2flashByPages( ){
     DEBUGLOGISP(__PRETTY_FUNCTION__);    DEBUGLOGISP("\r\n");
    avrsip_err_t _ret = ERROR_OK;
     if(_hexFileBuf.empty()){
-        return ERR_NOFILE; 
+        return ERR_NOFILE;
     }
     uint32_t filesize = _hexFileBuf.size();
     uint32_t hexTrueLineBegin = 0;     // pos of symbol after first ':'
     uint32_t numOfDotLines = 0;        // how many lines we have
-    char _c;  
+    char _c;
     // look for first ':' and remember position of next symb. now it is our new begin of file.
     for (uint32_t _index = 0; _index < filesize; _index++) {
         _c = _hexFileBuf.at(_index);
@@ -539,7 +539,7 @@ avrsip_err_t  ESP8266_AVRISP::hexFile2flashByPages( ){
         readedSyms = hexFileLineParser(hexTrueLineBegin, linepageaddr, lineBuffer, chsum,  rtype, readedBins, totalBins);
         hexTrueLineBegin += readedSyms;
         if (spiBufPos && rtype){
-            _ret = chipFlashPage (spipageBuffer, spipageaddr, pagesize); 
+            _ret = chipFlashPage (spipageBuffer, spipageaddr, pagesize);
         }
         if (spiBufPos >= pagesize ) {
             spiBufPos = 0;
@@ -553,7 +553,7 @@ avrsip_err_t  ESP8266_AVRISP::hexFile2flashByPages( ){
         if (_ret != ERROR_OK) {
             break;
         }
-        
+
     }
     pmode_end();
     return _ret;
@@ -565,13 +565,13 @@ int32_t ESP8266_AVRISP::hexFileLineParser (uint32_t beginLine, uint16_t &linepag
     uint32_t _filesize = _hexFileBuf.size();
     uint16_t len;
     uint8_t b = 0;
-    char _c;  
+    char _c;
 
     // 'empty' the page by filling it with 0xFF's
     for (uint32_t _index = beginLine; _index < _filesize; _index++) {
          _c = _hexFileBuf.at(_index);
         lineLen++;
-        if (_c == HEX_PARSE_LINEBEGIN) { 
+        if (_c == HEX_PARSE_LINEBEGIN) {
             break;
         }
     }
@@ -580,7 +580,7 @@ int32_t ESP8266_AVRISP::hexFileLineParser (uint32_t beginLine, uint16_t &linepag
     len =            hex2bin(_hexFileBuf.at(beginLine++));
     len = (len<<4) + hex2bin(_hexFileBuf.at(beginLine++));
     chsum = len;
-    
+
     // read high address byte
     b =           hex2bin(_hexFileBuf.at(beginLine++));
     b = (b<<4) +  hex2bin(_hexFileBuf.at(beginLine++));
@@ -593,28 +593,28 @@ int32_t ESP8266_AVRISP::hexFileLineParser (uint32_t beginLine, uint16_t &linepag
     chsum += b;
     linepageaddr = (linepageaddr << 8) + b;
 
-    // record type 
-    b =            hex2bin(_hexFileBuf.at(beginLine++)); // record type 
+    // record type
+    b =            hex2bin(_hexFileBuf.at(beginLine++)); // record type
     b = (b<<4) +   hex2bin(_hexFileBuf.at(beginLine++));
     chsum += b;
     type = b;
     if (type == 0x01){
         // end record, return -1 to indicate we're done
-        return - 1; 
+        return - 1;
     }
-    // read line 
+    // read line
     binReadNum = 0;
     for (byte i=0; i < len; i++) {
         // read 'n' bytes
         b =          hex2bin(_hexFileBuf.at(beginLine++));
-        b = (b<<4) + hex2bin(_hexFileBuf.at(beginLine++)); 
+        b = (b<<4) + hex2bin(_hexFileBuf.at(beginLine++));
         lineBuf[i] = b;
         chsum += b;
         binReadNum ++;
         totalBins++;
-    }       
-    //check sum, 
-    b =           hex2bin(_hexFileBuf.at(beginLine++));  
+    }
+    //check sum,
+    b =           hex2bin(_hexFileBuf.at(beginLine++));
     b = (b<<4) +  hex2bin(_hexFileBuf.at(beginLine++));
     chsum += b;
 
@@ -647,7 +647,7 @@ uint8_t ESP8266_AVRISP::hex2bin (uint8_t h)    {
 
 
 /*------------------------------------------------------------------------*/
-//chip flash verification 
+//chip flash verification
 // return 0 if all ok
 // return addr where is mistake
 String ESP8266_AVRISP::chipFlashVerification() {
@@ -666,7 +666,7 @@ String ESP8266_AVRISP::chipFlashVerification() {
             bytespi = chipSpiTransaction(STK_VERIFYADDRHIGH, addr >> 9, addr / 2, 0) & 0xFF;
         } else {
             // for 'low bytes'
-            bytespi = chipSpiTransaction(STK_VERIFYADDRLOW,  addr >> 9, addr / 2, 0) & 0xFF; 
+            bytespi = chipSpiTransaction(STK_VERIFYADDRLOW,  addr >> 9, addr / 2, 0) & 0xFF;
         }
         SPI.endTransaction();
 // verify this byte
@@ -674,7 +674,7 @@ String ESP8266_AVRISP::chipFlashVerification() {
             sprintf(strbuf, "Verification error at address 0x%04x. <br> Should be 0x%02x not 0x%02x", addr, bytebuf, bytespi);
             _ret = (String)strbuf;
             DEBUGLOGISP("%s \n\r", strbuf);
-            
+
             pmode_end();
             return _ret;
         }
@@ -683,7 +683,7 @@ String ESP8266_AVRISP::chipFlashVerification() {
     sprintf(strbuf, "Verification succesfull! <br> All %d bytes are correct!<br>", addr);
     AVRISP_fuses_t AVRISP_fuses ;
     chipFusesRead(AVRISP_fuses);
-    sprintf(strbuf, "Fuses: HIGH 0x%02x LOW 0x%02x LOCK 0x%02x EXT 0x%02x<br>", 
+    sprintf(strbuf, "Fuses: HIGH 0x%02x LOW 0x%02x LOCK 0x%02x EXT 0x%02x<br>",
         AVRISP_fuses.high, AVRISP_fuses.low, AVRISP_fuses.lock, AVRISP_fuses.ext
         );
     verificationResult = _ret;
@@ -720,7 +720,7 @@ void ESP8266_AVRISP::cfgFileLoadWeb(AVRISP_CfgFile_t &_inStruct){
 
 bool ESP8266_AVRISP::cfgFileLoad() {
     if (!_fs) { _fs->begin();  }// If SPIFFS is not started
-	File configFile = _fs->open(DEFAULT_PROG_JSON, "r");	
+	File configFile = _fs->open(DEFAULT_PROG_JSON, "r");
 	if (!configFile) {
 		DEBUGLOGISP("Failed to open config file");
 		return false;
@@ -735,7 +735,7 @@ bool ESP8266_AVRISP::cfgFileLoad() {
 	std::unique_ptr<char[]> buf(new char[size]);
 	configFile.readBytes(buf.get(), size);
 	configFile.close();
-	DynamicJsonDocument jsonDoc(JSON_FILESIZEMAX);
+	JsonDocument jsonDoc;
 	auto error = deserializeJson(jsonDoc, buf.get());
 	if (error) {
 		DEBUGLOGISP("Failed to parse config file. Error: %s\r\n", error.c_str());
@@ -749,7 +749,7 @@ bool ESP8266_AVRISP::cfgFileLoad() {
     _AVRISP_CfgFile.hex_buildtime          = jsonDoc["hex_ts"]           .as<const char *>();
     _AVRISP_CfgFile.hex_buildtime_old      = jsonDoc["hex_ts_old"]       .as<const char *>();
     _AVRISP_CfgFile.fwTS                   = jsonDoc["lastUpdTS_gmt"]    .as<const char *>();
-    
+
     // _AVRISP_CfgFile.avr_signature          = jsonDoc["avr_sign"].as<const char *>();
     _AVRISP_CfgFile.project_name           = jsonDoc["avr_proj"].as<const char *>();
     _AVRISP_CfgFile.chipsize               = jsonDoc["chipsize"].as<uint32_t>();
@@ -774,22 +774,22 @@ void ESP8266_AVRISP::cfg_setDefault() {
     _AVRISP_CfgFile.fwTS                    = "";
 
 	//_AVRISP_CfgFile.avr_signature                 = DEFAULT_AVR_SIGN;
-    _AVRISP_CfgFile.project_name                = DEFAULT_AVR_MCU;  
-    _AVRISP_CfgFile.chipsize               = DEFAULT_chipsize; 
-    _AVRISP_CfgFile.pagesize               = MEM_PAGE_SIZE;     
+    _AVRISP_CfgFile.project_name                = DEFAULT_AVR_MCU;
+    _AVRISP_CfgFile.chipsize               = DEFAULT_chipsize;
+    _AVRISP_CfgFile.pagesize               = MEM_PAGE_SIZE;
     _AVRISP_CfgFile.cleanFS                 = true;
 
-	AVRISP_HexFileUploaded.hex_filename = ""; 
-    AVRISP_HexFileUploaded.signture = ""; 
-    AVRISP_HexFileUploaded.project_name = ""; 
-    AVRISP_HexFileUploaded.version = ""; 
-    AVRISP_HexFileUploaded.buildtime = ""; 
+	AVRISP_HexFileUploaded.hex_filename = "";
+    AVRISP_HexFileUploaded.signture = "";
+    AVRISP_HexFileUploaded.project_name = "";
+    AVRISP_HexFileUploaded.version = "";
+    AVRISP_HexFileUploaded.buildtime = "";
 
 	DEBUGLOGISP(__PRETTY_FUNCTION__);	DEBUGLOGISP("\r\n");
 }
 
 bool ESP8266_AVRISP::cfgFileSave(){
-	DynamicJsonDocument jsonDoc(JSON_STR_LEN);
+	JsonDocument jsonDoc;
 	jsonDoc["hex_filename"]         = _AVRISP_CfgFile.hex_filename;
 	jsonDoc["hex_filename_old"]     = _AVRISP_CfgFile.hex_filename_old  ;
 	jsonDoc["hex_vesion"]           = _AVRISP_CfgFile.hex_version;
@@ -802,13 +802,13 @@ bool ESP8266_AVRISP::cfgFileSave(){
     jsonDoc["avr_proj"]              = _AVRISP_CfgFile.project_name;
     jsonDoc["chipsize"]             = _AVRISP_CfgFile.chipsize;
     jsonDoc["cleanfs"]             = _AVRISP_CfgFile.cleanFS;
-    
 
-	
+
+
     if (!_fs) { _fs->begin();  }// If SPIFFS is not started
 
-	File configFile  = _fs->open(DEFAULT_PROG_JSON, "w");	
-    
+	File configFile  = _fs->open(DEFAULT_PROG_JSON, "w");
+
 	if (!configFile) {
 		DEBUGLOGISP("\r\n Failed to open config file for writing\r\n");
 		configFile.close();
@@ -824,7 +824,7 @@ bool ESP8266_AVRISP::cfgFileSave(){
 avrsip_err_t  ESP8266_AVRISP:: cfgFilSetUploadeAsNow (String _fwTime){
     avrsip_err_t _ret = ERR_RNM;
     if(cfgFileLoad()) {
-        _ret = ERROR_OK; 
+        _ret = ERROR_OK;
     } else {
         return ERR_OPENFILE;
     }
@@ -840,7 +840,7 @@ avrsip_err_t  ESP8266_AVRISP:: cfgFilSetUploadeAsNow (String _fwTime){
 
 
     if(cfgFileSave()) {
-       _ret = ERROR_OK; 
+       _ret = ERROR_OK;
     } else {
         _ret = ERR_CFG;
     }
@@ -851,7 +851,7 @@ avrsip_err_t  ESP8266_AVRISP:: cfgFilSetUploadeAsNow (String _fwTime){
 avrsip_err_t  ESP8266_AVRISP:: cfgFileSetNowAsOld(){
     avrsip_err_t _ret = ERR_RNM;
     if(cfgFileLoad()) {
-        _ret = ERROR_OK; 
+        _ret = ERROR_OK;
     } else {
         return ERR_OPENFILE;
     }
@@ -880,21 +880,21 @@ avrsip_err_t  ESP8266_AVRISP:: cfgFileSetNowAsOld(){
     _AVRISP_CfgFile.hex_buildtime_old  =   _AVRISP_CfgFile.hex_buildtime;
 
     if(cfgFileSave()) {
-       _ret = ERROR_OK; 
+       _ret = ERROR_OK;
     } else {
         _ret = ERR_CFG;
     }
 
 	DEBUGLOGISP(" %d \r\n" , _ret);
     DEBUGLOGISP(__PRETTY_FUNCTION__);    DEBUGLOGISP("\r\n");
-   
+
     return _ret ;
 }
 
 
 
 String ESP8266_AVRISP::fsDirListGet() {
-    String list = "";  
+    String list = "";
     if (!_fs) { _fs->begin();  }// If SPIFFS is not started
 #ifdef ESP32
     File root =  _fs->open("/");
@@ -921,34 +921,34 @@ String ESP8266_AVRISP::fsDirListGet() {
     DEBUGLOGISP(__PRETTY_FUNCTION__);	DEBUGLOGISP("\r\n");
 
     return list;
-   
+
 }
 
 // delete *.hex files if they are not _AVRISP_CfgFile.hex_filename OR _AVRISP_CfgFile.hex_filename_old
 void ESP8266_AVRISP::filesClean (){
     if (_AVRISP_CfgFile.cleanFS == false) {return;}
     size_t pos ;
-    std::string fname = ""; 
+    std::string fname = "";
     std::string ftype = "";
     String fileDel = "";
     Serial.printf("list of *.hex files: \n\r");
     if (!_fs) { _fs->begin();  }// If SPIFFS is not started
-    
+
 #if defined(ESP8266)
     Dir files = _fs->openDir("/");
     while (files.next()) {
         fname = files.fileName().c_str() ;
         pos = fname.find_last_of(FILE_TYPE_COMMA);
         ftype = fname.substr(pos + 1);
-        if (ftype == FILE_TYPE) { 
+        if (ftype == FILE_TYPE) {
             fileDel = fname.c_str();
             if ((fileDel !=_AVRISP_CfgFile.hex_filename) && (fileDel != _AVRISP_CfgFile.hex_filename_old)) {
                 fileDel = "/"+ fileDel;
-                if (_fs->exists(fileDel)) { 
-                    DEBUGLOGISP(" delete %s \n\r",  fileDel.c_str()); 
-                    _fs->remove(fileDel); 
+                if (_fs->exists(fileDel)) {
+                    DEBUGLOGISP(" delete %s \n\r",  fileDel.c_str());
+                    _fs->remove(fileDel);
                 }
-            }    
+            }
         }
     }
 #endif
@@ -959,15 +959,15 @@ void ESP8266_AVRISP::filesClean (){
         fname = files.name() ;
         pos = fname.find_last_of(FILE_TYPE_COMMA);
         ftype = fname.substr(pos + 1);
-        if (ftype == FILE_TYPE) { 
+        if (ftype == FILE_TYPE) {
             fileDel = fname.c_str();
             if ((fileDel !=_AVRISP_CfgFile.hex_filename) && (fileDel != _AVRISP_CfgFile.hex_filename_old)) {
                 fileDel = "/"+ fileDel;
-                if (_fs->exists(fileDel)) { 
-                    DEBUGLOGISP(" delete %s \n\r",  fileDel.c_str()); 
-                    _fs->remove(fileDel); 
+                if (_fs->exists(fileDel)) {
+                    DEBUGLOGISP(" delete %s \n\r",  fileDel.c_str());
+                    _fs->remove(fileDel);
                 }
-            }    
+            }
         }
         files = root.openNextFile();
     }
