@@ -1,5 +1,4 @@
 #include "main.h"
-#include <ArduinoJson.h>
 
 #if defined(ESP32)
 #include <SPIFFS.h>
@@ -68,18 +67,18 @@ void AsyncFSWebServer::s_secondTick(void* arg) {
 			DBG_OUTPUT_PORT.printf("Connection Timeout, switching to AP Mode.\r\n");
 			self->WifiScan = WF_SCAN_NO_NEED;
 			self->configureWifiAP();
-		}	
+		}
 	}
 	if (self->WifiScan == WF_STAT_SCANED)	{
-		self->configureWifi();	
+		self->configureWifi();
 		self->WifiScan = WF_SCAN_NO_NEED;
 	}
-	
+
 	if (self->WifiScan != WF_SCAN_NO_NEED) {
-		self->load_configWifi(self->scanWifi());		
+		self->load_configWifi(self->scanWifi());
 
 	}
-	
+
 #endif //AP_ENABLE_TIMEOUT
 
 }
@@ -92,34 +91,32 @@ void  AsyncFSWebServer::gpioGetArgs(AsyncWebServerRequest *request) {
 	if (request->args() > 0) { // get new configs from args
 		for (uint8_t i = 0; i < request->args(); i++) {
 			DEBUGLOG("Arg %d: %s %s\r\n", i, request->argName(i).c_str() , request->arg(i).c_str() );
-			if (request->argName(i) == "uartstr")	{  
-				uartStr = urldecode(request->arg(i));	
+			if (request->argName(i) == "uartstr")	{
+				uartStr = urldecode(request->arg(i));
 				Serial.printf("%s \n\r", uartStr.c_str() );
-				continue; 
+                continue;
 			}
 			if ( _sysConfig.deviceType == DEVTYPE_GPIO){
-				if (request->argName(i) == "led1")	{  
-					if (urldecode(request->arg(i)) == "on") {	digitalWrite(PIN_MISO, HIGH);	} 
-					if (urldecode(request->arg(i)) == "off") {	digitalWrite(PIN_MISO, LOW);	} 
-					continue; 
+				if (request->argName(i) == "led1")      {
+					if (urldecode(request->arg(i)) == "on") {       digitalWrite(PIN_MISO, HIGH);   }
+					if (urldecode(request->arg(i)) == "off") {      digitalWrite(PIN_MISO, LOW);    }
+					continue;
 				}
-				if (request->argName(i) == "led2")	{  
-					if (urldecode(request->arg(i)) == "on") {	digitalWrite(PIN_MOSI, HIGH);	} 
-					if (urldecode(request->arg(i)) == "off") {	digitalWrite(PIN_MOSI, LOW);	} 
-					continue; 
+				if (request->argName(i) == "led2")      {
+					if (urldecode(request->arg(i)) == "on") {       digitalWrite(PIN_MOSI, HIGH);   }
+					if (urldecode(request->arg(i)) == "off") {      digitalWrite(PIN_MOSI, LOW);    }
+					continue;
 				}
-				if (request->argName(i) == "led3")	{  
-					if (urldecode(request->arg(i)) == "on") {	digitalWrite(PIN_SCK, HIGH);	} 
-					if (urldecode(request->arg(i)) == "off") {	digitalWrite(PIN_SCK, LOW);	} 
-					continue; 
+				if (request->argName(i) == "led3")      {
+					if (urldecode(request->arg(i)) == "on") {       digitalWrite(PIN_SCK, HIGH);    }
+					if (urldecode(request->arg(i)) == "off") {      digitalWrite(PIN_SCK, LOW);     }
+					continue;
 				}
-				if (request->argName(i) == "led4")	{  
-					if (urldecode(request->arg(i)) == "on") {	digitalWrite(PIN_RST, HIGH);	} 
-					if (urldecode(request->arg(i)) == "off") {	digitalWrite(PIN_RST, LOW);	} 
-					continue; 
+				if (request->argName(i) == "led4")      {
+					if (urldecode(request->arg(i)) == "on") {       digitalWrite(PIN_RST, HIGH);    }
+					if (urldecode(request->arg(i)) == "off") {      digitalWrite(PIN_RST, LOW);     }
+					continue;
 				}
-
-
 			}
 		}
 	request->send(200, "text/plain", values);
@@ -175,8 +172,8 @@ void  AsyncFSWebServer::avrCheckFile(AsyncWebServerRequest *request) {
 
 	//check hex file binary data before flashing
     int32_t _size = avrprog.hexFileUploadedBodyCheck(_hexfileCheck);
-    if (_size >= ERROR_OK) 			{ 
-		values	+= "bodyerror|ok|div\n";	
+    if (_size >= ERROR_OK) 			{
+		values	+= "bodyerror|ok|div\n";
 		values 	+= "size|" + (String)_size	 	+ "|div\n";
 	}
     if (_size == ERR_NOFILE) 		{ values+= "bodyerror|no file!|div\n";	}
@@ -189,13 +186,13 @@ void  AsyncFSWebServer::avrCheckFile(AsyncWebServerRequest *request) {
 }
 
 
-void  AsyncFSWebServer::avrProgRollback(AsyncWebServerRequest *request) { 
+void  AsyncFSWebServer::avrProgRollback(AsyncWebServerRequest *request) {
 // GalyaUNasOtmena
 	String values = "";
 	DEBUGLOG("_hexfilename  %s \n\r", _hexfileProg.c_str());
 	avrsip_err_t _res ;
  	_res = avrprog.avrChipProgrammMain("2", NTP.getTimeDateString() );
-	
+
 	DEBUGLOG("avrProgRollback  %d \n\r", _res);
 	values	+= "avrprogres|" + (String) _res + "|div\n";
 	request->send(200, "text/plain", values);
@@ -208,7 +205,7 @@ void  AsyncFSWebServer::avrProg(AsyncWebServerRequest *request) {
 	DEBUGLOG("_hexfilename  %s \n\r", _hexfileProg.c_str());
 	avrsip_err_t _res ;
  	_res = avrprog.avrChipProgrammMain(_hexfileProg, NTP.getTimeDateString() );
-	
+
 	DEBUGLOG("avrProg  %d \n\r", _res);
 	values	+= "avrprogres|"+(String) _res+"|div\n";
 	request->send(200, "text/plain", values);
@@ -231,7 +228,7 @@ void  AsyncFSWebServer::avrProgStatus(AsyncWebServerRequest *request) {
 void  AsyncFSWebServer::avrFusesRead(AsyncWebServerRequest *request) {
 	String values = "";
 	AVRISP_fuses_t AVRISP_fuses ;
-	
+
 	avrprog.chipFusesRead(AVRISP_fuses);
 	char strbuf[256];
 
@@ -267,7 +264,7 @@ void  AsyncFSWebServer::avrWebFusesWrite(AsyncWebServerRequest *request) {
 			if (request->argName(i) == "avrfuseext") 	{ s_ext  = urldecode(request->arg(i));	continue; }
 		}
 		request->send_P(200, "text/html", Page_AvrRefresh);
-		
+
 		high =        		hex2bin(s_high[0]);
 		if (s_high[1])     	high = (high<<4) + 	hex2bin(s_high[1]);
 		low =        		hex2bin(s_low[0]);
@@ -276,7 +273,7 @@ void  AsyncFSWebServer::avrWebFusesWrite(AsyncWebServerRequest *request) {
     	if (s_lock[1])     	lock = (lock<<4) + 	hex2bin(s_lock[1]);
 		ext =        		hex2bin(s_ext[0]);
     	if (s_ext[1])     	ext = (ext<<4) + 	hex2bin(s_ext[1]);
-	
+
 		avrprog.chipFusesWrite(high, low, lock, ext);
 	}
 	else {
@@ -338,7 +335,7 @@ void AsyncFSWebServer::ntpHandler(NTPSyncEvent_t event)	{
 	if (WiFi.status() != WL_CONNECTED) {return;}
 	if (_ntpevent == noResponse || _ntpevent == invalidAddress ||  _ntpevent == responseError ) {
 		ntpBeginReserv();
-	}	
+	}
 }
 
 void AsyncFSWebServer::ntpBeginReserv (){
@@ -355,7 +352,7 @@ void AsyncFSWebServer::ntpBegin (){
         NTP.setNTPTimeout (NTP_TIMEOUT);
 		NTP.onNTPSyncEvent([this](NTPSyncEvent_t event){	ntpHandler(event);	});
 		ntpBeginReserv();
-		NTP.getTime();	
+		NTP.getTime();
 	}
 }
 
@@ -368,8 +365,8 @@ void AsyncFSWebServer::ntpBegin (){
 	_fs = fs;
 
 	avrprog.setFs(&SPIFFS); // init FS
-   
-	
+
+
 	connectionTimout = 0;
 	_ntpserveer = 0;
 	DBG_OUTPUT_PORT.begin(115200);
@@ -377,7 +374,7 @@ void AsyncFSWebServer::ntpBegin (){
 #ifndef RELEASE
 	DBG_OUTPUT_PORT.setDebugOutput(true);
 #endif // RELEASE
-	
+
 	if (CONNECTION_LED >= 0) {
 		pinMode(CONNECTION_LED, OUTPUT); // CONNECTION_LED pin defined as output
 	}
@@ -390,16 +387,16 @@ void AsyncFSWebServer::ntpBegin (){
 		DEBUGLOG("AP Enable = %d\n", _apConfig.APenable);
 	}
 
-	if (CONNECTION_LED >= 0) {	
+	if (CONNECTION_LED >= 0) {
 		digitalWrite(CONNECTION_LED, HIGH);
-		 // Turn LED off	
+		 // Turn LED off
 	}
     if (!_fs) { _fs->begin();  }// If SPIFFS is not started
 #ifndef RELEASE
 	{ // List files
 #if defined(ESP32)
 		File dir = _fs->open("/");
-	
+
 #elif defined(ESP8266)
 		Dir dir = _fs->openDir("/");
 		while (dir.next()) {
@@ -412,10 +409,10 @@ void AsyncFSWebServer::ntpBegin (){
 	}
 #endif // RELEASE
 	loadHTTPAuth();
-	
 	if (!load_config_Sys()) { defaultConfigSys();  	}
 	if (!load_config_NTP()) { defaultConfigNTP();  	}
 	if (!load_config_UDP()) { defaultConfigUDP();  	}
+	if (!load_config_metar()) { default_config_metar();  	}
 #if (USE_RESERV_WIFI > 0)
 	if (!load_configWifi(3)) { defaultConfigWifi(3); _apConfig.APenable = true; 	}
 	if (!load_configWifi(2)) { defaultConfigWifi(2); _apConfig.APenable = true; 	}
@@ -427,14 +424,14 @@ void AsyncFSWebServer::ntpBegin (){
 	DEBUGLOG("_strWifis[1] %s\r\n", _strWifi1);
 	DEBUGLOG("_strWifis[2] %s\r\n", _strWifi2);
 	DEBUGLOG("_strWifis[3] %s\r\n", _strWifi3);
-	
+
 	// NTP client setup
 	if (_ntpConfig.updateNTPTimeEvery > 0) { // Enable NTP sync
         NTP.setInterval (_ntpConfig.updateNTPTimeEvery * 60);
         NTP.setNTPTimeout (NTP_TIMEOUT);
 		NTP.onNTPSyncEvent([this](NTPSyncEvent_t event){	ntpHandler(event);	});
 		ntpBeginReserv();
-		NTP.getTime();	
+		NTP.getTime();
 	}
 	// Register wifi Event to control connection LED and wifi connection status
 	#if defined(ESP32)
@@ -449,7 +446,7 @@ void AsyncFSWebServer::ntpBegin (){
 	//WIFI INIT start here
 	String hostName = _sysConfig.deviceName + "_" + _sysConfig.deviceSerial;
 	WiFi.hostname(hostName.c_str());
-	
+
 	if (AP_ENABLE_BUTTON >= 0) {
 		if (_apConfig.APenable) {
 			configureWifiAP(); // Set AP mode if AP button was pressed
@@ -490,9 +487,8 @@ void AsyncFSWebServer::ntpBegin (){
 		avrprog.setReset(false);  // let the AVR chip run by level up RST pin.
 		avrprog.begin(); // load AVR isp cfg's
 		DEBUGLOG("AVR Setup\n\r");
-	} 
+	}
 	else if ( _sysConfig.deviceType == DEVTYPE_GPIO){
-		ledInit();
 		DEBUGLOG("GPIO Setup\n\r");
 	}
 }
@@ -505,39 +501,13 @@ void AsyncFSWebServer::showDBG() {
 //duplicate config stuff for user level config items
 
 bool AsyncFSWebServer::load_configWifi(int _in) {
-	if (_in < 0) return false;
-	File configFile;
-	if (_in == 0) {		 configFile = _fs->open(WIFI_CONFIG_FILE0, "r");	}
-#if (USE_RESERV_WIFI > 0)
-	if (_in == 1) {		 configFile = _fs->open(WIFI_CONFIG_FILE1, "r");	}
-	if (_in == 2) {		 configFile = _fs->open(WIFI_CONFIG_FILE2, "r");	}
-	if (_in == 3) {		 configFile = _fs->open(WIFI_CONFIG_FILE3, "r");	}
-	
-#endif
-	if (!configFile) {
-		DEBUGLOG("Failed to open config file");
+	if (_in < 0){
 		return false;
 	}
-	size_t size = configFile.size();
-	/*if (size > 1024) {
-	DEBUGLOG("Config file size is too large");
-	configFile.close();
-	return false;
-	}*/
-
-	// Allocate a buffer to store contents of the file.
-	std::unique_ptr<char[]> buf(new char[size]);
-
-	// We don't use String here because ArduinoJson library requires the input
-	// buffer to be mutable. If you don't use ArduinoJson, you may as well
-	// use configFile.readString instead.
-	configFile.readBytes(buf.get(), size);
-	configFile.close();
-	//DEBUGLOG("file size: %d bytes\r\n", size);
-	DynamicJsonDocument jsonDoc(1024);
-	auto error = deserializeJson(jsonDoc, buf.get());
-	if (error) {
-		DEBUGLOG("Failed to parse config file. Error: %s\r\n", error.c_str());
+	char filename[40];
+	sprintf(filename, "/%s%d.json", WIFI_CONFIG_FILE_NAME, _in);
+	JsonDocument jsonDoc;
+	if (!load_jsonDoc(filename, jsonDoc)){
 		return false;
 	}
 
@@ -547,7 +517,6 @@ bool AsyncFSWebServer::load_configWifi(int _in) {
 	if (_in == 2)  sprintf(_strWifi2, "%s", _wifiConfig.ssid.c_str());
 	if (_in == 3)  sprintf(_strWifi3, "%s", _wifiConfig.ssid.c_str());
 
-	
 	_wifiConfig.password = jsonDoc["pass"].as<const char *>();
 	_wifiConfig.ip = IPAddress(jsonDoc["ip"][0], jsonDoc["ip"][1], jsonDoc["ip"][2], jsonDoc["ip"][3]);
 	_wifiConfig.netmask = IPAddress(jsonDoc["netmask"][0], jsonDoc["netmask"][1], jsonDoc["netmask"][2], jsonDoc["netmask"][3]);
@@ -555,91 +524,39 @@ bool AsyncFSWebServer::load_configWifi(int _in) {
 	_wifiConfig.dns = IPAddress(jsonDoc["dns"][0], jsonDoc["dns"][1], jsonDoc["dns"][2], jsonDoc["dns"][3]);
 	_wifiConfig.dhcp = jsonDoc["dhcp"].as<bool>();
 
-	// DEBUGLOG("Config %d wifi initialized. ", _in);
-	// DEBUGLOG("SSID: %s ", 	_wifiConfig.ssid.c_str());
-	// DEBUGLOG("PASS: %s\r\n", _wifiConfig.password.c_str());
-	//DEBUGLOG(__PRETTY_FUNCTION__); DEBUGLOG("\r\n");
+	return true;
+}
+
+bool AsyncFSWebServer::load_config_metar() {
+	JsonDocument jsonDoc;
+	if (!load_jsonDoc(CONFIG_FILE_METAR, jsonDoc)){
+		return false;
+	}
+	_metarConfig.icao = jsonDoc["icao"].as<const char *>();
 
 	return true;
 }
 
-
 bool AsyncFSWebServer::load_config_Sys() {
-	File configFile = _fs->open(CONFIG_FILE_SYS, "r");	
-
-	if (!configFile) {
-		DEBUGLOG("Failed to open config file");
+	JsonDocument jsonDoc;
+	if (!load_jsonDoc(CONFIG_FILE_SYS, jsonDoc)){
 		return false;
 	}
-	size_t size = configFile.size();
-	/*if (size > 1024) {
-	DEBUGLOG("Config file size is too large");
-	configFile.close();
-	return false;
-	}*/
-
-	// Allocate a buffer to store contents of the file.
-	std::unique_ptr<char[]> buf(new char[size]);
-
-	// We don't use String here because ArduinoJson library requires the input
-	// buffer to be mutable. If you don't use ArduinoJson, you may as well
-	// use configFile.readString instead.
-	configFile.readBytes(buf.get(), size);
-	configFile.close();
-	//DEBUGLOG("file size: %d bytes\r\n", size);
-	DynamicJsonDocument jsonDoc(1024);
-	auto error = deserializeJson(jsonDoc, buf.get());
-	if (error) {
-		DEBUGLOG("Failed to parse config file. Error: %s\r\n", error.c_str());
-		return false;
-	}
-
-#ifndef RELEASE
-	String temp;
-	serializeJsonPretty(jsonDoc, temp);
-	Serial.println(temp);
-#endif
 	_sysConfig.deviceName 			= jsonDoc["deviceName"].as<const char *>();
 	_sysConfig.deviceSerial 		= jsonDoc["deviceSerial"].as<const char *>();
 	_sysConfig.deviceType 			= jsonDoc["deviceType"].as<const char *>();
-	
-	//DEBUGLOG("Connection LED: %d\n", config.connectionLed);
-	// DEBUGLOG(__PRETTY_FUNCTION__);	DEBUGLOG("\r\n");
 	return true;
 }
 
 
 bool AsyncFSWebServer::load_config_UDP() {
-	File configFile = _fs->open(CONFIG_FILE_UDP, "r");	
-	if (!configFile) {
-		DEBUGLOG("Failed to open config file");
+		JsonDocument jsonDoc;
+	if (!load_jsonDoc(CONFIG_FILE_UDP, jsonDoc)){
 		return false;
 	}
-	size_t size = configFile.size();
-	/*if (size > 1024) {
-	DEBUGLOG("Config file size is too large");
-	configFile.close();
-	return false;
-	}*/
-	// Allocate a buffer to store contents of the file.
-	std::unique_ptr<char[]> buf(new char[size]);
-	configFile.readBytes(buf.get(), size);
-	configFile.close();
-	//DEBUGLOG("file size: %d bytes\r\n", size);
-	DynamicJsonDocument jsonDoc(1024);
-	auto error = deserializeJson(jsonDoc, buf.get());
-	if (error) {
-		DEBUGLOG("Failed to parse config file. Error: %s\r\n", error.c_str());
-		return false;
-	}
-#ifndef RELEASE
-	String temp;
-	serializeJsonPretty(jsonDoc, temp);
-	Serial.println(temp);
-#endif
 	_udpConfig.udpPortTx 			= jsonDoc["udpPortTx"].as< int >();
 	_udpConfig.udpPortRx 			= jsonDoc["udpPortRx"].as< int >();
-	_udpConfig.udpTimeOut			= jsonDoc["udpTimeOut"].as< int >();	
+	_udpConfig.udpTimeOut			= jsonDoc["udpTimeOut"].as< int >();
 	_udpConfig.keyword				= jsonDoc["udpkeyword"].as<const char *>();
 	DEBUGLOG("updPortTx: %d\r\n"	, _udpConfig.udpPortTx);
 	DEBUGLOG("updPortRx: %d\r\n"	, _udpConfig.udpPortRx);
@@ -649,9 +566,9 @@ bool AsyncFSWebServer::load_config_UDP() {
 	return true;
 }
 
-
-bool AsyncFSWebServer::load_config_NTP() {
-	File configFile = _fs->open(CONFIG_FILE_NTP, "r");	
+bool AsyncFSWebServer::load_jsonDoc(const String& file,
+									JsonDocument& jsonDoc){
+	File configFile = _fs->open(file, "r");
 
 	if (!configFile) {
 		DEBUGLOG("Failed to open config file");
@@ -663,15 +580,15 @@ bool AsyncFSWebServer::load_config_NTP() {
 	configFile.close();
 	return false;
 	}*/
-
-	// Allocate a buffer to store contents of the file.
-	std::unique_ptr<char[]> buf(new char[size]);
-
-	configFile.readBytes(buf.get(), size);
+	char * buf = (char *) malloc(size);
+	if ( buf == NULL){
+		return false;
+	}
+	DEBUGLOG("File: %s, size: %d\r\n", file.c_str(), size);
+	configFile.readBytes(buf, size);
 	configFile.close();
-	//DEBUGLOG("file size: %d bytes\r\n", size);
-	DynamicJsonDocument jsonDoc(1024);
-	auto error = deserializeJson(jsonDoc, buf.get());
+	auto error = deserializeJson(jsonDoc, buf);
+	free(buf);
 	if (error) {
 		DEBUGLOG("Failed to parse config file. Error: %s\r\n", error.c_str());
 		return false;
@@ -682,6 +599,14 @@ bool AsyncFSWebServer::load_config_NTP() {
 	serializeJsonPretty(jsonDoc, temp);
 	Serial.println(temp);
 #endif
+	return true;
+}
+
+bool AsyncFSWebServer::load_config_NTP() {
+	JsonDocument jsonDoc;
+	if (!load_jsonDoc(CONFIG_FILE_NTP, jsonDoc)){
+		return false;
+	}
 	_ntpConfig.ntpServerName0 		= jsonDoc["ntp0"].as<const char *>();
 	_ntpConfig.ntpServerName1 		= jsonDoc["ntp1"].as<const char *>();
 	_ntpConfig.ntpServerName2 		= jsonDoc["ntp2"].as<const char *>();
@@ -696,18 +621,24 @@ bool AsyncFSWebServer::load_config_NTP() {
 	return true;
 }
 
-
+void AsyncFSWebServer::default_config_metar() {
+	_metarConfig.icao 		= "UWGG";
+	save_config_metar();
+	DEBUGLOG(__PRETTY_FUNCTION__);
+	DEBUGLOG("\r\n");
+}
 
 void AsyncFSWebServer::defaultConfigSys() {
 	// DEFAULT CONFIG SUSTEM
-	_sysConfig.deviceName 		= "esp_server"; 
-	_sysConfig.deviceSerial 	= SERIAL_NUMBER; 
+	_sysConfig.deviceName 		= "esp_server";
+	_sysConfig.deviceSerial 	= SERIAL_NUMBER;
 	_sysConfig.deviceType 		= DEVTYPE_GPIO;
 	//_sysConfig.connectionLed = CONNECTION_LED;
 	save_configSys();
 	DEBUGLOG(__PRETTY_FUNCTION__);
 	DEBUGLOG("\r\n");
 }
+
 void AsyncFSWebServer::defaultConfigUDP() {
 	// DEFAULT CONFIG UDP
 	_udpConfig.udpPortTx = UDP_BROADCAST_PORT_DFLT;
@@ -731,13 +662,9 @@ void AsyncFSWebServer::defaultConfigNTP() {
 	DEBUGLOG("\r\n");
 }
 
-bool AsyncFSWebServer::save_configSys() {
-	DEBUGLOG("Save config SYSTEM\r\n");
-	DynamicJsonDocument jsonDoc(JSON_STR_LEN);
-	jsonDoc["deviceName"] 	= _sysConfig.deviceName; 
-	jsonDoc["deviceSerial"] = _sysConfig.deviceSerial; 
-	
-	File configFile  = _fs->open(CONFIG_FILE_SYS, "w");	
+bool AsyncFSWebServer::save_jsonDoc(const JsonDocument& jsonDoc,
+									const String& file) {
+	File configFile  = _fs->open(file, "w");
 	if (!configFile) {
 		DEBUGLOG("Failed to open config file for writing\r\n");
 		configFile.close();
@@ -753,58 +680,43 @@ bool AsyncFSWebServer::save_configSys() {
 	configFile.close();
 	return true;
 }
+
+bool AsyncFSWebServer::save_config_metar() {
+	DEBUGLOG("Save config METAR\r\n");
+	JsonDocument jsonDoc;
+	jsonDoc["icao"] = _metarConfig.icao;
+	return save_jsonDoc(jsonDoc, CONFIG_FILE_METAR);
+}
+
+bool AsyncFSWebServer::save_configSys() {
+	DEBUGLOG("Save config SYSTEM\r\n");
+	JsonDocument jsonDoc;
+	jsonDoc["deviceName"] 	= _sysConfig.deviceName;
+	jsonDoc["deviceSerial"] = _sysConfig.deviceSerial;
+	return save_jsonDoc(jsonDoc, CONFIG_FILE_SYS);
+}
+
 bool AsyncFSWebServer::save_configNTP() {
 	DEBUGLOG("Save config NTP \r\n");
-	DynamicJsonDocument jsonDoc(JSON_STR_LEN);
+	JsonDocument jsonDoc;
 	jsonDoc["ntp0"] 		= _ntpConfig.ntpServerName0;
 	jsonDoc["ntp1"] 		= _ntpConfig.ntpServerName1;
 	jsonDoc["ntp2"] 		= _ntpConfig.ntpServerName2;
 	jsonDoc["NTPperiod"] 	= _ntpConfig.updateNTPTimeEvery;
 	jsonDoc["timeZone"] 	= _ntpConfig.timezone;
 	jsonDoc["daylight"] 	= _ntpConfig.daylight;
-	File configFile  = _fs->open(CONFIG_FILE_NTP, "w");	
-
-	if (!configFile) {
-		DEBUGLOG("Failed to open config file for writing\r\n");
-		configFile.close();
-		return false;
-	}
-#ifndef RELEASE
-	String temp;
-	serializeJsonPretty(jsonDoc, temp);
-	Serial.println(temp);
-#endif
-	serializeJson(jsonDoc, configFile);
-	configFile.flush();
-	configFile.close();
-	return true;
+	return save_jsonDoc(jsonDoc, CONFIG_FILE_NTP);
 }
 
 bool AsyncFSWebServer::save_configUDP() {
 	DEBUGLOG("Save config UDP \r\n");
-	DynamicJsonDocument jsonDoc(JSON_STR_LEN);
+	JsonDocument jsonDoc;
 	jsonDoc["udpPortTx"] 	= _udpConfig.udpPortTx;
-	jsonDoc["udpPortRx"] 	= _udpConfig.udpPortRx; 
-	jsonDoc["udpTimeOut"] 	= _udpConfig.udpTimeOut; 
-	jsonDoc["udpkeyword"] 	= _udpConfig.keyword; 
-	File configFile  = _fs->open(CONFIG_FILE_UDP, "w");	
-	if (!configFile) {
-		DEBUGLOG("Failed to open config file for writing\r\n");
-		configFile.close();
-		return false;
-	}
-#ifndef RELEASE
-	String temp;
-	serializeJsonPretty(jsonDoc, temp);
-	Serial.println(temp);
-#endif
-	serializeJson(jsonDoc, configFile);
-	configFile.flush();
-	configFile.close();
-	return true;
+	jsonDoc["udpPortRx"] 	= _udpConfig.udpPortRx;
+	jsonDoc["udpTimeOut"] 	= _udpConfig.udpTimeOut;
+	jsonDoc["udpkeyword"] 	= _udpConfig.keyword;
+	return save_jsonDoc(jsonDoc, CONFIG_FILE_UDP);
 }
-
-
 
 
 void AsyncFSWebServer::defaultConfigWifi(int _in) {
@@ -824,30 +736,30 @@ void AsyncFSWebServer::defaultConfigWifi(int _in) {
 bool AsyncFSWebServer::save_configWifi(int _in) {
 	//flag_config = false;
 	DEBUGLOG("Save config\r\n");
-	DynamicJsonDocument jsonDoc(JSON_STR_LEN);
-	
+	JsonDocument jsonDoc;
+
 	jsonDoc["ssid"] = _wifiConfig.ssid;
 	jsonDoc["pass"] = _wifiConfig.password;
 	jsonDoc["dhcp"] = _wifiConfig.dhcp;
-	JsonArray jsonip = jsonDoc.createNestedArray("ip");
+	JsonArray jsonip = jsonDoc["ip"].to<JsonArray>();
 	jsonip.add(_wifiConfig.ip[0]);
 	jsonip.add(_wifiConfig.ip[1]);
 	jsonip.add(_wifiConfig.ip[2]);
 	jsonip.add(_wifiConfig.ip[3]);
 
-	JsonArray jsonNM = jsonDoc.createNestedArray("netmask");
+	JsonArray jsonNM = jsonDoc["netmask"].to<JsonArray>();
 	jsonNM.add(_wifiConfig.netmask[0]);
 	jsonNM.add(_wifiConfig.netmask[1]);
 	jsonNM.add(_wifiConfig.netmask[2]);
 	jsonNM.add(_wifiConfig.netmask[3]);
 
-	JsonArray jsonGateway = jsonDoc.createNestedArray("gateway");
+	JsonArray jsonGateway = jsonDoc["gateway"].to<JsonArray>();
 	jsonGateway.add(_wifiConfig.gateway[0]);
 	jsonGateway.add(_wifiConfig.gateway[1]);
 	jsonGateway.add(_wifiConfig.gateway[2]);
 	jsonGateway.add(_wifiConfig.gateway[3]);
 
-	JsonArray jsondns = jsonDoc.createNestedArray("dns");
+	JsonArray jsondns = jsonDoc["dns"].to<JsonArray>();
 	jsondns.add(_wifiConfig.dns[0]);
 	jsondns.add(_wifiConfig.dns[1]);
 	jsondns.add(_wifiConfig.dns[2]);
@@ -859,7 +771,7 @@ bool AsyncFSWebServer::save_configWifi(int _in) {
 	File configFile ;
 
 	if (_in == 0) {		 configFile = _fs->open(WIFI_CONFIG_FILE0, "w");	}
-#if (USE_RESERV_WIFI > 0)	
+#if (USE_RESERV_WIFI > 0)
 	if (_in == 1) {		 configFile = _fs->open(WIFI_CONFIG_FILE1, "w");	}
 	if (_in == 2) {		 configFile = _fs->open(WIFI_CONFIG_FILE2, "w");	}
 	if (_in == 3) {		 configFile = _fs->open(WIFI_CONFIG_FILE3, "w");	}
@@ -921,7 +833,7 @@ bool AsyncFSWebServer::load_user_config(String name, String &value) {
 	configFile.readBytes(buf.get(), size);
 	configFile.close();
 	//DEBUGLOG("496 JSON file size: %d bytes\r\n", size);
-	DynamicJsonDocument jsonDoc(1024);
+	JsonDocument jsonDoc;
 	auto error = deserializeJson(jsonDoc, buf.get());
 	if (error) {
 		DEBUGLOG("Failed to parse config file. Error: %s\r\n", error.c_str());
@@ -982,7 +894,7 @@ bool AsyncFSWebServer::save_user_config(String name, String value) {
 	configFile.readBytes(buf.get(), size);
 	configFile.close();
 	DEBUGLOG("Read JSON file size: %d bytes\r\n", size);
-	DynamicJsonDocument jsonDoc(1024);
+	JsonDocument jsonDoc;
 	auto error = deserializeJson(jsonDoc, buf.get());
 
 	if (error) {
@@ -1058,57 +970,17 @@ bool AsyncFSWebServer::save_user_config(String name, long value) {
 }
 
 bool AsyncFSWebServer::loadHTTPAuth() {
-	File configFile = _fs->open(SECRET_FILE, "r");
-	if (!configFile) {
-		DEBUGLOG("Failed to open secret file\r\n");
+	JsonDocument jsonDoc;
+	if (!load_jsonDoc(SECRET_FILE, jsonDoc)){
 		_httpAuth.auth = false;
 		_httpAuth.wwwUsername = "";
 		_httpAuth.wwwPassword = "";
-		configFile.close();
+		DEBUGLOG("Huh");
 		return false;
 	}
-
-	size_t size = configFile.size();
-	/*if (size > 256) {
-	DEBUGLOG("Secret file size is too large\r\n");
-	httpAuth.auth = false;
-	configFile.close();
-	return false;
-	}*/
-
-	// Allocate a buffer to store contents of the file.
-	std::unique_ptr<char[]> buf(new char[size]);
-
-	// We don't use String here because ArduinoJson library requires the input
-	// buffer to be mutable. If you don't use ArduinoJson, you may as well
-	// use configFile.readString instead.
-	configFile.readBytes(buf.get(), size);
-	configFile.close();
-	DEBUGLOG("JSON secret file size: %d bytes\n", size);
-	DynamicJsonDocument jsonDoc(256);
-	auto error = deserializeJson(jsonDoc, buf.get());
-	
-	if (error) {
-#ifndef RELEASE
-		String temp;
-		serializeJsonPretty(jsonDoc, temp);
-		DBG_OUTPUT_PORT.println(temp);
-		DBG_OUTPUT_PORT.println("Failed to parse secret file. Error: ");
-		DBG_OUTPUT_PORT.println(error.c_str());
-#endif // RELEASE
-		_httpAuth.auth = false;
-		return false;
-	}
-#ifndef RELEASE
-	String temp;
-	serializeJsonPretty(jsonDoc, temp);
-	DBG_OUTPUT_PORT.println(temp);
-#endif // RELEASE
-	
 	_httpAuth.auth = jsonDoc["auth"];
 	_httpAuth.wwwUsername = jsonDoc["user"].as<String>();
 	_httpAuth.wwwPassword = jsonDoc["pass"].as<String>();
-
 	DEBUGLOG(_httpAuth.auth ? "Secret initialized.\r\n" : "Auth disabled.\r\n");
 	if (_httpAuth.auth) {
 		DEBUGLOG("User: %s\r\n", _httpAuth.wwwUsername.c_str());
@@ -1116,7 +988,6 @@ bool AsyncFSWebServer::loadHTTPAuth() {
 	}
 	DEBUGLOG(__PRETTY_FUNCTION__);
 	DEBUGLOG("\r\n");
-
 	return true;
 }
 
@@ -1156,22 +1027,22 @@ void AsyncFSWebServer::configureWifiAP() {
 	}
 
 	DBG_OUTPUT_PORT.printf("AP Mode enabled. SSID: %s IP: %s\r\n", WiFi.softAPSSID().c_str(), WiFi.softAPIP().toString().c_str());
-	
+
 	connectionTimout = 0;
-	
+
 }
 
-int AsyncFSWebServer::scanWifi() { 
+int AsyncFSWebServer::scanWifi() {
 	int _scanNum = -1;
 	int y = 0;
-	
+
 	int nets = WiFi.scanComplete();
-	if (nets == WIFI_SCAN_FAILED) {	
+	if (nets == WIFI_SCAN_FAILED) {
 		WiFi.scanNetworks(true);
-	} 
+	}
 	if (nets > 0) {
 		for (int i = 0; i < nets; ++i) {
-			if (strcmp( _strWifi3,  WiFi.SSID(i).c_str()) == 0){ _scanNum = 3; y=i;} 
+			if (strcmp( _strWifi3,  WiFi.SSID(i).c_str()) == 0){ _scanNum = 3; y=i;}
 			if (strcmp( _strWifi2,  WiFi.SSID(i).c_str()) == 0){ _scanNum = 2; y=i;}
 			if (strcmp( _strWifi1,  WiFi.SSID(i).c_str()) == 0){ _scanNum = 1; y=i;}
 			if (strcmp( _strWifi0,  WiFi.SSID(i).c_str()) == 0){ _scanNum = 0; y=i;}
@@ -1179,10 +1050,10 @@ int AsyncFSWebServer::scanWifi() {
 		WiFi.scanDelete();
 	}
 	if (_scanNum >= 0) {
-		WifiScan = WF_STAT_SCANED;	
+		WifiScan = WF_STAT_SCANED;
 	}
 
-	DEBUGLOG("timeout: %d _scanNum = %d nets = %d \r\n", (AP_ENABLE_TIMEOUT - connectionTimout), _scanNum, nets);	
+	DEBUGLOG("timeout: %d _scanNum = %d nets = %d \r\n", (AP_ENABLE_TIMEOUT - connectionTimout), _scanNum, nets);
 	return _scanNum;
 }
 
@@ -1224,9 +1095,9 @@ void AsyncFSWebServer::ConfigureOTA(String password) {
 	});
 
 #if defined(ESP32)
-	ArduinoOTA.onEnd(std::bind([](fs::SPIFFSFS* fs) 
+	ArduinoOTA.onEnd(std::bind([](fs::SPIFFSFS* fs)
 #elif defined(ESP8266)
-	ArduinoOTA.onEnd(std::bind([](FS* fs) 
+	ArduinoOTA.onEnd(std::bind([](FS* fs)
 #endif
 	{
 		fs->end();
@@ -1236,7 +1107,7 @@ void AsyncFSWebServer::ConfigureOTA(String password) {
 		DEBUGLOG("\t OTA Progress: %u%% \r\n", (progress / (total / 100)));
 	});
 	ArduinoOTA.onError([](ota_error_t error) {
-		DEBUGLOG("Error[%u]: ", error);	
+		DEBUGLOG("Error[%u]: ", error);
 		if (error == OTA_AUTH_ERROR) 			{DEBUGLOG("Auth Failed\r\n");		}
 		else if (error == OTA_BEGIN_ERROR) 		{DEBUGLOG("Begin Failed\r\n");		}
 		else if (error == OTA_CONNECT_ERROR)	{DEBUGLOG("Connect Failed\r\n");	}
@@ -1261,7 +1132,7 @@ void AsyncFSWebServer::onWiFiConnected(WiFiEventStationModeConnected data) {
 		DEBUGLOG("Led %d on\n", CONNECTION_LED);
 	}
 	wifiDisconnectedSince = 0;
-	
+
 }
 
 #if defined(ESP32)
@@ -1274,7 +1145,7 @@ void AsyncFSWebServer::onWiFiConnectedGotIP(WiFiEventStationModeGotIP data) {
 		 // Turn LED on
 		 //turnLedOn();
 	}
-	
+
 	DBG_OUTPUT_PORT.printf("GotIP Address: %s \n", WiFi.localIP().toString().c_str());
 	DBG_OUTPUT_PORT.printf("Gateway:    %s\r\n", WiFi.gatewayIP().toString().c_str());
 	DBG_OUTPUT_PORT.printf("DNS:        %s\r\n", WiFi.dnsIP().toString().c_str());
@@ -1282,7 +1153,7 @@ void AsyncFSWebServer::onWiFiConnectedGotIP(WiFiEventStationModeGotIP data) {
 	wifiDisconnectedSince = 0;
 	//force NTPsstart after got ip
 	if (_ntpConfig.updateNTPTimeEvery > 0) {	updateTimeFromNTP = true;	}		// Enable NTP sync
-	
+
 	connectionTimout = 0;
 	_ntpserveer = 0;
 	wifiStatus = FS_STAT_CONNECTED;
@@ -1300,15 +1171,15 @@ void AsyncFSWebServer::onWiFiDisconnected() {
 #elif defined(ESP8266)
 void AsyncFSWebServer::onWiFiDisconnected(WiFiEventStationModeDisconnected data) {
 #endif
-	udpBroadcast.udpStop();		
+	udpBroadcast.udpStop();
 	if (wifiStatus == FS_STAT_RESET) {return;}
 
 	DEBUGLOG(" case STA_DISCONNECTED \r\n");
-	if (CONNECTION_LED >= 0) {	
-		digitalWrite(CONNECTION_LED, HIGH);	
+	if (CONNECTION_LED >= 0) {
+		digitalWrite(CONNECTION_LED, HIGH);
 		//flashLED(config.connectionLed, 2, 100);
 	} // Turn LED off
-	// FIXME 
+	// FIXME
 	DBG_OUTPUT_PORT.printf("Led %s off\n", CONNECTION_LED);
 	if (wifiDisconnectedSince == 0) { wifiDisconnectedSince = millis(); }
 	DEBUGLOG("Disconnected for %d seconds \r\n", (int)((millis() - wifiDisconnectedSince) / 1000));
@@ -1456,7 +1327,7 @@ int AsyncFSWebServer::handleHexFileUpload( String filename, size_t index, uint8_
 	static File fsUploadFile;
 	static size_t fileSize = 0;
 	// Start
-	if (!index) { 
+	if (!index) {
 		DEBUGLOG("handleHexFileUpload Name: %s\r\n", filename.c_str());
 		if (!filename.startsWith("/")) filename = "/" + filename;
 		fsUploadFile = _fs->open(filename, "w");
@@ -1467,13 +1338,13 @@ int AsyncFSWebServer::handleHexFileUpload( String filename, size_t index, uint8_
 		DEBUGLOG("Continue upload part. Size = %u\r\n", len);
 		if (fsUploadFile.write(data, len) != len) {
 			_hexFileUploadStatus  += "uploadstatus|error|div\n";
-		}	
-		else { 
-			fileSize += len;	
+		}
+		else {
+			fileSize += len;
 		}
 	}
 	// End
-	if (final) { 
+	if (final) {
 		if (fsUploadFile) {	fsUploadFile.close();	}
 		_ret = fileSize;
 		DEBUGLOG("HexFileUpload final Size: %u\n", fileSize);
@@ -1718,7 +1589,7 @@ void AsyncFSWebServer::send_network_configuration_html(AsyncWebServerRequest *re
 		}
 		request->send_P(200, "text/html", Page_ConfigRefresh);
 		if (_saveIn == 0) {save_configWifi(0);}
-		
+
 #if (USE_RESERV_WIFI > 0)
 		if (_saveIn == 1) {save_configWifi(1);}
 		if (_saveIn == 2) {save_configWifi(2);}
@@ -1777,7 +1648,7 @@ void AsyncFSWebServer::get_project_configuration_html(AsyncWebServerRequest *req
 }
 
 void AsyncFSWebServer::get_udp_configuration_html(AsyncWebServerRequest *request) {
-	
+
 	if (request->args() > 0) { // get new configs from args
 		for (uint8_t i = 0; i < request->args(); i++) {
 			DEBUGLOG("Arg %d: %s %s\r\n", i, request->argName(i).c_str() ,request->arg(i).c_str() );
@@ -1785,7 +1656,7 @@ void AsyncFSWebServer::get_udp_configuration_html(AsyncWebServerRequest *request
 			if (request->argName(i) == "udpportrx")  		{ _udpConfig.udpPortRx = request->arg(i).toInt();				continue; }
 			if (request->argName(i) == "udptime")  			{ _udpConfig.udpTimeOut = request->arg(i).toInt();				continue; }
 			if (request->argName(i) == "udpkeyword")  			{ _udpConfig.keyword = urldecode(request->arg(i));			continue; }
-			
+
 		}
 		request->send_P(200, "text/html", Page_GeneralUdp);	// refresh page
 		save_configUDP();	 	// Save Settings
@@ -1848,7 +1719,7 @@ void AsyncFSWebServer::restart_esp() {
 	// DEBUGLOG(__FUNCTION__);	DEBUGLOG("\r\n");
 	wifiStatus = FS_STAT_RESET;
 	WiFi.disconnect(true, false);
-	_fs->end(); 
+	_fs->end();
 	delay(1000);
 	ESP.restart();
 }
@@ -1898,8 +1769,8 @@ void AsyncFSWebServer::send_wwwauth_configuration_html(AsyncWebServerRequest *re
 bool AsyncFSWebServer::saveHTTPAuth() {
 	//flag_config = false;
 	DEBUGLOG("Save secret\r\n");
-	DynamicJsonDocument jsonDoc(256);
-	
+	JsonDocument jsonDoc;
+
 	jsonDoc["auth"] = _httpAuth.auth;
 	jsonDoc["user"] = _httpAuth.wwwUsername;
 	jsonDoc["pass"] = _httpAuth.wwwPassword;
@@ -1934,11 +1805,11 @@ void AsyncFSWebServer::send_update_firmware_values_html(AsyncWebServerRequest *r
 	String updateOKstr = "";
 	String updateFiletype = "";
 	typeOTAfile = UNSUPPORTED;
-	
+
 	if (_updateFileName == OTA_FILENAME_FIRMWARE) {
 		typeOTAfile = FIRMWARE;
 		updateFiletype = OTA_FIRMWARE;
-	} 
+	}
 	if (_updateFileName == OTA_FILENAME_FILESYSTEM) {
 		typeOTAfile = FILESYSTEM;
 		updateFiletype = OTA_FILESYSTEM;
@@ -2031,7 +1902,7 @@ void AsyncFSWebServer::uploadUpdateFile(AsyncWebServerRequest *request, String f
 		#elif defined(ESP8266)
 		if (typeOTAfile == FILESYSTEM) 	{ updatePartition = U_FS; }
 		#endif
-		
+
 		if (typeOTAfile == FIRMWARE) 	{ updatePartition = U_FLASH; }
 
 		if (!Update.begin(_updateFileSize, updatePartition)) {	//start with max available size
@@ -2051,7 +1922,7 @@ void AsyncFSWebServer::uploadUpdateFile(AsyncWebServerRequest *request, String f
 	totalSize += len;
 	//percernt formula
 	uint16_t percentLoaded = (totalSize * 100) /  _updateFileSize ;
-	if (  (percentLoaded % 5) == 0  && (percentLoaded != percentLoadedPrev)) { 
+	if (  (percentLoaded % 5) == 0  && (percentLoaded != percentLoadedPrev)) {
 		percentLoadedPrev = percentLoaded;
 		DBG_OUTPUT_PORT.printf("Uploaded: %d bytes  %u %%\r\n", totalSize, percentLoaded);
 	}
@@ -2159,7 +2030,7 @@ void AsyncFSWebServer::serverInit() {
 	});
 	//load editor
 	on("/edit", HTTP_GET, [this](AsyncWebServerRequest *request) {
-		if (!this->checkAuth(request)) {	return request->requestAuthentication(); };	
+		if (!this->checkAuth(request)) {	return request->requestAuthentication(); };
 		if (!this->handleFileRead("/edit.html", request))
 			request->send(404, "text/plain", "FileNotFound");
 	});
@@ -2175,7 +2046,7 @@ void AsyncFSWebServer::serverInit() {
 	//first callback is called after the request has ended with all parsed arguments
 	//second callback handles file uploads at that location
 	on("/edit", HTTP_POST, [](AsyncWebServerRequest *request) {
-		 request->send(200, "text/plain", ""); }, 
+		 request->send(200, "text/plain", ""); },
 		[this](AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final) {
 			this->handleFileUpload(request, filename, index, data, len, final);
 	});
@@ -2280,7 +2151,7 @@ void AsyncFSWebServer::serverInit() {
 		if (!this->checkAuth(request)) {	return request->requestAuthentication(); };
 		this->send_NTP_configuration_values_html(request);
 	});
-	
+
 	on("/ntp.html", [this](AsyncWebServerRequest *request) {
 		if (!this->checkAuth(request)) {	return request->requestAuthentication(); };
 		this->send_NTP_configuration_html(request);
@@ -2321,7 +2192,7 @@ void AsyncFSWebServer::serverInit() {
 		if (!this->checkAuth(request)) {	return request->requestAuthentication(); };
 		this->send_device_values_html(request);
 	});
- 
+
 //update.html vvv
 	on("/update/updatepossible", [this](AsyncWebServerRequest *request) {
 		if (!this->checkAuth(request)) {	return request->requestAuthentication(); };
@@ -2360,7 +2231,7 @@ void AsyncFSWebServer::serverInit() {
 	}, [this](AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final) {
 		this->handleHexFileUpload( filename, index, data, len, final);
 	});
-	
+
 	on("/avr/uploadstatus", [this](AsyncWebServerRequest *request) {
 		if (!this->checkAuth(request)) {	return request->requestAuthentication(); };
 		this->handleHexFileUploadStatus(request);
@@ -2388,7 +2259,7 @@ void AsyncFSWebServer::serverInit() {
 		if (!this->checkAuth(request)) {	return request->requestAuthentication(); };
 		this->avrProgStatus(request);
 	});
-	
+
 
 	on("/avr/fuseread", [this](AsyncWebServerRequest *request) {
 		if (!this->checkAuth(request)) {	return request->requestAuthentication(); };
@@ -2423,9 +2294,9 @@ void AsyncFSWebServer::serverInit() {
 
 	on("/json", [this](AsyncWebServerRequest *request) {
 		if (!this->checkAuth(request)) {	return request->requestAuthentication(); };
-		if (jsoncallback) { 
+		if (jsoncallback) {
 			this->jsoncallback(request);
-		} 
+		}
 		else {
 			String values = "";
 			request->send(200, "text/plain", values);
@@ -2520,7 +2391,7 @@ void AsyncFSWebServer::serverInit() {
 }
 
 bool AsyncFSWebServer::checkAuth(AsyncWebServerRequest *request) {
-	if (!_httpAuth.auth) {	return true;}	
+	if (!_httpAuth.auth) {	return true;}
 	else {
 		return request->authenticate(_httpAuth.wwwUsername.c_str(), _httpAuth.wwwPassword.c_str());
 	}
@@ -2564,10 +2435,10 @@ void AsyncFSWebServer::serialShowInfo() {
 	Serial.printf("WifiHostName  %s \n\r", 	WiFi.hostname().c_str());
     #endif
 
-	
+
 	Serial.printf("Gateway: %s\r\n", WiFi.gatewayIP().toString().c_str());
 	Serial.printf("DNS: %s\r\n", WiFi.dnsIP().toString().c_str());
-	
+
 	String hostname = _sysConfig.deviceName+"_"+_sysConfig.deviceSerial;
 	Serial.printf("local DNS hostname  http://%s.local \n\r", hostname.c_str());
 	Serial.printf("or you can connect directly  http://%s \n\r", WiFi.localIP().toString().c_str());
@@ -2585,12 +2456,12 @@ String AsyncFSWebServer::udpJsonBroadcast() {
 	avrprog.cfgFileStructGet( AVRISP_HexFiles_Web);
 	String hostname = "http://" + _sysConfig.deviceName+"_"+_sysConfig.deviceSerial+".local";
 	String iphost 	= "http://" + WiFi.localIP().toString();
-	DynamicJsonDocument jsonDoc(JSON_STR_LEN * 2);
+	JsonDocument jsonDoc;
 	jsonDoc["deviceName"] 		= _sysConfig.deviceName;
 	jsonDoc["deviceSerial"] 	= _sysConfig.deviceSerial;
 	jsonDoc["deviceType"] 		= _sysConfig.deviceType;
-	
-	
+
+
 	jsonDoc["ip"] 				= WiFi.localIP().toString();
 	jsonDoc["dnshost"] 			= hostname;
 	jsonDoc["iphost"] 			= iphost;
@@ -2601,7 +2472,7 @@ String AsyncFSWebServer::udpJsonBroadcast() {
 	jsonDoc["udpPortRx"] 		= _udpConfig.udpPortRx;
 	jsonDoc["udpTimeOut"] 		= _udpConfig.udpTimeOut;
 	jsonDoc["keyword"] 			= _udpConfig.keyword;
-	
+
 	//jsonDoc["chip"] 			= AVRISP_HexFiles_Web.avr_signature;
 	jsonDoc["size"] 			= AVRISP_HexFiles_Web.chipsize;
 	jsonDoc["project"] 			= AVRISP_HexFiles_Web.project_name;
@@ -2631,7 +2502,7 @@ uint8_t AsyncFSWebServer::hex2bin (uint8_t h)    {
        { return((h - 'a') + 10); }
     DEBUGLOGISP("Bad hex digit! %x \n\r", h);
     return 0xff;
-} 
+}
 // convert a single hex digit character to its integer value (from https://code.google.com/p/avr-netino/)
 unsigned char AsyncFSWebServer::h2int(char c) {
 	if (c >= '0' && c <= '9') {
