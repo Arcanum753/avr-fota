@@ -16,7 +16,7 @@
 #define MIN 60  // 60 secs
 
 
-#define LOCALHOST '127.0.0.1'
+#define LOCALHOST "127.0.0.1"
 #define UDP_PORT  40001
 
 
