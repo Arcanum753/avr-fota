@@ -5,7 +5,7 @@
  *      Author: Sam
  */
 #include <stdint.h>
-#include "EERTOS.h"
+#include "eertos.h"
 
 //Пустая процедура - простой ядра.
 void  Idle_task(void) { }
