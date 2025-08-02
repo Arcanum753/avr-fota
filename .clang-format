@@ -1,0 +1,43 @@
+---
+BasedOnStyle: Google
+
+# How much whitespace?
+UseTab: Always
+TabWidth: 4
+IndentWidth: 4
+ContinuationIndentWidth: 4
+LineEnding: DeriveLF
+
+SpacesBeforeTrailingComments: 1
+
+# Line things up
+AccessModifierOffset: -4  # outdent `public:`, etc
+
+DerivePointerAlignment: false
+PointerAlignment: Right   # char *foo, char &bar
+
+AlignAfterOpenBracket: true
+AlignConsecutiveAssignments:
+  Enabled: true
+  AcrossEmptyLines: true
+  AcrossComments: false
+AlignConsecutiveDeclarations: true
+
+AllowShortIfStatementsOnASingleLine: false
+
+# Braces
+AlwaysBreakAfterReturnType: TopLevelDefinitions
+AllowShortFunctionsOnASingleLine: Inline
+BreakBeforeBraces: Custom
+BraceWrapping:
+  AfterStruct: true
+  AfterClass: true
+  AfterEnum: true
+  AfterFunction: true
+  AfterControlStatement: true
+  AfterNamespace: false
+  AfterExternBlock: false
+  BeforeCatch: true
+  BeforeElse: true
+  SplitEmptyFunction: false
+  SplitEmptyRecord: false

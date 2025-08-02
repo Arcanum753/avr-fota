@@ -63,5 +63,15 @@
         "sstream": "cpp",
         "thread": "cpp"
     },
-    "C_Cpp.errorSquiggles": "disabled"
+    "C_Cpp.errorSquiggles": "disabled",
+    "editor.formatOnSaveMode": "modifications",
+    "editor.formatOnSave": true,
+    "editor.formatOnType": true,
+    "editor.wordWrapColumn": 120,
+    "editor.rulers": [
+        {
+            "color": "#FF0000",
+            "column": 120
+        }
+    ]
 }
