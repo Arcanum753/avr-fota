@@ -181,7 +181,7 @@ public:
     void begin(FS* fs) ;                        // esp8266/esp32 flash file system
 #endif
     void handle();
-    const char* getHostName();
+	const String getHostName();
 	AsyncFSWebServer& setJSONCallback(JSON_CALLBACK_SIGNATURE);
 	AsyncFSWebServer& setRESTCallback(REST_CALLBACK_SIGNATURE);
 	AsyncFSWebServer& setPOSTCallback(POST_CALLBACK_SIGNATURE);
