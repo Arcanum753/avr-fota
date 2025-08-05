@@ -48,11 +48,6 @@ jobs:
       if: matrix.env == 'd1_mini_pro'
       run: pio pkg install --global --platform "platformio/espressif8266"
 
-    # Явная установка инструментов для ESP32
-    - name: Install ESP32 tools (if needed)
-      if: matrix.env != 'd1_mini_pro'
-      run: pio pkg install --global --tool "platformio/toolchain-xtensa-esp32" "platformio/tool-esptoolpy"
-
     - name: Build for ${{ matrix.env }}
       id: build-step
       run: pio run -e ${{ matrix.env }}
