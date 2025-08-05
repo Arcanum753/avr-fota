@@ -11,6 +11,8 @@ jobs:
     name: Build ${{ matrix.env }}
     runs-on: ubuntu-latest
     strategy:
+      # Отключаем автоматическую отмену задач
+      fail-fast: false
       matrix:
         env: [esp32cam, espwroom32, d1_mini_pro]
     steps:
@@ -32,16 +34,32 @@ jobs:
       with:
         python-version: '3.10'
 
-    - name: Install PlatformIO
+    - name: Install PlatformIO Core
       run: pip install platformio
 
     - name: Install ESP32 platform
       if: matrix.env != 'd1_mini_pro'
-      run: pio platform install espressif32
+      run: pio pkg install --global --platform "platformio/espressif32"
 
     - name: Install ESP8266 platform
       if: matrix.env == 'd1_mini_pro'
-      run: pio platform install espressif8266
+      run: pio pkg install --global --platform "platformio/espressif8266"
 
     - name: Build for ${{ matrix.env }}
+      id: build-step
+      continue-on-error: true
       run: pio run -e ${{ matrix.env }}
+
+    - name: Upload build logs on failure
+      if: ${{ failure() && steps.build-step.outcome == 'failure' }}
+      uses: actions/upload-artifact@v4
+      with:
+        name: build-logs-${{ matrix.env }}-${{ github.run_id }}
+        path: |
+          .pio/build/${{ matrix.env }}/**/*.log
+          .pio/logs/*
+        retention-days: 7
+
+    - name: Fail workflow if build failed
+      if: ${{ failure() && steps.build-step.outcome == 'failure' }}
+      run: exit 1
