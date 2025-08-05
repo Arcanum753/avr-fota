@@ -47,7 +47,6 @@ jobs:
 
     - name: Build for ${{ matrix.env }}
       id: build-step
-      continue-on-error: true
       run: pio run -e ${{ matrix.env }}
 
     - name: Upload build logs on failure
