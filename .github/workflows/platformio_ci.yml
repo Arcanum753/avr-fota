@@ -1,0 +1,44 @@
+name: PlatformIO CI
+
+on:
+  push:
+    branches: [main, master, dev]  # Добавлена ветка dev
+  pull_request:
+    branches: [main, master, dev]  # Ограничение PR для этих веток
+
+jobs:
+  build:
+    name: Build ${{ matrix.env }}
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        env: [esp32cam, espwroom32, d1_mini_pro]
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    # Кэширование зависимостей
+    - name: Cache PlatformIO dependencies
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.platformio
+          .pio
+        key: ${{ runner.os }}-pio-${{ hashFiles('platformio.ini') }}
+        restore-keys: |
+          ${{ runner.os }}-pio-
+
+    # Базовая установка PlatformIO
+    - name: Setup PlatformIO Core
+      uses: platformio/platformio-core-action@v2
+      with:
+        platform: espressif32
+
+    # Установка ESP8266 только для d1_mini_pro
+    - name: Install ESP8266 platform
+      if: matrix.env == 'd1_mini_pro'
+      run: pio platform install espressif8266
+
+    # Основная сборка
+    - name: Build for ${{ matrix.env }}
+      run: pio run -e ${{ matrix.env }}
