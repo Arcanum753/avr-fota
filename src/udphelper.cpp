@@ -21,7 +21,7 @@
 #include "FSWebServerLib.h"
 #include "debug.h"
 
-IPAddress responseIp (LOCALHOST);
+IPAddress responseIp ((const unsigned char *) LOCALHOST);
 AsyncUDP udp_broadcast;
 AsyncUDP udp_listen;
 

@@ -2398,9 +2398,8 @@ bool AsyncFSWebServer::checkAuth(AsyncWebServerRequest *request) {
 
 }
 
-const char* AsyncFSWebServer::getHostName() {
-	String hostname = _sysConfig.deviceName+"_"+_sysConfig.deviceSerial;
-	return hostname.c_str();
+const String AsyncFSWebServer::getHostName() {
+	return _sysConfig.deviceName+"_"+_sysConfig.deviceSerial;
 }
 
 AsyncFSWebServer& AsyncFSWebServer::setJSONCallback(JSON_CALLBACK_SIGNATURE) {
