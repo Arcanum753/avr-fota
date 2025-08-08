@@ -7,6 +7,8 @@
 #include <stdint.h>
 #include "eertos.h"
 
+static void Idle_task(void);
+
 /* Tasks queue with pointers to the runnable functions */
 static TPTR TaskQueue[TaskQueueSize];
 
