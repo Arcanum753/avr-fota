@@ -20,8 +20,7 @@
 
 // pin used for entering setup mode
 
- Ticker _secondEERtos;
-void usecondTick();
+Ticker _secondEERtos;
 void TaskBlink1();
 void TaskBlink2();
 
@@ -33,12 +32,12 @@ void setup() {
   
     Serial.begin(115200);
     InitRTOS(); // init eertos
-     _secondEERtos.attach_ms(1, &usecondTick); // init eertos time manager   
-    // SetTask(TaskBlink1); // do blink
-    SPIFFS.begin(); // Not really needed, checked inside library and started if
-                    // needed
-                    
-    // WiFi is started inside library
+	_secondEERtos.attach_ms(1, &TimerService); // init eertos time manager
+	// SetTask(TaskBlink1); // do blink
+	SPIFFS.begin(); // Not really needed, checked inside library and started if
+					// needed
+
+	// WiFi is started inside library
     ESPHTTPServer.begin(&SPIFFS);
     #if defined(ESP32)
 	
@@ -83,10 +82,6 @@ void TaskBlink1(){
 
 void TaskBlink2(){
       SetTimerTask(TaskBlink1, 1000);
-}
-
-void usecondTick()  {
-    TimerService();
 }
 
 void ledInit(){
