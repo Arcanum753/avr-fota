@@ -367,7 +367,7 @@ protected:
 
     void restart_esp();
     void send_wwwauth_configuration_values_html(AsyncWebServerRequest *request);
-    void send_wwwauth_configuration_html(AsyncWebServerRequest *request);
+    void set_wwwauth_configuration(AsyncWebServerRequest *request);
     void send_update_firmware_values_html(AsyncWebServerRequest *request);
     void setUpdateMD5(AsyncWebServerRequest *request);
     void uploadUpdateFile(AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final);

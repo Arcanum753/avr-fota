@@ -1617,8 +1617,8 @@ void AsyncFSWebServer::get_system_configuration_html(AsyncWebServerRequest *requ
 			if (request->argName(i) == "name") 		{ _sysConfig.deviceName = urldecode(request->arg(i));			continue; }
 			if (request->argName(i) == "serial") 	{ _sysConfig.deviceSerial = urldecode(request->arg(i));			continue; }
 		}
-		request->send_P(200, "text/html", Page_GeneralSys);
-		save_configSys();
+			request->send_P(200, "text/html", Page_GeneralSys);
+			save_configSys();
 	}
 	else {
 		handleFileRead(request->url(), request);
@@ -1735,34 +1735,44 @@ void AsyncFSWebServer::send_wwwauth_configuration_values_html(AsyncWebServerRequ
 	// DEBUGLOG(__FUNCTION__);	DEBUGLOG("\r\n");
 }
 
-void AsyncFSWebServer::send_wwwauth_configuration_html(AsyncWebServerRequest *request) {
+void AsyncFSWebServer::set_wwwauth_configuration(AsyncWebServerRequest *request) {
 	DEBUGLOG("%s %d\n", __FUNCTION__, request->args());
-	if (request->args() > 0)  // Save Settings
+	if (request->args() > 0)
 	{
+		bool save = false;
 		_httpAuth.auth = false;
-		//String temp = "";
-		for (uint8_t i = 0; i < request->args(); i++) {
+		for (uint8_t i = 0; i < request->args(); i++)
+		{
+			if (request->argName(i) == "authconf") {
+				save = true;
+				continue;
+			}
 			if (request->argName(i) == "wwwuser") {
 				_httpAuth.wwwUsername = urldecode(request->arg(i));
-				DEBUGLOG("User: %s\n", _httpAuth.wwwUsername.c_str());
 				continue;
 			}
 			if (request->argName(i) == "wwwpass") {
 				_httpAuth.wwwPassword = urldecode(request->arg(i));
-				DEBUGLOG("Pass: %s\n", _httpAuth.wwwPassword.c_str());
 				continue;
 			}
 			if (request->argName(i) == "wwwauth") {
 				_httpAuth.auth = true;
-				DEBUGLOG("HTTP Auth enabled\r\n");
 				continue;
 			}
 		}
 
-		saveHTTPAuth();
-	}
-	handleFileRead("/system.html", request);
+		if (!_httpAuth.auth)
+		{
+			_httpAuth.wwwUsername = "";
+			_httpAuth.wwwPassword = "";
+		}
 
+		if (save)
+		{
+			request->send_P(200, "text/html", Page_GeneralSys);
+			saveHTTPAuth();
+		}
+	}
 	//DEBUGLOG(__PRETTY_FUNCTION__);	DEBUGLOG("\r\n");
 }
 
@@ -2184,9 +2194,9 @@ void AsyncFSWebServer::serverInit() {
 		this->get_system_configuration_html(request);
 	});
 	// FIXME
-	on("/system.html", [this](AsyncWebServerRequest *request) {
+	on("/system/savewwwauth", [this](AsyncWebServerRequest *request) {
 		if (!this->checkAuth(request)) {	return request->requestAuthentication(); };
-		this->send_wwwauth_configuration_html(request);
+		this->set_wwwauth_configuration(request);
 	});
 	on("/system/devconf", HTTP_GET, [this](AsyncWebServerRequest *request) {
 		if (!this->checkAuth(request)) {	return request->requestAuthentication(); };

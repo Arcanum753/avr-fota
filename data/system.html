@@ -18,98 +18,67 @@
         </table>
     </form>
     <hr>
-    <form>
+    <form id="wwwAuthForm" onsubmit=" return checkAuth( this ) " method="get">
+        <input type="hidden" id="authconf" name="authconf" value="">
         <table border="0" cellspacing="0" cellpadding="3" style="width:350px" align="center">
-            <tr>
-                <td align="center"><a href="javascript:restartESP()" class="btn btn--m btn--blue">Restart</a></td>
-            </tr>
-            
+            <tr><td><label for="wwwauth">Use auth:</label><input type="checkbox" id="wwwauth" name="wwwauth" onclick='javascript:enableAuthFields(this);'></td></tr>
+            <tr id="username" style="display: none;"><td><label for="wwwuser">Web User:</label><input type="text" id="wwwuser" name="wwwuser" value=""></td></tr>
+            <tr id="password" style="display: none;"><td><label for="wwwpass">Password:</label><input type="password" id="wwwpass" name="wwwpass" value=""></td></tr>
+            <tr><td align="center" colspan="2">Notice password is used for<br/>HTTP Auth, AP Mode and OTA</td></tr>
+            <tr><td align="center"><input type="submit" value="Save"></td></tr>
+            <tr><td id="submitResult" align="center"></td></tr>
         </table>
     </form>
     <hr>
-    <form id="wwwAuthForm" action="" method="get">
+        <form>
         <table border="0" cellspacing="0" cellpadding="3" style="width:350px" align="center">
-            <tr>
-                <td style="width:120px" align="center">Use auth:</td>
-                <td>
-                    <input type="checkbox" id="wwwauth" name="wwwauth" onclick='enableAuthFields(this);'>
-                </td>
-            </tr>
-            <tr>
-                <td align="right">Web User:</td>
-                <td>
-                    <input type="text" id="wwwuser" name="wwwuser" value="">
-                </td>
-            </tr>
-            <tr>
-                <td align="right">Password:</td>
-                <td>
-                    <input type="password" id="wwwpass" name="wwwpass" value="">
-                </td>
-            </tr>
-            <tr>
-                <td align="center" colspan="2">Notice password is used for<br/>HTTP Auth, AP Mode and OTA</td>
-            </tr>
-            <tr>
-                <td colspan="2" align="center">
-                    <a href='javascript:submitFrm(document.forms["wwwAuthForm"])' style="width:150px" class="btn btn--m btn--blue">Save</a>
-                </td>
-            </tr>
-
+            <tr><td colspan="2" align="center"><input type="button" value="Restart" onclick='javascript:restartESP()'></td></tr>
         </table>
     </form>
-    <table border="0" cellspacing="0" cellpadding="3" style="width:350px">
-        <tr>
-            <td id="submitResult"></td>
-        </tr>
-    </table>
-
+    <hr>
     <markup>./page_bottom.html</markup>
     <script src="GetJson.js" defer></script>
     <script src="GetMarkup.js" defer></script>
     <script src="microajax.js" defer></script>
 
     <script>
-           window.onload = function() {
-              setTimeout(() => {
-                    ApplyCVT("/admin/infovalues");
-                    ApplyCVT("/system/info");
-                    ApplyCVT("/system/devconf");
-                }, 500);
-                syncLoader.loadFiles(["style.css", "microajax.js"]).then(() => {
-                    GetState();
-                });
-                enableAuthFields(document.getElementById("wwwauth"));
-          
-               
-    			
-    		};
+            window.onload = function() {
+                ApplyCVT("/system/devconf")
+                    .then(() => ApplyCVT("/system/info"))
+                    .then(() => ApplyCVT("/system/wwwauth"))
+                    .then(() => enableAuthFields(document.getElementById("wwwauth")));
+            };
+
         function enableAuthFields(cb) {
-            //document.getElementById("wwwuser").disabled = !cb.checked;
-            //document.getElementById("wwwpass").disabled = !cb.checked;
-        }
-
-        function submitFrm(frm) {
-            if (document.getElementById("wwwauth").checked) {
-                if ((document.getElementById("wwwuser").value != "") && (document.getElementById("wwwpass").value != "")) {
-                    //document.getElementById("submitResult").innerHTML = "Auth updated";
-                    console.log("Enable: " + document.getElementById("wwwauth").checked);
-                    console.log("User: " + document.getElementById("wwwuser").value);
-                    console.log("Pass: " + document.getElementById("wwwpass").value);
-                    frm.submit();
-                } else {
-                    document.getElementById("submitResult").innerHTML = "User and password must be filled";
-                }
-            } else {
-                //document.getElementById("wwwuser").value = "";
-                document.getElementById("wwwpass").value = "";
-                //document.getElementById("submitResult").innerHTML = "Auth disabled";
-                console.log("Enable: " + document.getElementById("wwwauth").checked);
-                console.log("User: " + document.getElementById("wwwuser").value);
-                console.log("Pass: " + document.getElementById("wwwpass").value);
-                frm.submit();
-
+            let username_row = document.getElementById('username').style;
+            let password_row = document.getElementById('password').style;
+            if (cb.checked)
+            {
+                username_row.display = 'table-row';
+                password_row.display = 'table-row';
             }
+            else
+            {
+                username_row.display = 'none';
+                password_row.display = 'none';
+            }
+        }
+        function checkAuth(frm)
+        {
+            if (document.getElementById("wwwauth").checked)
+            {
+                if((document.getElementById("wwwuser").value == "") || (document.getElementById("wwwpass").value == ""))
+                {
+                    document.getElementById("submitResult").innerHTML = "User and password must be filled";
+                    return false;
+                }
+            }
+            else
+            {
+                document.getElementById("wwwuser").value = "";
+                document.getElementById("wwwpass").value = "";
+            }
+            document.getElementById("wwwAuthForm").action = "/system/savewwwauth";
         }
 
         function restartESP() {
