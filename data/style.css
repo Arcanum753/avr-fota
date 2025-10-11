@@ -78,7 +78,7 @@ h2.title {
 }
 
 table {
-    min-width: 400px;
+    min-width: 300px;
 }
 
 table .align-right {
@@ -86,7 +86,7 @@ table .align-right {
 }
 
 table.form select {
-    width: 143px;
+    width: 140px;
 }
 
 table.form {

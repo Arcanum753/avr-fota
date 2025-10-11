@@ -63,19 +63,16 @@ SerialTerminal::SerialTerminal(char newlineChar, char delimiterChar) :
  * \param function
  *      The function to be called when receiving the \c command.
  */
-void SerialTerminal::addCommand(const char *command, void (*function)())
-{
+void SerialTerminal::addCommand(const char *command, void (*function)())    {
     // Increase size command list by one
-    _commandList = (SerialTerminalCallback *)realloc(_commandList,
-            sizeof(SerialTerminalCallback) * (_numCommands + 1));
-
+    _commandList = (SerialTerminalCallback *)realloc(_commandList, sizeof(SerialTerminalCallback) * (_numCommands + 1));
     // Copy command and store command callback handler
     strncpy(_commandList[_numCommands].command, command, ST_NUM_COMMAND_CHARS);
     _commandList[_numCommands].function = function;
-
     // Increment number of commands
     _numCommands++;
 }
+
 
 
 /*!
@@ -85,10 +82,7 @@ void SerialTerminal::addCommand(const char *command, void (*function)())
  * \param doEcho
  *      Should all printable chars be echoed to the serial console?
  */
-void SerialTerminal::setSerialEcho(bool doEcho)
-{
-    doCharEcho = doEcho;
-}
+void SerialTerminal::setSerialEcho(bool doEcho) {    doCharEcho = doEcho; }
 
 /*!
  * \brief Set post command handler callback for after all handled commands.
@@ -215,3 +209,23 @@ char *SerialTerminal::getRemaining()
 {
     return strtok_r(NULL, "", &_lastPos);
 }
+
+void SerialTerminal::helpShow(void) {
+    Serial.print("Supported commands: \n \t");
+    for (int i = 0; i < _numCommands; i++)    {
+        Serial.printf(_commandList[i].command );
+        Serial.print(" \n\t");
+    }
+}
+
+void SerialTerminal::EchoOnOff(void) {
+    if ( doCharEcho ) {
+        Serial.print("Echo off. \n");
+        doCharEcho = false;
+    } else {
+        Serial.print("Echo on. \n");
+        doCharEcho = true; 
+    }
+
+}
+

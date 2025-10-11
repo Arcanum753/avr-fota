@@ -1,5 +1,7 @@
 #include "SPIFFSEditor.h"
-#include <FS.h>
+
+
+
 
 //File: edit.htm.gz, Size: 4151
 #define edit_htm_gz_len 4151
@@ -376,11 +378,11 @@ static bool isExcluded(fs::FS &_fs, const char *filename) {
 
 // WEB HANDLER IMPLEMENTATION
 
-#ifdef ESP32
-SPIFFSEditor::SPIFFSEditor(const fs::FS& fs, const String& username, const String& password)
-#else
+//  #ifdef ESP32
+//  SPIFFSEditor::SPIFFSEditor(const fs::FS& fs  = SPIFFS, const String& username, const String& password)
+//  #else
 SPIFFSEditor::SPIFFSEditor(const String& username, const String& password, const fs::FS& fs)
-#endif
+//  #endif
 :_fs(fs)
 ,_username(username)
 ,_password(password)

@@ -64,6 +64,11 @@ function ApplyCVT(url, prefix = "") {
               comp.checked = fields[1];
             }
           }
+          if (fields[0] == "devicetype") {
+            if (fields[1] == "avr")     {   document.getElementById("avr").style.display = "";    } 
+            else if (fields[1] == "stm32")   {   document.getElementById("stm32").style.display = "";    }
+            else if (fields[1] == "gpio")    {   document.getElementById("gpio").style.display = "";    }
+          }
         }
 
         resolve(data);
@@ -74,3 +79,4 @@ function ApplyCVT(url, prefix = "") {
     }
   });
 }
+

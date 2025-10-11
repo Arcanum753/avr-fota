@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html>	<head>
+	<title>404 - Page not found.</title>
+	<meta http-equiv="Content-type" content="text/html; charset=utf-8">
+	<link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+<markup>./page_head.html</markup>
+	<h3 style="background: #7D8EE2" align="center">  <span id="devicename2">  </span>  404 page.  </h2>	
+	<div class="content">
+		<h2 class="error" align="center">404 - Page not found!</h2>
+		<p align="center">Sorry, the page you are requesting was not found on this device.</p>
+	</div>
+
+</body>
+<markup>./page_bottom.html</markup>
+<script src="GetJson.js" defer></script>
+<script src="GetMarkup.js" defer></script>
+<script src="microajax.js" defer></script>
+<script>
+	window.onload = function() {
+		setTimeout(() => {
+			ApplyCVT("/admin/infovalues");
+			ApplyCVT("/admin/connectionstate");
+			ApplyCVT("/system/info");
+		}, 500);
+		
+	};
+	</script>
+
+</html>

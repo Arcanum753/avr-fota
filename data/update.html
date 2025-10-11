@@ -1,59 +1,42 @@
 <!DOCTYPE html>
 <html>
 <head>
-	<title>Esp8266 fOTA</title>
+	<title>ESP Firmware &amp FS OTA</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta http-equiv="Content-type" content="text/html; charset=utf-8">
 	<link rel="stylesheet" href="style.css">
 	<script src="FSBrowserNG.js"></script>
 </head>
 <body>
-    <markup>./head.html</markup>
-    <h2 class="title" style="background: #7D8EE2; padding: 8px;"> Esp8266 Firmware self update</h2>
+    <markup>./page_head.html</markup>
+    <h2 class="title" style="background: #7D8EE2; padding: 8px;"> ESP chip firmware &amp filesystem self update page</h2>
     <hr>
     <form method='POST' action='/update' enctype='multipart/form-data'>
-        <table align="center"> 
-            <tr>  <td> <input id="fileName" type='file' name='update' onchange="summd5()" disabled> </td> </tr>
-            <tr><td> <input id="updateButton" type='submit' value='Update es8266 firmware.' disabled> </td> </tr>
+        <table align = "center"> 
+            <tr><td> <input id="fileName" type='file' name='update' onchange="summd5()" > </td> </tr>
             <tr><td id="md5row" hidden>
                     Calculated file MD5 hash: <span id="clientHash">Select a file</span><br>
-                    Size: <span id="fileSize"></span> Bytes
+                    Size: <span id="fileSize"></span> Bytes <br>
+                    Filename: <span id="fileNameLoaded"></span>
                 </td>
+            <tr><td> <input id="updateButton" type='submit'   value='Update ESP chip firmware.' disabled > </td> </tr>
             </tr>
-            <tr><td>  Checking if remote update is possible... <span id="remupd"></span> </td> </tr>
-            <tr>  <td>  <span id="remupdResult"></span> </td> </tr>
+            
         </table>
     </form>
 
-    <markup>./bottom.html</markup>
-     <script src="GetMarkup.js" defer></script>
+    <markup>./page_bottom.html</markup>
+    <script src="GetMarkup.js" defer></script>
     <script src="GetJson.js" defer></script>
-    <script>
- 
-  
-      function GetState() {
-          setValues("/update/updatepossible")
-          setTimeout(function () {
-              if (document.getElementById("remupd").innerHTML == "OK") {
-                  console.warn("ERROR = OK");
-                  document.getElementById("fileName").disabled = false;
-                  document.getElementById("updateButton").disabled = false;
-                  document.getElementById("remupdResult").innerHTML = "";
-              }
-          }, 2000);
-      }
-
+    <script src="microajax.js" defer></script>
+    <script src="spark-md5.js" defer></script>
+    <script> 
         window.onload = function () {
-            syncLoader.loadFiles(["style.css", "microajax.js", "spark-md5.js"]).then(() => {
-                GetState();
-            });
-            ApplyJson("config.json");
       	  	setTimeout(() => {
         			ApplyCVT("/admin/infovalues");
         			ApplyCVT("/admin/connectionstate");
-        			ApplyCVT("/admin/devconf");
-      			
-      		}, 1000);
+                    ApplyCVT("/system/info");
+      		}, 250);
         };
 
         var blobSlice = File.prototype.slice || File.prototype.mozSlice || File.prototype.webkitSlice,
@@ -82,10 +65,15 @@
                     console.info('Finished loading!');
                     console.info('Computed hash: ' + md5hash); // compute hash
                     console.info('Total time: ' + (new Date().getTime() - time) + 'ms');
+                    
                     document.getElementById('md5row').hidden = false;
+                    
                     document.getElementById('clientHash').innerHTML = md5hash;
                     document.getElementById('fileSize').innerHTML = file.size;
-                    setValues('/setmd5?md5=' + md5hash + '&size=' + file.size);
+                    document.getElementById('fileNameLoaded').innerHTML = file.name;
+                    
+                    setValues('/setmd5?md5=' + md5hash + '&size=' + file.size + '&name=' + file.name);
+                    setTimeout(fileChechInfoGet, 250);
                 }
             };
             fileReader.onerror = function () {
@@ -97,7 +85,39 @@
             time = new Date().getTime();
             fileReader.readAsBinaryString(file);
         }
-
+        
+        function fileChechInfoGet() {
+          const _buttonEn = document.getElementById('updateButton') ;
+          const _buttonVal = document.getElementById('updateButton');
+          let _filetype;
+          let _filesize ;
+          
+          const xhr = new XMLHttpRequest();
+          xhr.open('get', "/update/updatepossible")
+          xhr.send();
+          xhr.addEventListener('loadend', () => {
+            const fieldsRows = ParseCVT(xhr.response).reverse();
+            for (fields of fieldsRows) {
+              if (fields[0] == "updFileType" ) {
+                  _filetype = fields[1];
+                } 
+            }
+            if (_filetype == "FIRMWARE"  ) {
+                _buttonEn.disabled = false;
+                _buttonVal.value = 'Update FIRMWARE';
+            
+            }
+            if (_filetype == "FILESYSTEM"  ) {
+              _buttonEn.disabled = false;
+              _buttonVal.value = 'Update FILESYSTEM';
+            }
+            if (_filetype == "UNSUPPORTED"  ) {
+              _buttonEn.disabled = true;
+              _buttonVal.value = 'UNSUPPORTED FILE!';
+            }
+          });
+        }
+        
     </script>
    
 </body>
