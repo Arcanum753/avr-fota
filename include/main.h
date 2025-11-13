@@ -13,7 +13,7 @@
 #define NTP_TIMEOUT 3000 // milliseconds
 
 #define SEC 1000 // 1000 usecs
-#define MIN 60  // 60 secs
+#define MINUTES 60  // 60 secs
 
 
 #define LOCALHOST "127.0.0.1"

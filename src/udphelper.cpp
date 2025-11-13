@@ -87,11 +87,11 @@ void udpBroadcastTimer() {
   uint16_t timeout = ESPHTTPServer.getudpTimeOut();
   if (timeout > 60) {timeout = 60;}
   if (timeout == 0){
-    SetTimerTask(udpBroadcastTimer, SEC * MIN);
+    SetTimerTask(udpBroadcastTimer, SEC * MINUTES);
     return;
   }
   if (timeout > 0 ){
-    SetTimerTask(udpBroadcastTimer, SEC * MIN * timeout);
+    SetTimerTask(udpBroadcastTimer, SEC * MINUTES * timeout);
     udpBroadcast.udpBroadcastSend(ESPHTTPServer.getUpdPortTx(), ESPHTTPServer.udpJsonBroadcast());
   }
 }

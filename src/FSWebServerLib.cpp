@@ -143,7 +143,7 @@ void AsyncFSWebServer::ntpBeginReserv (){
 
 void AsyncFSWebServer::ntpBegin (){
 	if (_ntpConfig.updateNTPTimeEvery > 0) { // Enable NTP sync
-        NTP.setInterval (_ntpConfig.updateNTPTimeEvery * MIN);
+        NTP.setInterval (_ntpConfig.updateNTPTimeEvery * MINUTES);
         NTP.setNTPTimeout (NTP_TIMEOUT);
 		NTP.onNTPSyncEvent([this](NTPSyncEvent_t event){	ntpHandler(event);	});
 		ntpBeginReserv();
