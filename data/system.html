@@ -18,6 +18,12 @@
         </table>
     </form>
     <hr>
+    <form>
+    <table border="0" cellspacing="0" cellpadding="3" style="width:350px" align="center">
+        <tr><td colspan="2" align="center"><input type="button" value="Restart" onclick='javascript:restartESP()'></td></tr>
+    </table>
+</form>
+<hr>
     <form id="wwwAuthForm" onsubmit=" return checkAuth( this ) " method="get">
         <input type="hidden" id="authconf" name="authconf" value="">
         <table border="0" cellspacing="0" cellpadding="3" style="width:350px" align="center">
@@ -30,12 +36,7 @@
         </table>
     </form>
     <hr>
-        <form>
-        <table border="0" cellspacing="0" cellpadding="3" style="width:350px" align="center">
-            <tr><td colspan="2" align="center"><input type="button" value="Restart" onclick='javascript:restartESP()'></td></tr>
-        </table>
-    </form>
-    <hr>
+
     <markup>./page_bottom.html</markup>
     <script src="GetJson.js" defer></script>
     <script src="GetMarkup.js" defer></script>

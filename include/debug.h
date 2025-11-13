@@ -1,5 +1,5 @@
 // 0 disable showing debug // 1 show logic debug // 2 - show all bufs
-#define DEBUG_SHOWHEXBUF 1    
+#define DEBUG_SHOWHEXBUF 2
 
 #define DBG_ISP_OUTPUT_PORT Serial
 

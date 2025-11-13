@@ -3,7 +3,7 @@
 #define SERIAL_NUMBER "0"
 #define DEVTYPE_GPIO "gpio"
 #define DEVTYPE_AVR "avr"
-#define DEVTYPE_STM32 "stm32"
+#define DEVTYPE_SWD "stm32"
 #define APP_BUILDDATE  __DATE__
 #define APP_BUILDTIME  __TIME__
 
