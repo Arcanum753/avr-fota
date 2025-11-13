@@ -2458,6 +2458,12 @@ uint16_t AsyncFSWebServer::getUpdPortRx() 	{	return _udpConfig.udpPortRx;	}
 uint16_t AsyncFSWebServer::getudpTimeOut() 	{	return _udpConfig.udpTimeOut;	}
 String AsyncFSWebServer::getudpKeyword() 	{	return _udpConfig.keyword;	}
 
+String
+AsyncFSWebServer::getMetar()
+{
+	return _metarConfig.icao;
+}
+
 String AsyncFSWebServer::udpJsonBroadcast() {
 	String _ret = "";
 

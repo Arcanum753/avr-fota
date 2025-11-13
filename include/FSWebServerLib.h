@@ -213,6 +213,8 @@ public:
     strUdpConfig    _udpConfig; // UDP configuration
     strMetarConfig    _metarConfig; // METAR configuration
 
+    String getMetar();
+
 private:
 	JSON_CALLBACK_SIGNATURE;
 	REST_CALLBACK_SIGNATURE;
