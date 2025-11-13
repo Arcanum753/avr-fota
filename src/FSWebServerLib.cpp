@@ -1112,50 +1112,48 @@ void AsyncFSWebServer::handleFileDelete(AsyncWebServerRequest *request) {
 	request->send(200, "text/plain", "");
 }
 
+// int AsyncFSWebServer::handleHexFileUpload( String filename, size_t index,
+// uint8_t *data, size_t len, bool final) { 	int  _ret= 0;
+// _hexFileUploadStatus =
+// ""; 	static File fsUploadFile; 	static size_t fileSize = 0;
+// 	// Start
+// 	if (!index) {
+// 		DEBUGLOG("handleHexFileUpload Name: %s\r\n", filename.c_str());
+// 		if (!filename.startsWith("/")) filename = "/" + filename;
+// 		fsUploadFile = _fs->open(filename, "w");
+// 		DEBUGLOG("First upload part.\r\n");
+// 	}
+// 	// Continue
+// 	if (fsUploadFile) {
+// 		DEBUGLOG("Continue upload part. Size = %u\r\n", len);
+// 		if (fsUploadFile.write(data, len) != len) {
+// 			_hexFileUploadStatus  += "uploadstatus|error|div\n";
+// 		}
+// 		else {
+// 			fileSize += len;
+// 		}
+// 	}
+// 	// End
+// 	if (final) {
+// 		if (fsUploadFile) {	fsUploadFile.close();	}
+// 		_ret = fileSize;
+// 		DEBUGLOG("HexFileUpload final Size: %u\n", fileSize);
+// 		_hexfileCheck = filename;
+// 		_hexFileUploadStatus  += "uploadstatus|ok|div\n";
+// 		_hexFileUploadStatus  += "file|"	 + _hexfileCheck 	+"|div\n";
+// 		_hexFileUploadStatus  += "fileSize|" + (String)fileSize 	+"|div\n";
+// 		fileSize = 0;
+// 	}
+// 	DEBUGLOG(__PRETTY_FUNCTION__);
+// 	DEBUGLOG("\r\n");
+// 	return _ret;
 
-int AsyncFSWebServer::handleHexFileUpload( String filename, size_t index, uint8_t *data, size_t len, bool final) {
-	int  _ret= 0;
-	_hexFileUploadStatus = "";
-	static File fsUploadFile;
-	static size_t fileSize = 0;
-	// Start
-	if (!index) {
-		DEBUGLOG("handleHexFileUpload Name: %s\r\n", filename.c_str());
-		if (!filename.startsWith("/")) filename = "/" + filename;
-		fsUploadFile = _fs->open(filename, "w");
-		DEBUGLOG("First upload part.\r\n");
-	}
-	// Continue
-	if (fsUploadFile) {
-		DEBUGLOG("Continue upload part. Size = %u\r\n", len);
-		if (fsUploadFile.write(data, len) != len) {
-			_hexFileUploadStatus  += "uploadstatus|error|div\n";
-		}
-		else {
-			fileSize += len;
-		}
-	}
-	// End
-	if (final) {
-		if (fsUploadFile) {	fsUploadFile.close();	}
-		_ret = fileSize;
-		DEBUGLOG("HexFileUpload final Size: %u\n", fileSize);
-		_hexfileCheck = filename;
-		_hexFileUploadStatus  += "uploadstatus|ok|div\n";
-		_hexFileUploadStatus  += "file|"	 + _hexfileCheck 	+"|div\n";
-		_hexFileUploadStatus  += "fileSize|" + (String)fileSize 	+"|div\n";
-		fileSize = 0;
-	}
-	DEBUGLOG(__PRETTY_FUNCTION__);
-	DEBUGLOG("\r\n");
-	return _ret;
+// }
 
-}
-
-void AsyncFSWebServer::handleHexFileUploadStatus(AsyncWebServerRequest *request) {
-	request->send(200, "text/plain", _hexFileUploadStatus);
-	// DEBUGLOG(__FUNCTION__);	DEBUGLOG("\r\n");
-}
+// void AsyncFSWebServer::handleHexFileUploadStatus(AsyncWebServerRequest
+// *request) { 	request->send(200, "text/plain", _hexFileUploadStatus);
+// 	// DEBUGLOG(__FUNCTION__);	DEBUGLOG("\r\n");
+// }
 
 void AsyncFSWebServer::handleFileUpload(AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final) {
 	static File fsUploadFile;
@@ -1388,10 +1386,14 @@ void AsyncFSWebServer::send_wwwauth_configuration_values_html(AsyncWebServerRequ
 	// DEBUGLOG(__FUNCTION__);	DEBUGLOG("\r\n");
 }
 
-void AsyncFSWebServer::send_wwwauth_configuration_html(AsyncWebServerRequest *request) {
+void
+AsyncFSWebServer::set_wwwauth_configuration(AsyncWebServerRequest *request)
+{
 	DEBUGLOG(__PRETTY_FUNCTION__);	DEBUGLOG("\r\n");
 	DEBUGLOG("%s %d\n", __FUNCTION__, request->args());
-	if (request->args() > 0) { // Save Settings
+	if (request->args() > 0)
+	{
+		bool save	   = false;
 		_httpAuth.auth = false;
 		for (uint8_t i = 0; i < request->args(); i++)
 		{
