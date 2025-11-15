@@ -1,4 +1,12 @@
 #include "main.h"
+#include <ArduinoJson.h>
+
+#include "FSWebServerLib.h"
+#include "prog_isp.h"
+#include "prog_swd.h"
+#include "udphelper.h"
+#include "programmer.h"
+#include "debug.h"
 
 #if defined(ESP32)
 #include <SPIFFS.h>
@@ -7,9 +15,8 @@
 #elif defined(ESP8266)
 #include <FS.h>
 #endif
-#include "FSWebServerLib.h"
-#include "avrisp.h"
-#include "udphelper.h"
+
+
 
 AsyncFSWebServer ESPHTTPServer(80);
 
@@ -83,212 +90,6 @@ void AsyncFSWebServer::s_secondTick(void* arg) {
 
 }
 
-
-
-void  AsyncFSWebServer::gpioGetArgs(AsyncWebServerRequest *request) {
-	String values = "";
-	String uartStr = "";
-	if (request->args() > 0) { // get new configs from args
-		for (uint8_t i = 0; i < request->args(); i++) {
-			DEBUGLOG("Arg %d: %s %s\r\n", i, request->argName(i).c_str() , request->arg(i).c_str() );
-			if (request->argName(i) == "uartstr")	{
-				uartStr = urldecode(request->arg(i));
-				Serial.printf("%s \n\r", uartStr.c_str() );
-                continue;
-			}
-			if ( _sysConfig.deviceType == DEVTYPE_GPIO){
-				if (request->argName(i) == "led1")      {
-					if (urldecode(request->arg(i)) == "on") {       digitalWrite(PIN_MISO, HIGH);   }
-					if (urldecode(request->arg(i)) == "off") {      digitalWrite(PIN_MISO, LOW);    }
-					continue;
-				}
-				if (request->argName(i) == "led2")      {
-					if (urldecode(request->arg(i)) == "on") {       digitalWrite(PIN_MOSI, HIGH);   }
-					if (urldecode(request->arg(i)) == "off") {      digitalWrite(PIN_MOSI, LOW);    }
-					continue;
-				}
-				if (request->argName(i) == "led3")      {
-					if (urldecode(request->arg(i)) == "on") {       digitalWrite(PIN_SCK, HIGH);    }
-					if (urldecode(request->arg(i)) == "off") {      digitalWrite(PIN_SCK, LOW);     }
-					continue;
-				}
-				if (request->argName(i) == "led4")      {
-					if (urldecode(request->arg(i)) == "on") {       digitalWrite(PIN_RST, HIGH);    }
-					if (urldecode(request->arg(i)) == "off") {      digitalWrite(PIN_RST, LOW);     }
-					continue;
-				}
-			}
-		}
-	request->send(200, "text/plain", values);
-	DEBUGLOG(__PRETTY_FUNCTION__);	DEBUGLOG("\r\n");
-}
-}
-
-void  AsyncFSWebServer::avrGetInfo(AsyncWebServerRequest *request) {
-	String values = "";
-	AVRISP_CfgFile_t AVRISP_HexFiles_Web;
-	avrsip_err_t _res = avrprog.cfgFileStructGet( AVRISP_HexFiles_Web	);
-	if (_res < ERROR_OK) {
-		values+= "getinfoerror|Can't open cfg file.|div\n";
-	} else {
-
-		values += "proj|"   +			AVRISP_HexFiles_Web.project_name		+ "|div\n";
-		//values += "signcfg|"   +			AVRISP_HexFiles_Web.avr_signature		+ "|div\n";
-		values += "signcon|"   +			avrprog.avrChipSignGet()		+ "|div\n";
-		values += "chsize|" + 	(String)AVRISP_HexFiles_Web.chipsize 			+ "|div\n";
-
-		values += "hnamen|" + 			AVRISP_HexFiles_Web.hex_filename		+ "|div\n";
-		values += "hvern|"  + 			AVRISP_HexFiles_Web.hex_version			+ "|div\n";
-		values += "htimen|" +			AVRISP_HexFiles_Web.hex_buildtime		+ "|div\n";
-
-		values += "hnameo|" + 			AVRISP_HexFiles_Web.hex_filename_old	+ "|div\n";
-		values += "hvero|"  + 			AVRISP_HexFiles_Web.hex_version_old		+ "|div\n";
-		values += "htimeo|"	+  			AVRISP_HexFiles_Web.hex_buildtime_old	+ "|div\n";
-		values += "flashtime|" +  		AVRISP_HexFiles_Web.fwTS 				+ "|div\n";
-
-
-	}
-	request->send(200, "text/plain", values);
-	// DEBUGLOG(__FUNCTION__);	DEBUGLOG("\r\n");
-}
-
-void  AsyncFSWebServer::avrCheckFile(AsyncWebServerRequest *request) {
-	String values = "";
-	AVRISP_HexFileUploaded_t HexFileUploaded ;
-	avrsip_err_t _res = avrprog.hexFileMetaStructGet( _hexfileCheck, HexFileUploaded	);
-	if (_res < ERROR_OK) {
-		values+= "checkmetaerror|no meta info|div\n";
-	} else {
-		values += "sign|" + HexFileUploaded.signture	 			+ "|div\n";
-		values += "proj|" + HexFileUploaded.project_name 			+ "|div\n";
-		values += "vers|" + HexFileUploaded.version					+ "|div\n";
-		values += "time|" + HexFileUploaded.buildtime	 			+ "|div\n";
-		values += "cmpsign|" + (String)HexFileUploaded.cmpsign	 	+ "|div\n";
-		values += "cmpproj|" + (String)HexFileUploaded.cmpproj	 	+ "|div\n";
-		if (HexFileUploaded.cmpsign && HexFileUploaded.cmpproj){
-			_hexfileProg = _hexfileCheck;
-		}
-	}
-
-	//check hex file binary data before flashing
-    int32_t _size = avrprog.hexFileUploadedBodyCheck(_hexfileCheck);
-    if (_size >= ERROR_OK) 			{
-		values	+= "bodyerror|ok|div\n";
-		values 	+= "size|" + (String)_size	 	+ "|div\n";
-	}
-    if (_size == ERR_NOFILE) 		{ values+= "bodyerror|no file!|div\n";	}
-    if (_size == ERR_INCORRECTFILE) { values+= "bodyerror|file damaged|div\n";	}
-    if (_size == ERR_HEXADDR) 		{ values+= "bodyerror|addres line damaged|div\n";	}
-    if (_size == ERR_HEXCRC) 		{ values+= "bodyerror|crc damaged|div\n";	}
-
-	request->send(200, "text/plain", values);
-	 DEBUGLOG(__FUNCTION__);	DEBUGLOG("\r\n");
-}
-
-
-void  AsyncFSWebServer::avrProgRollback(AsyncWebServerRequest *request) {
-// GalyaUNasOtmena
-	String values = "";
-	DEBUGLOG("_hexfilename  %s \n\r", _hexfileProg.c_str());
-	avrsip_err_t _res ;
- 	_res = avrprog.avrChipProgrammMain("2", NTP.getTimeDateString() );
-
-	DEBUGLOG("avrProgRollback  %d \n\r", _res);
-	values	+= "avrprogres|" + (String) _res + "|div\n";
-	request->send(200, "text/plain", values);
-	DEBUGLOG(__PRETTY_FUNCTION__);
-	DEBUGLOG("\r\n");
-}
-
-void  AsyncFSWebServer::avrProg(AsyncWebServerRequest *request) {
-	String values = "";
-	DEBUGLOG("_hexfilename  %s \n\r", _hexfileProg.c_str());
-	avrsip_err_t _res ;
- 	_res = avrprog.avrChipProgrammMain(_hexfileProg, NTP.getTimeDateString() );
-
-	DEBUGLOG("avrProg  %d \n\r", _res);
-	values	+= "avrprogres|"+(String) _res+"|div\n";
-	request->send(200, "text/plain", values);
-	DEBUGLOG(__PRETTY_FUNCTION__);
-	DEBUGLOG("\r\n");
-}
-
-
-void  AsyncFSWebServer::avrProgStatus(AsyncWebServerRequest *request) {
-	String values = "";
- 	values += "avrprogver|" ;
-	values += avrprog.chipFlashVerificationResultGet() ;
-	values += "|div\n";
-
-	request->send(200, "text/plain", values);
-	DEBUGLOG(__PRETTY_FUNCTION__);
-	DEBUGLOG("\r\n");
-}
-
-void  AsyncFSWebServer::avrFusesRead(AsyncWebServerRequest *request) {
-	String values = "";
-	AVRISP_fuses_t AVRISP_fuses ;
-
-	avrprog.chipFusesRead(AVRISP_fuses);
-	char strbuf[256];
-
-	sprintf(strbuf, "avrfusehigh|%02x|input\n", AVRISP_fuses.high);
-	values+= String(strbuf);
-	sprintf(strbuf, "avrfuselow|%02x|input\n", AVRISP_fuses.low);
-	values+= String(strbuf);
-	sprintf(strbuf, "avrfuseprot|%02x|input\n", AVRISP_fuses.lock);
-	values+= String(strbuf);
-	sprintf(strbuf, "avrfuseext|%02x|input\n", AVRISP_fuses.ext);
-	values+= String(strbuf);
-
-	request->send(200, "text/plain", values);
-	DEBUGLOG(__PRETTY_FUNCTION__);
-	DEBUGLOG("\r\n");
-}
-
-
-void  AsyncFSWebServer::avrWebFusesWrite(AsyncWebServerRequest *request) {
-	if (!checkAuth(request))	{return request->requestAuthentication(); }
-		// AVRISP_fuses_t AVRISP_fuses ;
-	String s_high = "";  	uint8_t high = 0;
-	String s_low  = "";		uint8_t low  = 0;
-	String s_lock = "";		uint8_t lock = 0;
-	String s_ext  = "";		uint8_t ext  = 0;
-	if (request->args() > 0)  // Save Settings
-	{
-		for (uint8_t i = 0; i < request->args(); i++) {
-			DEBUGLOG("Arg %d: %s %s\r\n", i, request->argName(i).c_str() ,request->arg(i).c_str() );
-			if (request->argName(i) == "avrfusehigh") 	{ s_high = urldecode(request->arg(i));	continue; }
-			if (request->argName(i) == "avrfuselow") 	{ s_low  = urldecode(request->arg(i));	continue; }
-			if (request->argName(i) == "avrfuseprot") 	{ s_lock = urldecode(request->arg(i));	continue; }
-			if (request->argName(i) == "avrfuseext") 	{ s_ext  = urldecode(request->arg(i));	continue; }
-		}
-		request->send_P(200, "text/html", Page_AvrRefresh);
-
-		high =        		hex2bin(s_high[0]);
-		if (s_high[1])     	high = (high<<4) + 	hex2bin(s_high[1]);
-		low =        		hex2bin(s_low[0]);
-    	if (s_low[1])     	low = (low<<4) + 	hex2bin(s_low[1]);
-		lock =        		hex2bin(s_lock[0]);
-    	if (s_lock[1])     	lock = (lock<<4) + 	hex2bin(s_lock[1]);
-		ext =        		hex2bin(s_ext[0]);
-    	if (s_ext[1])     	ext = (ext<<4) + 	hex2bin(s_ext[1]);
-
-		avrprog.chipFusesWrite(high, low, lock, ext);
-	}
-	else {
-		handleFileRead(request->url(), request);
-	}
-	DEBUGLOG(__PRETTY_FUNCTION__);
-	DEBUGLOG("\r\n");
-}
-
-void  AsyncFSWebServer::udpTest(AsyncWebServerRequest *request) {
-	udpBroadcast.udpBroadcastSend(getUpdPortTx(), udpJsonBroadcast());
-}
-
-
-
 void AsyncFSWebServer::sendTimeData() {
 	DEBUGLOG("sendTimeData %s\r\n", NTP.getTimeDateString().c_str());
 	DEBUGLOG(__PRETTY_FUNCTION__);
@@ -296,18 +97,12 @@ void AsyncFSWebServer::sendTimeData() {
 }
 
 String formatBytes(size_t bytes) {
-	if (bytes < 1024) {
-		return String(bytes) + "B";
-	}
-	else if (bytes < (1024 * 1024)) {
-		return String(bytes / 1024.0) + "KB";
-	}
-	else if (bytes < (1024 * 1024 * 1024)) {
-		return String(bytes / 1024.0 / 1024.0) + "MB";
-	}
-	else {
-		return String(bytes / 1024.0 / 1024.0 / 1024.0) + "GB";
-	}
+	if (bytes < 1024) {		return String(bytes) + "B";	}
+	else
+		if (bytes < (1024 * 1024))			{	return String(bytes / 1024.0) + "KB";	}
+	else
+		if (bytes < (1024 * 1024 * 1024))	{	return String(bytes / 1024.0 / 1024.0) + "MB";	}
+	else	{	return String(bytes / 1024.0 / 1024.0 / 1024.0) + "GB";	}
 }
 
 void flashLED(int pin, int times, int delayTime) {
@@ -348,7 +143,7 @@ void AsyncFSWebServer::ntpBeginReserv (){
 
 void AsyncFSWebServer::ntpBegin (){
 	if (_ntpConfig.updateNTPTimeEvery > 0) { // Enable NTP sync
-        NTP.setInterval (_ntpConfig.updateNTPTimeEvery * MIN);
+        NTP.setInterval (_ntpConfig.updateNTPTimeEvery * MINUTES);
         NTP.setNTPTimeout (NTP_TIMEOUT);
 		NTP.onNTPSyncEvent([this](NTPSyncEvent_t event){	ntpHandler(event);	});
 		ntpBeginReserv();
@@ -363,10 +158,9 @@ void AsyncFSWebServer::ntpBegin (){
 #endif
 {
 	_fs = fs;
-
 	avrprog.setFs(&SPIFFS); // init FS
-
-
+	espProgrammer.setFs(&SPIFFS); // init FS
+	swdprog.setFs(&SPIFFS);
 	connectionTimout = 0;
 	_ntpserveer = 0;
 	DBG_OUTPUT_PORT.begin(115200);
@@ -375,12 +169,10 @@ void AsyncFSWebServer::ntpBegin (){
 	DBG_OUTPUT_PORT.setDebugOutput(true);
 #endif // RELEASE
 
-	if (CONNECTION_LED >= 0) {
-		pinMode(CONNECTION_LED, OUTPUT); // CONNECTION_LED pin defined as output
-	}
-	if (AP_ENABLE_BUTTON >= 0) {
-		pinMode(AP_ENABLE_BUTTON, INPUT_PULLUP); // If this pin is HIGH during startup ESP will run in AP_ONLY mode. Backdoor to change WiFi settings when configured WiFi is not available.
-	}
+// CONNECTION_LED pin defined as output
+	if (CONNECTION_LED >= 0) {	pinMode(CONNECTION_LED, OUTPUT);	}
+	// If this pin is HIGH during startup ESP will run in AP_ONLY mode. Backdoor to change WiFi settings when configured WiFi is not available.
+	if (AP_ENABLE_BUTTON >= 0) {	pinMode(AP_ENABLE_BUTTON, INPUT_PULLUP); 	}
 
 	if (AP_ENABLE_BUTTON >= 0) {
 		_apConfig.APenable = !digitalRead(AP_ENABLE_BUTTON); // Read AP button. If button is pressed activate AP
@@ -435,8 +227,8 @@ void AsyncFSWebServer::ntpBegin (){
 	}
 	// Register wifi Event to control connection LED and wifi connection status
 	#if defined(ESP32)
-	onStationModeConnectedHandler 		= WiFi.onEvent([this](WiFiEvent_t event, WiFiEventInfo_t info)	{	this->onWiFiConnected();	}, 		WiFiEvent_t::ARDUINO_EVENT_WIFI_STA_CONNECTED);
-	onStationModeDisconnectedHandler 	= WiFi.onEvent([this](WiFiEvent_t event, WiFiEventInfo_t info)	{	this->onWiFiDisconnected();	}, 		WiFiEvent_t::ARDUINO_EVENT_WIFI_STA_DISCONNECTED);
+	onStationModeConnectedHandler 		= WiFi.onEvent([this](WiFiEvent_t event, WiFiEventInfo_t info)	{	this->onWiFiConnected();		},	WiFiEvent_t::ARDUINO_EVENT_WIFI_STA_CONNECTED);
+	onStationModeDisconnectedHandler 	= WiFi.onEvent([this](WiFiEvent_t event, WiFiEventInfo_t info)	{	this->onWiFiDisconnected();		},	WiFiEvent_t::ARDUINO_EVENT_WIFI_STA_DISCONNECTED);
 	onStationModeGotIPHandler 			= WiFi.onEvent([this](WiFiEvent_t event, WiFiEventInfo_t info)	{	this->onWiFiConnectedGotIP();	}, 	WiFiEvent_t::ARDUINO_EVENT_WIFI_STA_GOT_IP);
 	#elif defined(ESP8266)
 	onStationModeConnectedHandler 		= WiFi.onStationModeConnected([this](WiFiEventStationModeConnected data) 		{	this->onWiFiConnected(data);		});
@@ -446,14 +238,11 @@ void AsyncFSWebServer::ntpBegin (){
 	//WIFI INIT start here
 	String hostName = _sysConfig.deviceName + "_" + _sysConfig.deviceSerial;
 	WiFi.hostname(hostName.c_str());
-
 	if (AP_ENABLE_BUTTON >= 0) {
-		if (_apConfig.APenable) {
-			configureWifiAP(); // Set AP mode if AP button was pressed
-		}
-		else {
-			configureWifi(); // Set WiFi config
-		}
+		// Set AP mode if AP button was pressed
+		if (_apConfig.APenable) {	configureWifiAP();	}
+		// Set WiFi config
+		else {	configureWifi();	}
 	}
 	else {
 		configureWifi(); // Set WiFi config
@@ -483,14 +272,23 @@ void AsyncFSWebServer::ntpBegin (){
 	MDNS.addService("http", "tcp", 80);
 	prepareSizesForUpdate();
 	ConfigureOTA(_httpAuth.wwwPassword.c_str());
+
+
+	// ledInit();
+
 	if (_sysConfig.deviceType ==  DEVTYPE_AVR){
-		avrprog.setReset(false);  // let the AVR chip run by level up RST pin.
-		avrprog.begin(); // load AVR isp cfg's
+		espProgrammer.prog_ProgTypeSet(DEVTYPE_AVR);
 		DEBUGLOG("AVR Setup\n\r");
+	}
+	else if ( _sysConfig.deviceType == DEVTYPE_SWD){
+		espProgrammer.prog_ProgTypeSet(DEVTYPE_SWD);
+		DEBUGLOG("SWD Setup\n\r");
 	}
 	else if ( _sysConfig.deviceType == DEVTYPE_GPIO){
 		DEBUGLOG("GPIO Setup\n\r");
 	}
+	espProgrammer.begin();
+
 }
 
 void AsyncFSWebServer::showDBG() {
@@ -549,23 +347,6 @@ bool AsyncFSWebServer::load_config_Sys() {
 }
 
 
-bool AsyncFSWebServer::load_config_UDP() {
-		JsonDocument jsonDoc;
-	if (!load_jsonDoc(CONFIG_FILE_UDP, jsonDoc)){
-		return false;
-	}
-	_udpConfig.udpPortTx 			= jsonDoc["udpPortTx"].as< int >();
-	_udpConfig.udpPortRx 			= jsonDoc["udpPortRx"].as< int >();
-	_udpConfig.udpTimeOut			= jsonDoc["udpTimeOut"].as< int >();
-	_udpConfig.keyword				= jsonDoc["udpkeyword"].as<const char *>();
-	DEBUGLOG("updPortTx: %d\r\n"	, _udpConfig.udpPortTx);
-	DEBUGLOG("updPortRx: %d\r\n"	, _udpConfig.udpPortRx);
-	DEBUGLOG("udpTimeOut: %d\r\n"	, _udpConfig.udpTimeOut);
-	DEBUGLOG("keyword: %s\r\n"		, _udpConfig.keyword);
-	// DEBUGLOG(__PRETTY_FUNCTION__);	DEBUGLOG("\r\n");
-	return true;
-}
-
 bool AsyncFSWebServer::load_jsonDoc(const String& file,
 									JsonDocument& jsonDoc){
 	File configFile = _fs->open(file, "r");
@@ -584,7 +365,7 @@ bool AsyncFSWebServer::load_jsonDoc(const String& file,
 	if ( buf == NULL){
 		return false;
 	}
-	DEBUGLOG("File: %s, size: %d\r\n", file.c_str(), size);
+	DEBUGLOGFH("File: %s, size: %d\r\n", file.c_str(), size);
 	configFile.readBytes(buf, size);
 	configFile.close();
 	auto error = deserializeJson(jsonDoc, buf);
@@ -595,9 +376,9 @@ bool AsyncFSWebServer::load_jsonDoc(const String& file,
 	}
 
 #ifndef RELEASE
-	String temp;
-	serializeJsonPretty(jsonDoc, temp);
-	Serial.println(temp);
+	// String temp;
+	// serializeJsonPretty(jsonDoc, temp);
+	// Serial.println(temp);
 #endif
 	return true;
 }
@@ -617,26 +398,42 @@ bool AsyncFSWebServer::load_config_NTP() {
 	DEBUGLOG("NTP Server0: %s\r\n", _ntpConfig.ntpServerName0.c_str());
 	DEBUGLOG("NTP Server1: %s\r\n", _ntpConfig.ntpServerName1.c_str());
 	DEBUGLOG("NTP Server2: %s\r\n", _ntpConfig.ntpServerName2.c_str());
-	// DEBUGLOG(__PRETTY_FUNCTION__);	DEBUGLOG("\r\n");
 	return true;
 }
 
 void AsyncFSWebServer::default_config_metar() {
 	_metarConfig.icao 		= "UWGG";
 	save_config_metar();
-	DEBUGLOG(__PRETTY_FUNCTION__);
-	DEBUGLOG("\r\n");
+	DEBUGLOG(__PRETTY_FUNCTION__);	DEBUGLOG("\r\n");
+}
+
+bool AsyncFSWebServer::load_config_UDP() {
+	// DEBUGLOG(__PRETTY_FUNCTION__);	DEBUGLOG("\r\n");
+	JsonDocument jsonDoc;
+	if (!load_jsonDoc(CONFIG_FILE_UDP, jsonDoc)){	return false;	}
+#ifndef RELEASE
+	String temp;
+	serializeJsonPretty(jsonDoc, temp);
+	Serial.println(temp.c_str());
+#endif
+	_udpConfig.udpPortTx 			= jsonDoc["udpPortTx"].as< int >();
+	_udpConfig.udpPortRx 			= jsonDoc["udpPortRx"].as< int >();
+	_udpConfig.udpTimeOut			= jsonDoc["udpTimeOut"].as< int >();
+	_udpConfig.keyword				= jsonDoc["udpkeyword"].as<const char *>();
+	DEBUGLOG("updPortTx: %d\r\n"	, _udpConfig.udpPortTx);
+	DEBUGLOG("updPortRx: %d\r\n"	, _udpConfig.udpPortRx);
+	DEBUGLOG("udpTimeOut: %d\r\n"	, _udpConfig.udpTimeOut);
+	DEBUGLOG("keyword: %s\r\n"		, _udpConfig.keyword.c_str());
+	return true;
 }
 
 void AsyncFSWebServer::defaultConfigSys() {
-	// DEFAULT CONFIG SUSTEM
+	// DEFAULT CONFIG SYSTEM
 	_sysConfig.deviceName 		= "esp_server";
 	_sysConfig.deviceSerial 	= SERIAL_NUMBER;
 	_sysConfig.deviceType 		= DEVTYPE_GPIO;
 	//_sysConfig.connectionLed = CONNECTION_LED;
 	save_configSys();
-	DEBUGLOG(__PRETTY_FUNCTION__);
-	DEBUGLOG("\r\n");
 }
 
 void AsyncFSWebServer::defaultConfigUDP() {
@@ -646,8 +443,6 @@ void AsyncFSWebServer::defaultConfigUDP() {
 	_udpConfig.udpTimeOut = UDP_BROADCAST_TIME_DFLT;
 	_udpConfig.keyword = UDP_BROADCAST_KEYWORD_DFLT;
 	save_configUDP();
-	DEBUGLOG(__PRETTY_FUNCTION__);
-	DEBUGLOG("\r\n");
 }
 void AsyncFSWebServer::defaultConfigNTP() {
 	// DEFAULT CONFIG NTP
@@ -658,12 +453,9 @@ void AsyncFSWebServer::defaultConfigNTP() {
 	_ntpConfig.timezone = 10;
 	_ntpConfig.daylight = 1;
 	save_configNTP();
-	DEBUGLOG(__PRETTY_FUNCTION__);
-	DEBUGLOG("\r\n");
 }
 
-bool AsyncFSWebServer::save_jsonDoc(const JsonDocument& jsonDoc,
-									const String& file) {
+bool AsyncFSWebServer::save_jsonDoc(const JsonDocument& jsonDoc,	const String& file) {
 	File configFile  = _fs->open(file, "w");
 	if (!configFile) {
 		DEBUGLOG("Failed to open config file for writing\r\n");
@@ -673,7 +465,7 @@ bool AsyncFSWebServer::save_jsonDoc(const JsonDocument& jsonDoc,
 #ifndef RELEASE
 	String temp;
 	serializeJsonPretty(jsonDoc, temp);
-	Serial.println(temp);
+	Serial.println(temp.c_str());
 #endif
 	serializeJson(jsonDoc, configFile);
 	configFile.flush();
@@ -693,6 +485,7 @@ bool AsyncFSWebServer::save_configSys() {
 	JsonDocument jsonDoc;
 	jsonDoc["deviceName"] 	= _sysConfig.deviceName;
 	jsonDoc["deviceSerial"] = _sysConfig.deviceSerial;
+	jsonDoc["deviceType"] 	= _sysConfig.deviceType;
 	return save_jsonDoc(jsonDoc, CONFIG_FILE_SYS);
 }
 
@@ -785,7 +578,7 @@ bool AsyncFSWebServer::save_configWifi(int _in) {
 #ifndef RELEASE
 	String temp;
 	serializeJsonPretty(jsonDoc, temp);
-	Serial.println(temp);
+	Serial.println(temp.c_str());
 #endif
 	serializeJson(jsonDoc, configFile);
 	configFile.flush();
@@ -843,7 +636,7 @@ bool AsyncFSWebServer::load_user_config(String name, String &value) {
 #ifndef RELEASE
 	String temp;
 	serializeJsonPretty(jsonDoc, temp);
-	Serial.println(temp);
+	Serial.println(temp.c_str());
 #endif
 
 	value = jsonDoc[name].as<const char*>();
@@ -919,7 +712,7 @@ bool AsyncFSWebServer::save_user_config(String name, String value) {
 	DEBUGLOG("Save user config \r\n");
 	String temp;
 	serializeJsonPretty(jsonDoc, temp);
-	Serial.println(temp);
+	Serial.println(temp.c_str());
 #endif
 	serializeJson(jsonDoc, configFile);
 	configFile.flush();
@@ -1009,6 +802,7 @@ void AsyncFSWebServer::configureWifiAP() {
 	WiFi.mode(WIFI_AP);
 	wifiStatus = FS_STAT_APMODE;
 
+	// need only when we online at last
 	load_config_Sys();
 	load_config_UDP();
 	load_config_NTP();
@@ -1022,14 +816,9 @@ void AsyncFSWebServer::configureWifiAP() {
 		WiFi.softAP(APname.c_str());
 		DEBUGLOG("AP Pass disabled \r\n");
 	}
-	if (CONNECTION_LED >= 0) {
-		flashLED(CONNECTION_LED, 3, 250);
-	}
-
+	if (CONNECTION_LED >= 0) {	flashLED(CONNECTION_LED, 3, 250);	}
 	DBG_OUTPUT_PORT.printf("AP Mode enabled. SSID: %s IP: %s\r\n", WiFi.softAPSSID().c_str(), WiFi.softAPIP().toString().c_str());
-
 	connectionTimout = 0;
-
 }
 
 int AsyncFSWebServer::scanWifi() {
@@ -1177,16 +966,18 @@ void AsyncFSWebServer::onWiFiDisconnected(WiFiEventStationModeDisconnected data)
 	DEBUGLOG(" case STA_DISCONNECTED \r\n");
 	if (CONNECTION_LED >= 0) {
 		digitalWrite(CONNECTION_LED, HIGH);
-		//flashLED(config.connectionLed, 2, 100);
+		// flashLED(config.connectionLed, 2, 100);
 	} // Turn LED off
 	// FIXME
-	DBG_OUTPUT_PORT.printf("Led %s off\n", CONNECTION_LED);
 	if (wifiDisconnectedSince == 0) { wifiDisconnectedSince = millis(); }
 	DEBUGLOG("Disconnected for %d seconds \r\n", (int)((millis() - wifiDisconnectedSince) / 1000));
 	wifiStatus = FS_STAT_CONNECTING;
 	WifiScan = WF_STAT_SCANING;
+
 }
 
+
+// working with pages vvv
 
 void AsyncFSWebServer::handleFileList(AsyncWebServerRequest *request) {
 	if (!request->hasArg("dir")) { request->send(500, "text/plain", "BAD ARGS"); return; }
@@ -1262,9 +1053,7 @@ bool AsyncFSWebServer::handleFileRead(String path, AsyncWebServerRequest *reques
 	String contentType = getContentType(path, request);
 	String pathWithGz = path + ".gz";
 	if (_fs->exists(pathWithGz) || _fs->exists(path)) {
-		if (_fs->exists(pathWithGz)) {
-			path += ".gz";
-		}
+		if (_fs->exists(pathWithGz)) { path += ".gz"; }
 		DEBUGLOGFH("Content type: %s\r\n", contentType.c_str());
 		AsyncWebServerResponse *response = request->beginResponse(*_fs, path, contentType);
 		if (path.endsWith(".gz"))
@@ -1301,6 +1090,9 @@ void AsyncFSWebServer::handleFileCreate(AsyncWebServerRequest *request) {
 	path = String(); // Remove? Useless statement?
 }
 
+
+// удаление файла
+
 void AsyncFSWebServer::handleFileDelete(AsyncWebServerRequest *request) {
 	if (!checkAuth(request)) {
 		return request->requestAuthentication();
@@ -1320,50 +1112,48 @@ void AsyncFSWebServer::handleFileDelete(AsyncWebServerRequest *request) {
 	request->send(200, "text/plain", "");
 }
 
+// int AsyncFSWebServer::handleHexFileUpload( String filename, size_t index,
+// uint8_t *data, size_t len, bool final) { 	int  _ret= 0;
+// _hexFileUploadStatus =
+// ""; 	static File fsUploadFile; 	static size_t fileSize = 0;
+// 	// Start
+// 	if (!index) {
+// 		DEBUGLOG("handleHexFileUpload Name: %s\r\n", filename.c_str());
+// 		if (!filename.startsWith("/")) filename = "/" + filename;
+// 		fsUploadFile = _fs->open(filename, "w");
+// 		DEBUGLOG("First upload part.\r\n");
+// 	}
+// 	// Continue
+// 	if (fsUploadFile) {
+// 		DEBUGLOG("Continue upload part. Size = %u\r\n", len);
+// 		if (fsUploadFile.write(data, len) != len) {
+// 			_hexFileUploadStatus  += "uploadstatus|error|div\n";
+// 		}
+// 		else {
+// 			fileSize += len;
+// 		}
+// 	}
+// 	// End
+// 	if (final) {
+// 		if (fsUploadFile) {	fsUploadFile.close();	}
+// 		_ret = fileSize;
+// 		DEBUGLOG("HexFileUpload final Size: %u\n", fileSize);
+// 		_hexfileCheck = filename;
+// 		_hexFileUploadStatus  += "uploadstatus|ok|div\n";
+// 		_hexFileUploadStatus  += "file|"	 + _hexfileCheck 	+"|div\n";
+// 		_hexFileUploadStatus  += "fileSize|" + (String)fileSize 	+"|div\n";
+// 		fileSize = 0;
+// 	}
+// 	DEBUGLOG(__PRETTY_FUNCTION__);
+// 	DEBUGLOG("\r\n");
+// 	return _ret;
 
-int AsyncFSWebServer::handleHexFileUpload( String filename, size_t index, uint8_t *data, size_t len, bool final) {
-	int  _ret= 0;
-	_hexFileUploadStatus = "";
-	static File fsUploadFile;
-	static size_t fileSize = 0;
-	// Start
-	if (!index) {
-		DEBUGLOG("handleHexFileUpload Name: %s\r\n", filename.c_str());
-		if (!filename.startsWith("/")) filename = "/" + filename;
-		fsUploadFile = _fs->open(filename, "w");
-		DEBUGLOG("First upload part.\r\n");
-	}
-	// Continue
-	if (fsUploadFile) {
-		DEBUGLOG("Continue upload part. Size = %u\r\n", len);
-		if (fsUploadFile.write(data, len) != len) {
-			_hexFileUploadStatus  += "uploadstatus|error|div\n";
-		}
-		else {
-			fileSize += len;
-		}
-	}
-	// End
-	if (final) {
-		if (fsUploadFile) {	fsUploadFile.close();	}
-		_ret = fileSize;
-		DEBUGLOG("HexFileUpload final Size: %u\n", fileSize);
-		_hexfileCheck = filename;
-		_hexFileUploadStatus  += "uploadstatus|ok|div\n";
-		_hexFileUploadStatus  += "file|"	 + _hexfileCheck 	+"|div\n";
-		_hexFileUploadStatus  += "fileSize|" + (String)fileSize 	+"|div\n";
-		fileSize = 0;
-	}
-	DEBUGLOG(__PRETTY_FUNCTION__);
-	DEBUGLOG("\r\n");
-	return _ret;
+// }
 
-}
-
-void AsyncFSWebServer::handleHexFileUploadStatus(AsyncWebServerRequest *request) {
-	request->send(200, "text/plain", _hexFileUploadStatus);
-	// DEBUGLOG(__FUNCTION__);	DEBUGLOG("\r\n");
-}
+// void AsyncFSWebServer::handleHexFileUploadStatus(AsyncWebServerRequest
+// *request) { 	request->send(200, "text/plain", _hexFileUploadStatus);
+// 	// DEBUGLOG(__FUNCTION__);	DEBUGLOG("\r\n");
+// }
 
 void AsyncFSWebServer::handleFileUpload(AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final) {
 	static File fsUploadFile;
@@ -1374,76 +1164,28 @@ void AsyncFSWebServer::handleFileUpload(AsyncWebServerRequest *request, String f
 		if (!filename.startsWith("/")) filename = "/" + filename;
 		fsUploadFile = _fs->open(filename, "w");
 		DEBUGLOG("First upload part.\r\n");
-
 	}
 	// Continue
 	if (fsUploadFile) {
 		DEBUGLOG("Continue upload part. Size = %u\r\n", len);
-		if (fsUploadFile.write(data, len) != len) {
-			DBG_OUTPUT_PORT.println("Write error during upload");
-		}
-		else {
-			fileSize += len;
-		}
+		if (fsUploadFile.write(data, len) != len) {	DBG_OUTPUT_PORT.println("Write error during upload");	}
+		else {	fileSize += len;	}
 	}
+	//da fack?!
 	/*for (size_t i = 0; i < len; i++) {
 	if (fsUploadFile)
 	fsUploadFile.write(data[i]);
 	}*/
 	if (final) { // End
-		if (fsUploadFile) {
-			fsUploadFile.close();
-		}
+		if (fsUploadFile) {	fsUploadFile.close();	}
 		DEBUGLOG("handleFileUpload Size: %u\n", fileSize);
 		fileSize = 0;
 	}
 }
 
-
-void AsyncFSWebServer::send_project_configuration_values_html(AsyncWebServerRequest *request) { // answer for "get" request
-	AVRISP_CfgFile_t AVRISP_HexFiles_Web;
-	avrsip_err_t _res = avrprog.cfgFileStructGet( AVRISP_HexFiles_Web	);
-	String values = "";
-	// values += "devicesign|"   	  +	AVRISP_HexFiles_Web.avr_signature	+ "|input\n";
-	values += "deviceproj|"   	  + AVRISP_HexFiles_Web.project_name	+ "|input\n";
-	values += "devicemem|" 	  +(String)AVRISP_HexFiles_Web.chipsize 	+ "|input\n";
-	values += "cleanfs|" 	  +(String) (AVRISP_HexFiles_Web.cleanFS 	? "checked" : "") + "|chk\n";
-	request->send(200, "text/plain", values);
-	//DEBUGLOG(__FUNCTION__);	DEBUGLOG("\r\n");
-}
-
-
-void AsyncFSWebServer::send_system_configuration_values_html(AsyncWebServerRequest *request) { // answer for "get" request
-	String values = "";
-
-	values += "devicename|"  	+ _sysConfig.deviceName  		+ "|div\n";
-	values += "deviceserial|" 	+ _sysConfig.deviceSerial 		+ "|div\n";
-	values += "devicetype|" 	+ _sysConfig.deviceType 		+ "|div\n";
-	values += "versionapp|" + _Version_App + "|div\n";
-	values += "versionweb|" + _Version_Web + "|div\n";
-	values += "versiondatetime|" + _Version_BuildDate + " " + _Version_BuildTime + "|div\n";
-	request->send(200, "text/plain", values);
-	//DEBUGLOG(__FUNCTION__);	DEBUGLOG("\r\n");
-}
-
-
-void AsyncFSWebServer::send_device_values_html(AsyncWebServerRequest *request) { // answer for "get" request
-	String values = "";
-	values += "name|"   + _sysConfig.deviceName  		+ "|input\n";
-	values += "serial|" + _sysConfig.deviceSerial 	+ "|input\n";
-	request->send(200, "text/plain", values);
-	//DEBUGLOG(__FUNCTION__);	DEBUGLOG("\r\n");
-}
-void AsyncFSWebServer::send_udp_configuration_values_html(AsyncWebServerRequest *request) { // answer for "get" request
-	String values = "";
-	values += "udpporttx|" 	  		+(String)_udpConfig.udpPortTx 	+ "|input\n";
-	values += "udpportrx|" 	  		+(String)_udpConfig.udpPortRx 	+ "|input\n";
-	values += "udptime|"   			+(String)_udpConfig.udpTimeOut 	+ "|input\n";
-	values += "udpkeyword|"   		+		 _udpConfig.keyword 	+ "|input\n";
-	request->send(200, "text/plain", values);
-	//DEBUGLOG(__FUNCTION__);	DEBUGLOG("\r\n");
-}
+// wifi.html vvv
 void AsyncFSWebServer::send_network_configuration_values_html(AsyncWebServerRequest *request, int _index) {
+	DEBUGLOG(__PRETTY_FUNCTION__);	DEBUGLOG("\r\n");
 	load_configWifi(_index);
 	String values = "";
 	values += "ssid|" + (String)_wifiConfig.ssid + "|input\n";
@@ -1468,12 +1210,11 @@ void AsyncFSWebServer::send_network_configuration_values_html(AsyncWebServerRequ
 	request->send(200, "text/plain", values);
 	values = "";
 
-	DEBUGLOG(__PRETTY_FUNCTION__);
-	DEBUGLOG("\r\n");
+
 }
 
 void AsyncFSWebServer::send_connection_state_values_html(AsyncWebServerRequest *request) {
-
+	// DEBUGLOG(__FUNCTION__);	DEBUGLOG("\r\n");
 	String state = "N/A";
 	String Networks = "";
 	if (WiFi.status() == 0) state = "Idle";
@@ -1493,8 +1234,8 @@ void AsyncFSWebServer::send_connection_state_values_html(AsyncWebServerRequest *
 	state = "";
 	values = "";
 	Networks = "";
-	// DEBUGLOG(__FUNCTION__);	DEBUGLOG("\r\n");
 }
+
 
 void AsyncFSWebServer::send_information_values_html(AsyncWebServerRequest *request) {
 	String values = "";
@@ -1533,23 +1274,37 @@ String AsyncFSWebServer::getMacAddress() {
 	return  String(macStr);
 }
 
-void AsyncFSWebServer::send_NTP_configuration_values_html(AsyncWebServerRequest *request) {
-	String values = "";
-	values += "ntpserver0|" 	+ (String)_ntpConfig.ntpServerName0 			+ "|input\n";
-	values += "ntpserver1|" 	+ (String)_ntpConfig.ntpServerName1 			+ "|input\n";
-	values += "ntpserver2|" 	+ (String)_ntpConfig.ntpServerName2 			+ "|input\n";
 
-	values += "ntpserver0_d|" 	+ (String)_ntpConfig.ntpServerName0 			+ "|div\n";
-	values += "ntpserver1_d|" 	+ (String)_ntpConfig.ntpServerName1 			+ "|div\n";
-	values += "ntpserver2_d|" 	+ (String)_ntpConfig.ntpServerName2 			+ "|div\n";
 
-	values += "update|" 	+ (String)_ntpConfig.updateNTPTimeEvery 			+ "|input\n";
-	values += "tz|" 		+ (String)_ntpConfig.timezone 						+ "|input\n";
-	values += "dst|" 		+ (String)(_ntpConfig.daylight ? "checked" : "") 	+ "|chk\n";
-	request->send(200, "text/plain", values);
+void AsyncFSWebServer::send_scanwifi(AsyncWebServerRequest *request) {
 	// DEBUGLOG(__FUNCTION__);	DEBUGLOG("\r\n");
+	String json = "[";
+	int n = WiFi.scanComplete();
+	if (n == WIFI_SCAN_FAILED) {	WiFi.scanNetworks(true);	}
+	else if (n) {
+		for (int i = 0; i < n; ++i) {
+			if (i) json += ",";
+			json += "{";
+			json += "\"rssi\":" 	+ String(WiFi.RSSI(i));
+			json += ",\"ssid\":\"" 	+ WiFi.SSID(i) 			+ "\"";
+			json += ",\"bssid\":\"" + WiFi.BSSIDstr(i) 		+ "\"";
+			json += ",\"channel\":" + String(WiFi.channel(i));
+			json += ",\"secure\":" 	+ String(WiFi.encryptionType(i));
+			#ifdef ESP8266
+			json += ",\"hidden\":" + String(WiFi.isHidden(i) ? "true" : "false");
+			#endif
+			#ifdef ESP32
+			//TODO
+			#endif
+			json += "}";
+		}
+		WiFi.scanDelete();
+		if (WiFi.scanComplete() == WIFI_SCAN_FAILED) {	WiFi.scanNetworks(true);	}
+	}
+	json += "]";
+	request->send(200, "text/json", json);
+	json = "";
 }
-
 
 void AsyncFSWebServer::send_network_configuration_html(AsyncWebServerRequest *request) {
 	// DEBUGLOG(__FUNCTION__);	DEBUGLOG("\r\n");
@@ -1609,111 +1364,7 @@ void AsyncFSWebServer::send_network_configuration_html(AsyncWebServerRequest *re
 	DEBUGLOG(__PRETTY_FUNCTION__);	DEBUGLOG("\r\n");
 }
 
-void AsyncFSWebServer::get_system_configuration_html(AsyncWebServerRequest *request) {
-	if (!checkAuth(request)) {		return request->requestAuthentication(); 	}
-	if (request->args() > 0) { // Save Settings
-		for (uint8_t i = 0; i < request->args(); i++) {
-			DEBUGLOG("Arg %d: %s %s\r\n", i, request->argName(i).c_str() ,request->arg(i).c_str() );
-			if (request->argName(i) == "name") 		{ _sysConfig.deviceName = urldecode(request->arg(i));			continue; }
-			if (request->argName(i) == "serial") 	{ _sysConfig.deviceSerial = urldecode(request->arg(i));			continue; }
-		}
-			request->send_P(200, "text/html", Page_GeneralSys);
-			save_configSys();
-	}
-	else {
-		handleFileRead(request->url(), request);
-	}
-	DEBUGLOG(__PRETTY_FUNCTION__);	DEBUGLOG("\r\n");
-}
-
-void AsyncFSWebServer::get_project_configuration_html(AsyncWebServerRequest *request) {
-	if (!checkAuth(request)) {		return request->requestAuthentication(); 	}
-		AVRISP_CfgFile_t AVRISP_HexFiles_Web;
-		AVRISP_HexFiles_Web.cleanFS = false;
-	if (request->args() > 0) { // Save Settings
-		for (uint8_t i = 0; i < request->args(); i++) {
-			DEBUGLOG("Arg %d: %s %s\r\n", i, request->argName(i).c_str() ,request->arg(i).c_str() );
-			// if (request->argName(i) == "devicesign") 		{ AVRISP_HexFiles_Web.avr_signature = urldecode(request->arg(i));	continue; }
-			if (request->argName(i) == "deviceproj") 		{ AVRISP_HexFiles_Web.project_name = urldecode(request->arg(i));	continue; }
-			if (request->argName(i) == "devicemem")  		{ AVRISP_HexFiles_Web.chipsize = request->arg(i).toInt();			continue; }
-			if (request->argName(i) == "cleanfs")			{	if ( urldecode(request->arg(i)) == "on") { AVRISP_HexFiles_Web.cleanFS = true; }	continue; 		}
-		}
-		request->send_P(200, "text/html", Page_GeneralPrj);
-		avrprog.cfgFileLoadWeb(AVRISP_HexFiles_Web);
-	}
-	else {
-		handleFileRead(request->url(), request);
-	}
-	DEBUGLOG(__PRETTY_FUNCTION__);	DEBUGLOG("\r\n");
-}
-
-void AsyncFSWebServer::get_udp_configuration_html(AsyncWebServerRequest *request) {
-
-	if (request->args() > 0) { // get new configs from args
-		for (uint8_t i = 0; i < request->args(); i++) {
-			DEBUGLOG("Arg %d: %s %s\r\n", i, request->argName(i).c_str() ,request->arg(i).c_str() );
-			if (request->argName(i) == "udpporttx")  		{ _udpConfig.udpPortTx = request->arg(i).toInt();				continue; }
-			if (request->argName(i) == "udpportrx")  		{ _udpConfig.udpPortRx = request->arg(i).toInt();				continue; }
-			if (request->argName(i) == "udptime")  			{ _udpConfig.udpTimeOut = request->arg(i).toInt();				continue; }
-			if (request->argName(i) == "udpkeyword")  			{ _udpConfig.keyword = urldecode(request->arg(i));			continue; }
-
-		}
-		request->send_P(200, "text/html", Page_GeneralUdp);	// refresh page
-		save_configUDP();	 	// Save Settings
-		udpBroadcastTimer();	// start new UDP broadcasting
-	}
-	else {		handleFileRead(request->url(), request);	}
-	DEBUGLOG(__PRETTY_FUNCTION__);	DEBUGLOG("\r\n");
-}
-
-void AsyncFSWebServer::send_NTP_configuration_html(AsyncWebServerRequest *request) {
-	if (!checkAuth(request)) {		return request->requestAuthentication(); }
-	if (request->args() > 0)  {// Save Settings
-		_ntpConfig.daylight = false;
-		//String temp = "";
-		for (uint8_t i = 0; i < request->args(); i++) {
-			if (request->argName(i) == "ntpserver0") {
-				_ntpConfig.ntpServerName0 = urldecode(request->arg(i));
-				DEBUGLOG("ntpServerName0: %s\r\n", _ntpConfig.ntpServerName0);
-				continue;
-			}
-			if (request->argName(i) == "ntpserver1") {
-				_ntpConfig.ntpServerName1 = urldecode(request->arg(i));
-				DEBUGLOG("ntpServerName1: %s\r\n", _ntpConfig.ntpServerName1);
-				continue;
-			}
-			if (request->argName(i) == "ntpserver2") {
-				_ntpConfig.ntpServerName2 = urldecode(request->arg(i));
-				DEBUGLOG("ntpServerName2: %s\r\n", _ntpConfig.ntpServerName2);
-				continue;
-			}
-			if (request->argName(i) == "update") {
-				_ntpConfig.updateNTPTimeEvery = request->arg(i).toInt();
-				NTP.setInterval(_ntpConfig.updateNTPTimeEvery * 60);
-				continue;
-			}
-			if (request->argName(i) == "tz") {
-				_ntpConfig.timezone = request->arg(i).toInt();
-				  NTP.setTimeZone(_ntpConfig.timezone / 10);
-				continue;
-			}
-			if (request->argName(i) == "dst") {
-				_ntpConfig.daylight = true;
-				DEBUGLOG("Daylight Saving: %d\r\n", _ntpConfig.daylight);
-				continue;
-			}
-		}
-		save_configNTP();
-		NTP.setNtpServerName(_ntpConfig.ntpServerName0.c_str());
-		NTP.setDayLight(_ntpConfig.daylight);
-		ntpBeginReserv();
-		setTime(NTP.getTime()); //set time
-	}
-	handleFileRead("/ntp.html", request);
-	// request->send_P(200, "text/html", Page_GeneralNtp);
-	//DEBUGLOG(__PRETTY_FUNCTION__);	DEBUGLOG("\r\n");
-
-}
+// wifi.html ^^^
 
 void AsyncFSWebServer::restart_esp() {
 	// DEBUGLOG(__FUNCTION__);	DEBUGLOG("\r\n");
@@ -1735,11 +1386,14 @@ void AsyncFSWebServer::send_wwwauth_configuration_values_html(AsyncWebServerRequ
 	// DEBUGLOG(__FUNCTION__);	DEBUGLOG("\r\n");
 }
 
-void AsyncFSWebServer::set_wwwauth_configuration(AsyncWebServerRequest *request) {
+void
+AsyncFSWebServer::set_wwwauth_configuration(AsyncWebServerRequest *request)
+{
+	DEBUGLOG(__PRETTY_FUNCTION__);	DEBUGLOG("\r\n");
 	DEBUGLOG("%s %d\n", __FUNCTION__, request->args());
 	if (request->args() > 0)
 	{
-		bool save = false;
+		bool save	   = false;
 		_httpAuth.auth = false;
 		for (uint8_t i = 0; i < request->args(); i++)
 		{
@@ -1796,7 +1450,7 @@ bool AsyncFSWebServer::saveHTTPAuth() {
 #ifndef RELEASE
 	String temp;
 	serializeJsonPretty(jsonDoc, temp);
-	Serial.println(temp);
+	Serial.println(temp.c_str());
 #endif // RELEASE
 	serializeJson(jsonDoc, configFile);
 	configFile.flush();
@@ -1961,7 +1615,6 @@ void AsyncFSWebServer::uploadUpdateFile(AsyncWebServerRequest *request, String f
 	//delay(2);
 }
 
-
 void AsyncFSWebServer::handle_rest_config(AsyncWebServerRequest *request) {
 	String values = "";
 	// handle generic rest call
@@ -1985,20 +1638,12 @@ void AsyncFSWebServer::handle_rest_config(AsyncWebServerRequest *request) {
 		}
 		if (name.substring(1, 2) == "_")	{
 			type = name.substring(0, 2);
-			if (type == "i_")	{
-				type = "input";
-			}
-			else if (type == "d_")	{
-				type = "div";
-			}
-			else if (type == "c_")	{
-				type = "chk";
-			}
+			if (type == "i_")	{	type = "input";	}
+			else	if (type == "d_")	{	type = "div";	}
+			else	if (type == "c_")	{	type = "chk";	}
 			name = name.substring(2);
 		}
-		else	{
-			type = "input";
-		}
+		else	{	type = "input";		}
 
 		load_user_config(name, data);
 		values += name + "|" + data + "|" + type + "\n";
@@ -2011,24 +1656,450 @@ void AsyncFSWebServer::handle_rest_config(AsyncWebServerRequest *request) {
 
 
 void AsyncFSWebServer::post_rest_config(AsyncWebServerRequest *request) {
+	DEBUGLOG(__PRETTY_FUNCTION__);	DEBUGLOG("\r\n");
 	String target = "/";
 	for (uint8_t i = 0; i < request->args(); i++) {
 		DEBUGLOG("Arg %d: %s\r\n", i, request->arg(i).c_str());
 		DEBUGLOG(request->argName(i).c_str());
 		DEBUGLOG(" : ");
 		DEBUGLOG(urldecode(request->arg(i)).c_str());
-
 		//check for post redirect
-		if (request->argName(i) == "afterpost")		{
-			target = urldecode(request->arg(i));
-		}
-		else { //or savedata in Json File
-			save_user_config(request->argName(i), request->arg(i));
-		}
+		if (request->argName(i) == "afterpost")		{	target = urldecode(request->arg(i));	}
+		//or savedata in Json File
+		else {	save_user_config(request->argName(i), request->arg(i));	}
 	}
 	request->redirect(target);
+
+}
+
+
+// sam arcanum web pages functions VVV
+
+// *.html vvv
+void AsyncFSWebServer::send_system_configuration_values_html(AsyncWebServerRequest *request) { // answer for "get" request
+	//DEBUGLOG(__FUNCTION__);	DEBUGLOG("\r\n");
+	String values = "";
+	values += "devicename|"  	+ _sysConfig.deviceName  		+ "|div\n";
+	values += "deviceserial|" 	+ _sysConfig.deviceSerial 		+ "|div\n";
+	values += "devicetype|" 	+ _sysConfig.deviceType 		+ "|div\n";
+	values += "versionapp|" 	+ _Version_App + "|div\n";
+	values += "versionweb|" 	+ _Version_Web + "|div\n";
+	values += "versiondatetime|" + _Version_BuildDate + " " + _Version_BuildTime + "|div\n";
+	request->send(200, "text/plain", values);
+}
+// *.html ^^^
+
+// ntp.html vvv
+void AsyncFSWebServer::send_NTP_configuration_html(AsyncWebServerRequest *request) {
+	//DEBUGLOG(__PRETTY_FUNCTION__);	DEBUGLOG("\r\n");
+	if (!checkAuth(request)) {		return request->requestAuthentication(); }
+	if (request->args() > 0)  {// Save Settings
+		_ntpConfig.daylight = false;
+		for (uint8_t i = 0; i < request->args(); i++) {
+			if (request->argName(i) == "ntpserver0") {
+				_ntpConfig.ntpServerName0 = urldecode(request->arg(i));
+				DEBUGLOG("ntpServerName0: %s\r\n", _ntpConfig.ntpServerName0);
+				continue;
+			}
+			if (request->argName(i) == "ntpserver1") {
+				_ntpConfig.ntpServerName1 = urldecode(request->arg(i));
+				DEBUGLOG("ntpServerName1: %s\r\n", _ntpConfig.ntpServerName1);
+				continue;
+			}
+			if (request->argName(i) == "ntpserver2") {
+				_ntpConfig.ntpServerName2 = urldecode(request->arg(i));
+				DEBUGLOG("ntpServerName2: %s\r\n", _ntpConfig.ntpServerName2);
+				continue;
+			}
+			if (request->argName(i) == "update") {
+				_ntpConfig.updateNTPTimeEvery = request->arg(i).toInt();
+				NTP.setInterval(_ntpConfig.updateNTPTimeEvery * 60);
+				continue;
+			}
+			if (request->argName(i) == "tz") {
+				_ntpConfig.timezone = request->arg(i).toInt();
+				  NTP.setTimeZone(_ntpConfig.timezone / 10);
+				continue;
+			}
+			if (request->argName(i) == "dst") {
+				_ntpConfig.daylight = true;
+				DEBUGLOG("Daylight Saving: %d\r\n", _ntpConfig.daylight);
+				continue;
+			}
+		}
+		save_configNTP();
+		NTP.setNtpServerName(_ntpConfig.ntpServerName0.c_str());
+		NTP.setDayLight(_ntpConfig.daylight);
+		ntpBeginReserv();
+		setTime(NTP.getTime()); //set time
+	}
+	handleFileRead("/ntp.html", request);
+	// request->send_P(200, "text/html", Page_GeneralNtp);
+
+
+}
+void AsyncFSWebServer::send_NTP_configuration_values_html(AsyncWebServerRequest *request) {
+	// DEBUGLOG(__FUNCTION__);	DEBUGLOG("\r\n");
+	String values = "";
+	values += "ntpserver0|" 	+ (String)_ntpConfig.ntpServerName0 			+ "|input\n";
+	values += "ntpserver1|" 	+ (String)_ntpConfig.ntpServerName1 			+ "|input\n";
+	values += "ntpserver2|" 	+ (String)_ntpConfig.ntpServerName2 			+ "|input\n";
+
+	values += "ntpserver0_d|" 	+ (String)_ntpConfig.ntpServerName0 			+ "|div\n";
+	values += "ntpserver1_d|" 	+ (String)_ntpConfig.ntpServerName1 			+ "|div\n";
+	values += "ntpserver2_d|" 	+ (String)_ntpConfig.ntpServerName2 			+ "|div\n";
+
+	values += "update|" 	+ (String)_ntpConfig.updateNTPTimeEvery 			+ "|input\n";
+	values += "tz|" 		+ (String)_ntpConfig.timezone 						+ "|input\n";
+	values += "dst|" 		+ (String)(_ntpConfig.daylight ? "checked" : "") 	+ "|chk\n";
+	request->send(200, "text/plain", values);
+}
+
+// ntp.html ^^^
+
+
+// udp.html vvv
+void  AsyncFSWebServer::udpTest(AsyncWebServerRequest *request) {
+	udpBroadcast.udpBroadcastSend(getUpdPortTx(), udpJsonBroadcast());
+}
+void AsyncFSWebServer::send_udp_configuration_values_html(AsyncWebServerRequest *request) { // answer for "get" request
+	//DEBUGLOG(__FUNCTION__);	DEBUGLOG("\r\n");
+	String values = "";
+	values += "udpporttx|" 	  		+(String)_udpConfig.udpPortTx 	+ "|input\n";
+	values += "udpportrx|" 	  		+(String)_udpConfig.udpPortRx 	+ "|input\n";
+	values += "udptime|"   			+(String)_udpConfig.udpTimeOut 	+ "|input\n";
+	values += "udpkeyword|"   		+		 _udpConfig.keyword 	+ "|input\n";
+	request->send(200, "text/plain", values);
+}
+
+
+void AsyncFSWebServer::get_udp_configuration_html(AsyncWebServerRequest *request) {
+	//DEBUGLOG(__PRETTY_FUNCTION__);	DEBUGLOG("\r\n");
+	if (request->args() > 0) { // get new configs from args
+		for (uint8_t i = 0; i < request->args(); i++) {
+			DEBUGLOG("Arg %d: %s %s\r\n", i, request->argName(i).c_str() ,request->arg(i).c_str() );
+			if (request->argName(i) == "udpporttx")  		{ _udpConfig.udpPortTx = request->arg(i).toInt();		continue; }
+			if (request->argName(i) == "udpportrx")  		{ _udpConfig.udpPortRx = request->arg(i).toInt();		continue; }
+			if (request->argName(i) == "udptime")  			{ _udpConfig.udpTimeOut = request->arg(i).toInt();		continue; }
+			if (request->argName(i) == "udpkeyword")		{ _udpConfig.keyword = urldecode(request->arg(i));		continue; }
+		}
+		request->send_P(200, "text/html", Page_GeneralUdp);	// refresh page
+		save_configUDP();	 	// Save Settings
+		udpBroadcastTimer();	// start new UDP broadcasting
+	}
+	else {	handleFileRead(request->url(), request);	}
+}
+// udp.html ^^^
+
+// project.html vvv
+void AsyncFSWebServer::send_project_configuration_values_html(AsyncWebServerRequest *request) { // answer for "get" request
+	//DEBUGLOG(__FUNCTION__);	DEBUGLOG("\r\n");
+	Prog_CfgFile_t Prog_CfgFile;
+	int _res = espProgrammer.cfg_FileStructGet(Prog_CfgFile);
+
+	String values = "";
+	values += "progproj|"	+ 		 Prog_CfgFile.project_name			+ "|input\n";
+	values += "progmem|"	+(String)Prog_CfgFile.chip_size 	+ "|input\n";
+	request->send(200, "text/plain", values);
+}
+
+void AsyncFSWebServer::get_project_configuration_html(AsyncWebServerRequest *request) {
+	if (!checkAuth(request)) {		return request->requestAuthentication(); 	}
+	Prog_CfgFile_t Prog_CfgFile;
+	if (request->args() > 0) { // Save Settings
+		for (uint8_t i = 0; i < request->args(); i++) {
+			DEBUGLOG("Arg %d: %s %s\r\n", i, request->argName(i).c_str() ,request->arg(i).c_str() );
+			// if (request->argName(i) == "devicesign") 		{ AVRISP_HexFiles_Web.avr_signature = urldecode(request->arg(i));	continue; }
+			if (request->argName(i) == "progproj") 		{ Prog_CfgFile.project_name = urldecode(request->arg(i));	continue; }
+			if (request->argName(i) == "progmem")  		{ Prog_CfgFile.chip_size = request->arg(i).toInt();			continue; }
+		}
+		request->send_P(200, "text/html", Page_GeneralPrj);
+		espProgrammer.cfg_FileSaveFromWeb(Prog_CfgFile);
+	}
+	else {	handleFileRead(request->url(), request);	}
 	DEBUGLOG(__PRETTY_FUNCTION__);	DEBUGLOG("\r\n");
 }
+// project.html ^^^
+
+// system.html vvv
+void AsyncFSWebServer::send_device_values_html(AsyncWebServerRequest *request) { // answer for "get" request
+	//DEBUGLOG(__FUNCTION__);	DEBUGLOG("\r\n");
+	String values = "";
+	values += "name|"		+ _sysConfig.deviceName		+ "|input\n";
+	values += "serial|" 	+ _sysConfig.deviceSerial 	+ "|input\n";
+	values += "progtype|"	+ _sysConfig.deviceType		+ "|input\n";
+	request->send(200, "text/plain", values);
+}
+
+void AsyncFSWebServer::get_system_configuration_html(AsyncWebServerRequest *request) {
+	//DEBUGLOG(__FUNCTION__);	DEBUGLOG("\r\n");
+	if (!checkAuth(request)) {		return request->requestAuthentication(); 	}
+	if (request->args() > 0) { // Save Settings
+		for (uint8_t i = 0; i < request->args(); i++) {
+			DEBUGLOG("Arg %d: %s %s\r\n", i, request->argName(i).c_str() ,request->arg(i).c_str() );
+			if (request->argName(i) == "name") 		{ _sysConfig.deviceName 	= urldecode(request->arg(i));	continue; }
+			if (request->argName(i) == "serial") 	{ _sysConfig.deviceSerial 	= urldecode(request->arg(i));	continue; }
+			if (request->argName(i) == "progtype") 	{ _sysConfig.deviceType 	= urldecode(request->arg(i));	continue; }
+		}
+		request->send_P(200, "text/html", Page_GeneralSys);
+		save_configSys();
+	}
+	else {	handleFileRead(request->url(), request);	}
+	DEBUGLOG(__PRETTY_FUNCTION__);	DEBUGLOG("\r\n");
+}
+
+// system.html ^^^
+
+// gpio.html vvv
+
+void  AsyncFSWebServer::gpioGetArgs(AsyncWebServerRequest *request) {
+	String values = "";
+	String uartStr = "";
+	if (request->args() > 0) { // get new configs from args
+		for (uint8_t i = 0; i < request->args(); i++) {
+			DEBUGLOG("Arg %d: %s %s\r\n", i, request->argName(i).c_str() , request->arg(i).c_str() );
+			if (request->argName(i) == "uartstr")	{
+				uartStr = urldecode(request->arg(i));
+				Serial.printf("%s \n\r", uartStr.c_str() );
+				continue;
+			}
+			if ( _sysConfig.deviceType == DEVTYPE_GPIO){
+				if (request->argName(i) == "led1")	{
+					if (urldecode(request->arg(i)) == "on")  {	digitalWrite(PIN_MISO, HIGH);	}
+					if (urldecode(request->arg(i)) == "off") {	digitalWrite(PIN_MISO, LOW);	}
+					continue;
+				}
+				if (request->argName(i) == "led2")	{
+					if (urldecode(request->arg(i)) == "on")  {	digitalWrite(PIN_MOSI, HIGH);	}
+					if (urldecode(request->arg(i)) == "off") {	digitalWrite(PIN_MOSI, LOW);	}
+					continue;
+				}
+				if (request->argName(i) == "led3")	{
+					if (urldecode(request->arg(i)) == "on")  {	digitalWrite(PIN_SCK, HIGH);	}
+					if (urldecode(request->arg(i)) == "off") {	digitalWrite(PIN_SCK, LOW);		}
+					continue;
+				}
+				if (request->argName(i) == "led4")	{
+					if (urldecode(request->arg(i)) == "on")  {	digitalWrite(PIN_RST, HIGH);	}
+					if (urldecode(request->arg(i)) == "off") {	digitalWrite(PIN_RST, LOW);	}
+					continue;
+				}
+			}
+		}
+		request->send(200, "text/plain", values);
+		DEBUGLOG(__PRETTY_FUNCTION__);	DEBUGLOG("\r\n");
+	}
+}
+
+// gpio.html ^^^
+
+// avr.html vvv
+void  AsyncFSWebServer::avrGetActualFWInfo(AsyncWebServerRequest *request) {
+	// DEBUGLOG(__FUNCTION__);	DEBUGLOG("\r\n");
+
+	AVRISP_CfgFile_t AVRISP_HexFiles_Web;
+	int _res0 = avrprog.cfgFileStructGet( AVRISP_HexFiles_Web	);
+
+	Prog_CfgFile_t Prog_CfgFile;
+	int _res1 = espProgrammer.cfg_FileStructGet(Prog_CfgFile);
+
+	String values = "";
+	if (_res0 < ERROR_OK || _res1 < ERROR_OK) {
+		values+= "getinfoerror|Can't open cfg file.|div\n";
+		request->send(200, "text/plain", values);
+		return;
+	}
+
+	values += "proj|"   +			Prog_CfgFile.project_name		+ "|div\n";
+	values += "chsize|" + 	(String)Prog_CfgFile.chip_size 			+ "|div\n";
+	//values += "signcfg|"   +			AVRISP_HexFiles_Web.avr_signature		+ "|div\n";
+	values += "signcon|"   +			avrprog.avrChipSignGet()		+ "|div\n";
+	values += "hnamen|" + 			AVRISP_HexFiles_Web.hex_filename		+ "|div\n";
+	values += "hvern|"  + 			AVRISP_HexFiles_Web.hex_version			+ "|div\n";
+	values += "htimen|" +			AVRISP_HexFiles_Web.hex_buildtime		+ "|div\n";
+	values += "flashtime|" +  		AVRISP_HexFiles_Web.fwTS 				+ "|div\n";
+	request->send(200, "text/plain", values);
+}
+
+void  AsyncFSWebServer::avrProg(AsyncWebServerRequest *request) {
+	String values = "";
+	DEBUGLOG("_hexfilename  %s \n\r", _hexfileProg.c_str()); // что программируем
+	// int _res  = avrprog.avr_ChipProgrammMain(_hexfileProg, NTP.getTimeDateString() );
+	int _res  = espProgrammer.prog_Programm(_hexfileProg,  NTP.getTimeDateString());
+
+	DEBUGLOG("avrProg  %d \n\r", _res);
+	values	+= "avrprogres|"+(String) _res+"|div\n";
+	request->send(200, "text/plain", values);
+	DEBUGLOG(__PRETTY_FUNCTION__);	DEBUGLOG("\r\n");
+}
+
+
+void  AsyncFSWebServer::avrProgStatus(AsyncWebServerRequest *request) {
+	String values = "";
+ 	values += "avrprogver|" ;
+	values += avrprog.chipFlashVerificationResultGet() ;
+	values += "|div\n";
+
+	request->send(200, "text/plain", values);
+	DEBUGLOG(__PRETTY_FUNCTION__);	DEBUGLOG("\r\n");
+}
+
+void  AsyncFSWebServer::avrFusesRead(AsyncWebServerRequest *request) {
+	String values = "";
+	AVRISP_fuses_t AVRISP_fuses ;
+
+	avrprog.chipFusesRead(AVRISP_fuses);
+	char strbuf[256];
+
+	sprintf(strbuf, "avrfusehigh|%02x|input\n", AVRISP_fuses.high);
+	values+= String(strbuf);
+	sprintf(strbuf, "avrfuselow|%02x|input\n", AVRISP_fuses.low);
+	values+= String(strbuf);
+	sprintf(strbuf, "avrfuseprot|%02x|input\n", AVRISP_fuses.lock);
+	values+= String(strbuf);
+	sprintf(strbuf, "avrfuseext|%02x|input\n", AVRISP_fuses.ext);
+	values+= String(strbuf);
+
+	request->send(200, "text/plain", values);
+	DEBUGLOG(__PRETTY_FUNCTION__);
+	DEBUGLOG("\r\n");
+}
+
+
+void  AsyncFSWebServer::avrWebFusesWrite(AsyncWebServerRequest *request) {
+	if (!checkAuth(request))	{return request->requestAuthentication(); }
+		// AVRISP_fuses_t AVRISP_fuses ;
+	String s_high = "";  	uint8_t high = 0;
+	String s_low  = "";		uint8_t low  = 0;
+	String s_lock = "";		uint8_t lock = 0;
+	String s_ext  = "";		uint8_t ext  = 0;
+	if (request->args() > 0)  // Save Settings
+	{
+		for (uint8_t i = 0; i < request->args(); i++) {
+			DEBUGLOG("Arg %d: %s %s\r\n", i, request->argName(i).c_str() ,request->arg(i).c_str() );
+			if (request->argName(i) == "avrfusehigh") 	{ s_high = urldecode(request->arg(i));	continue; }
+			if (request->argName(i) == "avrfuselow") 	{ s_low  = urldecode(request->arg(i));	continue; }
+			if (request->argName(i) == "avrfuseprot") 	{ s_lock = urldecode(request->arg(i));	continue; }
+			if (request->argName(i) == "avrfuseext") 	{ s_ext  = urldecode(request->arg(i));	continue; }
+		}
+		request->send_P(200, "text/html", Page_AvrRefresh);
+
+		high =        		hex2bin(s_high[0]);
+		if (s_high[1])     	high = (high<<4) + 	hex2bin(s_high[1]);
+		low =        		hex2bin(s_low[0]);
+    	if (s_low[1])     	low = (low<<4) + 	hex2bin(s_low[1]);
+		lock =        		hex2bin(s_lock[0]);
+    	if (s_lock[1])     	lock = (lock<<4) + 	hex2bin(s_lock[1]);
+		ext =        		hex2bin(s_ext[0]);
+    	if (s_ext[1])     	ext = (ext<<4) + 	hex2bin(s_ext[1]);
+
+		avrprog.chipFusesWrite(high, low, lock, ext);
+	}
+	else {
+		handleFileRead(request->url(), request);
+	}
+	DEBUGLOG(__PRETTY_FUNCTION__);
+	DEBUGLOG("\r\n");
+}
+// avr.html ^^^
+
+
+// stm32.html vvv
+void AsyncFSWebServer::programmerGetFilesList (AsyncWebServerRequest *request) {
+	DEBUGLOGISP(__PRETTY_FUNCTION__);	DEBUGLOGISP("\r\n");
+	String json = "";
+	espProgrammer.web_GetFileList(json);
+	request->send(200, "text/json", json);
+	json = "";
+    DEBUGLOGISP("List of *.hex *.bin *.binary files: %s \n\r", json);
+}
+
+void AsyncFSWebServer::programmerGetDiskInfo (AsyncWebServerRequest *request) {
+	DEBUGLOGISP(__PRETTY_FUNCTION__);	DEBUGLOGISP("\r\n");
+	String values = "";
+	espProgrammer.web_GetDiskInfo(values);
+	request->send(200, "text/json", values);
+	values = "";
+    DEBUGLOGISP("Disk info: %s \n\r", values);
+}
+
+void AsyncFSWebServer::programmerFileDelete(AsyncWebServerRequest *request) {
+	if (!checkAuth(request))	{	return request->requestAuthentication();	}
+	if (request->args() == 0) 	{	return request->send(500, "text/plain", "BAD ARGS");	}
+	String path = request->arg(0U);
+	DEBUGLOG("handleFileDelete: %s\r\n", path.c_str());
+	if (path == "/")		{	return request->send(500, "text/plain", "BAD PATH");	}
+	if (!path.startsWith("/")) {path = "/" + path;}
+	if (!_fs->exists(path)) {	return request->send(404, "text/plain", "FileNotFound");	}
+	_fs->remove(path);
+	request->send(200, "text/plain", "");
+}
+
+// загрузчик файла из фронтенда
+int AsyncFSWebServer::programmerFileUpload2FS( String filename, size_t index, uint8_t *data, size_t len, bool final) {
+	DEBUGLOG(__PRETTY_FUNCTION__);	DEBUGLOG("\r\n");
+	int  _ret= 0;
+	_hexFileUploadStatus = "";
+	static File fsUploadFile;
+	static size_t fileSize = 0;
+	// Start
+	if (!index) {
+		DEBUGLOG("Name: %s\r\n", filename.c_str());
+		if (!filename.startsWith("/")) {filename = "/" + filename;}
+		fsUploadFile = _fs->open(filename, "w");
+		DEBUGLOG("First upload part.\r\n");
+	}
+	// Continue
+	if (fsUploadFile) {
+		DEBUGLOG("Continue upload part. Size = %u\r\n", len);
+		if (fsUploadFile.write(data, len) != len) {
+			_hexFileUploadStatus  += "uploadstatus|error|div\n";
+			_hexFileUploadStatus  += "file|"	  + _hexfileCheck		+"|div\n";
+			_hexFileUploadStatus  += "fileSize|" + (String)fileSize 	+"|div\n";
+		}
+		else {	fileSize += len;	}
+	}
+	// End
+	if (final) {
+		if (fsUploadFile) {	fsUploadFile.close();	}
+		_ret = fileSize;
+		DEBUGLOG("HexFileUpload final Size: %u\n", fileSize);
+		_hexfileCheck = filename;
+		_hexFileUploadStatus  += "status|ok|div\n";
+		_hexFileUploadStatus  += "file|"	  + _hexfileCheck		+"|div\n";
+		_hexFileUploadStatus  += "fileSize|" + (String)fileSize 	+"|div\n";
+		fileSize = 0;
+	}
+	return _ret;
+}
+
+
+void AsyncFSWebServer::programmerFileUpload2FSStat(AsyncWebServerRequest *request) {
+	DEBUGLOG(__FUNCTION__);	DEBUGLOG("\r\n");
+	request->send(200, "text/plain", _hexFileUploadStatus);
+}
+
+void AsyncFSWebServer::programmerFileUpload2Chip(AsyncWebServerRequest *request) {
+	if (!checkAuth(request))	{	return request->requestAuthentication();	}
+	if (request->args() == 0) 	{	return request->send(500, "text/plain", "BAD ARGS");	}
+	String path = "";
+	for (uint8_t i = 0; i < request->args(); i++) {
+		DEBUGLOG("Arg %d: %s\r\n", i, request->arg(i).c_str());
+		if (request->argName(i) == "path") 	{ path = urldecode(request->arg(i));	continue; }
+	}
+	if (path == "/")		{	return request->send(500, "text/plain", "BAD PATH");	}
+	if (!path.startsWith("/")) {path = "/" + path;}
+	if (!_fs->exists(path)) {	return request->send(404, "text/plain", "FileNotFound");	}
+
+	DEBUGLOG("programmerFileUpload2Chip: %s\r\n", path.c_str());
+	request->send(200, "text/plain", "");
+
+	//здесь уже выход программирования
+	espProgrammer.prog_Programm(path,  NTP.getTimeDateString());
+
+}
+
+// stm32.html ^^^
 
 void AsyncFSWebServer::serverInit() {
 	//SERVER INIT
@@ -2062,7 +2133,7 @@ void AsyncFSWebServer::serverInit() {
 	});
 //edit.html ^^^
 
-//confifg.html vvv
+//wifi.html vvv
 	on("/admin/values/0", [this](AsyncWebServerRequest *request) {
 		if (!this->checkAuth(request)) {	return request->requestAuthentication(); };
 		this->send_network_configuration_values_html(request, 0);
@@ -2090,10 +2161,7 @@ void AsyncFSWebServer::serverInit() {
 		this->send_information_values_html(request);
 	});
 
-	on("/config.html", [this](AsyncWebServerRequest *request) {
-		if (!this->checkAuth(request)) {	return request->requestAuthentication(); };
-		this->send_network_configuration_html(request);
-	});
+
 	on("/scan", HTTP_GET, [](AsyncWebServerRequest *request) {
 		String json = "[";
 		int n = WiFi.scanComplete();
@@ -2127,21 +2195,14 @@ void AsyncFSWebServer::serverInit() {
 		json = "";
 	});
 
-//confifg.html ^^^
-
-//project.html vvv
-	on("/project/info", HTTP_GET, [this](AsyncWebServerRequest *request) {
+	on("/wifi.html", [this](AsyncWebServerRequest *request) {
 		if (!this->checkAuth(request)) {	return request->requestAuthentication(); };
-		this->send_project_configuration_values_html(request);
+		this->send_network_configuration_html(request);
 	});
 
-	on("/project.html", HTTP_POST,  [this](AsyncWebServerRequest *request) {
-		if (!this->checkAuth(request)) {	return request->requestAuthentication(); };
-		this->get_project_configuration_html(request);
-	});
-//project.html ^^^
+//wifi.html ^^^
 
-// /udp.html vvv
+// 	udp.html vvv
 	on("/udp/info", HTTP_GET, [this](AsyncWebServerRequest *request) {
 		if (!this->checkAuth(request)) {	return request->requestAuthentication(); };
 		this->send_udp_configuration_values_html(request);
@@ -2169,7 +2230,7 @@ void AsyncFSWebServer::serverInit() {
 // ntp.html ^^^
 
 
-//system.html
+//system.html vvv
 	on("/system/restart", [this](AsyncWebServerRequest *request) {
 		if (!this->checkAuth(request)) {	return request->requestAuthentication(); };
 		DBG_OUTPUT_PORT.println(request->url());
@@ -2180,7 +2241,8 @@ void AsyncFSWebServer::serverInit() {
 		if (!this->checkAuth(request)) {	return request->requestAuthentication(); };
 		this->send_wwwauth_configuration_values_html(request);
 	});
-//system.html
+
+
 	on("/admin", [this](AsyncWebServerRequest *request) {
 		if (!this->checkAuth(request)) {	return request->requestAuthentication(); };
 		if (!this->handleFileRead("/admin.html", request)) {	request->send(404, "text/plain", "FileNotFound");	}
@@ -2202,6 +2264,7 @@ void AsyncFSWebServer::serverInit() {
 		if (!this->checkAuth(request)) {	return request->requestAuthentication(); };
 		this->send_device_values_html(request);
 	});
+//system.html ^^^
 
 //update.html vvv
 	on("/update/updatepossible", [this](AsyncWebServerRequest *request) {
@@ -2227,59 +2290,89 @@ void AsyncFSWebServer::serverInit() {
 	});
 //update.html ^^^
 
+
+
+
+	//project.html vvv
+	on("/project/info", HTTP_GET, [this](AsyncWebServerRequest *request) {
+		if (!this->checkAuth(request)) {	return request->requestAuthentication(); };
+		this->send_project_configuration_values_html(request); // show values
+	});
+
+	on("/project.html", HTTP_POST,  [this](AsyncWebServerRequest *request) {
+		if (!this->checkAuth(request)) {	return request->requestAuthentication(); };
+		this->get_project_configuration_html(request); // save values from the page
+	});
+	//project.html ^^^
+
+
+	//stm32.html vvv
+
+	on("/prog/diskinfo", HTTP_GET, [this](AsyncWebServerRequest *request) {
+		if (!this->checkAuth(request)) {	return request->requestAuthentication(); };
+		this->programmerGetDiskInfo (request);
+	});
+
+	on("/prog/fileslist", HTTP_GET, [this](AsyncWebServerRequest *request) {
+		if (!this->checkAuth(request)) {	return request->requestAuthentication(); };
+		this->programmerGetFilesList (request);
+	});
+
+	on("/prog/delete", HTTP_DELETE, [this](AsyncWebServerRequest *request) {
+		if (!this->checkAuth(request)) {	return request->requestAuthentication(); };
+		this->programmerFileDelete(request);
+	});
+
+	on("/prog/uploadfile", HTTP_POST, [this](AsyncWebServerRequest *request) {
+		if (!this->checkAuth(request)) {	return request->requestAuthentication(); };
+		request->send(200, "text/plain", "uploadstatus|begin|div");
+	}, [this](AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final) {
+		this->programmerFileUpload2FS( filename, index, data, len, final);
+	});
+
+	on("/prog/uploadstat", [this](AsyncWebServerRequest *request) {
+		if (!this->checkAuth(request)) {	return request->requestAuthentication(); };
+		this->programmerFileUpload2FSStat(request);
+	});
+	on("/prog/flash", [this](AsyncWebServerRequest *request) {
+		if (!this->checkAuth(request)) {	return request->requestAuthentication(); };
+		this->programmerFileUpload2Chip(request);
+	});
+//stm32.html ^^^
+
 //avr.html vvv
 //first callback is called after the request has ended with all parsed arguments
 //second callback handles file uploads at that location
 	on("/avr/info", [this](AsyncWebServerRequest *request) {
 		if (!this->checkAuth(request)) {	return request->requestAuthentication(); };
-		this->avrGetInfo(request);
+		this->avrGetActualFWInfo(request);
 	});
-
-	on("/avr/uploadfile", HTTP_POST, [this](AsyncWebServerRequest *request) {
-		if (!this->checkAuth(request)) {	return request->requestAuthentication(); };
-		request->send(200, "text/plain", "uploadstatus|begin|div");
-	}, [this](AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final) {
-		this->handleHexFileUpload( filename, index, data, len, final);
-	});
-
-	on("/avr/uploadstatus", [this](AsyncWebServerRequest *request) {
-		if (!this->checkAuth(request)) {	return request->requestAuthentication(); };
-		this->handleHexFileUploadStatus(request);
-	});
-
-	on("/avr/checkmeta", [this](AsyncWebServerRequest *request) {
-		if (!this->checkAuth(request)) {	return request->requestAuthentication(); };
-		this->avrCheckFile(request);
-	});
-
-
 	on("/avr/flashrun", [this](AsyncWebServerRequest *request) {
 		if (!this->checkAuth(request)) {	return request->requestAuthentication(); };
 		this->avrProg(request);
 	});
-
-
-
-	on("/avr/flashrollback", HTTP_POST, [this](AsyncWebServerRequest *request) {
-		if (!this->checkAuth(request)) {	return request->requestAuthentication(); };
-		this->avrProgRollback(request);
-	});
-
 	on("/avr/flashstatus", [this](AsyncWebServerRequest *request) {
 		if (!this->checkAuth(request)) {	return request->requestAuthentication(); };
 		this->avrProgStatus(request);
 	});
-
-
 	on("/avr/fuseread", [this](AsyncWebServerRequest *request) {
 		if (!this->checkAuth(request)) {	return request->requestAuthentication(); };
 		this->avrFusesRead(request);
 	});
-
 	on("/avr/fusewrite", HTTP_POST, [this](AsyncWebServerRequest *request) {
 		if (!this->checkAuth(request)) {	return request->requestAuthentication(); };
 		this->avrWebFusesWrite(request);
 	});
+//avr.html ^^^
+
+//gpio.html vvv
+	on("/gpio", HTTP_POST, [this](AsyncWebServerRequest *request) {
+		if (!this->checkAuth(request)) {	return request->requestAuthentication(); };
+		this->gpioGetArgs(request);
+	});
+//gpio.html ^^^
+
+
 
 //avr.html ^^^
 
@@ -2431,6 +2524,63 @@ void AsyncFSWebServer::setUSERVERSION(String Version) {
 	_Version_App = Version;
 }
 
+// String AsyncFSWebServer::FilesListGet() {
+
+
+//     if (!_fs) { _fs->begin();  }// If SPIFFS is not started
+// // #ifdef ESP32
+// //     File root =  _fs->open("/");
+// //     File file = root.openNextFile();
+// //     while (file) {
+// //         if (file.isDirectory()) {
+// //             json +=   "DIR: [";  json += file.name();   json += "]\n\r";
+// //         } else {
+// //             json +=   "\t";
+// // 			json += file.name();
+// // 			json +=   " \t";
+// // 			json += String(file.size());
+// // 			json +=   "\n\r";
+// //         }
+// //         file = root.openNextFile();
+// //     }
+// // #else
+// //     Dir files = _fs->openDir("/");
+// //     while (files.next()) {
+// //         if (files.isDirectory()) {
+// //             list +=   "DIR: [";  list += files.fileName();   list +=   "] \n\r";
+// //         } else {
+// //             File f = files.openFile("r");	list +=   "\t";
+// // 			list  += files.fileName();		list +=   " \t";
+// // 			list  += String(f.size());		list +=   "\n\r";
+// //         }
+// //     }
+// // #endif
+// 	String json = "[";
+
+// 	json += "{";
+// 	json +=  "\"fname\":filenameTest1";
+// 	json +=  "\"type\":filetypeTest1";
+// 	json +=  "\"size\":filesizeTest1";
+// 	json +=  "\"actual\":actualTest1";
+// 	json +=  "\"chip\":chipTest1";
+// 	json +=  "\"date\":dateTest1";
+// 	json += "}";
+
+// 	json += "{";
+// 	json +=  "\"fname\":filenameTest2";
+// 	json +=  "\"type\":filetypeTest2";
+// 	json +=  "\"size\":filesizeTest2";
+// 	json +=  "\"actual\":actualTest2";
+// 	json +=  "\"chip\":chipTest2";
+// 	json +=  "\"date\":dateTest2";
+// 	json += "}";
+
+// 	json += "]";
+//     return json;
+// }
+
+
+
 void AsyncFSWebServer::serialShowInfo() {
 	Serial.printf("Ep8266 service chip firmware ver: %s\n\r",  VERSION_APP);
 	Serial.printf("Ep8266 web pages ver: %s\n\r",  VERSION_WEB);
@@ -2489,8 +2639,8 @@ String AsyncFSWebServer::udpJsonBroadcast() {
 	jsonDoc["keyword"] 			= _udpConfig.keyword;
 
 	//jsonDoc["chip"] 			= AVRISP_HexFiles_Web.avr_signature;
-	jsonDoc["size"] 			= AVRISP_HexFiles_Web.chipsize;
-	jsonDoc["project"] 			= AVRISP_HexFiles_Web.project_name;
+	// jsonDoc["size"] 			= AVRISP_HexFiles_Web.chipsize;
+	// jsonDoc["project"] 			= AVRISP_HexFiles_Web.project_name;
 	jsonDoc["esp8266Ver"] 		= VERSION_APP;
 	jsonDoc["webVer"] 			= VERSION_WEB;
 	jsonDoc["buildDate"] 		= __DATE__;

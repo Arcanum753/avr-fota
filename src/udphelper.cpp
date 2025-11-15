@@ -40,14 +40,14 @@ void UDPBROADCAST_CLASS::udpStart(uint16_t _port) {
         udpBroadcastTimer();
         udp_listen.onPacket([](AsyncUDPPacket packet) {
           responseIp = packet.remoteIP();
-#ifdef ESP32          
-          DEBUGLOG("UDP captured from %s, port %d, type: ", responseIp.toString().c_str(), packet.remotePort() ); 
+#ifdef ESP32
+          DEBUGLOG("UDP captured from %s, port %d, type: ", responseIp.toString().c_str(), packet.remotePort() );
 #endif
 #ifdef ESP8266
-          DEBUGLOG("UDP captured from %s, port %d, type: ", responseIp.toString().c_str(), packet.remotePort() ); 
+          DEBUGLOG("UDP captured from %s, port %d, type: ", responseIp.toString().c_str(), packet.remotePort() );
 #endif
           DEBUGLOG(packet.isBroadcast() ? "Broadcast " : packet.isMulticast() ? "Multicast " : "Unicast ");
-
+          DEBUGLOG("\r\n");
           // compare incoming data with keyword string
           if (strncmp((const char *)packet.data(), ESPHTTPServer.getudpKeyword().c_str(), ESPHTTPServer.getudpKeyword().length()) == 0) {
             udpResponse(responseIp); //response if keyword
@@ -67,8 +67,8 @@ void UDPBROADCAST_CLASS::udpStop(){
     portTx = _port;
     if (isStarted == false) {return;}
     if (portTx == portRx) {
-      DEBUGLOGISP("udpStringResp: portTx == portRx.\r\n"); 
-      return;  
+      DEBUGLOGISP("udpStringResp: portTx == portRx.\r\n");
+      return;
     }
 
     char * _str = new char [_strin.length()+1];
@@ -76,7 +76,7 @@ void UDPBROADCAST_CLASS::udpStop(){
 
     // DEBUGLOGISP("udpStringResp: %s \n\r", _str);
     udp_broadcast.broadcastTo(_str, portTx);
-    DEBUGLOGISP("\r\n"); 
+    DEBUGLOGISP("\r\n");
 }
 
 void  udpResponse(IPAddress respIp ){
@@ -87,11 +87,11 @@ void udpBroadcastTimer() {
   uint16_t timeout = ESPHTTPServer.getudpTimeOut();
   if (timeout > 60) {timeout = 60;}
   if (timeout == 0){
-    SetTimerTask(udpBroadcastTimer, SEC * MIN);
+    SetTimerTask(udpBroadcastTimer, SEC * MINUTES);
     return;
-  } 
+  }
   if (timeout > 0 ){
-    SetTimerTask(udpBroadcastTimer, SEC * MIN * timeout);
+    SetTimerTask(udpBroadcastTimer, SEC * MINUTES * timeout);
     udpBroadcast.udpBroadcastSend(ESPHTTPServer.getUpdPortTx(), ESPHTTPServer.udpJsonBroadcast());
   }
 }

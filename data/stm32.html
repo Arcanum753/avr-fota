@@ -1,35 +1,309 @@
-<!DOCTYPE html>
+<!DOCfiletype html>
 <html>	<head>
 	<title>STM32 OTA</title>
-	<meta http-equiv="Content-type" content="text/html; charset=utf-8">
+	<meta http-equiv="Content-filetype" content="text/html; charset=utf-8">
 	<link rel="stylesheet" href="style.css">
 </head>
 
 <body>
 	<markup>./page_head.html</markup>
 	<div class="c">
-		<h2 class="title" style="background: #7D8EE2">  <span id="devicename">  </span> STM32 Firmware Update  </h2>	
+		<h2 class="title" style="background: #7D8EE2">  <span id="devicename">  </span> STM32/AVR Firmware  </h2>
 	</div>
 	<div class="c">
-	  
+
+	<hr>
+		<table border="1" cellspacing="1" align="center">
+				<tr><td>File system all space:</td>		<td><div id="diskall"  class="align-right">N/A</div>	</td></tr>
+				<tr><td>File system used space:</td>	<td><div id="diskused" class="align-right">N/A</div>	</td></tr>
+				<tr><td>File system free space:</td>	<td><div id="diskfree" class="align-right">N/A</div>	</td></tr>
 		</table>
+	<hr>
+	<p style="text-align:center;"><span> <strong>*.hex & *.bin & .binary files list: </strong> </span></p>
+
+	<form id="upload" onsubmit="event.preventDefault(); uploadFiles()" enctype="multipart/form-data" autocomplete="off">
+		<table border="1" cellspacing="1" align="center">
+			<tr>
+				<td align="center"> <input id="fileHex" name="update" type="file" accept=".hex, .bin, .binary" > </td>
+				<td align="center"> <button id="uploadFWFileBtn" type="submit" >Upload firmware file</button> </td>
+				<tr><td colspan="2" align="center"> <span id="uploadtext"></span> </td> </tr>
+			</tr>
+		</table>
+	</form>
+
+	<table border="1" cellspacing="1" align="center">
+		<tr>
+			<tr><td align="center"  > <button onclick="refreshList(); ">Refresh list</button></td></tr>
+			<td>
+				<table  border="1">
+
+					<thead bgcolor='#DDDDDD'>
+						<tr>
+							<th>File</th>
+							<th>Type</th>
+							<th>Size (bytes)</th>
+							<th>Chip</th>
+							<th>Actual<span title="Last date and time when firmware file was uploaded to chip.">(?)</span></th>
+						</tr>
+					</thead>
+					<tbody id="filelist"></tbody>
+				</table>
+			</td>
+		</tr>
+
+	</table>
+
+	<hr>
+		<table border="1" cellspacing="1" align="center">
+			<tr>
+				<td align="center">Selected file:</td>
+				<td align="center"> <span id="selectedfile"></span> </td>
+			</tr>
+			<tr>
+				<td align="center"> <button onclick="selectedFileProgFirmware();">Programm firmware</button></td>
+				<td align="center"> <button onclick="fileSelectedDelete();">Delete file</button></td>
+			</tr>
+			<tr>
+				<td colspan="2" align="center"> <span id="selectedfileerr"> </span> </td>
+			</tr>
+
+
+		</table>
+
 	</div>
 
 	<markup>./page_bottom.html</markup>
-	<script src="GetJson.js" defer></script>
+	<script src="GetJson.js"   defer></script>
 	<script src="GetMarkup.js" defer></script>
 	<script src="microajax.js" defer></script>
+
 	<script>
 		window.onload = function() {
 			setTimeout(() => {
-				ApplyCVT("/admin/infovalues");
-				ApplyCVT("/admin/connectionstate");
 				ApplyCVT("/system/info");
-				
-			}, 250);
-			
+				ApplyCVT("/admin/infovalues");
+				fsSpaceSize();
+				refreshList();
+			}, 100);
+
 		};
-		</script>
+	</script>
+
+	<script language="javascript" filetype="text/javascript">
+		function refreshList (){
+			//ApplyCVT("/stm32/refresh");
+			request = new XMLHttpRequest();
+			if (request) {
+				request.open("GET", "/prog/fileslist", true);
+				request.addEventListener("load", refreshFilesList)
+				request.send();
+			}
+		}
+		var selectedfileglob ;
+
+		function refreshListLoc(res) {
+			var array;
+			//var jsonstr =  '[{"progactual":"true","filename":"stm32f103_dirtos500.bin","filetype":".bin","filesizestr":35004,"progchip":"stm32","progdate":""},{"progactual":"","filename":"stm32f103_dirtos500.binary","filetype":".binary","filesizestr":35004,"progchip":"stm32","progdate":""},{"progactual":"","filename":"stm32f103_dirtos1000.bin","filetype":".bin","filesizestr":35004,"progchip":"","progdate":""},{"progactual":"","filename":"stm32f103_dirtos1000.binary","filetype":".binary","filesizestr":35004,"progchip":"","progdate":""},{"progactual":"","filename":"eertos_at328p_ota103.hex","filetype":".hex","filesizestr":3671,"progchip":"avr","progdate":""},{"progactual":"","filename":"eertos_at328p_ota104.hex","filetype":".hex","filesizestr":3841,"progchip":"","progdate":""}]';
+			var jsonstr = '[{"filename":"stm32f103_dirtos500.bin","filetype":".bin","filesizestr":35004,"progchip":"stm32","progdate":""},{"filename":"stm32f103_dirtos500.binary","filetype":".binary","filesizestr":35004,"progchip":"stm32","progdate":""},{"filename":"stm32f103_dirtos1000.bin","filetype":".bin","filesizestr":35004,"progchip":"","progdate":""},{"filename":"stm32f103_dirtos1000.binary","filetype":".binary","filesizestr":35004,"progchip":"","progdate":""},{"filename":"eertos_at328p_ota103.hex","filetype":".hex","filesizestr":3671,"progchip":"avr","progdate":""},{"filename":"eertos_at328p_ota104.hex","filetype":".hex","filesizestr":3841,"progchip":"","progdate":""}]';
+			array = JSON.parse(jsonstr);
+			document.getElementById("filelist").innerHTML = array.length;
+			var table = document.getElementById("filelist");
+			table.innerHTML = "";
+			for (var i = 0; i < array.length; i++) {
+				var row = document.createElement("tr");
+
+				// row.innerHTML += "<td align=\"center\">" + actualStr(array[i].progactual) 	+"</td>";
+				// row.innerHTML += "<td>" + array[i].filename 	+"</td>";
+				row.innerHTML += "<td> <a href='javascript:selfile(\"" + array[i].filename + "\")'>"  + array[i].filename +"</td>";
+				row.innerHTML += "<td>" 						+ array[i].filetype			+"</td>";
+				row.innerHTML += "<td align=\"right\">" 		+ array[i].filesizestr		+"</td>" ;
+				row.innerHTML += "<td align=\"center\">" 		+ array[i].progchip			+"</td>";
+				row.innerHTML += "<td>" 						+ array[i].progdate			+"</td>";
+
+				table.appendChild(row);
+			}
+		}
+
+		function fsSpaceSize() {
+          const xhr = new XMLHttpRequest();
+          xhr.open('get', '/prog/diskinfo');
+          xhr.send();
+          xhr.addEventListener('loadend', () => {
+
+            const _diskall 		= document.getElementById("diskall");
+			const _diskused		= document.getElementById("diskused");
+			const _diskfree		= document.getElementById("diskfree");
+
+			var _vdiskall = 0;
+			var _vdiskused = 0;
+			var _vdiskfree = 0;
+
+            const fieldsRows = ParseCVT(xhr.response).reverse();
+            console.log(fieldsRows);
+
+            for (fields of fieldsRows) {
+				if (fields[0] == "diskall"  )	{ _diskall.innerHTML  = formatBytes(fields[1]);	 }
+				if (fields[0] == "diskused" )	{ _diskused.innerHTML = formatBytes(fields[1]);  }
+				if (fields[0] == "diskfree" )	{ _diskfree.innerHTML = formatBytes(fields[1]);  }
+            }
+          });
+
+       }
+
+	  function formatBytes( bytes) {
+			if (bytes < 1024)	{
+				return String (bytes) + "B";
+			}
+			else
+			if (bytes < (1024 * 1024))	{
+				var numb = Math.trunc(bytes / 1024.0) ;
+				numb = numb.toFixed(3);
+				return String ( numb ) + "KB";
+			}
+			else
+			if (bytes < (1024 * 1024 * 1024))	{
+				var numb = Math.trunc(bytes / 1024.0 / 1024.0) ;
+				numb = numb.toFixed(3);
+				return String (numb) + "MB";
+			}
+			else	{
+				var numb = Math.trunc(bytes / 1024.0 / 1024.0 / 1024.0) ;
+				numb = numb.toFixed(3);
+				return String (numb) + "GB";
+			}
+		}
+
+		function selfile(value) {
+			const _uploadtext = document.getElementById("selectedfile");
+			_uploadtext.innerHTML =  value;
+			selectedfileglob = value;
+        }
+
+		function actualStr(_in) {
+            if (_in == 'true') { return '&#10004'; }
+            else if (_in == '') {   return '';   }
+
+        }
+
+		function refreshFilesList(res) {
+			var array;
+
+			array = JSON.parse(res.target.responseText);
+			document.getElementById("filelist").innerHTML = array.length;
+			var table = document.getElementById("filelist");
+			table.innerHTML = "";
+			for (var i = 0; i < array.length; i++) {
+				var row = document.createElement("tr");
+				row.innerHTML += "<td> <a href='javascript:selfile(\"" + array[i].filename + "\")'>"  + array[i].filename +"</td>";
+				row.innerHTML += "<td>" + array[i].filetype 	+"</td>";
+				row.innerHTML += "<td align=\"right\">" + array[i].filesizestr		+"</td>" ;
+				row.innerHTML += "<td align=\"center\">" + array[i].progchip 	+"</td>";
+				row.innerHTML += "<td>" + array[i].progdate 	+"</td>";
+				table.appendChild(row);
+			}
+			clearLabel();
+		}
+
+
+		function fileSelectedDelete(res){
+			const _uploadtext = document.getElementById("selectedfileerr");
+			if (selectedfileglob == null ) {
+				_uploadtext.innerHTML = "<b>" + 'Select file to delete first!' + "</b>";
+				return;
+		   }
+			xmlHttp = new XMLHttpRequest();
+			var formData = new FormData();
+			// selectedfileglob = '/' + selectedfileglob;
+			formData.append("path", selectedfileglob);
+			xmlHttp.open("DELETE", '/prog/delete');
+			xmlHttp.send(formData);
+
+			clearLabel();
+
+			setTimeout(() => {
+				fsSpaceSize();
+				refreshList();
+			}, 100);
+
+		}
+
+
+
+		function selectedFileProgFirmware(res){
+			const _uploadtext = document.getElementById("selectedfileerr");
+			if (selectedfileglob == null ) {
+				_uploadtext.innerHTML = "<b>" + 'Select file to flash first!' + "</b>";
+				return;
+			}
+		   	const xhr = new XMLHttpRequest();
+		   	var formData = new FormData();
+			//selectedfileglob = '/' + selectedfileglob;
+			formData.append("path", selectedfileglob);
+			xhr.open('POST', '/prog/flash');
+			xhr.send(formData);
+			clearLabel() ;
+			xhr.addEventListener('loadend', () => {
+
+				for (row of ParseCVT(xhr.response)) {
+					if (row[0] == "prog") { _uploadtext.innerHTML = row[1]; }
+				}
+
+			});
+			setTimeout(flashStatus, 3000);
+
+		}
+
+
+
+		function uploadFiles() {
+			const xhr = new XMLHttpRequest();
+			const form = document.querySelector('#upload');
+			const data = new FormData(form);
+			xhr.open('post', '/prog/uploadfile');
+			xhr.send(data);
+			xhr.addEventListener('loadend', () => {
+				const fieldsRows = ParseCVT(xhr.response);
+				const _uploadtext = document.getElementById("uploadtext");
+				_uploadtext.innerHTML = 'File upload begin...';
+				setTimeout(uploadFilesStat, 1500);
+			});
+		}
+
+		function uploadFilesStat() {
+			const xhr = new XMLHttpRequest();
+			xhr.open('get', '/prog/uploadstat');
+			xhr.send();
+			xhr.addEventListener('loadend', () => {
+				const _statup = document.getElementById("statup");
+				const _uploadtext = document.getElementById("uploadtext");
+				let _filename;
+				let _filesize ;
+
+				const fieldsRows = ParseCVT(xhr.response).reverse();
+				console.log(fieldsRows);
+				for (fields of fieldsRows) {
+					if (fields[0] == "file" )       						{	_filename = fields[1];  }
+					if (fields[0] == "fileSize" )							{	_filesize = fields[1];  }
+					if (fields[0] == "status" && fields[1] == "error")		{	_uploadtext.innerHTML = 'File uploaded failed!';	}
+					if (fields[0] == "status" && fields[1] == "ok") 		{	_uploadtext.innerHTML = `File <b> ${_filename} </b> <br> of <b> ${_filesize} </b> bytes uploaded successful!`; }
+				}
+			});
+			fsSpaceSize();
+			refreshList();
+
+		}
+
+		function clearLabel() {
+			const _uploadtext = document.getElementById("selectedfileerr");
+			_uploadtext.innerHTML = "";
+			selectedfileglob = null ;
+
+		}
+
+
+
+
+	</script>
 
 </body>
 

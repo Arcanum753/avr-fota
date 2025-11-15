@@ -15,7 +15,7 @@
 #include "eertos.h"
 #include "ErriezSerialTerminal.h"
 #include "terminal.h"
-#include "avrisp.h"
+#include "prog_isp.h"
 #include "udphelper.h"
 
 // pin used for entering setup mode

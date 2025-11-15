@@ -79,15 +79,24 @@ SetTask(TPTR TS)
  * @param TS Pointer to the task function
  * @param NewTime New timer value
  */
+//TODO Need review and refactor about Idle_i
 void
 SetTimerTask(TPTR TS, uint32_t NewTime)
 {
+	uint32_t      Idle_i = 0;
 	for (uint32_t index = 0; index < MainTimerQueueSize; index++)
 	{
 		if (MainTimer[index].GoToTask == TS)
 		{
 			MainTimer[index].Time = NewTime;
 			return;
+		}
+		else
+		{
+		if ((MainTimer[index].GoToTask == Idle_task) && (Idle_i == 0))
+			{
+				Idle_i = index;
+			}
 		}
 	}
 

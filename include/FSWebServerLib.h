@@ -57,13 +57,13 @@
 #define JSON_STR_LEN    512
 // #define HIDE_CONFIG
 
+#define FILENAME_LENGHT    64
 
 #define WIFI_CONFIG_FILE_NAME "config_wifi"
 #define WIFI_CONFIGS    4
 
-//WIFI_CONFIG_FILEx is deprecated option
 
-#define WIFI_CONFIG_FILE0 "/config_wifi0.json"
+#define WIFI_CONFIG_FILE0           "/config_wifi0.json"
 #if (USE_RESERV_WIFI > 0)
 #define WIFI_CONFIG_FILE1           "/config_wifi1.json"
 #define WIFI_CONFIG_FILE2           "/config_wifi2.json"
@@ -214,6 +214,7 @@ public:
     strMetarConfig    _metarConfig; // METAR configuration
 
     String getMetar();
+    String FilesListGet() ;
 
 private:
 	JSON_CALLBACK_SIGNATURE;
@@ -253,8 +254,8 @@ protected:
     #if defined(ESP32)
     // WiFiEventId_t eventID;
     WiFiEventId_t onStationModeConnectedHandler
-        , onStationModeDisconnectedHandler
-        , onStationModeGotIPHandler;
+                , onStationModeDisconnectedHandler
+                , onStationModeGotIPHandler;
     #elif defined(ESP8266)
 	WiFiEventHandler onStationModeConnectedHandler, onStationModeDisconnectedHandler, onStationModeGotIPHandler ;
     #endif
@@ -272,19 +273,25 @@ protected:
 
     void sendTimeData();
 
-    // all about avr;
+    // all about AVR;
     String _hexfileProg;
     String _hexfileCheck;
     String _hexFileUploadStatus;
-    int  handleHexFileUpload( String filename, size_t index, uint8_t *data, size_t len, bool final);
-    void handleHexFileUploadStatus(AsyncWebServerRequest *request);
-    void avrCheckFile(AsyncWebServerRequest *request);
-    void avrGetInfo(AsyncWebServerRequest *request);
+
+
+    void avrGetActualFWInfo(AsyncWebServerRequest *request);
     void avrProg(AsyncWebServerRequest *request);
-    void avrProgRollback(AsyncWebServerRequest *request);
     void avrProgStatus(AsyncWebServerRequest *request) ;
     void avrFusesRead(AsyncWebServerRequest *request) ;
     void avrWebFusesWrite(AsyncWebServerRequest *request) ;
+
+      // all about STM32;
+    void programmerGetFilesList (AsyncWebServerRequest *request);
+    void programmerGetDiskInfo  (AsyncWebServerRequest *request);
+    void programmerFileDelete         (AsyncWebServerRequest *request) ;
+    int  programmerFileUpload2FS( String filename, size_t index, uint8_t *data, size_t len, bool final);
+    void programmerFileUpload2FSStat(AsyncWebServerRequest *request);
+    void programmerFileUpload2Chip(AsyncWebServerRequest *request) ;
 
     // gpio
     void  gpioGetArgs(AsyncWebServerRequest *request);
@@ -362,12 +369,12 @@ protected:
     void send_NTP_configuration_values_html(AsyncWebServerRequest *request);
     void send_NTP_configuration_html(AsyncWebServerRequest *request);
     void send_network_configuration_html(AsyncWebServerRequest *request);
+    void send_scanwifi(AsyncWebServerRequest *request) ;
 
     void get_system_configuration_html(AsyncWebServerRequest *request);
     void get_udp_configuration_html(AsyncWebServerRequest *request);
     void get_project_configuration_html(AsyncWebServerRequest *request);
 
-    void restart_esp();
     void send_wwwauth_configuration_values_html(AsyncWebServerRequest *request);
     void set_wwwauth_configuration(AsyncWebServerRequest *request);
     void send_update_firmware_values_html(AsyncWebServerRequest *request);
@@ -376,6 +383,8 @@ protected:
     void updateFileExecute (AsyncWebServerRequest *request) ;
 	void handle_rest_config(AsyncWebServerRequest *request);
 	void post_rest_config(AsyncWebServerRequest *request);
+
+    void restart_esp();
 
     uint32_t maxSketchSpace   ;
     uint32_t freeSketchSpace   ;
