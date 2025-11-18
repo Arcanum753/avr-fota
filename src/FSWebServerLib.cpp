@@ -412,7 +412,6 @@ void AsyncFSWebServer::ntpBegin (){
 	if (!load_config_Sys()) { defaultConfigSys();  	}
 	if (!load_config_NTP()) { defaultConfigNTP();  	}
 	if (!load_config_UDP()) { defaultConfigUDP();  	}
-	if (!load_config_metar()) { default_config_metar();  	}
 #if (USE_RESERV_WIFI > 0)
 	if (!load_configWifi(3)) { defaultConfigWifi(3); _apConfig.APenable = true; 	}
 	if (!load_configWifi(2)) { defaultConfigWifi(2); _apConfig.APenable = true; 	}
@@ -527,16 +526,6 @@ bool AsyncFSWebServer::load_configWifi(int _in) {
 	return true;
 }
 
-bool AsyncFSWebServer::load_config_metar() {
-	JsonDocument jsonDoc;
-	if (!load_jsonDoc(CONFIG_FILE_METAR, jsonDoc)){
-		return false;
-	}
-	_metarConfig.icao = jsonDoc["icao"].as<const char *>();
-
-	return true;
-}
-
 bool AsyncFSWebServer::load_config_Sys() {
 	JsonDocument jsonDoc;
 	if (!load_jsonDoc(CONFIG_FILE_SYS, jsonDoc)){
@@ -621,13 +610,6 @@ bool AsyncFSWebServer::load_config_NTP() {
 	return true;
 }
 
-void AsyncFSWebServer::default_config_metar() {
-	_metarConfig.icao 		= "UWGG";
-	save_config_metar();
-	DEBUGLOG(__PRETTY_FUNCTION__);
-	DEBUGLOG("\r\n");
-}
-
 void AsyncFSWebServer::defaultConfigSys() {
 	// DEFAULT CONFIG SUSTEM
 	_sysConfig.deviceName 		= "esp_server";
@@ -679,13 +661,6 @@ bool AsyncFSWebServer::save_jsonDoc(const JsonDocument& jsonDoc,
 	configFile.flush();
 	configFile.close();
 	return true;
-}
-
-bool AsyncFSWebServer::save_config_metar() {
-	DEBUGLOG("Save config METAR\r\n");
-	JsonDocument jsonDoc;
-	jsonDoc["icao"] = _metarConfig.icao;
-	return save_jsonDoc(jsonDoc, CONFIG_FILE_METAR);
 }
 
 bool AsyncFSWebServer::save_configSys() {
@@ -2457,12 +2432,6 @@ uint16_t AsyncFSWebServer::getUpdPortTx() 	{	return _udpConfig.udpPortTx;	}
 uint16_t AsyncFSWebServer::getUpdPortRx() 	{	return _udpConfig.udpPortRx;	}
 uint16_t AsyncFSWebServer::getudpTimeOut() 	{	return _udpConfig.udpTimeOut;	}
 String AsyncFSWebServer::getudpKeyword() 	{	return _udpConfig.keyword;	}
-
-String
-AsyncFSWebServer::getMetar()
-{
-	return _metarConfig.icao;
-}
 
 String AsyncFSWebServer::udpJsonBroadcast() {
 	String _ret = "";

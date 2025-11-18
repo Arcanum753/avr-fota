@@ -63,9 +63,12 @@ function ApplyCVT(url, prefix = "") {
             } else if (fields[2] == "chk") {
               comp.checked = fields[1];
             }
+            else if (fields[2] == "select") {
+              comp.value = fields[1];
+            }
           }
           if (fields[0] == "devicetype") {
-            if (fields[1] == "avr")     {   document.getElementById("avr").style.display = "";    } 
+            if (fields[1] == "avr")     {   document.getElementById("avr").style.display = "";    }
             else if (fields[1] == "stm32")   {   document.getElementById("stm32").style.display = "";    }
             else if (fields[1] == "gpio")    {   document.getElementById("gpio").style.display = "";    }
           }

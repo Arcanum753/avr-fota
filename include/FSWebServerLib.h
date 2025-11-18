@@ -70,8 +70,6 @@
 #define WIFI_CONFIG_FILE3           "/config_wifi3.json"
 #endif
 
-#define CONFIG_FILE_METAR             "/config_metar.json"
-
 #define CONFIG_FILE_SYS             "/config_sys.json"
 #define CONFIG_FILE_NTP             "/config_ntp.json"
 #define CONFIG_FILE_UDP             "/config_udp.json"
@@ -292,12 +290,10 @@ protected:
     //udp
     void udpTest(AsyncWebServerRequest *request) ;
 
+public:
     bool save_jsonDoc(const JsonDocument& jsonDoc, const String& file);
     bool load_jsonDoc(const String& file, JsonDocument& jsonDoc);
-    //metar
-    bool load_config_metar();
-    bool save_config_metar();
-    void default_config_metar();
+private:
 
     //sys
     bool load_config_Sys();
@@ -342,6 +338,7 @@ protected:
 
     String getMacAddress();
 
+public:
     bool checkAuth(AsyncWebServerRequest *request);
     void handleFileList(AsyncWebServerRequest *request);
     //void handleFileRead_edit_html(AsyncWebServerRequest *request);
@@ -350,6 +347,7 @@ protected:
     void handleFileDelete(AsyncWebServerRequest *request);
 
     void handleFileUpload(AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final);
+private:
     void send_system_configuration_values_html(AsyncWebServerRequest *request);
     void send_device_values_html(AsyncWebServerRequest *request);
 
