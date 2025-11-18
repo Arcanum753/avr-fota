@@ -3,7 +3,7 @@
 #define SERIAL_NUMBER "0"
 #define DEVTYPE_GPIO "gpio"
 #define DEVTYPE_AVR "avr"
-#define DEVTYPE_STM32 "stm32"
+#define DEVTYPE_SWD "stm32"
 #define APP_BUILDDATE  __DATE__
 #define APP_BUILDTIME  __TIME__
 
@@ -13,7 +13,7 @@
 #define NTP_TIMEOUT 3000 // milliseconds
 
 #define SEC 1000 // 1000 usecs
-#define MIN 60  // 60 secs
+#define MINUTES 60  // 60 secs
 
 
 #define LOCALHOST "127.0.0.1"
