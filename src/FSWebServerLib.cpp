@@ -21,40 +21,7 @@
 AsyncFSWebServer ESPHTTPServer(80);
 
 
-const char Page_ConfigRefresh[] = R"=====(
-<meta http-equiv="refresh" content="10; URL=/index.html">
-Please Wait....Configuring Wifi.
-)=====";
 
-const char Page_IndexRefresh[] = R"=====(
-<meta http-equiv="refresh" content="10; URL=/index.html">
-Please Wait....Configuring and Restarting.
-)=====";
-
-const char Page_GeneralSys[] = R"=====(
-<meta http-equiv="refresh" content="10; URL=/system.html">
-Please Wait....Configuring.
-)=====";
-
-const char Page_GeneralUdp[] = R"=====(
-<meta http-equiv="refresh" content="10; URL=/udp.html">
-Please Wait....Configuring.
-)=====";
-
-const char Page_GeneralNtp[] = R"=====(
-<meta http-equiv="refresh" content="10; URL=/ntp.html">
-Please Wait....Configuring.
-)=====";
-
-const char Page_GeneralPrj[] = R"=====(
-<meta http-equiv="refresh" content="10; URL=/project.html">
-Please Wait....Configuring.
-)=====";
-
-const char Page_AvrRefresh[] = R"=====(
-<meta http-equiv="refresh" content="10; URL=/avr.html">
-Please Wait....Configuring.
-)=====";
 
 String _Version_App 		= VERSION_APP;
 String _Version_Web 		= VERSION_WEB;
@@ -203,7 +170,7 @@ void AsyncFSWebServer::ntpBegin (){
 	loadHTTPAuth();
 	if (!load_config_Sys()) { defaultConfigSys();  	}
 	if (!load_config_NTP()) { defaultConfigNTP();  	}
-	if (!load_config_UDP()) { defaultConfigUDP();  	}
+
 #if (USE_RESERV_WIFI > 0)
 	if (!load_configWifi(3)) { defaultConfigWifi(3); _apConfig.APenable = true; 	}
 	if (!load_configWifi(2)) { defaultConfigWifi(2); _apConfig.APenable = true; 	}
@@ -391,26 +358,6 @@ bool AsyncFSWebServer::load_config_NTP() {
 }
 
 
-bool AsyncFSWebServer::load_config_UDP() {
-	// DEBUGLOG(__PRETTY_FUNCTION__);	DEBUGLOG("\r\n");
-	JsonDocument jsonDoc;
-	if (!load_jsonDoc(CONFIG_FILE_UDP, jsonDoc)){	return false;	}
-#ifndef RELEASE
-	String temp;
-	serializeJsonPretty(jsonDoc, temp);
-	Serial.println(temp.c_str());
-#endif
-	_udpConfig.udpPortTx 			= jsonDoc["udpPortTx"].as< int >();
-	_udpConfig.udpPortRx 			= jsonDoc["udpPortRx"].as< int >();
-	_udpConfig.udpTimeOut			= jsonDoc["udpTimeOut"].as< int >();
-	_udpConfig.keyword				= jsonDoc["udpkeyword"].as<const char *>();
-	DEBUGLOG("updPortTx: %d\r\n"	, _udpConfig.udpPortTx);
-	DEBUGLOG("updPortRx: %d\r\n"	, _udpConfig.udpPortRx);
-	DEBUGLOG("udpTimeOut: %d\r\n"	, _udpConfig.udpTimeOut);
-	DEBUGLOG("keyword: %s\r\n"		, _udpConfig.keyword.c_str());
-	return true;
-}
-
 
 void AsyncFSWebServer::defaultConfigSys() {
 	// DEFAULT CONFIG SYSTEM
@@ -421,14 +368,7 @@ void AsyncFSWebServer::defaultConfigSys() {
 	save_configSys();
 }
 
-void AsyncFSWebServer::defaultConfigUDP() {
-	// DEFAULT CONFIG UDP
-	_udpConfig.udpPortTx = UDP_BROADCAST_PORT_DFLT;
-	_udpConfig.udpPortRx = UDP_BROADCAST_PORT_DFLT+1;
-	_udpConfig.udpTimeOut = UDP_BROADCAST_TIME_DFLT;
-	_udpConfig.keyword = UDP_BROADCAST_KEYWORD_DFLT;
-	save_configUDP();
-}
+
 void AsyncFSWebServer::defaultConfigNTP() {
 	// DEFAULT CONFIG NTP
 	_ntpConfig.ntpServerName0 = NTPSERVER_DFLT0;
@@ -477,16 +417,6 @@ bool AsyncFSWebServer::save_configNTP() {
 	jsonDoc["timeZone"] 	= _ntpConfig.timezone;
 	jsonDoc["daylight"] 	= _ntpConfig.daylight;
 	return save_jsonDoc(jsonDoc, CONFIG_FILE_NTP);
-}
-
-bool AsyncFSWebServer::save_configUDP() {
-	DEBUGLOG("Save config UDP \r\n");
-	JsonDocument jsonDoc;
-	jsonDoc["udpPortTx"] 	= _udpConfig.udpPortTx;
-	jsonDoc["udpPortRx"] 	= _udpConfig.udpPortRx;
-	jsonDoc["udpTimeOut"] 	= _udpConfig.udpTimeOut;
-	jsonDoc["udpkeyword"] 	= _udpConfig.keyword;
-	return save_jsonDoc(jsonDoc, CONFIG_FILE_UDP);
 }
 
 
@@ -782,7 +712,7 @@ void AsyncFSWebServer::configureWifiAP() {
 
 	// need only when we online at last
 	load_config_Sys();
-	load_config_UDP();
+//	load_config_UDP(); //FIXME
 	load_config_NTP();
 
 	String APname = _sysConfig.deviceName + "_" + _sysConfig.deviceSerial;
@@ -926,9 +856,10 @@ void AsyncFSWebServer::onWiFiConnectedGotIP(WiFiEventStationModeGotIP data) {
 	wifiStatus = FS_STAT_CONNECTED;
 
 	//udp broadcast - we are online!
-    udpBroadcast.udpBroadcastSend(getUpdPortTx(), udpJsonBroadcast());
+    udpResponse();
 	//udp start to listen
-	udpBroadcast.udpStart(getUpdPortRx());
+	udpBroadcast.udpInit();
+	udpBroadcast.udpStart(udpBroadcast.getUpdPortRx());
 	//ntpBegin();
 
 }
@@ -1736,38 +1667,7 @@ void AsyncFSWebServer::send_NTP_configuration_values_html(AsyncWebServerRequest 
 // ntp.html ^^^
 
 
-// udp.html vvv
-void  AsyncFSWebServer::udpTest(AsyncWebServerRequest *request) {
-	udpBroadcast.udpBroadcastSend(getUpdPortTx(), udpJsonBroadcast());
-}
-void AsyncFSWebServer::send_udp_configuration_values_html(AsyncWebServerRequest *request) { // answer for "get" request
-	//DEBUGLOG(__FUNCTION__);	DEBUGLOG("\r\n");
-	String values = "";
-	values += "udpporttx|" 	  		+(String)_udpConfig.udpPortTx 	+ "|input\n";
-	values += "udpportrx|" 	  		+(String)_udpConfig.udpPortRx 	+ "|input\n";
-	values += "udptime|"   			+(String)_udpConfig.udpTimeOut 	+ "|input\n";
-	values += "udpkeyword|"   		+		 _udpConfig.keyword 	+ "|input\n";
-	request->send(200, "text/plain", values);
-}
 
-
-void AsyncFSWebServer::get_udp_configuration_html(AsyncWebServerRequest *request) {
-	//DEBUGLOG(__PRETTY_FUNCTION__);	DEBUGLOG("\r\n");
-	if (request->args() > 0) { // get new configs from args
-		for (uint8_t i = 0; i < request->args(); i++) {
-			DEBUGLOG("Arg %d: %s %s\r\n", i, request->argName(i).c_str() ,request->arg(i).c_str() );
-			if (request->argName(i) == "udpporttx")  		{ _udpConfig.udpPortTx = request->arg(i).toInt();		continue; }
-			if (request->argName(i) == "udpportrx")  		{ _udpConfig.udpPortRx = request->arg(i).toInt();		continue; }
-			if (request->argName(i) == "udptime")  			{ _udpConfig.udpTimeOut = request->arg(i).toInt();		continue; }
-			if (request->argName(i) == "udpkeyword")		{ _udpConfig.keyword = urldecode(request->arg(i));		continue; }
-		}
-		request->send_P(200, "text/html", Page_GeneralUdp);	// refresh page
-		save_configUDP();	 	// Save Settings
-		udpBroadcastTimer();	// start new UDP broadcasting
-	}
-	else {	handleFileRead(request->url(), request);	}
-}
-// udp.html ^^^
 
 // project.html vvv
 void AsyncFSWebServer::send_project_configuration_values_html(AsyncWebServerRequest *request) { // answer for "get" request
@@ -2180,21 +2080,6 @@ void AsyncFSWebServer::serverInit() {
 
 //wifi.html ^^^
 
-// 	udp.html vvv
-	on("/udp/info", HTTP_GET, [this](AsyncWebServerRequest *request) {
-		if (!this->checkAuth(request)) {	return request->requestAuthentication(); };
-		this->send_udp_configuration_values_html(request);
-	});
-	on("/udp.html", HTTP_POST, [this](AsyncWebServerRequest *request) {
-		if (!this->checkAuth(request)) {	return request->requestAuthentication(); };
-		this->get_udp_configuration_html(request);
-	});
-	on("/udp/test", [this](AsyncWebServerRequest *request) {
-		if (!this->checkAuth(request)) {	return request->requestAuthentication(); };
-		this->udpTest(request);
-	});
-
-// /udp.html ^^^
 // ntp.html vvv
 	on("/ntp/info", [this](AsyncWebServerRequest *request) {
 		if (!this->checkAuth(request)) {	return request->requestAuthentication(); };
@@ -2579,48 +2464,6 @@ void AsyncFSWebServer::serialShowInfo() {
 	String hostname = _sysConfig.deviceName+"_"+_sysConfig.deviceSerial;
 	Serial.printf("local DNS hostname  http://%s.local \n\r", hostname.c_str());
 	Serial.printf("or you can connect directly  http://%s \n\r", WiFi.localIP().toString().c_str());
-}
-
-uint16_t AsyncFSWebServer::getUpdPortTx() 	{	return _udpConfig.udpPortTx;	}
-uint16_t AsyncFSWebServer::getUpdPortRx() 	{	return _udpConfig.udpPortRx;	}
-uint16_t AsyncFSWebServer::getudpTimeOut() 	{	return _udpConfig.udpTimeOut;	}
-String AsyncFSWebServer::getudpKeyword() 	{	return _udpConfig.keyword;	}
-
-String AsyncFSWebServer::udpJsonBroadcast() {
-	String _ret = "";
-
-	AVRISP_CfgFile_t AVRISP_HexFiles_Web;
-	avrprog.cfgFileStructGet( AVRISP_HexFiles_Web);
-	String hostname = "http://" + _sysConfig.deviceName+"_"+_sysConfig.deviceSerial+".local";
-	String iphost 	= "http://" + WiFi.localIP().toString();
-	JsonDocument jsonDoc;
-	jsonDoc["deviceName"] 		= _sysConfig.deviceName;
-	jsonDoc["deviceSerial"] 	= _sysConfig.deviceSerial;
-	jsonDoc["deviceType"] 		= _sysConfig.deviceType;
-
-
-	jsonDoc["ip"] 				= WiFi.localIP().toString();
-	jsonDoc["dnshost"] 			= hostname;
-	jsonDoc["iphost"] 			= iphost;
-	jsonDoc["mac"] 			    = WiFi.macAddress();
-	jsonDoc["ntpNow"] 			= NTP.getTimeDateString() ;
-
-	jsonDoc["udpPortTx"] 		= _udpConfig.udpPortTx;
-	jsonDoc["udpPortRx"] 		= _udpConfig.udpPortRx;
-	jsonDoc["udpTimeOut"] 		= _udpConfig.udpTimeOut;
-	jsonDoc["keyword"] 			= _udpConfig.keyword;
-
-	//jsonDoc["chip"] 			= AVRISP_HexFiles_Web.avr_signature;
-	// jsonDoc["size"] 			= AVRISP_HexFiles_Web.chipsize;
-	// jsonDoc["project"] 			= AVRISP_HexFiles_Web.project_name;
-	jsonDoc["esp8266Ver"] 		= VERSION_APP;
-	jsonDoc["webVer"] 			= VERSION_WEB;
-	jsonDoc["buildDate"] 		= __DATE__;
-	jsonDoc["buildTime"] 		= __TIME__;
-
-	serializeJsonPretty(jsonDoc, _ret);
-	// DEBUGLOG(__PRETTY_FUNCTION__); DEBUGLOG("\r\n");
-	return _ret;
 }
 
 

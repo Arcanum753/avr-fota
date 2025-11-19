@@ -26,6 +26,7 @@
 #include <ArduinoJson.h>
 
 
+//#define CHECKAUTH if (!ESPHTTPServer->checkAuth(request)) {	return request->requestAuthentication(); };
 
 //#define RELEASE  // Comment to enable debug output
 
@@ -45,9 +46,7 @@
 #define DEBUGLOGFH(...)
 #endif
 
-#define UDP_BROADCAST_PORT_DFLT 40000
-#define UDP_BROADCAST_TIME_DFLT 5
-#define UDP_BROADCAST_KEYWORD_DFLT "Ave_Omnissiah"
+
 
 #define CONNECTION_LED -1// Connection LED pin (Built in). -1 to disable
 #define AP_ENABLE_BUTTON -1//5 // Button pin to enable AP during startup for configuration. -1 to disable
@@ -72,7 +71,7 @@
 
 #define CONFIG_FILE_SYS             "/config_sys.json"
 #define CONFIG_FILE_NTP             "/config_ntp.json"
-#define CONFIG_FILE_UDP             "/config_udp.json"
+
 //#define CONFIG_FILE_PRJ                 "/config_prj.json"
 
 
@@ -121,12 +120,6 @@ typedef struct {
     bool daylight;
 } strNtpConfig;
 
-typedef struct {
-    uint16_t udpPortTx;
-    uint16_t udpPortRx;
-    uint16_t udpTimeOut;
-    String keyword;
-} strUdpConfig;
 
 typedef struct {
     String icao;
@@ -170,6 +163,42 @@ typedef enum {
 } enWifiScan;
 
 
+const char Page_ConfigRefresh[] = R"=====(
+<meta http-equiv="refresh" content="10; URL=/index.html">
+Please Wait....Configuring Wifi.
+)=====";
+
+const char Page_IndexRefresh[] = R"=====(
+<meta http-equiv="refresh" content="10; URL=/index.html">
+Please Wait....Configuring and Restarting.
+)=====";
+
+const char Page_GeneralSys[] = R"=====(
+<meta http-equiv="refresh" content="10; URL=/system.html">
+Please Wait....Configuring.
+)=====";
+
+const char Page_GeneralUdp[] = R"=====(
+<meta http-equiv="refresh" content="10; URL=/udp.html">
+Please Wait....Configuring.
+)=====";
+
+const char Page_GeneralNtp[] = R"=====(
+<meta http-equiv="refresh" content="10; URL=/ntp.html">
+Please Wait....Configuring.
+)=====";
+
+const char Page_GeneralPrj[] = R"=====(
+<meta http-equiv="refresh" content="10; URL=/project.html">
+Please Wait....Configuring.
+)=====";
+
+const char Page_AvrRefresh[] = R"=====(
+<meta http-equiv="refresh" content="10; URL=/avr.html">
+Please Wait....Configuring.
+)=====";
+
+
 class AsyncFSWebServer : public AsyncWebServer {
 public:
     AsyncFSWebServer(uint16_t port);
@@ -201,14 +230,10 @@ public:
     void clearUserConfig(bool reset);
     void serialShowInfo();
     void showDBG();
-    String      udpJsonBroadcast();
-    uint16_t    getUpdPortTx() ;
-    uint16_t    getUpdPortRx() ;
-    uint16_t    getudpTimeOut() ;
-    String      getudpKeyword();
+
     strSysConfig    _sysConfig; // SYS configuration
     strNtpConfig    _ntpConfig; // NTP configuration
-    strUdpConfig    _udpConfig; // UDP configuration
+
     strMetarConfig    _metarConfig; // METAR configuration
 
     String getMetar();
@@ -294,8 +319,7 @@ protected:
     // gpio
     void  gpioGetArgs(AsyncWebServerRequest *request);
 
-    //udp
-    void udpTest(AsyncWebServerRequest *request) ;
+    
 
 public:
     bool save_jsonDoc(const JsonDocument& jsonDoc, const String& file);
@@ -312,10 +336,7 @@ private:
     bool save_configNTP();
     void defaultConfigNTP();
 
-    //udp
-    bool load_config_UDP();
-    bool save_configUDP();
-    void defaultConfigUDP();
+
 
     bool load_configWifi(int _in);
     bool save_configWifi(int _in);
@@ -358,7 +379,7 @@ private:
     void send_system_configuration_values_html(AsyncWebServerRequest *request);
     void send_device_values_html(AsyncWebServerRequest *request);
 
-    void send_udp_configuration_values_html(AsyncWebServerRequest *request);
+    
 
     void send_project_configuration_values_html(AsyncWebServerRequest *request);
     void send_network_configuration_values_html(AsyncWebServerRequest *request, int _index);
@@ -370,7 +391,7 @@ private:
     void send_scanwifi(AsyncWebServerRequest *request) ;
 
     void get_system_configuration_html(AsyncWebServerRequest *request);
-    void get_udp_configuration_html(AsyncWebServerRequest *request);
+    
     void get_project_configuration_html(AsyncWebServerRequest *request);
 
     void send_wwwauth_configuration_values_html(AsyncWebServerRequest *request);

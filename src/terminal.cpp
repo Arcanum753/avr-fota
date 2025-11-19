@@ -160,11 +160,11 @@ void udpp (){
         Serial.println("Please set port 10000 < port <= 65536");
         return;
     }
-    String str = ESPHTTPServer.udpJsonBroadcast();
+    String str = udpBroadcast.udpJsonBroadcast();
     udpBroadcast.udpBroadcastSend(port, str);
 }
 
 void udpc ()    {
-     udpBroadcast.udpBroadcastSend(ESPHTTPServer.getUpdPortTx(), ESPHTTPServer.udpJsonBroadcast());
+     udpBroadcast.udpBroadcastSend(udpBroadcast.getUpdPortTx(), udpBroadcast.udpJsonBroadcast());
 }
 
