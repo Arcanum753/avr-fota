@@ -154,6 +154,7 @@ typedef enum {
     , FS_STAT_APMODE
     , FS_STAT_DISCONNECTED
     , FS_STAT_RESET
+    , FS_STAT_WRONGPASSWORDS
 } enWifiStatus;
 
 typedef enum {
@@ -380,6 +381,7 @@ private:
     void send_device_values_html(AsyncWebServerRequest *request);
 
     
+    void wifiSsidSetPSWDwrong(String _str) ;
 
     void send_project_configuration_values_html(AsyncWebServerRequest *request);
     void send_network_configuration_values_html(AsyncWebServerRequest *request, int _index);
