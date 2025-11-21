@@ -36,13 +36,19 @@ void AsyncFSWebServer::s_secondTick(void* arg) {
 //Check connection timeout if enabled
 #if (AP_ENABLE_TIMEOUT > 0)
 	// DBG_OUTPUT_PORT.printf("timer%d\r\n", ++self->connectionTimout);
-	if ((self->wifiStatus == FS_STAT_CONNECTING) )	{
+	if (self->wifiStatus == FS_STAT_CONNECTING) 	{
 		if (++self->connectionTimout >= AP_ENABLE_TIMEOUT){
-			DBG_OUTPUT_PORT.printf("Connection Timeout, switching to AP Mode.\r\n");
+			DBG_OUTPUT_PORT.printf("Connection Timeout. Switching to AP Mode.\r\n");
 			self->WifiScan = WF_SCAN_NO_NEED;
 			self->configureWifiAP();
 		}
 	}
+	if (self->wifiStatus == FS_STAT_WRONGPASSWORDS) {
+		DBG_OUTPUT_PORT.printf("All passwords wrong. Switching to AP Mode.\r\n");
+		self->WifiScan = WF_SCAN_NO_NEED;
+		self->configureWifiAP();
+	}
+
 	if (self->WifiScan == WF_STAT_SCANED)	{
 		self->configureWifi();
 		self->WifiScan = WF_SCAN_NO_NEED;
@@ -855,12 +861,12 @@ void AsyncFSWebServer::onWiFiConnectedGotIP(WiFiEventStationModeGotIP data) {
 	_ntpserveer = 0;
 	wifiStatus = FS_STAT_CONNECTED;
 
-	//udp broadcast - we are online!
-    udpResponse();
 	//udp start to listen
 	udpBroadcast.udpInit();
 	udpBroadcast.udpStart(udpBroadcast.getUpdPortRx());
 	//ntpBegin();
+	//udp broadcast - we are online!
+    udpResponse();
 
 }
 
@@ -869,10 +875,19 @@ void AsyncFSWebServer::onWiFiDisconnected() {
 #elif defined(ESP8266)
 void AsyncFSWebServer::onWiFiDisconnected(WiFiEventStationModeDisconnected data) {
 #endif
-	udpBroadcast.udpStop();
+	NTP.stop();				// always stop!
+	udpBroadcast.udpStop();	// always stop!
+
 	if (wifiStatus == FS_STAT_RESET) {return;}
 
-	DEBUGLOG(" case STA_DISCONNECTED \r\n");
+DEBUGLOG(" case STA_DISCONNECTED \r\n");
+	if(WiFi.status() != WL_CONNECTED && WiFi.status() != WL_NO_SSID_AVAIL)	  {
+		wifiStatus = FS_STAT_WRONGPASSWORDS;
+		WifiScan = WF_SCAN_NO_NEED;
+		wifiSsidSetPSWDwrong(_wifiConfig.ssid);		
+		WiFi.disconnect();		// anyway need it to avoid wifi logic errors
+	}
+
 	if (CONNECTION_LED >= 0) {
 		digitalWrite(CONNECTION_LED, HIGH);
 		// flashLED(config.connectionLed, 2, 100);
@@ -883,6 +898,14 @@ void AsyncFSWebServer::onWiFiDisconnected(WiFiEventStationModeDisconnected data)
 	wifiStatus = FS_STAT_CONNECTING;
 	WifiScan = WF_STAT_SCANING;
 
+}
+
+void AsyncFSWebServer::wifiSsidSetPSWDwrong(String _str) {
+	DEBUGLOG("wifi ssid wrong password: %s \n", _str.c_str());
+	if (strcmp( _strWifi3,  _str.c_str()) == 0)	{	memset (_strWifi3, 0, sizeof(_strWifi3)); }
+	if (strcmp( _strWifi2,  _str.c_str()) == 0)	{	memset (_strWifi2, 0, sizeof(_strWifi2)); }
+	if (strcmp( _strWifi1,  _str.c_str()) == 0)	{	memset (_strWifi1, 0, sizeof(_strWifi1)); }
+	if (strcmp( _strWifi0,  _str.c_str()) == 0)	{	memset (_strWifi0, 0, sizeof(_strWifi0)); }
 }
 
 

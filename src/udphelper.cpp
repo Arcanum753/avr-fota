@@ -72,8 +72,9 @@ void UDPBROADCAST_CLASS::udpStart(uint16_t _port) {
 
 
 void UDPBROADCAST_CLASS::udpStop(){
-  isStarted = false;
-  udp_listen.close();
+  	if (isStarted == false) {return;}
+	isStarted = false;
+	if (udp_listen.connected() == true){  	udp_listen.close(); }
 }
 
  void  UDPBROADCAST_CLASS::udpBroadcastSend(uint16_t _port, String _strin){
