@@ -21,7 +21,7 @@ typedef struct {
 void    udpResponse();
 void    udpBroadcastTimer();
 
-class  UDPBROADCAST_CLASS{
+class  UDPBROADCAST_CLASS   {
     public:
         UDPBROADCAST_CLASS (uint16_t portListen);
         void	udpInit(void);

@@ -25,29 +25,6 @@
 
 #include <ArduinoJson.h>
 
-
-//#define CHECKAUTH if (!ESPHTTPServer->checkAuth(request)) {	return request->requestAuthentication(); };
-
-//#define RELEASE  // Comment to enable debug output
-
-#define DBG_OUTPUT_PORT Serial
-
-#ifndef RELEASE
-#define DEBUGLOG(...) DBG_OUTPUT_PORT.printf(__VA_ARGS__)
-#else
-#define DEBUGLOG(...)
-#endif
-
-#define DBG_HADLEFILEWXIST  0
-
-#if (DBG_HADLEFILEWXIST > 0 )
-#define DEBUGLOGFH(...) DBG_OUTPUT_PORT.printf(__VA_ARGS__)
-#else
-#define DEBUGLOGFH(...)
-#endif
-
-
-
 #define CONNECTION_LED -1// Connection LED pin (Built in). -1 to disable
 #define AP_ENABLE_BUTTON -1//5 // Button pin to enable AP during startup for configuration. -1 to disable
 
@@ -58,16 +35,7 @@
 
 #define FILENAME_LENGHT    64
 
-#define WIFI_CONFIG_FILE_NAME "config_wifi"
-#define WIFI_CONFIGS    4
 
-
-#define WIFI_CONFIG_FILE0           "/config_wifi0.json"
-#if (USE_RESERV_WIFI > 0)
-#define WIFI_CONFIG_FILE1           "/config_wifi1.json"
-#define WIFI_CONFIG_FILE2           "/config_wifi2.json"
-#define WIFI_CONFIG_FILE3           "/config_wifi3.json"
-#endif
 
 #define CONFIG_FILE_SYS             "/config_sys.json"
 #define CONFIG_FILE_NTP             "/config_ntp.json"
@@ -125,22 +93,9 @@ typedef struct {
     String icao;
 } strMetarConfig;
 
-typedef struct {
-    String ssid;
-    String password;
-    IPAddress  ip;
-    IPAddress  netmask;
-    IPAddress  gateway;
-    IPAddress  dns;
-    bool dhcp;
-} strWifiConfig;
 
 
-typedef struct {
-    String APssid = "esp8266_ap"; // ChipID is appended to this name
-    String APpassword = "12345678";
-    bool APenable = false; // AP disabled by default
-} strApConfig;
+
 
 typedef struct {
     bool auth;
@@ -148,20 +103,7 @@ typedef struct {
     String wwwPassword;
 } strHTTPAuth;
 
-typedef enum {
-      FS_STAT_CONNECTING
-    , FS_STAT_CONNECTED
-    , FS_STAT_APMODE
-    , FS_STAT_DISCONNECTED
-    , FS_STAT_RESET
-    , FS_STAT_WRONGPASSWORDS
-} enWifiStatus;
 
-typedef enum {
-    WF_STAT_SCANING,
-    WF_STAT_SCANED,
-    WF_SCAN_NO_NEED
-} enWifiScan;
 
 
 const char Page_ConfigRefresh[] = R"=====(
@@ -199,6 +141,8 @@ const char Page_AvrRefresh[] = R"=====(
 Please Wait....Configuring.
 )=====";
 
+void flashLED(int pin, int times, int delayTime) ;
+
 
 class AsyncFSWebServer : public AsyncWebServer {
 public:
@@ -226,7 +170,6 @@ public:
 	static String urldecode(String input); // (based on https://code.google.com/p/avr-netino/)
 
     //Clear the configuration data (not the user config!) and optional reset the device
-    void clearConfig(bool reset);
     //Clear the user configuration data (not the Wifi config!) and optional reset the device
     void clearUserConfig(bool reset);
     void serialShowInfo();
@@ -249,54 +192,32 @@ private:
     void ntpBeginReserv ();
     void ntpHandler(NTPSyncEvent_t event);
 
-protected:
-
-
-
-    strWifiConfig       _wifiConfig;    //  WiFi configuration
-    strApConfig         _apConfig;      // Static AP config settings
-    strHTTPAuth         _httpAuth;
-
-    char                _strWifi0[40];
-    char                _strWifi1[40];
-    char                _strWifi2[40];
-    char                _strWifi3[40];
+    
+    
+    
+    
+    public:
     int                 _ntpserveer;
-
+    strHTTPAuth         _httpAuth;
+    
+    protected:
 #if ESP32
     fs::SPIFFSFS*               _fs;
 #elif defined(ESP8266)
     FS*                         _fs;                        // esp8266/esp32 flash file system
 #endif
-    long wifiDisconnectedSince = 0;
+   
     String _browserFileMD5 = "";
     uint32_t _updateFileSize = 0;
     String _updateFileName = "";
+    
+    
+    public:
     bool updateTimeFromNTP = false;
-
-
-    #if defined(ESP32)
-    // WiFiEventId_t eventID;
-    WiFiEventId_t onStationModeConnectedHandler
-                , onStationModeDisconnectedHandler
-                , onStationModeGotIPHandler;
-    #elif defined(ESP8266)
-	WiFiEventHandler onStationModeConnectedHandler, onStationModeDisconnectedHandler, onStationModeGotIPHandler ;
-    #endif
-
-
-
-    enWifiStatus wifiStatus;
-    enWifiScan WifiScan;
-    uint8_t connectionTimout;
-
-    Ticker _secondTk;
-    bool _secondFlag;
-
     AsyncEventSource _evs = AsyncEventSource("/events");
-
     void sendTimeData();
-
+    
+private:
     // all about AVR;
     String _hexfileProg;
     String _hexfileCheck;
@@ -320,52 +241,35 @@ protected:
     // gpio
     void  gpioGetArgs(AsyncWebServerRequest *request);
 
-    
 
 public:
     bool save_jsonDoc(const JsonDocument& jsonDoc, const String& file);
     bool load_jsonDoc(const String& file, JsonDocument& jsonDoc);
-private:
-
+    
     //sys
     bool load_config_Sys();
     bool save_configSys();
     void defaultConfigSys();
-
-    //ntp
     bool load_config_NTP();
+    
+    //ntp
     bool save_configNTP();
     void defaultConfigNTP();
+    private:
 
 
 
-    bool load_configWifi(int _in);
-    bool save_configWifi(int _in);
-    void defaultConfigWifi(int _in);
+
 
     // bool load_generic_config()
     bool loadHTTPAuth();
     bool saveHTTPAuth();
-    void configureWifiAP();
-    int scanWifi();
-    void configureWifi();
     void ConfigureOTA(String password);
     void serverInit();
 
-    #if ESP32
-    void onWiFiConnected        ();
-	void onWiFiDisconnected     ();
-	void onWiFiConnectedGotIP   ();
-    #elif defined(ESP8266)
-    void onWiFiConnected        (WiFiEventStationModeConnected      data);
-	void onWiFiDisconnected     (WiFiEventStationModeDisconnected   data);
-	void onWiFiConnectedGotIP   (WiFiEventStationModeGotIP          data);
-    #endif
+   
 
 
-    static void s_secondTick(void* arg);
-
-    String getMacAddress();
 
 public:
     bool checkAuth(AsyncWebServerRequest *request);
@@ -379,23 +283,12 @@ public:
 private:
     void send_system_configuration_values_html(AsyncWebServerRequest *request);
     void send_device_values_html(AsyncWebServerRequest *request);
-
-    
-    void wifiSsidSetPSWDwrong(String _str) ;
-
     void send_project_configuration_values_html(AsyncWebServerRequest *request);
-    void send_network_configuration_values_html(AsyncWebServerRequest *request, int _index);
-    void send_connection_state_values_html(AsyncWebServerRequest *request);
-    void send_information_values_html(AsyncWebServerRequest *request);
     void send_NTP_configuration_values_html(AsyncWebServerRequest *request);
     void send_NTP_configuration_html(AsyncWebServerRequest *request);
-    void send_network_configuration_html(AsyncWebServerRequest *request);
-    void send_scanwifi(AsyncWebServerRequest *request) ;
-
+    void send_information_values_html(AsyncWebServerRequest *request);
     void get_system_configuration_html(AsyncWebServerRequest *request);
-    
     void get_project_configuration_html(AsyncWebServerRequest *request);
-
     void send_wwwauth_configuration_values_html(AsyncWebServerRequest *request);
     void set_wwwauth_configuration(AsyncWebServerRequest *request);
     void send_update_firmware_values_html(AsyncWebServerRequest *request);
@@ -404,8 +297,9 @@ private:
     void updateFileExecute (AsyncWebServerRequest *request) ;
 	void handle_rest_config(AsyncWebServerRequest *request);
 	void post_rest_config(AsyncWebServerRequest *request);
-
+public:    
     void restart_esp();
+private:
 
     uint32_t maxSketchSpace   ;
     uint32_t freeSketchSpace   ;
@@ -415,7 +309,9 @@ private:
 
  //   static String urldecode(String input); // (based on https://code.google.com/p/avr-netino/)
     static unsigned char h2int(char c);
+    public:
     static boolean checkRange(String Value);
+    private:
     uint8_t hex2bin (uint8_t h) ;
 };
 
