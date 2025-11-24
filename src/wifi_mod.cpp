@@ -11,6 +11,7 @@
 #include "debug.h"
 #include "wifi_mod.h"
 #include "udphelper.h"
+#include "ntp_mod.h"
 
 WIFIMOD_CLASS wifiModClass(false);
 
@@ -225,7 +226,7 @@ void WIFIMOD_CLASS::configureWifiAP() {
 
 	// need only when we online at last
 	ESPHTTPServer.load_config_Sys();
-	ESPHTTPServer.load_config_NTP();
+	ntpModClass.load_config_NTP();
 
 	String APname = ESPHTTPServer._sysConfig.deviceName + "_" + ESPHTTPServer._sysConfig.deviceSerial;
 	if (ESPHTTPServer._httpAuth.auth) {
@@ -323,10 +324,10 @@ void WIFIMOD_CLASS::onWiFiConnectedGotIP(WiFiEventStationModeGotIP data) {
 	DBG_OUTPUT_PORT.printf("Led %d on\n", CONNECTION_LED);
 	wifiDisconnectedSince = 0;
 	//force NTPsstart after got ip
-	if (ESPHTTPServer._ntpConfig.updateNTPTimeEvery > 0) {	ESPHTTPServer.updateTimeFromNTP = true;	}		// Enable NTP sync
+	if (ntpModClass._ntpConfig.updateNTPTimeEvery > 0) {	ESPHTTPServer.updateTimeFromNTP = true;	}		// Enable NTP sync
 
 	connectionTimout = 0;
-	ESPHTTPServer._ntpserveer = 0;
+	ntpModClass._ntpserveer = 0;
 	wifiStatus = FS_STAT_CONNECTED;
 
 	//udp start to listen
