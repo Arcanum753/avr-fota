@@ -69,9 +69,8 @@ void WIFIMOD_CLASS::s_secondTick(void* arg) {
 // Set WiFi config
 	else {	configureWifi();	}
 	}
-	else {
-		configureWifi(); // Set WiFi config
-	}
+	// Set WiFi config
+	else {	configureWifi(); 	}
 	_secondTk.attach(1.0f, &WIFIMOD_CLASS::s_secondTick, static_cast<void*>(this)); // Task to run periodic things every second
 #if (USE_RESERV_WIFI > 0)
 	if (!load_configWifi(3)) { defaultConfigWifi(3); _apConfig.APenable = true; 	}
@@ -528,19 +527,15 @@ void WIFIMOD_CLASS::send_network_configuration_html(AsyncWebServerRequest *reque
 	}
 	DEBUGLOG(__PRETTY_FUNCTION__);	DEBUGLOG("\r\n");
 }
-
 // wifi.html ^^^
 
 
-void WIFIMOD_CLASS::webInit (){
-
-
 //wifi.html vvv
+void WIFIMOD_CLASS::webInit ()	{
 	ESPHTTPServer.on("/admin/values/0", [this](AsyncWebServerRequest *request) {
 		if (!ESPHTTPServer.checkAuth(request)) {	return request->requestAuthentication(); };
 		this->send_network_configuration_values_html(request, 0);
 	});
-
 	ESPHTTPServer.on("/admin/values/1", [this](AsyncWebServerRequest *request) {
 		if (!ESPHTTPServer.checkAuth(request)) {	return request->requestAuthentication(); };
 
@@ -556,13 +551,10 @@ void WIFIMOD_CLASS::webInit (){
 
 		this->send_network_configuration_values_html(request, 3);
 	});
-
 	ESPHTTPServer.on("/admin/connectionstate", [this](AsyncWebServerRequest *request) {
 		if (!ESPHTTPServer.checkAuth(request)) {	return request->requestAuthentication(); };
-
 		this->send_connection_state_values_html(request);
 	});
-
 
 	ESPHTTPServer.on("/scan", HTTP_GET, [](AsyncWebServerRequest *request) {
 		if (!ESPHTTPServer.checkAuth(request)) {	return request->requestAuthentication(); };
@@ -603,8 +595,6 @@ void WIFIMOD_CLASS::webInit (){
 		this->send_network_configuration_html(request);
 	});
 
-//wifi.html ^^^
-
-
 }
+//wifi.html ^^^
 

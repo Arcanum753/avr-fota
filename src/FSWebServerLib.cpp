@@ -136,8 +136,7 @@ void AsyncFSWebServer::ntpBegin (){
 	loadHTTPAuth();
 	if (!load_config_Sys()) { defaultConfigSys();  	}
 	if (!load_config_NTP()) { defaultConfigNTP();  	}
-
-
+	wifiModClass.begin(&SPIFFS); // wifi load cfg and set callback hooks
 
 	// NTP client setup
 	if (_ntpConfig.updateNTPTimeEvery > 0) { // Enable NTP sync
@@ -170,25 +169,23 @@ void AsyncFSWebServer::ntpBegin (){
 
 	AsyncWebServer::begin();
 	serverInit(); // Configure and start Web server
+	wifiModClass.webInit();
 	String mdnsName = _sysConfig.deviceName + "_" + _sysConfig.deviceSerial;
 	MDNS.begin(mdnsName.c_str()); // I've not got this to work. Need some investigation.
 	MDNS.addService("http", "tcp", 80);
 	prepareSizesForUpdate();
 	ConfigureOTA(_httpAuth.wwwPassword.c_str());
-
 	// ledInit();
 
 	if (_sysConfig.deviceType ==  DEVTYPE_AVR){
 		espProgrammer.prog_ProgTypeSet(DEVTYPE_AVR);
 		DEBUGLOG("AVR Setup\n\r");
-	}
-	else if ( _sysConfig.deviceType == DEVTYPE_SWD){
+	}	else
+	if ( _sysConfig.deviceType == DEVTYPE_SWD){
 		espProgrammer.prog_ProgTypeSet(DEVTYPE_SWD);
 		DEBUGLOG("SWD Setup\n\r");
-	}
-	else if ( _sysConfig.deviceType == DEVTYPE_GPIO){
-		DEBUGLOG("GPIO Setup\n\r");
-	}
+	} else
+	if ( _sysConfig.deviceType == DEVTYPE_GPIO){	DEBUGLOG("GPIO Setup\n\r");	}
 	espProgrammer.begin();
 
 }
