@@ -6,6 +6,7 @@
 #include "swd.h"
 
 #include "FSWebServerLib.h"
+#include "debug.h"
 #include "debug_cm.h"
 
 bool gpioInitState = false;
