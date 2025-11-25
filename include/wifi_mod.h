@@ -1,11 +1,12 @@
 
 #ifndef _WIFIMOD_h
 #define _WIFIMOD_h
+
 #include <WiFiClient.h>
 #include <TimeLib.h>
 
 
-#define WIFI_CONFIG_FILE_NAME "config_wifi"
+#define WIFI_CONFIG_FILE_NAME       "config_wifi"
 #define WIFI_CONFIGS    4
 
 
@@ -16,7 +17,6 @@
 #define WIFI_CONFIG_FILE3           "/config_wifi3.json"
 #endif
 
-#endif // _WIFIMOD_h
 
 
 
@@ -40,7 +40,7 @@ typedef struct {
 
 
 typedef enum {
-      FS_STAT_CONNECTING
+    FS_STAT_CONNECTING
     , FS_STAT_CONNECTED
     , FS_STAT_APMODE
     , FS_STAT_DISCONNECTED
@@ -57,28 +57,28 @@ typedef enum {
 
 
 class  WIFIMOD_CLASS    {
-public:
-   WIFIMOD_CLASS (bool _in);
-#if defined(ESP32)  
+    public:
+    WIFIMOD_CLASS (bool _in);
+    #if defined(ESP32)  
     void begin(fs::SPIFFSFS* fs);
-#elif defined(ESP8266)
+    #elif defined(ESP8266)
     void begin(FS* fs) ;                        // esp8266/esp32 flash file system
-#endif
-#if ESP32
+    #endif
+    #if ESP32
     fs::SPIFFSFS*               _fs;
-#elif defined(ESP8266)
+    #elif defined(ESP8266)
     FS*                         _fs;                        // esp8266/esp32 flash file system
-#endif
-
-#if defined(ESP32)
-// WiFiEventId_t eventID;
+    #endif
+    
+    #if defined(ESP32)
+    // WiFiEventId_t eventID;
     WiFiEventId_t onStationModeConnectedHandler
-                , onStationModeDisconnectedHandler
-                , onStationModeGotIPHandler;
+    , onStationModeDisconnectedHandler
+    , onStationModeGotIPHandler;
     #elif defined(ESP8266)
     WiFiEventHandler onStationModeConnectedHandler, onStationModeDisconnectedHandler, onStationModeGotIPHandler ;
-#endif
-
+    #endif
+    
     Ticker _secondTk;
     strWifiConfig       _wifiConfig;    //  WiFi configuration
     strApConfig         _apConfig;      // Static AP config settings
@@ -91,7 +91,7 @@ public:
     enWifiScan WifiScan;
     uint8_t connectionTimout;
     bool _secondFlag;
-
+    
     static void s_secondTick(void* arg);
     void webInit();
     String getMacAddress();
@@ -107,20 +107,21 @@ public:
     void send_connection_state_values_html(AsyncWebServerRequest *request);
     void send_network_configuration_html(AsyncWebServerRequest *request);
     void send_scanwifi(AsyncWebServerRequest *request) ;
-#if ESP32
+    #if ESP32
     void onWiFiConnected        ();
 	void onWiFiDisconnected     ();
 	void onWiFiConnectedGotIP   ();
-#elif defined(ESP8266)
+    #elif defined(ESP8266)
     void onWiFiConnected        (WiFiEventStationModeConnected      data);
 	void onWiFiDisconnected     (WiFiEventStationModeDisconnected   data);
 	void onWiFiConnectedGotIP   (WiFiEventStationModeGotIP          data);
-#endif
-protected: 
-        bool  dumb = false;
+    #endif
+    protected: 
+    bool  dumb = false;
 };
 
 extern WIFIMOD_CLASS wifiModClass;
 
 
 
+#endif // _WIFIMOD_h

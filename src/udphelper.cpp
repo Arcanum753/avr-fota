@@ -8,7 +8,7 @@
 #include <ESP8266mDNS.h>
 #include <ESPAsyncUDP.h>
 #endif
-
+#include <NtpClientLib.h>
 #include <WiFiClient.h>
 #include "udphelper.h"
 #include "eertos.h"

@@ -13,7 +13,6 @@
 
 #include <WiFiClient.h>
 #include <TimeLib.h>
-#include <NtpClientLib.h>
 #include <ESPAsyncWebServer.h>
 #if defined(ESP32)
 #include <SPIFFS.h>
@@ -38,7 +37,7 @@
 
 
 #define CONFIG_FILE_SYS             "/config_sys.json"
-#define CONFIG_FILE_NTP             "/config_ntp.json"
+
 
 //#define CONFIG_FILE_PRJ                 "/config_prj.json"
 
@@ -55,9 +54,6 @@
 
 #define AVRSERVERSTR_UPLOADBEGIN "upload begin\n"
 
-#define NTPSERVER_DFLT0 "pool.ntp.org";
-#define NTPSERVER_DFLT1 "0.ru.pool.ntp.org";
-#define NTPSERVER_DFLT2 "0.gentoo.pool.ntp.org";
 
 #define OTA_FILENAME_FIRMWARE           "firmware.bin"
 #define OTA_FILENAME_FILESYSTEM         "spiffs.bin"
@@ -78,15 +74,6 @@ typedef struct {
     String deviceSerial;
     String deviceType;
 } strSysConfig;
-
-typedef struct {
-    String ntpServerName0;
-    String ntpServerName1;
-    String ntpServerName2;
-    long updateNTPTimeEvery;
-    long timezone;
-    bool daylight;
-} strNtpConfig;
 
 
 typedef struct {
@@ -176,7 +163,7 @@ public:
     void showDBG();
 
     strSysConfig    _sysConfig; // SYS configuration
-    strNtpConfig    _ntpConfig; // NTP configuration
+    
 
     strMetarConfig    _metarConfig; // METAR configuration
 
@@ -188,16 +175,14 @@ private:
 	REST_CALLBACK_SIGNATURE;
 	POST_CALLBACK_SIGNATURE;
 
-    void ntpBegin ();
-    void ntpBeginReserv ();
-    void ntpHandler(NTPSyncEvent_t event);
+ 
 
     
     
     
     
     public:
-    int                 _ntpserveer;
+    
     strHTTPAuth         _httpAuth;
     
     protected:
@@ -250,11 +235,7 @@ public:
     bool load_config_Sys();
     bool save_configSys();
     void defaultConfigSys();
-    bool load_config_NTP();
-    
-    //ntp
-    bool save_configNTP();
-    void defaultConfigNTP();
+
     private:
 
 
@@ -284,8 +265,7 @@ private:
     void send_system_configuration_values_html(AsyncWebServerRequest *request);
     void send_device_values_html(AsyncWebServerRequest *request);
     void send_project_configuration_values_html(AsyncWebServerRequest *request);
-    void send_NTP_configuration_values_html(AsyncWebServerRequest *request);
-    void send_NTP_configuration_html(AsyncWebServerRequest *request);
+
     void send_information_values_html(AsyncWebServerRequest *request);
     void get_system_configuration_html(AsyncWebServerRequest *request);
     void get_project_configuration_html(AsyncWebServerRequest *request);
