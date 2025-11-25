@@ -55,21 +55,42 @@ class ESP_Programmer {
 #endif
 private:
     Prog_CfgFile_t _Prog_CfgFile; //  структура конфига
-    bool load_jsonDoc(const String& file,	JsonDocument& jsonDoc);
-    bool save_jsonDoc(const JsonDocument& jsonDoc,	const String& file);
-    String progType;
+    bool 	load_jsonDoc(const String& file,	JsonDocument& jsonDoc);
+    bool 	save_jsonDoc(const JsonDocument& jsonDoc,	const String& file);
+    String 	progType;
 
 public:
-    int         cfg_FileStructGet(Prog_CfgFile_t &_inStruct);
-    int         cfg_FileSaveFromWeb(Prog_CfgFile_t &_inStruct);
-    void        cfg_SetDefault();
-    bool        cfg_FileLoad();
-    bool        cfg_FileSave();
-    bool        web_GetFileList(String &str);
-    bool        web_GetDiskInfo(String &_str);
-    void        prog_ProgTypeSet(String _str);
-    String      formatBytes(size_t bytes);
-    int         prog_Programm(String _in, String _fwTime);
+	    // all about AVR;
+    String _hexfileProg;
+    String _hexfileCheck;
+    String _hexFileUploadStatus;
+
+    void		webInit();
+    int			cfg_FileStructGet(Prog_CfgFile_t &_inStruct);
+    int			cfg_FileSaveFromWeb(Prog_CfgFile_t &_inStruct);
+    void		cfg_SetDefault();
+    bool		cfg_FileLoad();
+    bool		cfg_FileSave();
+    bool		web_GetFileList(String &str);
+    bool		web_GetDiskInfo(String &_str);
+    void		prog_ProgTypeSet(String _str);
+    String		formatBytes(size_t bytes);
+    int			prog_Programm(String _in, String _fwTime);
+
+	void avrGetActualFWInfo(AsyncWebServerRequest *request);
+    void avrProg(AsyncWebServerRequest *request);
+    void avrProgStatus(AsyncWebServerRequest *request) ;
+    void avrFusesRead(AsyncWebServerRequest *request) ;
+    void avrWebFusesWrite(AsyncWebServerRequest *request) ;
+
+      // all about STM32;
+    void programmerGetFilesList (AsyncWebServerRequest *request);
+    void programmerGetDiskInfo  (AsyncWebServerRequest *request);
+    void programmerFileDelete         (AsyncWebServerRequest *request) ;
+    int  programmerFileUpload2FS( String filename, size_t index, uint8_t *data, size_t len, bool final);
+    void programmerFileUpload2FSStat(AsyncWebServerRequest *request);
+    void programmerFileUpload2Chip(AsyncWebServerRequest *request) ;
+	uint8_t hex2bin (uint8_t h) ;
 protected:
     uint8_t _in;
     //fs + hex file

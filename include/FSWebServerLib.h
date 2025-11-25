@@ -19,10 +19,9 @@
 #elif defined(ESP8266)
 #include <FS.h>
 #endif
-#include <Ticker.h>
-#include <ArduinoOTA.h>
-
 #include <ArduinoJson.h>
+#include <ArduinoOTA.h>
+#include <Ticker.h>
 
 #define CONNECTION_LED -1// Connection LED pin (Built in). -1 to disable
 #define AP_ENABLE_BUTTON -1//5 // Button pin to enable AP during startup for configuration. -1 to disable
@@ -175,17 +174,10 @@ private:
 	REST_CALLBACK_SIGNATURE;
 	POST_CALLBACK_SIGNATURE;
 
- 
+public:
+	strHTTPAuth         _httpAuth;
 
-    
-    
-    
-    
-    public:
-    
-    strHTTPAuth         _httpAuth;
-    
-    protected:
+protected:
 #if ESP32
     fs::SPIFFSFS*               _fs;
 #elif defined(ESP8266)
@@ -203,25 +195,10 @@ private:
     void sendTimeData();
     
 private:
-    // all about AVR;
-    String _hexfileProg;
-    String _hexfileCheck;
-    String _hexFileUploadStatus;
 
 
-    void avrGetActualFWInfo(AsyncWebServerRequest *request);
-    void avrProg(AsyncWebServerRequest *request);
-    void avrProgStatus(AsyncWebServerRequest *request) ;
-    void avrFusesRead(AsyncWebServerRequest *request) ;
-    void avrWebFusesWrite(AsyncWebServerRequest *request) ;
 
-      // all about STM32;
-    void programmerGetFilesList (AsyncWebServerRequest *request);
-    void programmerGetDiskInfo  (AsyncWebServerRequest *request);
-    void programmerFileDelete         (AsyncWebServerRequest *request) ;
-    int  programmerFileUpload2FS( String filename, size_t index, uint8_t *data, size_t len, bool final);
-    void programmerFileUpload2FSStat(AsyncWebServerRequest *request);
-    void programmerFileUpload2Chip(AsyncWebServerRequest *request) ;
+  
 
     // gpio
     void  gpioGetArgs(AsyncWebServerRequest *request);
@@ -236,7 +213,7 @@ public:
     bool save_configSys();
     void defaultConfigSys();
 
-    private:
+private:
 
 
 
@@ -292,7 +269,7 @@ private:
     public:
     static boolean checkRange(String Value);
     private:
-    uint8_t hex2bin (uint8_t h) ;
+    
 };
 
 extern AsyncFSWebServer ESPHTTPServer;
