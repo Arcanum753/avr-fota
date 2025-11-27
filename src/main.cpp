@@ -15,7 +15,7 @@
 #include "eertos.h"
 #include "ErriezSerialTerminal.h"
 #include "terminal.h"
-#include "prog_isp.h"
+
 #include "udphelper.h"
 
 // pin used for entering setup mode
@@ -86,9 +86,9 @@ void TaskBlink2(){
 
 void ledInit(){
     
-    pinMode(PIN_MISO, OUTPUT);
-    pinMode(PIN_MOSI, OUTPUT);
-    pinMode(PIN_SCK, OUTPUT);
-    pinMode(PIN_RST, OUTPUT);
+    // pinMode(PIN_MISO, OUTPUT);
+    // pinMode(PIN_MOSI, OUTPUT);
+    // pinMode(PIN_SCK, OUTPUT);
+    // pinMode(PIN_RST, OUTPUT);
 
 }

@@ -12,7 +12,7 @@
 #include <WiFiClient.h>
 #include "udphelper.h"
 #include "eertos.h"
-#include "prog_isp.h"
+
 #include "debug.h"
 
 IPAddress responseIp ((const unsigned char *) LOCALHOST);
@@ -155,8 +155,8 @@ String UDPBROADCAST_CLASS::udpJsonBroadcast()   {
   DEBUGLOG(__PRETTY_FUNCTION__); DEBUGLOG("\r\n");
 	String _ret = "";
 
-	AVRISP_CfgFile_t AVRISP_HexFiles_Web;
-	avrprog.cfgFileStructGet( AVRISP_HexFiles_Web);
+	// AVRISP_CfgFile_t AVRISP_HexFiles_Web;
+	// avrprog.cfgFileStructGet( AVRISP_HexFiles_Web);
 	String hostname = "http://" ;//+ _sysConfig.deviceName+"_"+_sysConfig.deviceSerial+".local";
 	String iphost 	= "http://" + WiFi.localIP().toString();
 	JsonDocument jsonDoc;

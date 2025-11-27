@@ -2,10 +2,7 @@
 #include <ArduinoJson.h>
 
 #include "FSWebServerLib.h"
-#include "prog_isp.h"
-#include "prog_swd.h"
 #include "udphelper.h"
-#include "programmer.h"
 #include "debug.h"
 #include "wifi_mod.h"
 #include "ntp_mod.h"
@@ -60,10 +57,6 @@ void flashLED(int pin, int times, int delayTime) {
 #endif
 {
 	_fs = fs;
-	avrprog.setFs(&SPIFFS); // init FS
-	espProgrammer.setFs(&SPIFFS); // init FS
-	swdprog.setFs(&SPIFFS);
-	
 	ntpModClass._ntpserveer = 0;
 	DBG_OUTPUT_PORT.begin(115200);
 	DBG_OUTPUT_PORT.print("\n\n");
@@ -107,7 +100,7 @@ void flashLED(int pin, int times, int delayTime) {
 	
 	wifiModClass.begin(&SPIFFS); // wifi load cfg and set callback hooks
 	ntpModClass.ntpBegin();
-	espProgrammer.webInit();
+	//espProgrammer.webInit();
 	//WIFI INIT start here
 	String hostName = _sysConfig.deviceName + "_" + _sysConfig.deviceSerial;
 
@@ -139,16 +132,8 @@ void flashLED(int pin, int times, int delayTime) {
 	ConfigureOTA(_httpAuth.wwwPassword.c_str());
 	// ledInit();
 
-	if (_sysConfig.deviceType ==  DEVTYPE_AVR){
-		espProgrammer.prog_ProgTypeSet(DEVTYPE_AVR);
-		DEBUGLOG("AVR Setup\n\r");
-	}	else
-	if ( _sysConfig.deviceType == DEVTYPE_SWD){
-		espProgrammer.prog_ProgTypeSet(DEVTYPE_SWD);
-		DEBUGLOG("SWD Setup\n\r");
-	} else
-	if ( _sysConfig.deviceType == DEVTYPE_GPIO){	DEBUGLOG("GPIO Setup\n\r");	}
-	espProgrammer.begin();
+
+	// espProgrammer.begin();
 
 }
 
@@ -1049,27 +1034,28 @@ void AsyncFSWebServer::send_system_configuration_values_html(AsyncWebServerReque
 // project.html vvv
 void AsyncFSWebServer::send_project_configuration_values_html(AsyncWebServerRequest *request) { // answer for "get" request
 	//DEBUGLOG(__FUNCTION__);	DEBUGLOG("\r\n");
-	Prog_CfgFile_t Prog_CfgFile;
-	int _res = espProgrammer.cfg_FileStructGet(Prog_CfgFile);
-
 	String values = "";
-	values += "progproj|"	+ 		 Prog_CfgFile.project_name			+ "|input\n";
-	values += "progmem|"	+(String)Prog_CfgFile.chip_size 	+ "|input\n";
+
+	// Prog_CfgFile_t Prog_CfgFile;
+	// int _res = espProgrammer.cfg_FileStructGet(Prog_CfgFile);
+	// values += "progproj|"	+ 		 Prog_CfgFile.project_name			+ "|input\n";
+	// values += "progmem|"	+(String)Prog_CfgFile.chip_size 	+ "|input\n";
+
 	request->send(200, "text/plain", values);
 }
 
 void AsyncFSWebServer::get_project_configuration_html(AsyncWebServerRequest *request) {
 	if (!checkAuth(request)) {		return request->requestAuthentication(); 	}
-	Prog_CfgFile_t Prog_CfgFile;
+	// Prog_CfgFile_t Prog_CfgFile;
 	if (request->args() > 0) { // Save Settings
-		for (uint8_t i = 0; i < request->args(); i++) {
-			DEBUGLOG("Arg %d: %s %s\r\n", i, request->argName(i).c_str() ,request->arg(i).c_str() );
-			// if (request->argName(i) == "devicesign") 		{ AVRISP_HexFiles_Web.avr_signature = urldecode(request->arg(i));	continue; }
-			if (request->argName(i) == "progproj") 		{ Prog_CfgFile.project_name = urldecode(request->arg(i));	continue; }
-			if (request->argName(i) == "progmem")  		{ Prog_CfgFile.chip_size = request->arg(i).toInt();			continue; }
-		}
-		request->send_P(200, "text/html", Page_GeneralPrj);
-		espProgrammer.cfg_FileSaveFromWeb(Prog_CfgFile);
+		// for (uint8_t i = 0; i < request->args(); i++) {
+		// 	DEBUGLOG("Arg %d: %s %s\r\n", i, request->argName(i).c_str() ,request->arg(i).c_str() );
+		// 	// if (request->argName(i) == "devicesign") 		{ AVRISP_HexFiles_Web.avr_signature = urldecode(request->arg(i));	continue; }
+		// 	if (request->argName(i) == "progproj") 		{ Prog_CfgFile.project_name = urldecode(request->arg(i));	continue; }
+		// 	if (request->argName(i) == "progmem")  		{ Prog_CfgFile.chip_size = request->arg(i).toInt();			continue; }
+		// }
+		// request->send_P(200, "text/html", Page_GeneralPrj);
+		// espProgrammer.cfg_FileSaveFromWeb(Prog_CfgFile);
 	}
 	else {	handleFileRead(request->url(), request);	}
 	DEBUGLOG(__PRETTY_FUNCTION__);	DEBUGLOG("\r\n");
@@ -1120,23 +1106,23 @@ void  AsyncFSWebServer::gpioGetArgs(AsyncWebServerRequest *request) {
 			}
 			if ( _sysConfig.deviceType == DEVTYPE_GPIO){
 				if (request->argName(i) == "led1")	{
-					if (urldecode(request->arg(i)) == "on")  {	digitalWrite(PIN_MISO, HIGH);	}
-					if (urldecode(request->arg(i)) == "off") {	digitalWrite(PIN_MISO, LOW);	}
+					// if (urldecode(request->arg(i)) == "on")  {	digitalWrite(PIN_MISO, HIGH);	}
+					// if (urldecode(request->arg(i)) == "off") {	digitalWrite(PIN_MISO, LOW);	}
 					continue;
 				}
 				if (request->argName(i) == "led2")	{
-					if (urldecode(request->arg(i)) == "on")  {	digitalWrite(PIN_MOSI, HIGH);	}
-					if (urldecode(request->arg(i)) == "off") {	digitalWrite(PIN_MOSI, LOW);	}
+					// if (urldecode(request->arg(i)) == "on")  {	digitalWrite(PIN_MOSI, HIGH);	}
+					// if (urldecode(request->arg(i)) == "off") {	digitalWrite(PIN_MOSI, LOW);	}
 					continue;
 				}
 				if (request->argName(i) == "led3")	{
-					if (urldecode(request->arg(i)) == "on")  {	digitalWrite(PIN_SCK, HIGH);	}
-					if (urldecode(request->arg(i)) == "off") {	digitalWrite(PIN_SCK, LOW);		}
+					// if (urldecode(request->arg(i)) == "on")  {	digitalWrite(PIN_SCK, HIGH);	}
+					// if (urldecode(request->arg(i)) == "off") {	digitalWrite(PIN_SCK, LOW);		}
 					continue;
 				}
 				if (request->argName(i) == "led4")	{
-					if (urldecode(request->arg(i)) == "on")  {	digitalWrite(PIN_RST, HIGH);	}
-					if (urldecode(request->arg(i)) == "off") {	digitalWrite(PIN_RST, LOW);	}
+					// if (urldecode(request->arg(i)) == "on")  {	digitalWrite(PIN_RST, HIGH);	}
+					// if (urldecode(request->arg(i)) == "off") {	digitalWrite(PIN_RST, LOW);	}
 					continue;
 				}
 			}
