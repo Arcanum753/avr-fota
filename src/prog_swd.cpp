@@ -1,5 +1,7 @@
+#include "main.h"
+#ifdef  PROGTYPE_SWD
+
 #include "Arduino.h"
-#include "swd.h"
 #include "FSWebServerLib.h"
 #include "debug_cm.h"
 #include "debug.h"
@@ -16,6 +18,7 @@ extern "C" {
 }
 #endif
 #include "prog_swd.h"
+#include "swd.h"
 
 
 ESP_PROGSWD swdprog;
@@ -278,7 +281,7 @@ bool ESP_PROGSWD::stm32Fx_write_flash_16bit(uint32_t address, uint32_t value, bo
 
 
 
-
+#endif
 
 
 

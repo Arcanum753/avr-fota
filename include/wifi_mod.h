@@ -2,9 +2,6 @@
 #ifndef _WIFIMOD_h
 #define _WIFIMOD_h
 
-#include <WiFiClient.h>
-#include <TimeLib.h>
-
 
 #define WIFI_CONFIG_FILE_NAME       "config_wifi"
 #define WIFI_CONFIGS    4

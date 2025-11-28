@@ -17,12 +17,8 @@
 NTPMOD_CLASS ntpModClass(false);
 
 
-NTPMOD_CLASS :: NTPMOD_CLASS (bool _in) {
-	 dumb = _in;
- }
+NTPMOD_CLASS :: NTPMOD_CLASS (bool _in) { dumb = _in; }
 
-
- 
 bool NTPMOD_CLASS::load_config_NTP() {
 	JsonDocument jsonDoc;
 	if (!ESPHTTPServer.load_jsonDoc(CONFIG_FILE_NTP, jsonDoc)){
@@ -41,9 +37,7 @@ bool NTPMOD_CLASS::load_config_NTP() {
 	return true;
 }
 
-
-
- bool NTPMOD_CLASS::save_configNTP() {
+bool NTPMOD_CLASS::save_configNTP() {
 	DEBUGLOG("Save config NTP \r\n");
 	JsonDocument jsonDoc;
 	jsonDoc["ntp0"] 		= _ntpConfig.ntpServerName0;
@@ -55,7 +49,6 @@ bool NTPMOD_CLASS::load_config_NTP() {
 	return ESPHTTPServer.save_jsonDoc(jsonDoc, CONFIG_FILE_NTP);
 }
 
-
 void NTPMOD_CLASS::defaultConfigNTP() {
 	// DEFAULT CONFIG NTP
 	_ntpConfig.ntpServerName0 = NTPSERVER_DFLT0;
@@ -66,9 +59,6 @@ void NTPMOD_CLASS::defaultConfigNTP() {
 	_ntpConfig.daylight = 1;
 	save_configNTP();
 }
-
-
-
 
 void NTPMOD_CLASS::ntpHandler(NTPSyncEvent_t event)	{
 	int _ntpevent = static_cast<int>(event);
@@ -97,7 +87,6 @@ void NTPMOD_CLASS::ntpBeginReserv (){
 
 void NTPMOD_CLASS::ntpBegin (){
     if (!load_config_NTP()) { defaultConfigNTP();  	}
-
 	if (_ntpConfig.updateNTPTimeEvery > 0) { // Enable NTP sync
         NTP.setInterval (_ntpConfig.updateNTPTimeEvery * MINUTES);
         NTP.setNTPTimeout (NTP_TIMEOUT);

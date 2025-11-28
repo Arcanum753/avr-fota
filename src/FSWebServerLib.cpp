@@ -9,11 +9,12 @@
 #if defined(ESP32)
 #include <SPIFFS.h>
 #include <esp32-hal-gpio.h>
+#include "module_prog_swd.h"
 
 #elif defined(ESP8266)
 #include <FS.h>
 #endif
-
+#include "common.h"
 
 
 AsyncFSWebServer ESPHTTPServer(80);
@@ -27,14 +28,6 @@ AsyncFSWebServer::AsyncFSWebServer(uint16_t port) : AsyncWebServer(port) {}
 
 
 
-String formatBytes(size_t bytes) {
-	if (bytes < 1024) {		return String(bytes) + "B";	}
-	else
-		if (bytes < (1024 * 1024))			{	return String(bytes / 1024.0) + "KB";	}
-	else
-		if (bytes < (1024 * 1024 * 1024))	{	return String(bytes / 1024.0 / 1024.0) + "MB";	}
-	else	{	return String(bytes / 1024.0 / 1024.0 / 1024.0) + "GB";	}
-}
 
 void flashLED(int pin, int times, int delayTime) {
 	int oldState = digitalRead(pin);
@@ -100,7 +93,7 @@ void flashLED(int pin, int times, int delayTime) {
 	
 	wifiModClass.begin(&SPIFFS); // wifi load cfg and set callback hooks
 	ntpModClass.ntpBegin();
-	//espProgrammer.webInit();
+	
 	//WIFI INIT start here
 	String hostName = _sysConfig.deviceName + "_" + _sysConfig.deviceSerial;
 
@@ -125,6 +118,11 @@ void flashLED(int pin, int times, int delayTime) {
 	serverInit(); // Configure and start Web server
 	wifiModClass.webInit();
 	ntpModClass.webInit();
+	#ifdef  PROGTYPE_SWD 
+	progSwd.setFs(&SPIFFS);
+	progSwd.begin();
+	progSwd.web_Init();
+	#endif
 	String mdnsName = _sysConfig.deviceName + "_" + _sysConfig.deviceSerial;
 	MDNS.begin(mdnsName.c_str()); // I've not got this to work. Need some investigation.
 	MDNS.addService("http", "tcp", 80);
@@ -133,7 +131,7 @@ void flashLED(int pin, int times, int delayTime) {
 	// ledInit();
 
 
-	// espProgrammer.begin();
+	// progSwd.begin();
 
 }
 
@@ -156,8 +154,7 @@ bool AsyncFSWebServer::load_config_Sys() {
 }
 
 
-bool AsyncFSWebServer::load_jsonDoc(const String& file,
-									JsonDocument& jsonDoc){
+bool AsyncFSWebServer::load_jsonDoc(const String& file, JsonDocument& jsonDoc){
 	File configFile = _fs->open(file, "r");
 
 	if (!configFile) {
@@ -171,9 +168,7 @@ bool AsyncFSWebServer::load_jsonDoc(const String& file,
 	return false;
 	}*/
 	char * buf = (char *) malloc(size);
-	if ( buf == NULL){
-		return false;
-	}
+	if ( buf == NULL){ return false;	}
 	DEBUGLOGFH("File: %s, size: %d\r\n", file.c_str(), size);
 	configFile.readBytes(buf, size);
 	configFile.close();
@@ -183,12 +178,6 @@ bool AsyncFSWebServer::load_jsonDoc(const String& file,
 		DEBUGLOG("Failed to parse config file. Error: %s\r\n", error.c_str());
 		return false;
 	}
-
-#ifndef RELEASE
-	// String temp;
-	// serializeJsonPretty(jsonDoc, temp);
-	// Serial.println(temp);
-#endif
 	return true;
 }
 
@@ -1036,8 +1025,8 @@ void AsyncFSWebServer::send_project_configuration_values_html(AsyncWebServerRequ
 	//DEBUGLOG(__FUNCTION__);	DEBUGLOG("\r\n");
 	String values = "";
 
-	// Prog_CfgFile_t Prog_CfgFile;
-	// int _res = espProgrammer.cfg_FileStructGet(Prog_CfgFile);
+	// CfgFile_ProgSwd_t Prog_CfgFile;
+	// int _res = progSwd.cfg_FileStructGet(Prog_CfgFile);
 	// values += "progproj|"	+ 		 Prog_CfgFile.project_name			+ "|input\n";
 	// values += "progmem|"	+(String)Prog_CfgFile.chip_size 	+ "|input\n";
 
@@ -1046,7 +1035,7 @@ void AsyncFSWebServer::send_project_configuration_values_html(AsyncWebServerRequ
 
 void AsyncFSWebServer::get_project_configuration_html(AsyncWebServerRequest *request) {
 	if (!checkAuth(request)) {		return request->requestAuthentication(); 	}
-	// Prog_CfgFile_t Prog_CfgFile;
+	// CfgFile_ProgSwd_t Prog_CfgFile;
 	if (request->args() > 0) { // Save Settings
 		// for (uint8_t i = 0; i < request->args(); i++) {
 		// 	DEBUGLOG("Arg %d: %s %s\r\n", i, request->argName(i).c_str() ,request->arg(i).c_str() );
@@ -1055,7 +1044,7 @@ void AsyncFSWebServer::get_project_configuration_html(AsyncWebServerRequest *req
 		// 	if (request->argName(i) == "progmem")  		{ Prog_CfgFile.chip_size = request->arg(i).toInt();			continue; }
 		// }
 		// request->send_P(200, "text/html", Page_GeneralPrj);
-		// espProgrammer.cfg_FileSaveFromWeb(Prog_CfgFile);
+		// progSwd.cfg_FileSaveFromWeb(Prog_CfgFile);
 	}
 	else {	handleFileRead(request->url(), request);	}
 	DEBUGLOG(__PRETTY_FUNCTION__);	DEBUGLOG("\r\n");

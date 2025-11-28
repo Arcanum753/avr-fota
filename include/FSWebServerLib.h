@@ -3,11 +3,7 @@
 #ifndef _FSWEBSERVERLIB_h
 #define _FSWEBSERVERLIB_h
 
-#if defined(ARDUINO) && ARDUINO >= 100
-    #include "Arduino.h"
-#else
-    #include "WProgram.h"
-#endif
+
 
 #include "main.h"
 
@@ -36,10 +32,6 @@
 
 
 #define CONFIG_FILE_SYS             "/config_sys.json"
-
-
-//#define CONFIG_FILE_PRJ                 "/config_prj.json"
-
 
 
 #define USER_CONFIG_FILE            "/userconfig.json"
