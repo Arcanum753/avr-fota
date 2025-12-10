@@ -17,8 +17,8 @@
 #define LOCALHOST "127.0.0.1"
 #define UDP_PORT  40001
 
-// #define PROGTYPE_ISP
-#define PROGTYPE_SWD
+#define PROGTYPE_ISP
+// #define PROGTYPE_SWD
 
 #if defined(ESP32)
 #include <WiFi.h>
@@ -32,8 +32,5 @@
 
 //#define RELEASE  // Comment to enable debug output
 
-
-
-void loop_user();  
+void loop_user();
 void ledInit();
-    

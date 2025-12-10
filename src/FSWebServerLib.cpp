@@ -6,10 +6,18 @@
 #include "debug.h"
 #include "wifi_mod.h"
 #include "ntp_mod.h"
+
 #if defined(ESP32)
 #include <SPIFFS.h>
 #include <esp32-hal-gpio.h>
+
+#ifdef PROGTYPE_ISP
+#include "module_prog_isp.h"
+#endif
+
+#ifdef PROGTYPE_SWD
 #include "module_prog_swd.h"
+#endif
 
 #elif defined(ESP8266)
 #include <FS.h>
@@ -90,10 +98,10 @@ void flashLED(int pin, int times, int delayTime) {
 #endif // RELEASE
 	loadHTTPAuth();
 	if (!load_config_Sys()) { defaultConfigSys();  	}
-	
+
 	wifiModClass.begin(&SPIFFS); // wifi load cfg and set callback hooks
 	ntpModClass.ntpBegin();
-	
+
 	//WIFI INIT start here
 	String hostName = _sysConfig.deviceName + "_" + _sysConfig.deviceSerial;
 
@@ -118,11 +126,11 @@ void flashLED(int pin, int times, int delayTime) {
 	serverInit(); // Configure and start Web server
 	wifiModClass.webInit();
 	ntpModClass.webInit();
-	#ifdef  PROGTYPE_SWD 
+#ifdef PROGTYPE_SWD
 	progSwd.setFs(&SPIFFS);
 	progSwd.begin();
 	progSwd.web_Init();
-	#endif
+#endif
 	String mdnsName = _sysConfig.deviceName + "_" + _sysConfig.deviceSerial;
 	MDNS.begin(mdnsName.c_str()); // I've not got this to work. Need some investigation.
 	MDNS.addService("http", "tcp", 80);

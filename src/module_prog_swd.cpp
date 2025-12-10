@@ -1,5 +1,5 @@
 #include "main.h"
-#ifdef  PROGTYPE_SWD 
+#ifdef PROGTYPE_SWD
 
 #include <cstddef>
 #include <Arduino.h>
@@ -35,7 +35,7 @@ bool Class_ProgSwd::begin (){
     DEBUGLOGISP(__PRETTY_FUNCTION__);	DEBUGLOGISP("\r\n");
     cfg_SetDefault();
     if (cfg_FileLoad() == false) {	cfg_FileSave();	}
-	swdprog.stm32Fx_begin();	
+	swdprog.stm32Fx_begin();
 	//TODO return init result
     return true;
 }
@@ -189,11 +189,11 @@ bool Class_ProgSwd::web_GetFilesListExe(String &_str)	{
         fname = files.name() ;
         pos = fname.find_last_of(FILE_TYPE_COMMA);
         ftype = fname.substr(pos + 1);
-        if (	
-			//	(ftype == FILE_TYPE_HEX) || //TODO HEX file viewing when we will di hexfile to swd
-				(ftype == FILE_TYPE_BINARY) || 
-				(ftype == FILE_TYPE_BIN)  
-			) {
+		if (
+			//	(ftype == FILE_TYPE_HEX) || //TODO HEX file viewing when we will
+			//di hexfile to swd
+			(ftype == FILE_TYPE_BINARY) || (ftype == FILE_TYPE_BIN))
+		{
 			size_t fsize = files.size();
 			if (i) json += ",";
 			json += "{";
@@ -206,8 +206,8 @@ bool Class_ProgSwd::web_GetFilesListExe(String &_str)	{
 			json += ",\"progdate\":\"";									json += "\"";
 			json += "}";
 			i++;
-        }
-        files = root.openNextFile();
+		}
+		files = root.openNextFile();
     }
 #endif
 
@@ -318,7 +318,7 @@ void Class_ProgSwd::web_FileUpload2Chip(AsyncWebServerRequest *request) {
 	request->send(200, "text/plain", "");
 
 	progSwd.prog_Programm(path,  NTP.getTimeDateString());
-	
+
 	//здесь уже выход из программирования
 }
 
