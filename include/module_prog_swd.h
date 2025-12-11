@@ -20,35 +20,21 @@
 
 
 // TODO навести тут порядок с кодами ошибок
-typedef enum progerr_e
-{
+typedef enum progerr_e  {
 	ERROR_OK = 0 // ошибок нет
-	,
-	ERR_SIGN = -1 // не совпадает сигнатура чипа
-	,
-	ERR_BUSY = -2 // программатор занят
-	,
-	ERR_FLASH = -3 // идёт прошивка
-	,
-	ERR_ERASE = -4 // идёт стирание
-	,
-	ERR_HEX = -5 // что-то с хекс файлом
-	,
-	ERR_CFG = -6 // что-то с конфигфайлом
-	,
-	ERR_RNM = -7 // TODO вспомнить бы год спустя что это
-	,
-	ERR_OPENFILE = -8 // файл прошивки не открывается.
-	,
-	ERR_INCORRECTFILE = -9 // он неправильный
-	,
-	ERR_NOFILE = -10 // наверное его нет
-	,
-	ERR_HEXCRC = -11 // что-то с CRC
-	,
-	ERR_HEXMEMOVER = -12 // FIXME
-	,
-	ERR_HEXADDR = -13 // FIXME
+	,ERR_SIGN = -1 // не совпадает сигнатура чипа
+	,ERR_BUSY = -2 // программатор занят
+	,ERR_FLASH = -3 // идёт прошивка
+	,ERR_ERASE = -4 // идёт стирание
+	,ERR_HEX = -5 // что-то с хекс файлом
+	,ERR_CFG = -6 // что-то с конфигфайлом
+	,ERR_RNM = -7 // TODO вспомнить бы год спустя что это
+	,ERR_OPENFILE = -8 // файл прошивки не открывается.
+	,ERR_INCORRECTFILE = -9 // он неправильный
+	,ERR_NOFILE = -10 // наверное его нет
+	,ERR_HEXCRC = -11 // что-то с CRC
+	,ERR_HEXMEMOVER = -12 // FIXME
+	,ERR_HEXADDR = -13 // FIXME
 } progerr_t;
 
 // главная структура настроек программатора.
@@ -72,12 +58,11 @@ private:
 
 
 public:
-	    // all about AVR;
     String _hexfileProg;
     String _hexfileCheck;
     String _hexFileUploadStatus;
 
-    void		web_Init();
+    // cfg
     int			cfg_FileStructGet(CfgFile_ProgSwd_t &_inStruct);
     int			cfg_FileSaveFromWeb(CfgFile_ProgSwd_t &_inStruct);
     void		cfg_SetDefault();
@@ -89,12 +74,14 @@ public:
 
 
     // all about WEB page;
-    void web_GetFilesList (AsyncWebServerRequest *request);
-    void web_GetDiskInfoExe  (AsyncWebServerRequest *request);
-    void web_FileDelete         (AsyncWebServerRequest *request) ;
-    int  web_FileUpload2FS( String filename, size_t index, uint8_t *data, size_t len, bool final);
-    void web_FileUpload2FS_Status(AsyncWebServerRequest *request);
-    void web_FileUpload2Chip(AsyncWebServerRequest *request) ;
+    void    web_Init();
+    void    web_GetFilesList (AsyncWebServerRequest *request);
+    void    web_GetDiskInfoExe  (AsyncWebServerRequest *request);
+    void    web_FileDelete         (AsyncWebServerRequest *request) ;
+    int     web_FileUpload2FS( String filename, size_t index, uint8_t *data, size_t len, bool final);
+    // programming
+    void    web_FileUpload2FS_Status(AsyncWebServerRequest *request);
+    void    web_FileUpload2Chip(AsyncWebServerRequest *request) ;
 protected:
     uint8_t _in;
     //fs + hex file

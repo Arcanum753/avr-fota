@@ -131,6 +131,13 @@ void flashLED(int pin, int times, int delayTime) {
 	progSwd.begin();
 	progSwd.web_Init();
 #endif
+
+#ifdef PROGTYPE_ISP
+	progIsp.setFs(&SPIFFS);
+	progIsp.begin();
+	progIsp.web_Init();
+#endif
+
 	String mdnsName = _sysConfig.deviceName + "_" + _sysConfig.deviceSerial;
 	MDNS.begin(mdnsName.c_str()); // I've not got this to work. Need some investigation.
 	MDNS.addService("http", "tcp", 80);
@@ -1246,8 +1253,6 @@ void AsyncFSWebServer::serverInit() {
 	});
 	//project.html ^^^
 
-
-//avr.html ^^^
 //gpio.html vvv
 	on("/gpio", HTTP_POST, [this](AsyncWebServerRequest *request) {
 		if (!this->checkAuth(request)) {	return request->requestAuthentication(); };
