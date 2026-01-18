@@ -16,7 +16,7 @@
 			<tr>	<td>Device ESP firmware version</td>	          <td><span id="versionapp"> </span></td></tr>
 			<tr>	<td>Device serial number</td>	<td> <span id="deviceserial">  </span> </td></tr>
 			<tr>	<td colspan="2"><span><hr></span></td></tr>		
-			<tr>	<td><strong>WiFi Connection state:</strong></td>	<td><div id="connectionstate">N/A</div>	</td></tr>
+			<tr>	<td><strong>WiFi Connection state:</strong></td>	<td><div  id="connectionstate">N/A</div>	</td></tr>
 			<tr>	<td>SSID:</td>										<td><span id="x_ssid">	</span> </td></tr>
 			<tr>	<td>IP:</td>										<td><span id="x_ip">	</span></td></tr>
 			<tr>	<td>Netmask:</td>									<td><span id="x_netmask"></span></td></tr>
@@ -47,9 +47,9 @@
 	<script>
 		window.onload = function() {
 			setTimeout(() => {
-				ApplyCVT("/admin/infovalues");
-				ApplyCVT("/admin/connectionstate");
-				ApplyCVT("/system/info");
+				ApplyCVT("/system/version");
+				ApplyCVT("/system/infovalues");
+				ApplyCVT("/wifi/connectionstate");
 				
 			}, 250);
 			

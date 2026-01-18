@@ -559,21 +559,15 @@ bool AsyncFSWebServer::handleFileRead(String path, AsyncWebServerRequest *reques
 }
 
 void AsyncFSWebServer::handleFileCreate(AsyncWebServerRequest *request) {
-	if (!checkAuth(request))
-		return request->requestAuthentication();
-	if (request->args() == 0)
-		return request->send(500, "text/plain", "BAD ARGS");
+	
+	if (request->args() == 0)		{	return request->send(500, "text/plain", "BAD ARGS");}
 	String path = request->arg(0U);
 	DEBUGLOG("handleFileCreate: %s\r\n", path.c_str());
-	if (path == "/")
-		return request->send(500, "text/plain", "BAD PATH");
-	if (_fs->exists(path))
-		return request->send(500, "text/plain", "FILE EXISTS");
+	if (path == "/")			{	return request->send(500, "text/plain", "BAD PATH");	}
+	if (_fs->exists(path))		{	return request->send(500, "text/plain", "FILE EXISTS");	}
 	File file = _fs->open(path, "w");
-	if (file)
-		file.close();
-	else
-		return request->send(500, "text/plain", "CREATE FAILED");
+	if (file)	{	file.close();	}
+	else		{	return request->send(500, "text/plain", "CREATE FAILED");	}
 	request->send(200, "text/plain", "");
 	path = String(); // Remove? Useless statement?
 }
@@ -582,20 +576,12 @@ void AsyncFSWebServer::handleFileCreate(AsyncWebServerRequest *request) {
 // удаление файла
 
 void AsyncFSWebServer::handleFileDelete(AsyncWebServerRequest *request) {
-	if (!checkAuth(request)) {
-		return request->requestAuthentication();
-	}
-	if (request->args() == 0) 	{
-		return request->send(500, "text/plain", "BAD ARGS");
-	}
+	
+	if (request->args() == 0) 	{	return request->send(500, "text/plain", "BAD ARGS");	}
 	String path = request->arg(0U);
 	DEBUGLOG("handleFileDelete: %s\r\n", path.c_str());
-	if (path == "/") {
-		return request->send(500, "text/plain", "BAD PATH");
-	}
-	if (!_fs->exists(path)) {
-		return request->send(404, "text/plain", "FileNotFound");
-	}
+	if (path == "/") 		{	return request->send(500, "text/plain", "BAD PATH");	}
+	if (!_fs->exists(path)) {	return request->send(404, "text/plain", "FileNotFound");	}
 	_fs->remove(path);
 	request->send(200, "text/plain", "");
 }
@@ -673,21 +659,22 @@ void AsyncFSWebServer::handleFileUpload(AsyncWebServerRequest *request, String f
 
 
 void AsyncFSWebServer::send_information_values_html(AsyncWebServerRequest *request) {
+	DEBUGLOG(__FUNCTION__);	DEBUGLOG("\r\n");
 	String values = "";
-	values += "x_ssid|" + (String)WiFi.SSID() + "|div\n";
-	values += "x_ip|" + (String)WiFi.localIP()[0] + "." + (String)WiFi.localIP()[1] + "." + (String)WiFi.localIP()[2] + "." + (String)WiFi.localIP()[3] + "|div\n";
-	values += "x_gateway|" + (String)WiFi.gatewayIP()[0] + "." + (String)WiFi.gatewayIP()[1] + "." + (String)WiFi.gatewayIP()[2] + "." + (String)WiFi.gatewayIP()[3] + "|div\n";
-	values += "x_netmask|" + (String)WiFi.subnetMask()[0] + "." + (String)WiFi.subnetMask()[1] + "." + (String)WiFi.subnetMask()[2] + "." + (String)WiFi.subnetMask()[3] + "|div\n";
-	values += "x_mac|" + wifiModClass.getMacAddress() + "|div\n";
-	values += "x_dns|" + (String)WiFi.dnsIP()[0] + "." + (String)WiFi.dnsIP()[1] + "." + (String)WiFi.dnsIP()[2] + "." + (String)WiFi.dnsIP()[3] + "|div\n";
+	values += "x_ssid|" 	+ (String)WiFi.SSID() + "|div\n";
+	values += "x_ip|" 		+ (String)WiFi.localIP()[0] + "." + (String)WiFi.localIP()[1] + "." + (String)WiFi.localIP()[2] + "." + (String)WiFi.localIP()[3] + "|div\n";
+	values += "x_gateway|" 	+ (String)WiFi.gatewayIP()[0] + "." + (String)WiFi.gatewayIP()[1] + "." + (String)WiFi.gatewayIP()[2] + "." + (String)WiFi.gatewayIP()[3] + "|div\n";
+	values += "x_netmask|" 	+ (String)WiFi.subnetMask()[0] + "." + (String)WiFi.subnetMask()[1] + "." + (String)WiFi.subnetMask()[2] + "." + (String)WiFi.subnetMask()[3] + "|div\n";
+	values += "x_mac|" 		+ wifiModClass.getMacAddress() + "|div\n";
+	values += "x_dns|" 		+ (String)WiFi.dnsIP()[0] + "." + (String)WiFi.dnsIP()[1] + "." + (String)WiFi.dnsIP()[2] + "." + (String)WiFi.dnsIP()[3] + "|div\n";
 	values += "x_ntp_sync|" + (String)NTP.getTimeDateString(NTP.getLastNTPSync()) + "|div\n";
 	values += "x_ntp_time|" + (String)NTP.getTimeStr() + "|div\n";
 	values += "x_ntp_date|" + (String)NTP.getDateStr() + "|div\n";
-	values += "x_ntp_adr|" + (String)NTP.getNtpServerName() + "|div\n";
-	values += "x_uptime|" + (String)NTP.getUptimeString() + "|div\n";
+	values += "x_ntp_adr|" 	+ (String)NTP.getNtpServerName() + "|div\n";
+	values += "x_uptime|" 	+ (String)NTP.getUptimeString() + "|div\n";
 	values += "x_last_boot|" + NTP.getTimeDateString(NTP.getLastBootTime()) + "|div\n";
 	#ifdef ESP32
-	values += "x_chipid|" + (String)ESP.getChipModel() + "|div\n";
+	values += "x_chipid|" 	+ (String)ESP.getChipModel() + "|div\n";
 	#elif defined(ESP8266)
 	values += "x_chipid|" + (String)ESP.getChipId() + "|div\n";
 	#endif
@@ -697,19 +684,17 @@ void AsyncFSWebServer::send_information_values_html(AsyncWebServerRequest *reque
 	request->send(200, "text/plain", values);
 	//delete &values;
 	values = "";
-	// DEBUGLOG(__FUNCTION__);	DEBUGLOG("\r\n");
 
 }
 
 void AsyncFSWebServer::sendTimeData() {
+	DEBUGLOG(__PRETTY_FUNCTION__);	DEBUGLOG("\r\n");
 	DEBUGLOG("sendTimeData %s\r\n", NTP.getTimeDateString().c_str());
-	DEBUGLOG(__PRETTY_FUNCTION__);
-	DEBUGLOG("\r\n");
 }
 
 
 void AsyncFSWebServer::restart_esp() {
-	// DEBUGLOG(__FUNCTION__);	DEBUGLOG("\r\n");
+	DEBUGLOG(__FUNCTION__);	DEBUGLOG("\r\n");
 	wifiModClass.wifiStatus = FS_STAT_RESET;
 	WiFi.disconnect(true, false);
 	_fs->end();
@@ -718,6 +703,7 @@ void AsyncFSWebServer::restart_esp() {
 }
 
 void AsyncFSWebServer::send_wwwauth_configuration_values_html(AsyncWebServerRequest *request) {
+	DEBUGLOG(__FUNCTION__);	DEBUGLOG("\r\n");
 	String values = "";
 	values += "wwwauth|" + (String)(_httpAuth.auth ? "checked" : "") + "|chk\n";
 	values += "wwwuser|" + (String)_httpAuth.wwwUsername + "|input\n";
@@ -725,20 +711,16 @@ void AsyncFSWebServer::send_wwwauth_configuration_values_html(AsyncWebServerRequ
 
 	request->send(200, "text/plain", values);
 
-	// DEBUGLOG(__FUNCTION__);	DEBUGLOG("\r\n");
 }
 
 void
-AsyncFSWebServer::set_wwwauth_configuration(AsyncWebServerRequest *request)
-{
+AsyncFSWebServer::set_wwwauth_configuration(AsyncWebServerRequest *request)	{
 	DEBUGLOG(__PRETTY_FUNCTION__);	DEBUGLOG("\r\n");
 	DEBUGLOG("%s %d\n", __FUNCTION__, request->args());
-	if (request->args() > 0)
-	{
+	if (request->args() > 0)	{
 		bool save	   = false;
 		_httpAuth.auth = false;
-		for (uint8_t i = 0; i < request->args(); i++)
-		{
+		for (uint8_t i = 0; i < request->args(); i++)		{
 			if (request->argName(i) == "authconf") {
 				save = true;
 				continue;
@@ -756,20 +738,16 @@ AsyncFSWebServer::set_wwwauth_configuration(AsyncWebServerRequest *request)
 				continue;
 			}
 		}
-
-		if (!_httpAuth.auth)
-		{
+		if (!_httpAuth.auth)		{
 			_httpAuth.wwwUsername = "";
 			_httpAuth.wwwPassword = "";
 		}
 
-		if (save)
-		{
+		if (save)		{
 			request->send_P(200, "text/html", Page_GeneralSys);
 			saveHTTPAuth();
 		}
 	}
-	//DEBUGLOG(__PRETTY_FUNCTION__);	DEBUGLOG("\r\n");
 }
 
 bool AsyncFSWebServer::saveHTTPAuth() {
@@ -807,6 +785,7 @@ void AsyncFSWebServer::prepareSizesForUpdate (){
 }
 
 void AsyncFSWebServer::send_update_firmware_values_html(AsyncWebServerRequest *request) {
+	DEBUGLOG(__FUNCTION__);	DEBUGLOG("\r\n");
 	String values = "";
 	String updateOKstr = "";
 	String updateFiletype = "";
@@ -820,32 +799,26 @@ void AsyncFSWebServer::send_update_firmware_values_html(AsyncWebServerRequest *r
 		typeOTAfile = FILESYSTEM;
 		updateFiletype = OTA_FILESYSTEM;
 	}
-	if (typeOTAfile == UNSUPPORTED) {
-		updateFiletype = OTA_UNSUPPORTED;
-	}
+	if (typeOTAfile == UNSUPPORTED) {	updateFiletype = OTA_UNSUPPORTED;	}
 
 	bool updateOK = maxSketchSpace < freeSketchSpace;
-	if (updateOK == true) {
-		updateOKstr = "OK" ;
-	} else {
-		updateOKstr = "ERROR" ;
-	}
+	if (updateOK == true) {	updateOKstr = "OK" ; } 
+		else {	updateOKstr = "ERROR" ;	}
 
 	DEBUGLOG("--updateOK: %s\r\n", updateOKstr);
 	DEBUGLOG("--FreeSketchSpace: %d\r\n", freeSketchSpace);
 	DEBUGLOG("--MaxSketchSpace: %d\r\n", maxSketchSpace);
 	DEBUGLOG("--UpdateFiletype: %d\r\n", updateFiletype);
 
-
 	values += "upd|" 			+ updateOKstr 				+ "|div\n";
 	values += "updSizeFree|" 	+ (String)freeSketchSpace 	+ "|div\n";
 	values += "updSizeMax|" 	+ (String)maxSketchSpace  	+ "|div\n";
 	values += "updFileType|" 	+ updateFiletype		  	+ "|div\n";
 	request->send(200, "text/plain", values);
-	//DEBUGLOG(__FUNCTION__);	DEBUGLOG("\r\n");
 }
 
 void AsyncFSWebServer::setUpdateMD5(AsyncWebServerRequest *request) {
+	DEBUGLOG(__FUNCTION__);	DEBUGLOG("\r\n");
 	_browserFileMD5 = "";
 	DEBUGLOG("Arg number: %d\r\n", request->args());
 	if (request->args() > 0)  {// Read hash
@@ -867,12 +840,12 @@ void AsyncFSWebServer::setUpdateMD5(AsyncWebServerRequest *request) {
 				continue;
 			}
 		}
-
 		request->send(200, "text/html", "OK --> MD5: " + _browserFileMD5);
 	}
 
 }
 void AsyncFSWebServer::updateFileExecute (AsyncWebServerRequest *request) {
+	DEBUGLOG(__FUNCTION__);	DEBUGLOG("\r\n");
 	AsyncWebServerResponse *response = request->beginResponse(200, "text/html", (Update.hasError()) ? "FAIL" : "<META http-equiv=\"refresh\" content=\"15;URL=/update\">Update correct. Restarting...");
 	response->addHeader("Connection", "close");
 	response->addHeader("Access-Control-Allow-Origin", "*");
@@ -1018,7 +991,7 @@ void AsyncFSWebServer::post_rest_config(AsyncWebServerRequest *request) {
 // sam arcanum web pages functions VVV
 
 // *.html vvv
-void AsyncFSWebServer::send_system_configuration_values_html(AsyncWebServerRequest *request) { // answer for "get" request
+void AsyncFSWebServer::send_system_version_values_html(AsyncWebServerRequest *request) { // answer for "get" request
 	//DEBUGLOG(__FUNCTION__);	DEBUGLOG("\r\n");
 	String values = "";
 	values += "devicename|"  	+ _sysConfig.deviceName  		+ "|div\n";
@@ -1046,7 +1019,6 @@ void AsyncFSWebServer::send_project_configuration_values_html(AsyncWebServerRequ
 }
 
 void AsyncFSWebServer::get_project_configuration_html(AsyncWebServerRequest *request) {
-	if (!checkAuth(request)) {		return request->requestAuthentication(); 	}
 	// CfgFile_ProgSwd_t Prog_CfgFile;
 	if (request->args() > 0) { // Save Settings
 		// for (uint8_t i = 0; i < request->args(); i++) {
@@ -1075,7 +1047,7 @@ void AsyncFSWebServer::send_device_values_html(AsyncWebServerRequest *request) {
 
 void AsyncFSWebServer::get_system_configuration_html(AsyncWebServerRequest *request) {
 	//DEBUGLOG(__FUNCTION__);	DEBUGLOG("\r\n");
-	if (!checkAuth(request)) {		return request->requestAuthentication(); 	}
+	
 	if (request->args() > 0) { // Save Settings
 		for (uint8_t i = 0; i < request->args(); i++) {
 			DEBUGLOG("Arg %d: %s %s\r\n", i, request->argName(i).c_str() ,request->arg(i).c_str() );
@@ -1183,13 +1155,13 @@ void AsyncFSWebServer::serverInit() {
 	});
 
 
-	on("/admin", [this](AsyncWebServerRequest *request) {
+	on("/system/infovalues", [this](AsyncWebServerRequest *request) {
 		if (!this->checkAuth(request)) {	return request->requestAuthentication(); };
-		if (!this->handleFileRead("/admin.html", request)) {	request->send(404, "text/plain", "FileNotFound");	}
+		this->send_information_values_html(request);
 	});
-	on("/system/info", [this](AsyncWebServerRequest *request) {
+	on("/system/version", [this](AsyncWebServerRequest *request) {
 		if (!this->checkAuth(request)) {	return request->requestAuthentication(); };
-		this->send_system_configuration_values_html(request);
+		this->send_system_version_values_html(request);
 	});
 	on("/system.html", [this](AsyncWebServerRequest *request) {
 		if (!this->checkAuth(request)) {	return request->requestAuthentication(); };
@@ -1204,12 +1176,9 @@ void AsyncFSWebServer::serverInit() {
 		if (!this->checkAuth(request)) {	return request->requestAuthentication(); };
 		this->send_device_values_html(request);
 	});
-//system.html ^^^
 
-	on("/admin/infovalues", [this](AsyncWebServerRequest *request) {
-		if (checkAuth(request)) {	return request->requestAuthentication(); };
-		this->send_information_values_html(request);
-	});
+	//system.html ^^^
+
 
 //update.html vvv
 	on("/update/updatepossible", [this](AsyncWebServerRequest *request) {

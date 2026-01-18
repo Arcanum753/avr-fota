@@ -231,7 +231,7 @@ public:
 
     void handleFileUpload(AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final);
 private:
-    void send_system_configuration_values_html(AsyncWebServerRequest *request);
+    void send_system_version_values_html(AsyncWebServerRequest *request);
     void send_device_values_html(AsyncWebServerRequest *request);
     void send_project_configuration_values_html(AsyncWebServerRequest *request);
 
