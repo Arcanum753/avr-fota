@@ -35,7 +35,9 @@ bool Class_ProgIsp::begin (){
     DEBUGLOGISP(__PRETTY_FUNCTION__);	DEBUGLOGISP("\r\n");
     cfg_SetDefault();
     if (cfg_FileLoad() == false) {	cfg_FileSave();	}
-	//swdprog.stm32Fx_begin();
+	
+	avrprog.begin();
+
 	//TODO return init result
     return true;
 }
@@ -44,7 +46,7 @@ bool Class_ProgIsp::begin (){
 // TODO навести тут порядок с именаяи GET/POST запросов.
 // all about webAPI. Set hooks
 void  Class_ProgIsp::web_Init()	{
-	//avr.html vvv
+	//stm32.html vvv
 	ESPHTTPServer.on("/prog/diskinfo", HTTP_GET, [this](AsyncWebServerRequest *request) {
 		if (!ESPHTTPServer.checkAuth(request)) {	return request->requestAuthentication(); };
 		web_GetDiskInfoExe (request);
@@ -75,10 +77,12 @@ void  Class_ProgIsp::web_Init()	{
 		if (!ESPHTTPServer.checkAuth(request)) {	return request->requestAuthentication(); };
 		web_FileUpload2Chip(request);
 	});
-    //avr.html ^^^
+    //stm32.html ^^^
 
 
     //avr.html vvv
+
+	
     //first callback is called after the request has ended with all parsed arguments
     //second callback handles file uploads at that location
     ESPHTTPServer.on("/avr/info", [this](AsyncWebServerRequest *request) {
@@ -101,6 +105,7 @@ void  Class_ProgIsp::web_Init()	{
         if (!ESPHTTPServer.checkAuth(request)) {	return request->requestAuthentication(); };
         avrWebFusesWrite(request);
     });
+
     //avr.html ^^^
 
 
@@ -116,6 +121,7 @@ int Class_ProgIsp::cfg_FileSaveFromWeb(CfgFile_progIsp_t &_inStruct)  {
 }
 
 int  Class_ProgIsp::cfg_FileStructGet(CfgFile_progIsp_t &_inStruct)  {
+	
     DEBUGLOGISP(__PRETTY_FUNCTION__); DEBUGLOGISP("\r\n");
     progerr_t _ret = ERROR_OK;
     if(!cfg_FileLoad()) {  return ERR_CFG; }
@@ -141,7 +147,7 @@ bool Class_ProgIsp::cfg_FileLoad() {
 }
 
 bool Class_ProgIsp::cfg_FileSave(){
-	DEBUGLOG("Save config PROJ\r\n");
+	DEBUGLOGISP(__PRETTY_FUNCTION__); DEBUGLOGISP("\r\n");
 	JsonDocument jsonDoc;
 	// jsonDoc["type"]			= CfgFile_progIsp.programmer_type;
     jsonDoc["project"]		= CfgFile_progIsp.project_name;
@@ -151,6 +157,7 @@ bool Class_ProgIsp::cfg_FileSave(){
 
 
 bool Class_ProgIsp::web_GetDiskInfoExe(String &_str)	{
+	DEBUGLOGISP(__PRETTY_FUNCTION__); DEBUGLOGISP("\r\n");
 	bool _ret = true;
 	String values 	= 	"";
 	size_t sizeAll	=	0;
@@ -327,6 +334,7 @@ int Class_ProgIsp::web_FileUpload2FS( String filename, size_t index, uint8_t *da
 
 void Class_ProgIsp::web_FileUpload2FS_Status(AsyncWebServerRequest *request) {
 	DEBUGLOG(__FUNCTION__);	DEBUGLOG("\r\n");
+	// TODO STATUS OUT!
 	request->send(200, "text/plain", _hexFileUploadStatus);
 }
 
@@ -356,25 +364,27 @@ void Class_ProgIsp::web_FileUpload2Chip(AsyncWebServerRequest *request) {
 
 // avr.html vvv
 void  Class_ProgIsp::avrGetActualFWInfo(AsyncWebServerRequest *request) {
-	// DEBUGLOG(__FUNCTION__);	DEBUGLOG("\r\n");
-
-	AVRISP_CfgFile_t AVRISP_HexFiles_Web;
-	int _res0 = avrprog.cfgFileStructGet( AVRISP_HexFiles_Web	);
-
-	CfgFile_progIsp_t Prog_CfgFile;
-	int _res1 = cfg_FileStructGet(Prog_CfgFile);
+	DEBUGLOG(__FUNCTION__);	DEBUGLOG("\r\n");
 
 	String values = "";
+	
+	
+	AVRISP_CfgFile_t AVRISP_HexFiles_Web;
+	int _res0 ;
+	_res0 = avrprog.cfgFileStructGet(AVRISP_HexFiles_Web);
+	CfgFile_progIsp_t Prog_CfgFile;
+	 int _res1 = cfg_FileStructGet(Prog_CfgFile);
+
 	if (_res0 < ERROR_OK || _res1 < ERROR_OK) {
 		values+= "getinfoerror|Can't open cfg file.|div\n";
 		request->send(200, "text/plain", values);
 		return;
 	}
 
-	values += "proj|"   +			Prog_CfgFile.project_name		+ "|div\n";
-	values += "chsize|" + 	(String)Prog_CfgFile.chip_size 			+ "|div\n";
-	//values += "signcfg|"   +			AVRISP_HexFiles_Web.avr_signature		+ "|div\n";
-	values += "signcon|"   +			avrprog.avrChipSignGet()		+ "|div\n";
+	values += "proj|"   +			Prog_CfgFile.project_name				+ "|div\n";
+	values += "chsize|" + 	(String)Prog_CfgFile.chip_size 					+ "|div\n";
+	//values += "signcfg|"   +		AVRISP_HexFiles_Web.avr_signature		+ "|div\n";
+	values += "signcon|"   +			avrprog.avrChipSignGet()			+ "|div\n";
 	values += "hnamen|" + 			AVRISP_HexFiles_Web.hex_filename		+ "|div\n";
 	values += "hvern|"  + 			AVRISP_HexFiles_Web.hex_version			+ "|div\n";
 	values += "htimen|" +			AVRISP_HexFiles_Web.hex_buildtime		+ "|div\n";
@@ -383,26 +393,26 @@ void  Class_ProgIsp::avrGetActualFWInfo(AsyncWebServerRequest *request) {
 }
 
 void  Class_ProgIsp::avrProg(AsyncWebServerRequest *request) {
+	DEBUGLOG(__PRETTY_FUNCTION__);	DEBUGLOG("\r\n");
 	String values = "";
 	DEBUGLOG("_hexfilename  %s \n\r", _hexfileProg.c_str()); // что программируем
-	// int _res  = avrprog.avr_ChipProgrammMain(_hexfileProg, NTP.getTimeDateString() );
-	int _res  = prog_Programm(_hexfileProg,  NTP.getTimeDateString());
+	int _res  = avrprog.avr_ChipProgrammMain(_hexfileProg, NTP.getTimeDateString() );
+	// int _res  = prog_Programm(_hexfileProg,  NTP.getTimeDateString());
 
 	DEBUGLOG("avrProg  %d \n\r", _res);
 	values	+= "avrprogres|"+(String) _res+"|div\n";
 	request->send(200, "text/plain", values);
-	DEBUGLOG(__PRETTY_FUNCTION__);	DEBUGLOG("\r\n");
 }
 
 
 void  Class_ProgIsp::avrProgStatus(AsyncWebServerRequest *request) {
+	DEBUGLOG(__PRETTY_FUNCTION__);	DEBUGLOG("\r\n");
 	String values = "";
  	values += "avrprogver|" ;
 	values += avrprog.chipFlashVerificationResultGet() ;
 	values += "|div\n";
 
 	request->send(200, "text/plain", values);
-	DEBUGLOG(__PRETTY_FUNCTION__);	DEBUGLOG("\r\n");
 }
 
 void  Class_ProgIsp::avrFusesRead(AsyncWebServerRequest *request) {
@@ -470,21 +480,6 @@ void  Class_ProgIsp::avrWebFusesWrite(AsyncWebServerRequest *request) {
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 #endif
 
+//EOF//

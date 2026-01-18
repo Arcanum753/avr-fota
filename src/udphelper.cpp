@@ -95,7 +95,7 @@ void UDPBROADCAST_CLASS::udpStop(){
 
 
 void  udpResponse( ){
-    udpBroadcast.udpBroadcastSend(udpBroadcast.getUpdPortTx(), udpBroadcast.udpJsonBroadcast());
+    //udpBroadcast.udpBroadcastSend(udpBroadcast.getUpdPortTx(), udpBroadcast.udpJsonBroadcast());
  }
 
 void udpBroadcastTimer() {
@@ -107,7 +107,7 @@ void udpBroadcastTimer() {
   }
   if (timeout > 0 ){
     SetTimerTask(udpBroadcastTimer, SEC * MINUTES * timeout);
-    udpBroadcast.udpBroadcastSend(udpBroadcast.getUpdPortTx(), udpBroadcast.udpJsonBroadcast());
+    //udpBroadcast.udpBroadcastSend(udpBroadcast.getUpdPortTx(), udpBroadcast.udpJsonBroadcast());
   }
 }
 

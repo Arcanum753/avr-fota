@@ -144,10 +144,7 @@ void flashLED(int pin, int times, int delayTime) {
 	prepareSizesForUpdate();
 	ConfigureOTA(_httpAuth.wwwPassword.c_str());
 	// ledInit();
-
-
 	// progSwd.begin();
-
 }
 
 void AsyncFSWebServer::showDBG() {
@@ -1259,18 +1256,6 @@ void AsyncFSWebServer::serverInit() {
 		this->gpioGetArgs(request);
 	});
 //gpio.html ^^^
-
-
-
-
-//gpio.html vvv
-	on("/gpio", HTTP_POST, [this](AsyncWebServerRequest *request) {
-		if (!this->checkAuth(request)) {	return request->requestAuthentication(); };
-		this->gpioGetArgs(request);
-	});
-//gpio.html ^^^
-
-
 
 	on("/rconfig", HTTP_GET, [this](AsyncWebServerRequest *request) {
 		if (!this->checkAuth(request)) {	return request->requestAuthentication(); };

@@ -56,7 +56,6 @@ public:
 private:
 CfgFile_progIsp_t CfgFile_progIsp; //  структура конфига
 
-
 public:
     String _hexfileProg;
     String _hexfileCheck;
