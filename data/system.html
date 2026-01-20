@@ -45,7 +45,7 @@
     <script>
             window.onload = function() {
                 ApplyCVT("/system/devconf")
-                    .then(() => ApplyCVT("/system/info"))
+                    .then(() => ApplyCVT("/system/version"))
                     .then(() => ApplyCVT("/system/wwwauth"))
                     .then(() => enableAuthFields(document.getElementById("wwwauth")));
             };

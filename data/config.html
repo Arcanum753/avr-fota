@@ -111,16 +111,16 @@
 		window.onload = function() {
             getNetwork();
 
-			ApplyCVT("/admin/connectionstate")
-                .then(() => ApplyCVT("/admin/infovalues"))
-                .then(() => ApplyCVT("/admin/values/0", "p0_"))
-                .then(() => ApplyCVT("/admin/values/1", "p1_"))
-                .then(() => ApplyCVT("/admin/values/2", "p2_"))
-                .then(() => ApplyCVT("/admin/values/3", "p3_"))
+			ApplyCVT("/wifi/connectionstate")
+                .then(() => ApplyCVT("/system/infovalues"))
+                .then(() => ApplyCVT("/wifi/values/0", "p0_"))
+                .then(() => ApplyCVT("/wifi/values/1", "p1_"))
+                .then(() => ApplyCVT("/wifi/values/2", "p2_"))
+                .then(() => ApplyCVT("/wifi/values/3", "p3_"))
 
             setTimeout(() => {
                 
-                ApplyCVT("/system/info");
+                ApplyCVT("/system/version");
 			}, 500);
 		};
 	</script>

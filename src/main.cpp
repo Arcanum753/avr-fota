@@ -1,21 +1,19 @@
-#include <Arduino.h>
-
-#include <ESPAsyncWebServer.h>
-
 
 #if defined(ESP32)
 #include <SPIFFS.h>
 #elif defined(ESP8266)
 #include <FS.h>
 #endif
+#include <ESPAsyncWebServer.h>
 #include <Ticker.h>
 #include <ESPAsyncWebServer.h>
+
 #include "main.h"
 #include "FSWebServerLib.h"
 #include "eertos.h"
 #include "ErriezSerialTerminal.h"
 #include "terminal.h"
-#include "prog_isp.h"
+
 #include "udphelper.h"
 
 // pin used for entering setup mode
@@ -86,9 +84,9 @@ void TaskBlink2(){
 
 void ledInit(){
     
-    pinMode(PIN_MISO, OUTPUT);
-    pinMode(PIN_MOSI, OUTPUT);
-    pinMode(PIN_SCK, OUTPUT);
-    pinMode(PIN_RST, OUTPUT);
+    // pinMode(PIN_MISO, OUTPUT);
+    // pinMode(PIN_MOSI, OUTPUT);
+    // pinMode(PIN_SCK, OUTPUT);
+    // pinMode(PIN_RST, OUTPUT);
 
 }

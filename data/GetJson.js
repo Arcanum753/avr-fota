@@ -68,9 +68,9 @@ function ApplyCVT(url, prefix = "") {
             }
           }
           if (fields[0] == "devicetype") {
-            if (fields[1] == "avr")     {   document.getElementById("avr").style.display = "";    }
-            else if (fields[1] == "stm32")   {   document.getElementById("stm32").style.display = "";    }
-            else if (fields[1] == "gpio")    {   document.getElementById("gpio").style.display = "";    }
+            if (fields[1] == "avr")           {   document.getElementById("avr").style.display = "";    }
+            else if (fields[1] == "stm32")    {   document.getElementById("stm32").style.display = "";    }
+            else if (fields[1] == "gpio")     {   document.getElementById("gpio").style.display = "";    }
           }
         }
 

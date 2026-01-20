@@ -1,14 +1,19 @@
+#include "main.h"
+#ifdef  PROGTYPE_ISP
+
+
 #include <cstddef>
 #include <Arduino.h>
 #include <ArduinoJson.h>
 #include <SPI.h>
-#include "main.h"
+
 
 #include "FSWebServerLib.h"
-#include "programmer.h"
+
+#include "module_prog_isp.h"
 #include "prog_isp.h"
 #include "debug.h"
-#ifdef ESP32
+#if defined(ESP32)
 #include <SPIFFS.h>
 #elif defined(ESP8266)
 #include <FS.h>
@@ -48,11 +53,13 @@ void ESP8266_AVRISP::setReset(bool rst) {
 
 bool ESP8266_AVRISP::begin (){
     DEBUGLOGISP(__PRETTY_FUNCTION__);	DEBUGLOGISP("\r\n");
+    cfg_setDefault();
+    if (cfgFileLoad() == false) {   cfgFileSave();  }
+
     pinMode(_reset_pin, OUTPUT);
     setReset(true);
-    cfg_setDefault();
     chipNow = chipSignRead();
-    if (cfgFileLoad() == false) {         cfgFileSave();    }
+    // FIXME do the false if smth wrong
     return true;
 }
 
@@ -301,10 +308,11 @@ int32_t  ESP8266_AVRISP::hexFileUploadedBodyCheck(String _in){
 
 // Returns 0 if hex file is ok.
 int ESP8266_AVRISP::hexFileBinDataCheck (  )   {
-
     DEBUGLOGISP(__PRETTY_FUNCTION__); DEBUGLOGISP("\r\n");
-    Prog_CfgFile_t Prog_CfgFile;
-	int _res = espProgrammer.cfg_FileStructGet(Prog_CfgFile);
+
+    CfgFile_progIsp_t Prog_CfgFile;
+	int _res = progIsp.cfg_FileStructGet(Prog_CfgFile);
+
 
     int32_t _ret = ERROR_OK;
     if(_hexFileBuf.empty()){
@@ -530,7 +538,6 @@ int32_t ESP8266_AVRISP::hexFileLineParser (uint32_t beginLine, uint16_t &linepag
  * returns 0xFF if bad hex digit.
  */
 uint8_t ESP8266_AVRISP::hex2bin (uint8_t h)    {
-
   uint8_t _ret = 0xff;
   if (h >= '0' && h <= '9') {
     _ret = (h - '0');
@@ -604,69 +611,26 @@ String  ESP8266_AVRISP:: chipFlashVerificationResultGet(){
 /*------------------------------------------------------------------------*/
 //all about json & configs
 
-int  ESP8266_AVRISP:: cfgFileStructGet(AVRISP_CfgFile_t &_inStruct)  {
+int  ESP8266_AVRISP::cfgFileStructGet(AVRISP_CfgFile_t &_inStruct)  {
+    DEBUGLOGISP(__PRETTY_FUNCTION__);   DEBUGLOGISP("\r\n");
     int _ret = ERROR_OK;
     if(!cfgFileLoad()) {  return ERR_CFG; }
     _inStruct = _AVRISP_CfgFile;
-    DEBUGLOGISP(__PRETTY_FUNCTION__); DEBUGLOGISP("\r\n");
     return _ret ;
 }
 
 
-
-bool ESP8266_AVRISP::cfgFileLoad() {
-    if (!_fs) { _fs->begin();  }// If SPIFFS is not started
-	File configFile = _fs->open(CONFIG_AVRPROG_JSON, "r");
-	if (!configFile) {
-		DEBUGLOGISP("Failed to open config file");
-		return false;
-	}
-	size_t size = configFile.size();
-	if (size > JSON_FILESIZEMAX) {
-        DEBUGLOGISP("Config file size is too large");
-        configFile.close();
-        return false;
-	}
-	// Allocate a buffer to store contents of the file.
-	std::unique_ptr<char[]> buf(new char[size]);
-	configFile.readBytes(buf.get(), size);
-	configFile.close();
-	JsonDocument jsonDoc;
-	auto error = deserializeJson(jsonDoc, buf.get());
-	if (error) {
-		DEBUGLOGISP("Failed to parse config file. Error: %s\r\n", error.c_str());
-		return false;
-	}
-
-    _AVRISP_CfgFile.hex_filename           = jsonDoc["hex_filename"]     .as<const char *>();
-    _AVRISP_CfgFile.hex_version            = jsonDoc["hex_vesion"]       .as<const char *>();
-    _AVRISP_CfgFile.hex_buildtime          = jsonDoc["hex_ts"]           .as<const char *>();
-    _AVRISP_CfgFile.fwTS                   = jsonDoc["lastUpdTS_gmt"]    .as<const char *>();
-
-    // _AVRISP_CfgFile.chipsize               = jsonDoc["chipsize"]         .as<uint32_t>();
-    // _AVRISP_CfgFile.avr_signature          = jsonDoc["avr_sign"].as<const char *>();
-    // _AVRISP_CfgFile.project_name           = jsonDoc["avr_proj"].as<const char *>();
-    _AVRISP_CfgFile.pagesize = MEM_PAGE_SIZE;
-#if (DEBUG_SHOWHEXBUF > 2)
-	String temp;
-	serializeJsonPretty(jsonDoc, temp);
-	Serial.println(temp);
-#endif
-	DEBUGLOGISP(__PRETTY_FUNCTION__);DEBUGLOGISP("\r\n");
-	return true;
-}
-
 void ESP8266_AVRISP::cfg_setDefault() {
-	DEBUGLOGISP(__PRETTY_FUNCTION__);	DEBUGLOGISP("\r\n");
-	_AVRISP_CfgFile.hex_filename            = DEFAULT_HEXFILENAME;
-	_AVRISP_CfgFile.hex_version             = DEFAULT_VER;
-	_AVRISP_CfgFile.hex_buildtime           = "";
+    DEBUGLOGISP(__PRETTY_FUNCTION__);	DEBUGLOGISP("\r\n");
+    _AVRISP_CfgFile.hex_filename            = DEFAULT_HEXFILENAME;
+    _AVRISP_CfgFile.hex_version             = DEFAULT_VER;
+    _AVRISP_CfgFile.hex_buildtime           = "";
     _AVRISP_CfgFile.fwTS                    = "";
     // _AVRISP_CfgFile.chipsize                = DEFAULT_AVR_CHIPSIZE;
     _AVRISP_CfgFile.pagesize               = MEM_PAGE_SIZE;
-	//_AVRISP_CfgFile.avr_signature         = DEFAULT_AVR_SIGN;
+    //_AVRISP_CfgFile.avr_signature         = DEFAULT_AVR_SIGN;
 
-	AVRISP_HexFileUploaded.hex_filename = "";
+    AVRISP_HexFileUploaded.hex_filename = "";
     AVRISP_HexFileUploaded.signture = "";
     AVRISP_HexFileUploaded.project_name = "";
     AVRISP_HexFileUploaded.version = "";
@@ -674,7 +638,31 @@ void ESP8266_AVRISP::cfg_setDefault() {
 
 }
 
+bool ESP8266_AVRISP::cfgFileLoad() {
+    DEBUGLOGISP(__PRETTY_FUNCTION__);   DEBUGLOGISP("\r\n");
+
+    JsonDocument jsonDoc;
+    if (!ESPHTTPServer.load_jsonDoc(CONFIG_AVRPROG_JSON, jsonDoc)){	return false;	}
+
+    _AVRISP_CfgFile.hex_filename           = jsonDoc["hex_filename"]     .as<const char *>();
+    _AVRISP_CfgFile.hex_version            = jsonDoc["hex_vesion"]       .as<const char *>();
+    _AVRISP_CfgFile.hex_buildtime          = jsonDoc["hex_ts"]           .as<const char *>();
+    _AVRISP_CfgFile.fwTS                   = jsonDoc["lastUpdTS_gmt"]    .as<const char *>();
+    _AVRISP_CfgFile.pagesize = MEM_PAGE_SIZE;
+
+    // _AVRISP_CfgFile.chipsize               = jsonDoc["chipsize"]         .as<uint32_t>();
+    // _AVRISP_CfgFile.avr_signature          = jsonDoc["avr_sign"].as<const char *>();
+    // _AVRISP_CfgFile.project_name           = jsonDoc["avr_proj"].as<const char *>();
+#if (DEBUG_SHOWHEXBUF > 2)
+	String temp;
+	serializeJsonPretty(jsonDoc, temp);
+	Serial.println(temp);
+#endif
+	return true;
+}
+
 bool ESP8266_AVRISP::cfgFileSave(){
+	DEBUGLOGISP(__PRETTY_FUNCTION__);	DEBUGLOGISP("\r\n");
 	JsonDocument jsonDoc;
 	jsonDoc["hex_filename"]         = _AVRISP_CfgFile.hex_filename;
 	jsonDoc["hex_vesion"]           = _AVRISP_CfgFile.hex_version;
@@ -683,25 +671,12 @@ bool ESP8266_AVRISP::cfgFileSave(){
     //jsonDoc["chipsize"]             = _AVRISP_CfgFile.chipsize;
     //jsonDoc["avr_sign"]               = _AVRISP_CfgFile.avr_signature;
 
-
-
-    if (!_fs) { _fs->begin();  }// If SPIFFS is not started
-
-	File configFile  = _fs->open(CONFIG_AVRPROG_JSON, "w");
-
-	if (!configFile) {
-		DEBUGLOGISP("\r\n Failed to open config file for writing\r\n");
-		configFile.close();
-		return false;
-	}
-	serializeJson(jsonDoc, configFile);
-	configFile.flush();
-	configFile.close();
-	DEBUGLOGISP(__PRETTY_FUNCTION__);	DEBUGLOGISP("\r\n");
+    return ESPHTTPServer.save_jsonDoc(jsonDoc, CONFIG_AVRPROG_JSON);
 	return true;
 }
 
 int  ESP8266_AVRISP:: cfgFilSetUploadeAsNow (String _fwTime){
+    DEBUGLOGISP(__PRETTY_FUNCTION__);    DEBUGLOGISP("\r\n");
     int _ret = ERR_RNM;
     if(cfgFileLoad()) { _ret = ERROR_OK; }
         else { return ERR_OPENFILE;    }
@@ -716,20 +691,13 @@ int  ESP8266_AVRISP:: cfgFilSetUploadeAsNow (String _fwTime){
     _AVRISP_CfgFile.fwTS           =   _fwTime;
 
 
-    if(cfgFileSave()) {
-       _ret = ERROR_OK;
-    } else {
-        _ret = ERR_CFG;
-    }
-    DEBUGLOGISP(__PRETTY_FUNCTION__);    DEBUGLOGISP("\r\n");
+    if(cfgFileSave()) { _ret = ERROR_OK;    }
+    else { _ret = ERR_CFG; }
     return _ret;
 }
 
 
 
+#endif
 
-
-
-
-
-
+//EOF//

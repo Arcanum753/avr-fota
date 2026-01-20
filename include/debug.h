@@ -3,11 +3,15 @@
 #ifndef _DEBUGLOG_h
 #define _DEBUGLOG_h
 
+#if defined(ARDUINO) && ARDUINO >= 100
+    #include <Arduino.h>
+#else
+    #include "WProgram.h"
+#endif
 
 
 //#define CHECKAUTH if (!ESPHTTPServer->checkAuth(request)) {	return request->requestAuthentication(); };
 
-//#define RELEASE  // Comment to enable debug output
 
 #define DBG_OUTPUT_PORT Serial
 

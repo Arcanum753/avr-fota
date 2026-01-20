@@ -55,8 +55,6 @@
 #define HEX_PARSE_WORD_TIME  "time"
 
 #define HEX_PARSE_LINEBEGIN      ':'
-
-
 #define HEX_PARSE_CHAR_SPACE       ' '    //spec symb for delimiter
 
 #define  FILE_TYPE_COMMA        '.'
@@ -136,7 +134,7 @@ public:
 #endif
     bool begin ();
 
-    int             avrChipProgrammDBG(String _in); // отладка для консоли
+    int             avrChipProgrammDBG(String _in);     // отладка для консоли
     int             avr_ChipProgrammMain(String _in, String _fwTime); // основной "сценарий" программирования из веба
 
     int32_t         hexFileUploadedBodyCheck(String _in);

@@ -411,13 +411,13 @@ void WIFIMOD_CLASS::send_connection_state_values_html(AsyncWebServerRequest *req
 	// DEBUGLOG(__FUNCTION__);	DEBUGLOG("\r\n");
 	String state = "N/A";
 	String Networks = "";
-	if (WiFi.status() == 0) state = "Idle";
-	else if (WiFi.status() == 1) state = "NO SSID AVAILBLE";
-	else if (WiFi.status() == 2) state = "SCAN COMPLETED";
-	else if (WiFi.status() == 3) state = "CONNECTED";
-	else if (WiFi.status() == 4) state = "CONNECT FAILED";
-	else if (WiFi.status() == 5) state = "CONNECTION LOST";
-	else if (WiFi.status() == 6) state = "DISCONNECTED";
+	if (WiFi.status() == 0) {	state = "Idle";	}
+	else		if (WiFi.status() == 1) state = "NO SSID AVAILBLE";
+	else 		if (WiFi.status() == 2) state = "SCAN COMPLETED";
+	else		if (WiFi.status() == 3) state = "CONNECTED";
+	else		if (WiFi.status() == 4) state = "CONNECT FAILED";
+	else		if (WiFi.status() == 5) state = "CONNECTION LOST";
+	else		if (WiFi.status() == 6) state = "DISCONNECTED";
 
 	WiFi.scanNetworks(true);
 
@@ -533,28 +533,35 @@ void WIFIMOD_CLASS::send_network_configuration_html(AsyncWebServerRequest *reque
 
 //wifi.html vvv
 void WIFIMOD_CLASS::webInit ()	{
-	ESPHTTPServer.on("/admin/values/0", [this](AsyncWebServerRequest *request) {
+
+	ESPHTTPServer.on("/wifi.html", [this](AsyncWebServerRequest *request) {
+		if (!ESPHTTPServer.checkAuth(request)) {	return request->requestAuthentication(); };
+		this->send_network_configuration_html(request);
+	});
+
+	ESPHTTPServer.on("/wifi/connectionstate", [this](AsyncWebServerRequest *request) {
+		if (!ESPHTTPServer.checkAuth(request)) {	return request->requestAuthentication(); };
+		this->send_connection_state_values_html(request);
+	});
+
+	ESPHTTPServer.on("/wifi/values/0", [this](AsyncWebServerRequest *request) {
 		if (!ESPHTTPServer.checkAuth(request)) {	return request->requestAuthentication(); };
 		this->send_network_configuration_values_html(request, 0);
 	});
-	ESPHTTPServer.on("/admin/values/1", [this](AsyncWebServerRequest *request) {
+	ESPHTTPServer.on("/wifi/values/1", [this](AsyncWebServerRequest *request) {
 		if (!ESPHTTPServer.checkAuth(request)) {	return request->requestAuthentication(); };
 
 		this->send_network_configuration_values_html(request, 1);
 	});
-	ESPHTTPServer.on("/admin/values/2", [this](AsyncWebServerRequest *request) {
+	ESPHTTPServer.on("/wifi/values/2", [this](AsyncWebServerRequest *request) {
 		if (!ESPHTTPServer.checkAuth(request)) {	return request->requestAuthentication(); };
 
 		this->send_network_configuration_values_html(request, 2);
 	});
-	ESPHTTPServer.on("/admin/values/3", [this](AsyncWebServerRequest *request) {
+	ESPHTTPServer.on("/wifi/values/3", [this](AsyncWebServerRequest *request) {
 		if (!ESPHTTPServer.checkAuth(request)) {	return request->requestAuthentication(); };
 
 		this->send_network_configuration_values_html(request, 3);
-	});
-	ESPHTTPServer.on("/admin/connectionstate", [this](AsyncWebServerRequest *request) {
-		if (!ESPHTTPServer.checkAuth(request)) {	return request->requestAuthentication(); };
-		this->send_connection_state_values_html(request);
 	});
 
 	ESPHTTPServer.on("/scan", HTTP_GET, [](AsyncWebServerRequest *request) {
@@ -591,10 +598,7 @@ void WIFIMOD_CLASS::webInit ()	{
 		json = "";
 	});
 
-	ESPHTTPServer.on("/wifi.html", [this](AsyncWebServerRequest *request) {
-		if (!ESPHTTPServer.checkAuth(request)) {	return request->requestAuthentication(); };
-		this->send_network_configuration_html(request);
-	});
+	
 
 }
 //wifi.html ^^^
