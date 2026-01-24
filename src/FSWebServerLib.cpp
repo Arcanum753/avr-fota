@@ -22,6 +22,7 @@
 #elif defined(ESP8266)
 #include <FS.h>
 #endif
+
 #include "common.h"
 
 
@@ -1207,7 +1208,7 @@ void AsyncFSWebServer::serverInit() {
 
 
 
-	//project.html vvv
+//project.html vvv
 	on("/project/info", HTTP_GET, [this](AsyncWebServerRequest *request) {
 		if (!this->checkAuth(request)) {	return request->requestAuthentication(); };
 		this->send_project_configuration_values_html(request); // show values
@@ -1217,7 +1218,7 @@ void AsyncFSWebServer::serverInit() {
 		if (!this->checkAuth(request)) {	return request->requestAuthentication(); };
 		this->get_project_configuration_html(request); // save values from the page
 	});
-	//project.html ^^^
+//project.html ^^^
 
 //gpio.html vvv
 	on("/gpio", HTTP_POST, [this](AsyncWebServerRequest *request) {

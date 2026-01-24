@@ -331,11 +331,13 @@ void WIFIMOD_CLASS::onWiFiConnectedGotIP(WiFiEventStationModeGotIP data) {
 	wifiStatus = FS_STAT_CONNECTED;
 
 	//udp start to listen
-	udpBroadcast.udpInit();
-	udpBroadcast.udpStart(udpBroadcast.getUpdPortRx());
+	udpBroadcast.webInit();
+	udpBroadcast.begin(udpBroadcast.getUpdPortRx());
 	//ntpBegin();
 	//udp broadcast - we are online!
-    udpResponse();
+    if (udpBroadcast.getudpPowerOn() == true ) {
+		udpBroadcastSimple();
+	}
 
 }
 
