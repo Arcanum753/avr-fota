@@ -14,6 +14,11 @@
 #define NTPSERVER_DFLT1 "0.ru.pool.ntp.org";
 #define NTPSERVER_DFLT2 "0.gentoo.pool.ntp.org";
 
+const char Page_GeneralNtp[] = R"=====(
+<meta http-equiv="refresh" content="10; URL=/ntp.html">
+Please Wait....Configuring.
+)=====";
+
 typedef struct {
     String ntpServerName0;
     String ntpServerName1;
@@ -40,25 +45,33 @@ class  NTPMOD_CLASS    {
     
     
     strNtpConfig    _ntpConfig; // NTP configuration
-    int                 _ntpserveer;
-    void ntpBegin ();
-    void webInit();
-    void ntpBeginReserv ();
-    void ntpHandler(NTPSyncEvent_t event);
-
-    bool load_config_NTP();
     
-    //ntp
+    void ntpBegin ();
+    void ntpOnConnected ();
+    void ntpOnDisconected ();
+    void webInit();
+    
+    void ntpSwitchReserv ();
+    void ntpOnSyncHandler(NTPSyncEvent_t event);
+    
+    //CFG
+    bool load_config_NTP();
     bool save_configNTP();
     void defaultConfigNTP();
-
+    
+    // WEB
+    
+    void send_NTP_info_html(AsyncWebServerRequest *request) ;
     void send_NTP_configuration_values_html(AsyncWebServerRequest *request);
     void send_NTP_configuration_html(AsyncWebServerRequest *request);
-
-
-
-
-protected: 
+    void sendTimeData();
+    
+    
+    
+    protected: 
+    bool updateTimeFromNTP  = false;
+    int _ntpServerCount         = 0;
+    String _ntpServerNow = "";
     bool  dumb = false;
 };
 

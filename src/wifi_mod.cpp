@@ -22,7 +22,7 @@ WIFIMOD_CLASS :: WIFIMOD_CLASS (bool _in) {
 
 void WIFIMOD_CLASS::s_secondTick(void* arg) {
 	WIFIMOD_CLASS* self = reinterpret_cast<WIFIMOD_CLASS*>(arg);
-	if (ESPHTTPServer._evs.count() > 0) {	ESPHTTPServer.sendTimeData();	}
+	if (ESPHTTPServer._evs.count() > 0) {	ntpModClass.sendTimeData();	}
 //Check connection timeout if enabled
 #if (AP_ENABLE_TIMEOUT > 0)
 	// DBG_OUTPUT_PORT.printf("timer%d\r\n", ++self->connectionTimout);
@@ -46,10 +46,8 @@ void WIFIMOD_CLASS::s_secondTick(void* arg) {
 
 	if (self->WifiScan != WF_SCAN_NO_NEED) {
 		self->load_configWifi(self->scanWifi());
-
 	}
 	
-
 #endif //AP_ENABLE_TIMEOUT
 }
 
@@ -186,22 +184,7 @@ bool WIFIMOD_CLASS::save_configWifi(int _in) {
 	return true;
 }
 
-void WIFIMOD_CLASS::clearConfig(bool reset)	{
-	if (_fs->exists(CONFIG_FILE_SYS)) 	{ _fs->remove(CONFIG_FILE_SYS);	}
-	if (_fs->exists(CONFIG_FILE_UDP)) 	{ _fs->remove(CONFIG_FILE_UDP);	}
-	if (_fs->exists(CONFIG_FILE_NTP)) 	{ _fs->remove(CONFIG_FILE_NTP);	}
-	if (_fs->exists(WIFI_CONFIG_FILE0)) { _fs->remove(WIFI_CONFIG_FILE0);	}
-#if (USE_RESERV_WIFI > 0)
-	if (_fs->exists(WIFI_CONFIG_FILE1)) { _fs->remove(WIFI_CONFIG_FILE1);	}
-	if (_fs->exists(WIFI_CONFIG_FILE2)) { _fs->remove(WIFI_CONFIG_FILE2);	}
-	if (_fs->exists(WIFI_CONFIG_FILE3)) { _fs->remove(WIFI_CONFIG_FILE3);	}
-#endif
-	if (_fs->exists(SECRET_FILE)) {		_fs->remove(SECRET_FILE);	}
-	if (reset) {
-		if (_fs) { _fs->end();  }// If SPIFFS is started - finish it.
-		ESPHTTPServer.restart_esp();
-	}
-}
+
 
 void WIFIMOD_CLASS::defaultConfigWifi(int _in) {
 	// DEFAULT CONFIG
@@ -224,9 +207,7 @@ void WIFIMOD_CLASS::configureWifiAP() {
 	WiFi.mode(WIFI_AP);
 	wifiStatus = FS_STAT_APMODE;
 
-	// need only when we online at last
-	ESPHTTPServer.load_config_Sys();
-	ntpModClass.load_config_NTP();
+	
 
 	String APname = ESPHTTPServer._sysConfig.deviceName + "_" + ESPHTTPServer._sysConfig.deviceSerial;
 	if (ESPHTTPServer._httpAuth.auth) {
@@ -307,6 +288,9 @@ void WIFIMOD_CLASS::onWiFiConnected(WiFiEventStationModeConnected data) {
 
 }
 
+
+// Do functions when we get IP.
+//means we get nor,al connection
 #if defined(ESP32)
 void WIFIMOD_CLASS::onWiFiConnectedGotIP() {
 #elif defined(ESP8266)
@@ -323,21 +307,24 @@ void WIFIMOD_CLASS::onWiFiConnectedGotIP(WiFiEventStationModeGotIP data) {
 	DBG_OUTPUT_PORT.printf("DNS:        %s\r\n", WiFi.dnsIP().toString().c_str());
 	DBG_OUTPUT_PORT.printf("Led %d on\n", CONNECTION_LED);
 	wifiDisconnectedSince = 0;
-	//force NTPsstart after got ip
-	if (ntpModClass._ntpConfig.updateNTPTimeEvery > 0) {	ESPHTTPServer.updateTimeFromNTP = true;	}		// Enable NTP sync
+	
+	
 
 	connectionTimout = 0;
-	ntpModClass._ntpserveer = 0;
+	
 	wifiStatus = FS_STAT_CONNECTED;
 
 	//udp start to listen
 	udpBroadcast.webInit();
 	udpBroadcast.begin(udpBroadcast.getUpdPortRx());
-	//ntpBegin();
+	// TODO NTPBEGIN
+
+	// FIXME put it into udp module
 	//udp broadcast - we are online!
-    if (udpBroadcast.getudpPowerOn() == true ) {
+    if (udpBroadcast.getudpPowerOn() == true ) { 
 		udpBroadcastSimple();
 	}
+	ntpModClass.ntpOnConnected();
 
 }
 
@@ -346,8 +333,9 @@ void WIFIMOD_CLASS::onWiFiDisconnected() {
 #elif defined(ESP8266)
 void WIFIMOD_CLASS::onWiFiDisconnected(WiFiEventStationModeDisconnected data) {
 #endif
-	NTP.stop();				// always stop!
+
 	udpBroadcast.udpStop();	// always stop!
+	ntpModClass.ntpOnDisconected();
 
 	if (wifiStatus == FS_STAT_RESET) {return;}
 
@@ -378,7 +366,7 @@ void WIFIMOD_CLASS::wifiSsidSetPSWDwrong(String _str) {
 	if (strcmp( _strWifi1,  _str.c_str()) == 0)	{	memset (_strWifi1, 0, sizeof(_strWifi1)); }
 	if (strcmp( _strWifi0,  _str.c_str()) == 0)	{	memset (_strWifi0, 0, sizeof(_strWifi0)); }
 }
-
+ 
 // wifi.html vvv
 void WIFIMOD_CLASS::send_network_configuration_values_html(AsyncWebServerRequest *request, int _index) {
 	DEBUGLOG(__PRETTY_FUNCTION__);	DEBUGLOG("\r\n");

@@ -73,8 +73,6 @@ typedef struct {
 
 
 
-
-
 typedef struct {
     bool auth;
     String wwwUsername;
@@ -104,10 +102,7 @@ const char Page_GeneralUdp[] = R"=====(
 Please Wait....Configuring.
 )=====";
 
-const char Page_GeneralNtp[] = R"=====(
-<meta http-equiv="refresh" content="10; URL=/ntp.html">
-Please Wait....Configuring.
-)=====";
+
 
 const char Page_GeneralPrj[] = R"=====(
 <meta http-equiv="refresh" content="10; URL=/project.html">
@@ -182,19 +177,13 @@ protected:
     
     
     public:
-    bool updateTimeFromNTP = false;
     AsyncEventSource _evs = AsyncEventSource("/events");
-    void sendTimeData();
+  
     
 private:
 
-
-
-  
-
     // gpio
     void  gpioGetArgs(AsyncWebServerRequest *request);
-
 
 public:
     bool save_jsonDoc(const JsonDocument& jsonDoc, const String& file);
@@ -207,19 +196,11 @@ public:
 
 private:
 
-
-
-
-
     // bool load_generic_config()
     bool loadHTTPAuth();
     bool saveHTTPAuth();
     void ConfigureOTA(String password);
     void serverInit();
-
-   
-
-
 
 public:
     bool checkAuth(AsyncWebServerRequest *request);
@@ -248,6 +229,7 @@ private:
 	void post_rest_config(AsyncWebServerRequest *request);
 public:    
     void restart_esp();
+    void clearConfig(bool reset);
 private:
 
     uint32_t maxSketchSpace   ;

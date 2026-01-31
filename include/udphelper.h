@@ -3,7 +3,12 @@
 
 #include "main.h"
 #include "FSWebServerLib.h"
+
+#ifdef ESP32
 #include <AsyncUDP.h>
+#else
+#include <ESPAsyncUDP.h>
+#endif
 
 #define CONFIG_FILE_UDP     "/config_udp.json"
 #define HTML_FILE_UDP       "/udp.html"
