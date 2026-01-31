@@ -64,7 +64,8 @@ void loop() {
     TaskManager();
     loop_user();
     TerminalLoop();
-    ESPHTTPServer.handle();
+//    ESPHTTPServer.handle(); FIXME ??
+    ArduinoOTA.handle();
     
 }
 

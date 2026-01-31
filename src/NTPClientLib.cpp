@@ -54,12 +54,8 @@ bool NTPClient::setNtpServerName (String ntpServerName) {
 
 bool NTPClient::setNtpServerName (char* ntpServerName) {
     char *name = ntpServerName;
-    if (!name) {
-        return false;
-    }
-    if (!strlen (name)) {
-        return false;
-    }
+    if (!name) {    return false;   }
+    if (!strlen (name)) {   return false; }
     DEBUGLOG ("NTP server set to %s\n", name);
     memset (_ntpServerName, 0, SERVER_NAME_LENGTH);
     strcpy (_ntpServerName, name);
