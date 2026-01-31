@@ -5,7 +5,7 @@
 #include "udphelper.h"
 #include "debug.h"
 #include "wifi_mod.h"
-// #include "ntp_mod.h"
+#include "ntp_mod.h"
 
 #if defined(ESP32)
 #include <SPIFFS.h>
@@ -128,7 +128,7 @@ void flashLED(int pin, int times, int delayTime) {
 	serverInit(); // Configure and start Web server
 	ntpModClass.ntpBegin();
 	wifiModClass.webInit();
-	//ntpModClass.webInit();
+	ntpModClass.webInit();
 #ifdef PROGTYPE_SWD
 	progSwd.setFs(&SPIFFS);
 	progSwd.begin();
