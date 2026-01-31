@@ -5,7 +5,7 @@
 #include "udphelper.h"
 #include "debug.h"
 #include "wifi_mod.h"
-// #include "ntp_mod.h"
+#include "ntp_mod.h"
 
 #if defined(ESP32)
 #include <SPIFFS.h>
@@ -101,11 +101,10 @@ void flashLED(int pin, int times, int delayTime) {
 
 	wifiModClass.begin(&SPIFFS); // wifi load cfg and set callback hooks
 
-	//ntpModClass.ntpBegin();
-
+	
 	//WIFI INIT start here
 	String hostName = _sysConfig.deviceName + "_" + _sysConfig.deviceSerial;
-
+	
 	DEBUGLOG("Open http://");
 	DEBUGLOG(hostName.c_str());
 	DEBUGLOG(".local to see the device web page.\r\n");
@@ -113,20 +112,21 @@ void flashLED(int pin, int times, int delayTime) {
 	if (!_sysConfig.deviceType.isEmpty()) {
 		DEBUGLOG("Device type: ");	DEBUGLOG(_sysConfig.deviceType.c_str());	DEBUGLOG("\n\r");
 	}
-#if defined(ESP32)
+	#if defined(ESP32)
 	DEBUGLOG("Flash chip size: %u\r\n", ESP.getFlashChipSize());
-#endif
-#if ESP8266
+	#endif
+	#if ESP8266
 	DEBUGLOG("Flash chip size: %u\r\n", ESP.getFlashChipRealSize());
-#endif
+	#endif
 	DEBUGLOG("Scketch size: %u\r\n", 		ESP.getSketchSize());
 	DEBUGLOG("Free flash space: %u\r\n", 	ESP.getFreeSketchSpace());
-
-
+	
+	
 	AsyncWebServer::begin();
 	serverInit(); // Configure and start Web server
+	ntpModClass.ntpBegin();
 	wifiModClass.webInit();
-	//ntpModClass.webInit();
+	ntpModClass.webInit();
 #ifdef PROGTYPE_SWD
 	progSwd.setFs(&SPIFFS);
 	progSwd.begin();

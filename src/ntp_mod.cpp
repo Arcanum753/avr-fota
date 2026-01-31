@@ -20,66 +20,66 @@ NTPMOD_CLASS ntpModClass(false);
 NTPMOD_CLASS :: NTPMOD_CLASS (bool _in) { dumb = _in; }
 
 
+// init
 void NTPMOD_CLASS::ntpBegin (){
 	DEBUGLOG(__PRETTY_FUNCTION__);	DEBUGLOG("\r\n");
+	_ntpServerCount = 0;
+	
 	defaultConfigNTP(); 
     if (load_config_NTP() == false ) { save_configNTP(); 	}
-	if (_ntpConfig.updateNTPTimeEvery > 0) { // Enable NTP sync
-        NTP.setInterval (_ntpConfig.updateNTPTimeEvery * MINUTES);
-        NTP.setNTPTimeout (NTP_TIMEOUT);
-		NTP.onNTPSyncEvent([this](NTPSyncEvent_t event){	ntpHandler(event);	});
-	
-	
-		// ntpBeginReserv();
-		// NTP.getTime();
-	}
+	_ntpServerNow = _ntpConfig.ntpServerName0;
 	// Enable NTP sync
 	if (_ntpConfig.updateNTPTimeEvery > 0) { updateTimeFromNTP = true;	}		
-	_ntpserveer = 0;
 }
 
 
+// on WiFi connect
 void NTPMOD_CLASS::ntpOnConnected (){
-	_ntpserveer = 0;
-
-}
-
-void NTPMOD_CLASS::ntpStop () {	NTP.stop(); }
-
-
-void NTPMOD_CLASS::ntpHandle()	{
-	if (updateTimeFromNTP == true ) {
-		ntpModClass.ntpBeginReserv();
-		// NTP.begin(_sysConfig.ntpServerName0, _sysConfig.timezone / 10, _sysConfig.daylight);
-	NTP.setInterval(15, ntpModClass._ntpConfig.updateNTPTimeEvery * 60);
-		Serial.println(NTP.getLastNTPSync());
-		updateTimeFromNTP = false;
+	if (updateTimeFromNTP == true) { // Enable NTP sync
+        NTP.setInterval ( _ntpConfig.updateNTPTimeEvery * MINUTES);
+        NTP.setNTPTimeout (NTP_TIMEOUT);
+		NTP.onNTPSyncEvent(	[this](NTPSyncEvent_t event)	{	ntpOnSyncHandler(event);	});
+		NTP.begin(_ntpServerNow, _ntpConfig.timezone / 10, _ntpConfig.daylight);
 	}
 }
 
-void NTPMOD_CLASS::ntpHandler(NTPSyncEvent_t event)	{
-	int _ntpevent = static_cast<int>(event);
-    if ( _ntpevent == timeSyncd) 		{ DEBUGLOG("\t NTP_timeSyncd\r\n"); 	}
-	if ( _ntpevent == noResponse) 		{ DEBUGLOG("\t NTP_noResponse \r\n"); 	}
-	if ( _ntpevent == invalidAddress) 	{ DEBUGLOG("\t NTP_invalidAddress\r\n"); 	}
-	if ( _ntpevent == requestSent) 		{ DEBUGLOG("\t NTP_requestSent\r\n"); 	}
-	if ( _ntpevent == errorSending) 	{ DEBUGLOG("\t NTP_errorSending \r\n"); 	}
-	if ( _ntpevent == responseError) 	{ DEBUGLOG("\t NTP_responseError \r\n"); 	}
-	if (WiFi.status() != WL_CONNECTED) {return;}
-	if (_ntpevent == noResponse 
-		|| _ntpevent == invalidAddress 
-		|| _ntpevent == responseError 
-        )	{
-				ntpBeginReserv();
-			}
+
+
+void NTPMOD_CLASS::ntpOnDisconected () {
+	NTP.stop(); 
 }
 
-void NTPMOD_CLASS::ntpBeginReserv (){
-	if  (_ntpserveer == 0) 	NTP.begin(_ntpConfig.ntpServerName0, _ntpConfig.timezone / 10, _ntpConfig.daylight);
-	if  (_ntpserveer == 1)  NTP.begin(_ntpConfig.ntpServerName1, _ntpConfig.timezone / 10, _ntpConfig.daylight);
-	if  (_ntpserveer == 2)  NTP.begin(_ntpConfig.ntpServerName2, _ntpConfig.timezone / 10, _ntpConfig.daylight);
-	_ntpserveer++;
-	if (_ntpserveer > 2) _ntpserveer = 2;
+
+void NTPMOD_CLASS::ntpOnSyncHandler(NTPSyncEvent_t event)	{
+	int _ntpevent = static_cast<int>(event);
+
+    if ( _ntpevent == timeSyncd) 		{ 
+		DEBUGLOG("NTP_timeSyncd: "); 	
+		DEBUGLOG(NTP.getTimeDateString(NTP.getLastNTPSync()).c_str() );	
+		DEBUGLOG(" \r\n");
+	}
+	if ( _ntpevent == noResponse) 		{ DEBUGLOG("NTP_noResponse \r\n"); 		}
+	if ( _ntpevent == invalidAddress) 	{ DEBUGLOG("NTP_invalidAddress \r\n"); 	}
+	if ( _ntpevent == requestSent) 		{ DEBUGLOG("NTP_requestSent \r\n"); 		}	
+	if ( _ntpevent == errorSending) 	{ DEBUGLOG("NTP_errorSending \r\n"); 	}
+	if ( _ntpevent == responseError) 	{ DEBUGLOG("NTP_responseError \r\n"); 	}
+
+	if ( _ntpevent == noResponse) 		{	ntpSwitchReserv();	}
+	if ( _ntpevent == invalidAddress) 	{	ntpSwitchReserv();	}
+	if ( _ntpevent == responseError) 	{	ntpSwitchReserv();	}
+				
+	if (WiFi.status() != WL_CONNECTED) 	{
+		NTP.stop(); 
+	}
+}
+
+void NTPMOD_CLASS::ntpSwitchReserv (){
+
+	if  (_ntpServerCount == 0)	{_ntpServerNow = _ntpConfig.ntpServerName0;}
+	if  (_ntpServerCount == 1)	{_ntpServerNow = _ntpConfig.ntpServerName1;}
+	if  (_ntpServerCount == 2)	{_ntpServerNow = _ntpConfig.ntpServerName2;}
+	_ntpServerCount++;
+	if (_ntpServerCount > 2) _ntpServerCount = 0;
 }
 
 
@@ -128,17 +128,15 @@ void NTPMOD_CLASS::defaultConfigNTP() {
 
 void NTPMOD_CLASS::webInit ()	{
 	DEBUGLOG(__PRETTY_FUNCTION__);	DEBUGLOG("\r\n");
-
 	
 	ESPHTTPServer.on("/ntp/info", HTTP_GET, [this](AsyncWebServerRequest *request) {
-		if (!ESPHTTPServer.checkAuth(request)) {		return request->requestAuthentication(); }
 		this->send_NTP_info_html(request);
 	});
 	
 	ESPHTTPServer.on("/ntp/conf", HTTP_GET, [this](AsyncWebServerRequest *request) {
-		if (!ESPHTTPServer.checkAuth(request)) {		return request->requestAuthentication(); }
 		this->send_NTP_configuration_values_html(request);
 	});
+
 	ESPHTTPServer.on("/ntp.html", HTTP_POST, [this](AsyncWebServerRequest *request) {
 		if (!ESPHTTPServer.checkAuth(request)) {		return request->requestAuthentication(); }
 		this->send_NTP_configuration_html(request);
@@ -199,13 +197,10 @@ void NTPMOD_CLASS::send_NTP_configuration_html(AsyncWebServerRequest *request) {
 			}
 		}
 		save_configNTP();
-		NTP.setNtpServerName(_ntpConfig.ntpServerName0.c_str());
-		NTP.setDayLight(_ntpConfig.daylight);
-		ntpBeginReserv();
+
 		setTime(NTP.getTime()); //set time
 	}
 	ESPHTTPServer.handleFileRead("/ntp.html", request);
-	// request->send_P(200, "text/html", Page_GeneralNtp);
 
 }
 

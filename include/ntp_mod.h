@@ -45,33 +45,33 @@ class  NTPMOD_CLASS    {
     
     
     strNtpConfig    _ntpConfig; // NTP configuration
-    bool updateTimeFromNTP  = false;
-    int _ntpserveer         = 0;
-
+    
     void ntpBegin ();
     void ntpOnConnected ();
-    void ntpStop ();
+    void ntpOnDisconected ();
     void webInit();
-
-    void ntpBeginReserv ();
-    void ntpHandle();
-    void ntpHandler(NTPSyncEvent_t event);
+    
+    void ntpSwitchReserv ();
+    void ntpOnSyncHandler(NTPSyncEvent_t event);
     
     //CFG
     bool load_config_NTP();
     bool save_configNTP();
     void defaultConfigNTP();
-
+    
     // WEB
     
     void send_NTP_info_html(AsyncWebServerRequest *request) ;
     void send_NTP_configuration_values_html(AsyncWebServerRequest *request);
     void send_NTP_configuration_html(AsyncWebServerRequest *request);
     void sendTimeData();
-
-
-
-protected: 
+    
+    
+    
+    protected: 
+    bool updateTimeFromNTP  = false;
+    int _ntpServerCount         = 0;
+    String _ntpServerNow = "";
     bool  dumb = false;
 };
 

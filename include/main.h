@@ -8,7 +8,7 @@
 #define USE_RESERV_WIFI 1
 #define NO_RST          0
 
-#define NTP_TIMEOUT 3000 // milliseconds
+#define NTP_TIMEOUT 5000 // milliseconds
 
 #define SEC 1000 // 1000 usecs
 #define MINUTES 60  // 60 secs

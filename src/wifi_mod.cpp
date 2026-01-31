@@ -324,6 +324,7 @@ void WIFIMOD_CLASS::onWiFiConnectedGotIP(WiFiEventStationModeGotIP data) {
     if (udpBroadcast.getudpPowerOn() == true ) { 
 		udpBroadcastSimple();
 	}
+	ntpModClass.ntpOnConnected();
 
 }
 
@@ -333,8 +334,8 @@ void WIFIMOD_CLASS::onWiFiDisconnected() {
 void WIFIMOD_CLASS::onWiFiDisconnected(WiFiEventStationModeDisconnected data) {
 #endif
 
-	// ntpModClass.ntpStop();
 	udpBroadcast.udpStop();	// always stop!
+	ntpModClass.ntpOnDisconected();
 
 	if (wifiStatus == FS_STAT_RESET) {return;}
 
