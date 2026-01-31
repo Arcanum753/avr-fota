@@ -201,6 +201,10 @@ void NTPMOD_CLASS::send_NTP_configuration_html(AsyncWebServerRequest *request) {
 		setTime(NTP.getTime()); //set time
 	}
 	ESPHTTPServer.handleFileRead("/ntp.html", request);
+<<<<<<< HEAD
+=======
+	// request->send_P(200, "text/html", Page_GeneralNtp);
+>>>>>>> 48544e2 (fix ntp on going)
 
 }
 

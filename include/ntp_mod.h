@@ -58,7 +58,6 @@ class  NTPMOD_CLASS    {
     bool load_config_NTP();
     bool save_configNTP();
     void defaultConfigNTP();
-    
     // WEB
     
     void send_NTP_info_html(AsyncWebServerRequest *request) ;
