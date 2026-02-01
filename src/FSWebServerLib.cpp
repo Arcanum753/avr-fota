@@ -10,16 +10,18 @@
 #if defined(ESP32)
 #include <SPIFFS.h>
 #include <esp32-hal-gpio.h>
+#endif
 
 #ifdef PROGTYPE_ISP
 #include "module_prog_isp.h"
 #endif
 
-#ifdef PROGTYPE_SWD
+
+#if defined(PROGTYPE_SWD)
 #include "module_prog_swd.h"
 #endif
 
-#elif defined(ESP8266)
+#if defined(ESP8266)
 #include <FS.h>
 #endif
 
