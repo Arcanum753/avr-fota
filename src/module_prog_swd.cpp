@@ -15,7 +15,8 @@
 
 #include "FSWebServerLib.h"
 #include "debug.h"
-#include "ntp_mod.h"
+
+#include "module_ntp.h"
 #include "prog_swd.h"
 
 #include "module_prog_swd.h"

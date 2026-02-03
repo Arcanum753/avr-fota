@@ -10,7 +10,8 @@
 #endif
 #include <NtpClientLib.h>
 #include <WiFiClient.h>
-#include "udphelper.h"
+#include "module_udp.h"
+
 #include "eertos.h"
 
 #include "debug.h"
@@ -36,13 +37,13 @@ bool    UDPBROADCAST_CLASS::getudpPowerOn() 	{	return _udpConfig.udpPowerOn;		}
 
 
 void UDPBROADCAST_CLASS::begin(uint16_t _port) {
-	DEBUGLOG(__FUNCTION__);	DEBUGLOG("\r\n");
+	DEBUGUDP(__FUNCTION__);	DEBUGUDP("\r\n");
 	if (isStarted == true)	{	return;	}
     portRx = _port;
     //Start to listen UDP packets on port _port.
 	SetTimerTask(udpBroadcastTimer, SEC * MINUTES * udpBroadcast.getudpTimeOut());
     if(udp_listen.listen(portRx)) {
-      	DEBUGLOG("UDP Listening on IP: %s and port %u \n\r",  WiFi.localIP().toString().c_str(), portRx);
+      	DEBUGUDP("UDP Listening on IP: %s and port %u \n\r",  WiFi.localIP().toString().c_str(), portRx);
         isStarted = true;
         
         udp_listen.onPacket(processUdpListenPacketHandler) ;
@@ -53,13 +54,13 @@ void UDPBROADCAST_CLASS::begin(uint16_t _port) {
 void processUdpListenPacketHandler(AsyncUDPPacket &packet) {
 	// data lenght check
 	if (packet.length() > UDP_DATA_LENGHT_MAX) {
-		DEBUGLOG("Udp rcv data size overmax!\n\r");
+		DEBUGUDP("Udp rcv data size overmax!\n\r");
 		return;
 	} 
 	// is broadcast &
 	bool _isBroadcast = packet.isBroadcast();
 	if (_isBroadcast == false) {
-		DEBUGLOG("Udp rcv non broadcast!\n\r");
+		DEBUGUDP("Udp rcv non broadcast!\n\r");
 		return;
 	}
 	_responseIp = packet.remoteIP();
@@ -81,7 +82,7 @@ void UDPBROADCAST_CLASS::udpStop()	{
 }
 		
 void  udpResponse(IPAddress _Ip)	{
-	DEBUGLOG(__FUNCTION__);	DEBUGLOG("\r\n");
+	DEBUGUDP(__FUNCTION__);	DEBUGUDP("\r\n");
 	message.flush();
 	message.print(udpBroadcast.udpJsonGet());
 	uint16_t _portTx= udpBroadcast.getUpdPortTx();
@@ -90,7 +91,7 @@ void  udpResponse(IPAddress _Ip)	{
 }
 
 void  udpBroadcastSimple( ){
-	DEBUGLOG(__FUNCTION__);	DEBUGLOG("\r\n");
+	DEBUGUDP(__FUNCTION__);	DEBUGUDP("\r\n");
 	udpBroadcast.udpBroadcastSend(udpBroadcast.getUpdPortTx(), udpBroadcast.udpJsonGet());
 }
 
@@ -101,14 +102,14 @@ void  udpBroadcastSimple( ){
     portTx = _port;
 
     if (portTx == getUpdPortRx()) {
-      DEBUGLOGISP("udpStringResp: portTx == portRx.\r\n");
+      DEBUGUDPISP("udpStringResp: portTx == portRx.\r\n");
       return;
     }
     char * _str = new char [_strin.length()+1];
     strcpy (_str, _strin.c_str());
     
 	udp_listen.broadcastTo(_str, portTx);
-    DEBUGLOGISP("  broadcastTo port: %u \n\r", portTx);
+    DEBUGUDPISP("  broadcastTo port: %u \n\r", portTx);
     
 }
 
@@ -117,7 +118,7 @@ void udpBroadcastTimer() {
   if (timeout > 60) {	timeout = 60;	}
   if (timeout == 0)	{	return;	}
 	if (timeout > 0 )	{
-	  DEBUGLOG("Udp timeout %d min. ", timeout);
+	  DEBUGUDP("Udp timeout %d min. ", timeout);
 	  udpBroadcast.udpBroadcastSend(udpBroadcast.getUpdPortTx(), udpBroadcast.udpJsonGet());
 	  SetTimerTask(udpBroadcastTimer, SEC * MINUTES * timeout);
   }
@@ -125,7 +126,7 @@ void udpBroadcastTimer() {
 }
 
 void  UDPBROADCAST_CLASS::udpBroadcastTest(AsyncWebServerRequest *request) {
-	DEBUGLOG(__FUNCTION__);	DEBUGLOG("\r\n");
+	DEBUGUDP(__FUNCTION__);	DEBUGUDP("\r\n");
 	udpBroadcastSend(getUpdPortTx(), udpJsonGet());
 }
 
@@ -152,7 +153,7 @@ void UDPBROADCAST_CLASS::webInit(void) {
 
 
 void UDPBROADCAST_CLASS::send_udp_configuration_values_html(AsyncWebServerRequest *request) { // answer for "get" request
-	DEBUGLOG(__FUNCTION__);	DEBUGLOG("\r\n");
+	DEBUGUDP(__FUNCTION__);	DEBUGUDP("\r\n");
 	String values = "";
 	values += "udpporttx|" 	  		+(String)_udpConfig.udpPortTx 	+ "|input\n";
 	values += "udpportrx|" 	  		+(String)_udpConfig.udpPortRx 	+ "|input\n";
@@ -163,10 +164,10 @@ void UDPBROADCAST_CLASS::send_udp_configuration_values_html(AsyncWebServerReques
 }
 
 void UDPBROADCAST_CLASS::get_udp_configuration_html(AsyncWebServerRequest *request) {
-	DEBUGLOG(__PRETTY_FUNCTION__);	DEBUGLOG("\r\n");
+	DEBUGUDP(__PRETTY_FUNCTION__);	DEBUGUDP("\r\n");
 	if (request->args() > 0) { // get new configs from args
 		for (uint8_t i = 0; i < request->args(); i++) {
-			DEBUGLOG("Arg %d: %s %s\r\n", i, request->argName(i).c_str() ,request->arg(i).c_str() );
+			DEBUGUDP("Arg %d: %s %s\r\n", i, request->argName(i).c_str() ,request->arg(i).c_str() );
 			if (request->argName(i) == "udpporttx")		{ _udpConfig.udpPortTx = request->arg(i).toInt();		continue; }
 			if (request->argName(i) == "udpportrx")		{ _udpConfig.udpPortRx = request->arg(i).toInt();		continue; }
 			if (request->argName(i) == "udptime")		{ _udpConfig.udpTimeOut = request->arg(i).toInt();		continue; }
@@ -184,7 +185,7 @@ void UDPBROADCAST_CLASS::get_udp_configuration_html(AsyncWebServerRequest *reque
 
 
 String UDPBROADCAST_CLASS::udpJsonGet()   {
-  	// DEBUGLOG(__PRETTY_FUNCTION__); DEBUGLOG("\r\n");
+  	// DEBUGUDP(__PRETTY_FUNCTION__); DEBUGUDP("\r\n");
 	String _ret = "";
 	JsonDocument jsonDoc;
 
@@ -236,7 +237,7 @@ void UDPBROADCAST_CLASS::defaultConfigUDP() {
 
 
 bool UDPBROADCAST_CLASS::save_configUDP() {
-	DEBUGLOG(__PRETTY_FUNCTION__);	DEBUGLOG("\r\n");
+	DEBUGUDP(__PRETTY_FUNCTION__);	DEBUGUDP("\r\n");
 	JsonDocument jsonDoc;
 	jsonDoc["udpPortTx"] 	= _udpConfig.udpPortTx;
 	jsonDoc["udpPortRx"] 	= _udpConfig.udpPortRx;
@@ -249,7 +250,7 @@ bool UDPBROADCAST_CLASS::save_configUDP() {
 
 
 bool UDPBROADCAST_CLASS::load_config_UDP() {
-	DEBUGLOG(__PRETTY_FUNCTION__);	DEBUGLOG("\r\n");
+	DEBUGUDP(__PRETTY_FUNCTION__);	DEBUGUDP("\r\n");
 	JsonDocument jsonDoc;
 	if (!ESPHTTPServer.load_jsonDoc(CONFIG_FILE_UDP, jsonDoc)){	return false;	}
 // #ifndef RELEASE
@@ -262,11 +263,11 @@ bool UDPBROADCAST_CLASS::load_config_UDP() {
 	_udpConfig.udpTimeOut			= jsonDoc["udpTimeOut"].as< int >();
 	_udpConfig.keyword				= jsonDoc["udpkeyword"].as<const char *>();
 	_udpConfig.udpPowerOn			= jsonDoc["udpPowerOn"].as< bool >(); 
-	DEBUGLOG("updPortTx: %d\r\n"	, _udpConfig.udpPortTx);
-	DEBUGLOG("updPortRx: %d\r\n"	, _udpConfig.udpPortRx);
-	DEBUGLOG("udpTimeOut: %d\r\n"	, _udpConfig.udpTimeOut);
-	DEBUGLOG("keyword: %s\r\n"		, _udpConfig.keyword.c_str());
-	DEBUGLOG("udpPowerOn: %d\r\n"	, _udpConfig.udpPowerOn);
+	DEBUGUDP("updPortTx: %d\r\n"	, _udpConfig.udpPortTx);
+	DEBUGUDP("updPortRx: %d\r\n"	, _udpConfig.udpPortRx);
+	DEBUGUDP("udpTimeOut: %d\r\n"	, _udpConfig.udpTimeOut);
+	DEBUGUDP("keyword: %s\r\n"		, _udpConfig.keyword.c_str());
+	DEBUGUDP("udpPowerOn: %d\r\n"	, _udpConfig.udpPowerOn);
 	return true;
 }
 

@@ -30,6 +30,11 @@
 #include <ESPAsyncTCP.h>
 #endif
 
+
+
+#define DEBUG_NTP 
+#define DEBUG_UDP 
+
 //#define RELEASE  // Comment to enable debug output
 
 void loop_user();

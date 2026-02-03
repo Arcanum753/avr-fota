@@ -10,8 +10,8 @@
 #include "FSWebServerLib.h"
 #include "debug.h"
 #include "wifi_mod.h"
-#include "udphelper.h"
-#include "ntp_mod.h"
+#include "module_udp.h"
+#include "module_ntp.h"
 
 
 NTPMOD_CLASS ntpModClass(false);
@@ -22,7 +22,7 @@ NTPMOD_CLASS :: NTPMOD_CLASS (bool _in) { dumb = _in; }
 
 // init
 void NTPMOD_CLASS::ntpBegin (){
-	DEBUGLOG(__PRETTY_FUNCTION__);	DEBUGLOG("\r\n");
+	DEBUGNTP(__PRETTY_FUNCTION__);	DEBUGNTP("\r\n");
 	_ntpServerCount = 0;
 	
 	defaultConfigNTP(); 
@@ -35,6 +35,7 @@ void NTPMOD_CLASS::ntpBegin (){
 
 // on WiFi connect
 void NTPMOD_CLASS::ntpOnConnected (){
+	DEBUGNTP(__PRETTY_FUNCTION__);	DEBUGNTP("\r\n");
 	if (updateTimeFromNTP == true) { // Enable NTP sync
         NTP.setInterval ( _ntpConfig.updateNTPTimeEvery * MINUTES);
         NTP.setNTPTimeout (NTP_TIMEOUT);
@@ -46,6 +47,7 @@ void NTPMOD_CLASS::ntpOnConnected (){
 
 
 void NTPMOD_CLASS::ntpOnDisconected () {
+	DEBUGNTP(__PRETTY_FUNCTION__);	DEBUGNTP("\r\n");
 	NTP.stop(); 
 }
 
@@ -54,15 +56,15 @@ void NTPMOD_CLASS::ntpOnSyncHandler(NTPSyncEvent_t event)	{
 	int _ntpevent = static_cast<int>(event);
 
     if ( _ntpevent == timeSyncd) 		{ 
-		DEBUGLOG("NTP_timeSyncd: "); 	
-		DEBUGLOG(NTP.getTimeDateString(NTP.getLastNTPSync()).c_str() );	
-		DEBUGLOG(" \r\n");
+		DEBUGNTP("NTP_timeSyncd: "); 	
+		DEBUGNTP(NTP.getTimeDateString(NTP.getLastNTPSync()).c_str() );	
+		DEBUGNTP(" \r\n");
 	}
-	if ( _ntpevent == noResponse) 		{ DEBUGLOG("NTP_noResponse \r\n"); 		}
-	if ( _ntpevent == invalidAddress) 	{ DEBUGLOG("NTP_invalidAddress \r\n"); 	}
-	if ( _ntpevent == requestSent) 		{ DEBUGLOG("NTP_requestSent \r\n"); 		}	
-	if ( _ntpevent == errorSending) 	{ DEBUGLOG("NTP_errorSending \r\n"); 	}
-	if ( _ntpevent == responseError) 	{ DEBUGLOG("NTP_responseError \r\n"); 	}
+	if ( _ntpevent == noResponse) 		{ DEBUGNTP("NTP_noResponse \r\n"); 		}
+	if ( _ntpevent == invalidAddress) 	{ DEBUGNTP("NTP_invalidAddress \r\n"); 	}
+	if ( _ntpevent == requestSent) 		{ DEBUGNTP("NTP_requestSent \r\n"); 		}	
+	if ( _ntpevent == errorSending) 	{ DEBUGNTP("NTP_errorSending \r\n"); 	}
+	if ( _ntpevent == responseError) 	{ DEBUGNTP("NTP_responseError \r\n"); 	}
 
 	if ( _ntpevent == noResponse) 		{	ntpSwitchReserv();	}
 	if ( _ntpevent == invalidAddress) 	{	ntpSwitchReserv();	}
@@ -97,14 +99,14 @@ bool NTPMOD_CLASS::load_config_NTP() {
 	_ntpConfig.timezone 			= jsonDoc["timeZone"].as<long>();
 	_ntpConfig.daylight 			= jsonDoc["daylight"].as<long>();
 
-	DEBUGLOG("NTP Server0: %s\r\n", _ntpConfig.ntpServerName0.c_str());
-	DEBUGLOG("NTP Server1: %s\r\n", _ntpConfig.ntpServerName1.c_str());
-	DEBUGLOG("NTP Server2: %s\r\n", _ntpConfig.ntpServerName2.c_str());
+	DEBUGNTP("NTP Server0: %s\r\n", _ntpConfig.ntpServerName0.c_str());
+	DEBUGNTP("NTP Server1: %s\r\n", _ntpConfig.ntpServerName1.c_str());
+	DEBUGNTP("NTP Server2: %s\r\n", _ntpConfig.ntpServerName2.c_str());
 	return true;
 }
 
 bool NTPMOD_CLASS::save_configNTP() {
-	DEBUGLOG("Save config NTP \r\n");
+	DEBUGNTP("Save config NTP \r\n");
 	JsonDocument jsonDoc;
 	jsonDoc["ntp0"] 		= _ntpConfig.ntpServerName0;
 	jsonDoc["ntp1"] 		= _ntpConfig.ntpServerName1;
@@ -127,7 +129,7 @@ void NTPMOD_CLASS::defaultConfigNTP() {
 }
 
 void NTPMOD_CLASS::webInit ()	{
-	DEBUGLOG(__PRETTY_FUNCTION__);	DEBUGLOG("\r\n");
+	DEBUGNTP(__PRETTY_FUNCTION__);	DEBUGNTP("\r\n");
 	
 	ESPHTTPServer.on("/ntp/info", HTTP_GET, [this](AsyncWebServerRequest *request) {
 		this->send_NTP_info_html(request);
@@ -145,7 +147,7 @@ void NTPMOD_CLASS::webInit ()	{
 
 
 void NTPMOD_CLASS::send_NTP_info_html(AsyncWebServerRequest *request) {
-	DEBUGLOG(__FUNCTION__);	DEBUGLOG("\r\n");
+	DEBUGNTP(__FUNCTION__);	DEBUGNTP("\r\n");
 	String values = "";
 
 	values += "x_ntp_sync|" + (String)NTP.getTimeDateString(NTP.getLastNTPSync()) + "|div\n";
@@ -161,23 +163,23 @@ void NTPMOD_CLASS::send_NTP_info_html(AsyncWebServerRequest *request) {
 
 // ntp.html vvv
 void NTPMOD_CLASS::send_NTP_configuration_html(AsyncWebServerRequest *request) {
-	DEBUGLOG(__PRETTY_FUNCTION__);	DEBUGLOG("\r\n");
+	DEBUGNTP(__PRETTY_FUNCTION__);	DEBUGNTP("\r\n");
 	if (request->args() > 0)  {// Save Settings
 		_ntpConfig.daylight = false;
 		for (uint8_t i = 0; i < request->args(); i++) {
 			if (request->argName(i) == "ntpserver0") {
 				_ntpConfig.ntpServerName0 = ESPHTTPServer.urldecode(request->arg(i));
-				DEBUGLOG("ntpServerName0: %s\r\n", _ntpConfig.ntpServerName0);
+				DEBUGNTP("ntpServerName0: %s\r\n", _ntpConfig.ntpServerName0);
 				continue;
 			}
 			if (request->argName(i) == "ntpserver1") {
 				_ntpConfig.ntpServerName1 = ESPHTTPServer.urldecode(request->arg(i));
-				DEBUGLOG("ntpServerName1: %s\r\n", _ntpConfig.ntpServerName1);
+				DEBUGNTP("ntpServerName1: %s\r\n", _ntpConfig.ntpServerName1);
 				continue;
 			}
 			if (request->argName(i) == "ntpserver2") {
 				_ntpConfig.ntpServerName2 = ESPHTTPServer.urldecode(request->arg(i));
-				DEBUGLOG("ntpServerName2: %s\r\n", _ntpConfig.ntpServerName2);
+				DEBUGNTP("ntpServerName2: %s\r\n", _ntpConfig.ntpServerName2);
 				continue;
 			}
 			if (request->argName(i) == "update") {
@@ -192,7 +194,7 @@ void NTPMOD_CLASS::send_NTP_configuration_html(AsyncWebServerRequest *request) {
 			}
 			if (request->argName(i) == "dst") {
 				_ntpConfig.daylight = true;
-				DEBUGLOG("Daylight Saving: %d\r\n", _ntpConfig.daylight);
+				DEBUGNTP("Daylight Saving: %d\r\n", _ntpConfig.daylight);
 				continue;
 			}
 		}
@@ -205,7 +207,7 @@ void NTPMOD_CLASS::send_NTP_configuration_html(AsyncWebServerRequest *request) {
 
 
 void NTPMOD_CLASS::send_NTP_configuration_values_html(AsyncWebServerRequest *request) {
-	DEBUGLOG(__FUNCTION__);	DEBUGLOG("\r\n");
+	DEBUGNTP(__FUNCTION__);	DEBUGNTP("\r\n");
 	String values = "";
 	values += "ntpserver0|" 	+ (String)_ntpConfig.ntpServerName0 			+ "|input\n";
 	values += "ntpserver1|" 	+ (String)_ntpConfig.ntpServerName1 			+ "|input\n";
@@ -226,8 +228,8 @@ void NTPMOD_CLASS::send_NTP_configuration_values_html(AsyncWebServerRequest *req
 
 
 void NTPMOD_CLASS::sendTimeData() {
-	DEBUGLOG(__PRETTY_FUNCTION__);	DEBUGLOG("\r\n");
-	DEBUGLOG("sendTimeData %s\r\n", NTP.getTimeDateString().c_str());
+	DEBUGNTP(__PRETTY_FUNCTION__);	DEBUGNTP("\r\n");
+	DEBUGNTP("sendTimeData %s\r\n", NTP.getTimeDateString().c_str());
 }
 
 
