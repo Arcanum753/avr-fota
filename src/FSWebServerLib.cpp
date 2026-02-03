@@ -2,10 +2,11 @@
 #include <ArduinoJson.h>
 
 #include "FSWebServerLib.h"
-#include "udphelper.h"
+
 #include "debug.h"
 #include "wifi_mod.h"
-#include "ntp_mod.h"
+#include "module_udp.h"
+#include "module_ntp.h"
 
 #if defined(ESP32)
 #include <SPIFFS.h>

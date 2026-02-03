@@ -10,8 +10,8 @@
 #include "FSWebServerLib.h"
 #include "debug.h"
 #include "wifi_mod.h"
-#include "udphelper.h"
-#include "ntp_mod.h"
+#include "module_udp.h"
+#include "module_ntp.h"
 
 WIFIMOD_CLASS wifiModClass(false);
 

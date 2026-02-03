@@ -10,6 +10,15 @@
 #include <ESPAsyncUDP.h>
 #endif
 
+#ifdef DEBUG_UDP
+#define DEBUGUDP(...) Serial.printf(__VA_ARGS__)
+#else
+#define DEBUGUDP(...)
+#endif
+
+
+
+
 #define CONFIG_FILE_UDP     "/config_udp.json"
 #define HTML_FILE_UDP       "/udp.html"
 #define UDP_DATA_LENGHT_MAX 64 // bytes

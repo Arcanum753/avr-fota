@@ -1,13 +1,22 @@
 #ifndef _MTPMOD_h
 #define _MTPMOD_h
 
+#include "main.h"
 #include <WiFiClient.h>
 #include <TimeLib.h>
 #include <NtpClientLib.h>
 
 
-#define CONFIG_FILE_NTP             "/config_ntp.json"
 
+#ifdef DEBUG_NTP
+#define DEBUGNTP(...) Serial.printf(__VA_ARGS__)
+#else
+#define DEBUGNTP(...)
+#endif
+
+
+
+#define CONFIG_FILE_NTP             "/config_ntp.json"
 
 
 #define NTPSERVER_DFLT0 "pool.ntp.org";
