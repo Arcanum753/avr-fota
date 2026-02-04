@@ -4,7 +4,7 @@
 #include "FSWebServerLib.h"
 
 #include "debug.h"
-#include "wifi_mod.h"
+#include "module_wifi.h"
 #include "module_udp.h"
 #include "module_ntp.h"
 
