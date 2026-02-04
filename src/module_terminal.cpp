@@ -12,7 +12,7 @@
 #include <ESPAsyncWebServer.h>
 #include "FSWebServerLib.h"
 #include "ErriezSerialTerminal.h"
-#include "terminal.h"
+#include "module_terminal.h"
 #include "module_udp.h"
 #include "swd.h"
 

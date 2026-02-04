@@ -102,14 +102,14 @@ void  udpBroadcastSimple( ){
     portTx = _port;
 
     if (portTx == getUpdPortRx()) {
-      DEBUGUDPISP("udpStringResp: portTx == portRx.\r\n");
+      DEBUGUDP("udpStringResp: portTx == portRx.\r\n");
       return;
     }
     char * _str = new char [_strin.length()+1];
     strcpy (_str, _strin.c_str());
     
 	udp_listen.broadcastTo(_str, portTx);
-    DEBUGUDPISP("  broadcastTo port: %u \n\r", portTx);
+    DEBUGUDP("  broadcastTo port: %u \n\r", portTx);
     
 }
 

@@ -12,7 +12,7 @@
 #include "FSWebServerLib.h"
 #include "eertos.h"
 #include "ErriezSerialTerminal.h"
-#include "terminal.h"
+#include "module_terminal.h"
 
 
 
