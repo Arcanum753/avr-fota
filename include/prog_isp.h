@@ -1,4 +1,9 @@
 
+
+#ifndef _PROGISP_h
+#define _PROGISP_h
+ 
+
 #include <vector>
 #include "debug.h"
 
@@ -203,7 +208,7 @@ extern ESP8266_AVRISP avrprog;
 
 
 
-
+#endif // _PROGISP_h
 
 
 

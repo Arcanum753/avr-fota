@@ -1,6 +1,6 @@
 
-#ifndef _WIFIMOD_h
-#define _WIFIMOD_h
+#ifndef _MODWIFI_h
+#define _MODWIFI_h
 
 
 #define WIFI_CONFIG_FILE_NAME       "config_wifi"
@@ -121,4 +121,4 @@ extern WIFIMOD_CLASS wifiModClass;
 
 
 
-#endif // _WIFIMOD_h
+#endif // _MODWIFI_h
