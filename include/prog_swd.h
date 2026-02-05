@@ -1,3 +1,8 @@
+
+#ifndef _PROGSWD_h
+#define _PROGSWD_h
+ 
+
 #include "swd.h"
 
 
@@ -148,3 +153,7 @@ protected:
 
 
 extern ESP_PROGSWD swdprog;
+
+
+#endif // _PROGSWD_h
+

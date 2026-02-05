@@ -46,15 +46,15 @@
 #define APSEL          0xFF000000  // APSEL Mask
 
 // Access Port Register Addresses
-#define AP_CSW         0x00        // Control and Status Word
-#define AP_TAR         0x04        // Transfer Address
-#define AP_DRW         0x0C        // Data Read/Write
-#define AP_BD0         0x10        // Banked Data 0
-#define AP_BD1         0x14        // Banked Data 1
-#define AP_BD2         0x18        // Banked Data 2
-#define AP_BD3         0x1C        // Banked Data 3
-#define AP_ROM         0xF8        // Debug ROM Address
-#define AP_IDR         0xFC        // Identification Register
+// #define AP_CSW         0x00        // Control and Status Word
+// #define AP_TAR         0x04        // Transfer Address
+// #define AP_DRW         0x0C        // Data Read/Write
+// #define AP_BD0         0x10        // Banked Data 0
+// #define AP_BD1         0x14        // Banked Data 1
+// #define AP_BD2         0x18        // Banked Data 2
+// #define AP_BD3         0x1C        // Banked Data 3
+// #define AP_ROM         0xF8        // Debug ROM Address
+// #define AP_IDR         0xFC        // Identification Register
 
 // AP Control and Status Word definitions
 #define CSW_SIZE       0x00000007  // Access Size: Selection Mask

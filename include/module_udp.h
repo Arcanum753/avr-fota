@@ -1,5 +1,5 @@
-#ifndef _UDPHELPER_h
-#define _UDPHELPER_h
+#ifndef _MODUDP_h
+#define _MODUDP_h
 
 #include "main.h"
 #include "FSWebServerLib.h"
@@ -75,4 +75,4 @@ class  UDPBROADCAST_CLASS   {
 };
 extern UDPBROADCAST_CLASS udpBroadcast;
 
-#endif // _UDPHELPER_h
+#endif // _MODUDP_h

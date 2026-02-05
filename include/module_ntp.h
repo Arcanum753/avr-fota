@@ -1,5 +1,5 @@
-#ifndef _MTPMOD_h
-#define _MTPMOD_h
+#ifndef _MODULENTP_h
+#define _MODULENTP_h
 
 #include "main.h"
 #include <WiFiClient.h>
@@ -89,4 +89,4 @@ extern NTPMOD_CLASS ntpModClass;
 
 
 
-#endif // _MTPMOD_h
+#endif // _MODULENTP_h
