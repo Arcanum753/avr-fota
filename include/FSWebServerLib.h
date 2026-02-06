@@ -140,7 +140,6 @@ public:
 	bool load_user_config(String name, float &value);
 	bool save_user_config(String name, long value);
 	bool load_user_config(String name, long &value);
-	static String urldecode(String input); // (based on https://code.google.com/p/avr-netino/)
 
     //Clear the configuration data (not the user config!) and optional reset the device
     //Clear the user configuration data (not the Wifi config!) and optional reset the device
@@ -238,10 +237,9 @@ private:
     UpdateTypeFile  typeOTAfile;
     uint16_t percentLoadedPrev ;
 
- //   static String urldecode(String input); // (based on https://code.google.com/p/avr-netino/)
-    static unsigned char h2int(char c);
+
     public:
-    static boolean checkRange(String Value);
+    
     private:
     
 };

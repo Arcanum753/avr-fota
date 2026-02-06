@@ -11,9 +11,11 @@
 
 #include <NtpClientLib.h>
 #include <WiFiClient.h>
+
 #include "module_udp.h"
 
 #include "eertos.h"
+#include "common.h"
 // #include "debug.h"
 
 
@@ -171,7 +173,7 @@ void UDPBROADCAST_CLASS::get_udp_configuration_html(AsyncWebServerRequest *reque
 			if (request->argName(i) == "udpporttx")		{ _udpConfig.udpPortTx = request->arg(i).toInt();		continue; }
 			if (request->argName(i) == "udpportrx")		{ _udpConfig.udpPortRx = request->arg(i).toInt();		continue; }
 			if (request->argName(i) == "udptime")		{ _udpConfig.udpTimeOut = request->arg(i).toInt();		continue; }
-			if (request->argName(i) == "udpkeyword")	{ _udpConfig.keyword    = ESPHTTPServer.urldecode(request->arg(i));		continue; }
+			if (request->argName(i) == "udpkeyword")	{ _udpConfig.keyword    = urldecode(request->arg(i));		continue; }
 			if (request->argName(i) == "udppoweron")	{ _udpConfig.udpPowerOn = true;		continue; }
 			
 		}

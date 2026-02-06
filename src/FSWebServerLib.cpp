@@ -1314,61 +1314,6 @@ void AsyncFSWebServer::setUSERVERSION(String Version) {
 	_Version_App = Version;
 }
 
-// String AsyncFSWebServer::FilesListGet() {
-
-
-//     if (!_fs) { _fs->begin();  }// If SPIFFS is not started
-// // #ifdef ESP32
-// //     File root =  _fs->open("/");
-// //     File file = root.openNextFile();
-// //     while (file) {
-// //         if (file.isDirectory()) {
-// //             json +=   "DIR: [";  json += file.name();   json += "]\n\r";
-// //         } else {
-// //             json +=   "\t";
-// // 			json += file.name();
-// // 			json +=   " \t";
-// // 			json += String(file.size());
-// // 			json +=   "\n\r";
-// //         }
-// //         file = root.openNextFile();
-// //     }
-// // #else
-// //     Dir files = _fs->openDir("/");
-// //     while (files.next()) {
-// //         if (files.isDirectory()) {
-// //             list +=   "DIR: [";  list += files.fileName();   list +=   "] \n\r";
-// //         } else {
-// //             File f = files.openFile("r");	list +=   "\t";
-// // 			list  += files.fileName();		list +=   " \t";
-// // 			list  += String(f.size());		list +=   "\n\r";
-// //         }
-// //     }
-// // #endif
-// 	String json = "[";
-
-// 	json += "{";
-// 	json +=  "\"fname\":filenameTest1";
-// 	json +=  "\"type\":filetypeTest1";
-// 	json +=  "\"size\":filesizeTest1";
-// 	json +=  "\"actual\":actualTest1";
-// 	json +=  "\"chip\":chipTest1";
-// 	json +=  "\"date\":dateTest1";
-// 	json += "}";
-
-// 	json += "{";
-// 	json +=  "\"fname\":filenameTest2";
-// 	json +=  "\"type\":filetypeTest2";
-// 	json +=  "\"size\":filesizeTest2";
-// 	json +=  "\"actual\":actualTest2";
-// 	json +=  "\"chip\":chipTest2";
-// 	json +=  "\"date\":dateTest2";
-// 	json += "}";
-
-// 	json += "]";
-//     return json;
-// }
-
 
 
 // TODO РАСПИХАТЬ УДАЛЕНИЕ ПО МОДУЛЯМ
@@ -1412,37 +1357,4 @@ void AsyncFSWebServer::serialShowInfo() {
 	Serial.printf("or you can connect directly  http://%s \n\r", WiFi.localIP().toString().c_str());
 }
 
-
-// convert a single hex digit character to its integer value (from https://code.google.com/p/avr-netino/)
-unsigned char AsyncFSWebServer::h2int(char c) {
-	if (c >= '0' && c <= '9')	{		return ((unsigned char)c - '0');	}
-	if (c >= 'a' && c <= 'f')	{		return ((unsigned char)c - 'a' + 10);	}
-	if (c >= 'A' && c <= 'F')	{		return ((unsigned char)c - 'A' + 10);	}
-	return(0);
-}
-
-String AsyncFSWebServer::urldecode(String input) { // (based on https://code.google.com/p/avr-netino/)
-	char c;
-	String ret = "";
-	for (byte t = 0; t < input.length(); t++) {
-		c = input[t];
-		if (c == '+') { c = ' ';}
-		if (c == '%') {
-			t++;
-			c = input[t];
-			t++;
-			c = (h2int(c) << 4) | h2int(input[t]);
-		}
-		ret.concat(c);
-	}
-	return ret;
-}
-
-//
-// Check the Values is between 0-255
-//
-boolean AsyncFSWebServer::checkRange(String Value) {
-	if (Value.toInt() < 0 || Value.toInt() > 255) {		return false;	}
-	else {		return true;	}
-}
 
