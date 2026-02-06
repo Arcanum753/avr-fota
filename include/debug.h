@@ -32,5 +32,4 @@
 
 
 
-
 #endif // _DEBUGLOG_h

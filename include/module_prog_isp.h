@@ -6,14 +6,14 @@
 #ifdef  PROGTYPE_ISP
 
 #ifdef DEBUG_ISP
-#define DEBUGLOGISP(...) Serial.printf(__VA_ARGS__)
+#define DEBUGLOGISP(...) DEBUGLOG(__VA_ARGS__)
 #else
 #define DEBUGLOGISP(...)
 #endif
 
 
 #if (DEBUG_SHOWHEXBUF > 1)
-#define DEBUGLOGISPBUF(...) Serial.printf(__VA_ARGS__)
+#define DEBUGLOGISPBUF(...) DEBUGLOG(__VA_ARGS__)
 #else
 #define DEBUGLOGISPBUF(...)
 #endif

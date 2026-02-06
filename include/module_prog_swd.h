@@ -5,7 +5,7 @@
 #ifdef  PROGTYPE_SWD
 
 #ifdef DEBUG_SWD
-#define DEBUGLOGSWD(...) Serial.printf(__VA_ARGS__)
+#define DEBUGLOGSWD(...) DEBUGLOG(__VA_ARGS__)
 #else
 #define DEBUGLOGSWD(...)
 #endif

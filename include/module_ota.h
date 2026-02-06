@@ -4,6 +4,7 @@
 
 
 class  MODULE_OTA_CLASS    {
+    
     public:
     MODULE_OTA_CLASS (bool _in);
     #if defined(ESP32)  
@@ -15,7 +16,7 @@ class  MODULE_OTA_CLASS    {
 
     protected: 
     bool  dumb = false;
-    
+
 };
 
 extern MODULE_OTA_CLASS ModOtaClass;

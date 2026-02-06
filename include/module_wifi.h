@@ -3,6 +3,15 @@
 #define _MODWIFI_h
 
 
+#include "main.h"
+
+#ifdef DEBUG_WIFI
+#define DEBUGLOGWIFI(...) DEBUGLOG(__VA_ARGS__)
+#else
+#define DEBUGLOGWIFI(...)
+#endif
+
+
 #define WIFI_CONFIG_FILE_NAME       "config_wifi"
 
 

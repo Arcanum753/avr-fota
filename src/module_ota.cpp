@@ -14,7 +14,7 @@
 #include "debug.h"
 #include "module_ota.h"
 
-
+MODULE_OTA_CLASS ModOtaClass(false);
 
 MODULE_OTA_CLASS :: MODULE_OTA_CLASS (bool _in) {
 	 dumb = _in;

@@ -78,10 +78,10 @@ void WIFIMOD_CLASS::s_secondTick(void* arg) {
 #endif
 // Try to load configuration from file system// Load defaults if any error
 	if (!load_configWifi(0)) { defaultConfigWifi(0); _apConfig.APenable = true;		}
-	DEBUGLOG("_strWifis[0] %s\r\n", _strWifi0);
-	DEBUGLOG("_strWifis[1] %s\r\n", _strWifi1);
-	DEBUGLOG("_strWifis[2] %s\r\n", _strWifi2);
-	DEBUGLOG("_strWifis[3] %s\r\n", _strWifi3);
+	DEBUGLOGWIFI("_strWifis[0] %s\r\n", _strWifi0);
+	DEBUGLOGWIFI("_strWifis[1] %s\r\n", _strWifi1);
+	DEBUGLOGWIFI("_strWifis[2] %s\r\n", _strWifi2);
+	DEBUGLOGWIFI("_strWifis[3] %s\r\n", _strWifi3);
 
 // Register wifi Event to control connection LED and wifi connection status
 	#if defined(ESP32)
@@ -126,7 +126,7 @@ bool WIFIMOD_CLASS::load_configWifi(int _in) {
 
 bool WIFIMOD_CLASS::save_configWifi(int _in) {
 	//flag_config = false;
-	DEBUGLOG("Save config\r\n");
+	DEBUGLOGWIFI("Save config\r\n");
 	JsonDocument jsonDoc;
 
 	jsonDoc["ssid"] = _wifiConfig.ssid;
@@ -168,7 +168,7 @@ bool WIFIMOD_CLASS::save_configWifi(int _in) {
 	if (_in == 3) {		 configFile = _fs->open(WIFI_CONFIG_FILE3, "w");	}
 #endif
 	if (!configFile) {
-		DEBUGLOG("Failed to open config file for writing\r\n");
+		DEBUGLOGWIFI("Failed to open config file for writing\r\n");
 		configFile.close();
 		return false;
 	}
@@ -197,11 +197,11 @@ void WIFIMOD_CLASS::defaultConfigWifi(int _in) {
 	_wifiConfig.dns 		= IPAddress(192, 168, 1, 1);
 	//config.connectionLed = CONNECTION_LED;
 	save_configWifi(_in);
-	DEBUGLOG(__PRETTY_FUNCTION__);	DEBUGLOG("\r\n");
+	DEBUGLOGWIFI(__PRETTY_FUNCTION__);	DEBUGLOGWIFI("\r\n");
 }
 
 void WIFIMOD_CLASS::configureWifiAP() {
-	DEBUGLOG(__PRETTY_FUNCTION__);	DEBUGLOG("\r\n");
+	DEBUGLOGWIFI(__PRETTY_FUNCTION__);	DEBUGLOGWIFI("\r\n");
 
 	if (WiFi.status() == WL_CONNECTED) { WiFi.disconnect();	}
 	WiFi.mode(WIFI_AP);
@@ -212,11 +212,11 @@ void WIFIMOD_CLASS::configureWifiAP() {
 	String APname = ESPHTTPServer._sysConfig.deviceName + "_" + ESPHTTPServer._sysConfig.deviceSerial;
 	if (ESPHTTPServer._httpAuth.auth) {
 		WiFi.softAP(APname, ESPHTTPServer._httpAuth.wwwPassword);
-		DEBUGLOG("AP Pass enabled: %s \r\n", ESPHTTPServer._httpAuth.wwwPassword.c_str());
+		DEBUGLOGWIFI("AP Pass enabled: %s \r\n", ESPHTTPServer._httpAuth.wwwPassword.c_str());
 	}
 	else {
 		WiFi.softAP(APname.c_str());
-		DEBUGLOG("AP Pass disabled \r\n");
+		DEBUGLOGWIFI("AP Pass disabled \r\n");
 	}
 	if (CONNECTION_LED >= 0) {	flashLED(CONNECTION_LED, 3, 250);	}
 	DBG_OUTPUT_PORT.printf("AP Mode enabled. SSID: %s IP: %s\r\n", WiFi.softAPSSID().c_str(), WiFi.softAPIP().toString().c_str());
@@ -244,14 +244,14 @@ int WIFIMOD_CLASS::scanWifi() {
 		WifiScan = WF_STAT_SCANED;
 	}
 
-	DEBUGLOG("timeout: %d _scanNum = %d nets = %d \r\n", (AP_ENABLE_TIMEOUT - connectionTimout), _scanNum, nets);
+	DEBUGLOGWIFI("timeout: %d _scanNum = %d nets = %d \r\n", (AP_ENABLE_TIMEOUT - connectionTimout), _scanNum, nets);
 	return _scanNum;
 }
 
 
 void WIFIMOD_CLASS::configureWifi() { // set esp8266 as wifi client
 	if (wifiStatus == FS_STAT_APMODE) {return;}
-	DEBUGLOG(__PRETTY_FUNCTION__);	DEBUGLOG("\r\n");
+	DEBUGLOGWIFI(__PRETTY_FUNCTION__);	DEBUGLOGWIFI("\r\n");
 	//disconnect required here
 	//improves reconnect reliability
 	if (WiFi.isConnected()) {		WiFi.disconnect(); 	}
@@ -282,7 +282,7 @@ void WIFIMOD_CLASS::onWiFiConnected(WiFiEventStationModeConnected data) {
 	if (CONNECTION_LED >= 0) {
 		digitalWrite(CONNECTION_LED, LOW); // Turn LED on
 		//turnLedESPHTTPServer.on();
-		DEBUGLOG("Led %d on\n", CONNECTION_LED);
+		DEBUGLOGWIFI("Led %d on\n", CONNECTION_LED);
 	}
 	wifiDisconnectedSince = 0;
 
@@ -339,7 +339,7 @@ void WIFIMOD_CLASS::onWiFiDisconnected(WiFiEventStationModeDisconnected data) {
 
 	if (wifiStatus == FS_STAT_RESET) {return;}
 
-DEBUGLOG(" case STA_DISCONNECTED \r\n");
+DEBUGLOGWIFI(" case STA_DISCONNECTED \r\n");
 	if(WiFi.status() != WL_CONNECTED && WiFi.status() != WL_NO_SSID_AVAIL)	  {
 		wifiStatus = FS_STAT_WRONGPASSWORDS;
 		WifiScan = WF_SCAN_NO_NEED;
@@ -353,14 +353,14 @@ DEBUGLOG(" case STA_DISCONNECTED \r\n");
 	} // Turn LED off
 	// FIXME
 	if (wifiDisconnectedSince == 0) { wifiDisconnectedSince = millis(); }
-	DEBUGLOG("Disconnected for %d seconds \r\n", (int)((millis() - wifiDisconnectedSince) / 1000));
+	DEBUGLOGWIFI("Disconnected for %d seconds \r\n", (int)((millis() - wifiDisconnectedSince) / 1000));
 	wifiStatus = FS_STAT_CONNECTING;
 	WifiScan = WF_STAT_SCANING;
 
 }
 
 void WIFIMOD_CLASS::wifiSsidSetPSWDwrong(String _str) {
-	DEBUGLOG("wifi ssid wrong password: %s \n", _str.c_str());
+	DEBUGLOGWIFI("wifi ssid wrong password: %s \n", _str.c_str());
 	if (strcmp( _strWifi3,  _str.c_str()) == 0)	{	memset (_strWifi3, 0, sizeof(_strWifi3)); }
 	if (strcmp( _strWifi2,  _str.c_str()) == 0)	{	memset (_strWifi2, 0, sizeof(_strWifi2)); }
 	if (strcmp( _strWifi1,  _str.c_str()) == 0)	{	memset (_strWifi1, 0, sizeof(_strWifi1)); }
@@ -369,7 +369,7 @@ void WIFIMOD_CLASS::wifiSsidSetPSWDwrong(String _str) {
  
 // wifi.html vvv
 void WIFIMOD_CLASS::send_network_configuration_values_html(AsyncWebServerRequest *request, int _index) {
-	DEBUGLOG(__PRETTY_FUNCTION__);	DEBUGLOG("\r\n");
+	DEBUGLOGWIFI(__PRETTY_FUNCTION__);	DEBUGLOGWIFI("\r\n");
 	load_configWifi(_index);
 	String values = "";
 	values += "ssid|" + (String)_wifiConfig.ssid + "|input\n";
@@ -398,7 +398,7 @@ void WIFIMOD_CLASS::send_network_configuration_values_html(AsyncWebServerRequest
 }
 
 void WIFIMOD_CLASS::send_connection_state_values_html(AsyncWebServerRequest *request) {
-	// DEBUGLOG(__FUNCTION__);	DEBUGLOG("\r\n");
+	// DEBUGLOGWIFI(__FUNCTION__);	DEBUGLOGWIFI("\r\n");
 	String state = "N/A";
 	String Networks = "";
 	if (WiFi.status() == 0) {	state = "Idle";	}
@@ -432,7 +432,7 @@ String WIFIMOD_CLASS::getMacAddress() {
 
 
 void WIFIMOD_CLASS::send_scanwifi(AsyncWebServerRequest *request) {
-	// DEBUGLOG(__FUNCTION__);	DEBUGLOG("\r\n");
+	// DEBUGLOGWIFI(__FUNCTION__);	DEBUGLOGWIFI("\r\n");
 	String json = "[";
 	int n = WiFi.scanComplete();
 	if (n == WIFI_SCAN_FAILED) {	WiFi.scanNetworks(true);	}
@@ -462,7 +462,7 @@ void WIFIMOD_CLASS::send_scanwifi(AsyncWebServerRequest *request) {
 }
 
 void WIFIMOD_CLASS::send_network_configuration_html(AsyncWebServerRequest *request) {
-	// DEBUGLOG(__FUNCTION__);	DEBUGLOG("\r\n");
+	// DEBUGLOGWIFI(__FUNCTION__);	DEBUGLOGWIFI("\r\n");
 	int _saveIn = 0;
 	if (request->args() > 0)  // Save Settings
 	{
@@ -470,7 +470,7 @@ void WIFIMOD_CLASS::send_network_configuration_html(AsyncWebServerRequest *reque
 		bool oldDHCP = _wifiConfig.dhcp; // Save status to avoid general.html cleares it
 		_wifiConfig.dhcp = false;
 		for (uint8_t i = 0; i < request->args(); i++) {
-			DEBUGLOG("Arg %d: %s\r\n", i, request->arg(i).c_str());
+			DEBUGLOGWIFI("Arg %d: %s\r\n", i, request->arg(i).c_str());
 			if (request->argName(i) == "devicename") {
 				ESPHTTPServer._sysConfig.deviceName = ESPHTTPServer.urldecode(request->arg(i));
 				_wifiConfig.dhcp = oldDHCP;
@@ -513,10 +513,10 @@ void WIFIMOD_CLASS::send_network_configuration_html(AsyncWebServerRequest *reque
 #endif
 	}
 	else {
-		DEBUGLOG(request->url().c_str());
+		DEBUGLOGWIFI(request->url().c_str());
 		ESPHTTPServer.handleFileRead(request->url(), request);
 	}
-	DEBUGLOG(__PRETTY_FUNCTION__);	DEBUGLOG("\r\n");
+	DEBUGLOGWIFI(__PRETTY_FUNCTION__);	DEBUGLOGWIFI("\r\n");
 }
 // wifi.html ^^^
 
