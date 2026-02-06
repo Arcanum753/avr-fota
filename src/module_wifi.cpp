@@ -397,23 +397,34 @@ void WIFIMOD_CLASS::send_network_configuration_values_html(AsyncWebServerRequest
 
 }
 
-void WIFIMOD_CLASS::send_connection_state_values_html(AsyncWebServerRequest *request) {
-	// DEBUGLOGWIFI(__FUNCTION__);	DEBUGLOGWIFI("\r\n");
+
+
+void WIFIMOD_CLASS::send_info_values_html(AsyncWebServerRequest *request) {
+	DEBUGLOGWIFI(__FUNCTION__);	DEBUGLOGWIFI("\r\n");
 	String state = "N/A";
 	String Networks = "";
 	if (WiFi.status() == 0) {	state = "Idle";	}
-	else		if (WiFi.status() == 1) state = "NO SSID AVAILBLE";
-	else 		if (WiFi.status() == 2) state = "SCAN COMPLETED";
-	else		if (WiFi.status() == 3) state = "CONNECTED";
-	else		if (WiFi.status() == 4) state = "CONNECT FAILED";
-	else		if (WiFi.status() == 5) state = "CONNECTION LOST";
-	else		if (WiFi.status() == 6) state = "DISCONNECTED";
+	if (WiFi.status() == 1) {	state = "NO SSID AVAILBLE";}
+	if (WiFi.status() == 2) {	state = "SCAN COMPLETED";}
+	if (WiFi.status() == 3) {	state = "CONNECTED";}
+	if (WiFi.status() == 4) {	state = "CONNECT FAILED";}
+	if (WiFi.status() == 5) {	state = "CONNECTION LOST";}
+	if (WiFi.status() == 6) {	state = "DISCONNECTED";}
 
 	WiFi.scanNetworks(true);
 
 	String values = "";
 	values += "connectionstate|" + state + "|div\n";
-	//values += "networks|Scanning networks ...|div\n";
+	
+	values += "x_ssid|" 	+ (String)WiFi.SSID() + "|div\n";
+	values += "x_ip|" 		+ (String)WiFi.localIP()[0] + "." + (String)WiFi.localIP()[1] + "." + (String)WiFi.localIP()[2] + "." + (String)WiFi.localIP()[3] + "|div\n";
+	values += "x_gateway|" 	+ (String)WiFi.gatewayIP()[0] + "." + (String)WiFi.gatewayIP()[1] + "." + (String)WiFi.gatewayIP()[2] + "." + (String)WiFi.gatewayIP()[3] + "|div\n";
+	values += "x_netmask|" 	+ (String)WiFi.subnetMask()[0] + "." + (String)WiFi.subnetMask()[1] + "." + (String)WiFi.subnetMask()[2] + "." + (String)WiFi.subnetMask()[3] + "|div\n";
+	values += "x_mac|" 		+ getMacAddress() + "|div\n";
+	values += "x_dns|" 		+ (String)WiFi.dnsIP()[0] + "." + (String)WiFi.dnsIP()[1] + "." + (String)WiFi.dnsIP()[2] + "." + (String)WiFi.dnsIP()[3] + "|div\n";
+
+
+
 	request->send(200, "text/plain", values);
 	state = "";
 	values = "";
@@ -529,10 +540,11 @@ void WIFIMOD_CLASS::webInit ()	{
 		this->send_network_configuration_html(request);
 	});
 
-	ESPHTTPServer.on("/wifi/connectionstate", [this](AsyncWebServerRequest *request) {
+	ESPHTTPServer.on("/wifi/info", [this](AsyncWebServerRequest *request) {
 		if (!ESPHTTPServer.checkAuth(request)) {	return request->requestAuthentication(); };
-		this->send_connection_state_values_html(request);
+		this->send_info_values_html(request);
 	});
+
 
 	ESPHTTPServer.on("/wifi/values/0", [this](AsyncWebServerRequest *request) {
 		if (!ESPHTTPServer.checkAuth(request)) {	return request->requestAuthentication(); };

@@ -113,7 +113,7 @@ class  WIFIMOD_CLASS    {
     
     void wifiSsidSetPSWDwrong(String _str) ;
     void send_network_configuration_values_html(AsyncWebServerRequest *request, int _index);
-    void send_connection_state_values_html(AsyncWebServerRequest *request);
+    void send_info_values_html(AsyncWebServerRequest *request);
     void send_network_configuration_html(AsyncWebServerRequest *request);
     void send_scanwifi(AsyncWebServerRequest *request) ;
     #if ESP32

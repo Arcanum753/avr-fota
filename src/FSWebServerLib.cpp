@@ -591,48 +591,6 @@ void AsyncFSWebServer::handleFileDelete(AsyncWebServerRequest *request) {
 	request->send(200, "text/plain", "");
 }
 
-// int AsyncFSWebServer::handleHexFileUpload( String filename, size_t index,
-// uint8_t *data, size_t len, bool final) { 	int  _ret= 0;
-// _hexFileUploadStatus =
-// ""; 	static File fsUploadFile; 	static size_t fileSize = 0;
-// 	// Start
-// 	if (!index) {
-// 		DEBUGLOG("handleHexFileUpload Name: %s\r\n", filename.c_str());
-// 		if (!filename.startsWith("/")) filename = "/" + filename;
-// 		fsUploadFile = _fs->open(filename, "w");
-// 		DEBUGLOG("First upload part.\r\n");
-// 	}
-// 	// Continue
-// 	if (fsUploadFile) {
-// 		DEBUGLOG("Continue upload part. Size = %u\r\n", len);
-// 		if (fsUploadFile.write(data, len) != len) {
-// 			_hexFileUploadStatus  += "uploadstatus|error|div\n";
-// 		}
-// 		else {
-// 			fileSize += len;
-// 		}
-// 	}
-// 	// End
-// 	if (final) {
-// 		if (fsUploadFile) {	fsUploadFile.close();	}
-// 		_ret = fileSize;
-// 		DEBUGLOG("HexFileUpload final Size: %u\n", fileSize);
-// 		_hexfileCheck = filename;
-// 		_hexFileUploadStatus  += "uploadstatus|ok|div\n";
-// 		_hexFileUploadStatus  += "file|"	 + _hexfileCheck 	+"|div\n";
-// 		_hexFileUploadStatus  += "fileSize|" + (String)fileSize 	+"|div\n";
-// 		fileSize = 0;
-// 	}
-// 	DEBUGLOG(__PRETTY_FUNCTION__);
-// 	DEBUGLOG("\r\n");
-// 	return _ret;
-
-// }
-
-// void AsyncFSWebServer::handleHexFileUploadStatus(AsyncWebServerRequest
-// *request) { 	request->send(200, "text/plain", _hexFileUploadStatus);
-// 	// DEBUGLOG(__FUNCTION__);	DEBUGLOG("\r\n");
-// }
 
 void AsyncFSWebServer::handleFileUpload(AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final) {
 	static File fsUploadFile;
@@ -666,12 +624,6 @@ void AsyncFSWebServer::handleFileUpload(AsyncWebServerRequest *request, String f
 void AsyncFSWebServer::send_information_values_html(AsyncWebServerRequest *request) {
 	DEBUGLOG(__FUNCTION__);	DEBUGLOG("\r\n");
 	String values = "";
-	values += "x_ssid|" 	+ (String)WiFi.SSID() + "|div\n";
-	values += "x_ip|" 		+ (String)WiFi.localIP()[0] + "." + (String)WiFi.localIP()[1] + "." + (String)WiFi.localIP()[2] + "." + (String)WiFi.localIP()[3] + "|div\n";
-	values += "x_gateway|" 	+ (String)WiFi.gatewayIP()[0] + "." + (String)WiFi.gatewayIP()[1] + "." + (String)WiFi.gatewayIP()[2] + "." + (String)WiFi.gatewayIP()[3] + "|div\n";
-	values += "x_netmask|" 	+ (String)WiFi.subnetMask()[0] + "." + (String)WiFi.subnetMask()[1] + "." + (String)WiFi.subnetMask()[2] + "." + (String)WiFi.subnetMask()[3] + "|div\n";
-	values += "x_mac|" 		+ wifiModClass.getMacAddress() + "|div\n";
-	values += "x_dns|" 		+ (String)WiFi.dnsIP()[0] + "." + (String)WiFi.dnsIP()[1] + "." + (String)WiFi.dnsIP()[2] + "." + (String)WiFi.dnsIP()[3] + "|div\n";
 
 
 	

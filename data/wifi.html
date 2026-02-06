@@ -111,15 +111,14 @@
 	<script>
 		window.onload = function() {
             getNetwork();
+            ApplyCVT("/system/infovalues");
 
-			ApplyCVT("/wifi/connectionstate")
-                .then(() => ApplyCVT("/system/infovalues"))
+			ApplyCVT("/wifi/info")
                 .then(() => ApplyCVT("/wifi/values/0", "p0_"))
                 .then(() => ApplyCVT("/wifi/values/1", "p1_"))
                 .then(() => ApplyCVT("/wifi/values/2", "p2_"))
                 .then(() => ApplyCVT("/wifi/values/3", "p3_"))
             setTimeout(() => {
-
                 ApplyCVT("/system/version");
 			}, 500);
 		};
