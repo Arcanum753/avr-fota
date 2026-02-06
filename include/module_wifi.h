@@ -120,6 +120,7 @@ class  WIFIMOD_CLASS    {
     bool  dumb = false;
 };
 
+
 extern WIFIMOD_CLASS wifiModClass;
 
 
