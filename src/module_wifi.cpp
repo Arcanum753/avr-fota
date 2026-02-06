@@ -8,6 +8,7 @@
 
 #include <ArduinoJson.h>
 #include "FSWebServerLib.h"
+#include "common.h"
 #include "debug.h"
 #include "module_wifi.h"
 #include "module_udp.h"
@@ -483,30 +484,30 @@ void WIFIMOD_CLASS::send_network_configuration_html(AsyncWebServerRequest *reque
 		for (uint8_t i = 0; i < request->args(); i++) {
 			DEBUGLOGWIFI("Arg %d: %s\r\n", i, request->arg(i).c_str());
 			if (request->argName(i) == "devicename") {
-				ESPHTTPServer._sysConfig.deviceName = ESPHTTPServer.urldecode(request->arg(i));
+				ESPHTTPServer._sysConfig.deviceName = urldecode(request->arg(i));
 				_wifiConfig.dhcp = oldDHCP;
 				continue;
 			}
-			if (request->argName(i) == "ssid") 		{ _wifiConfig.ssid = ESPHTTPServer.urldecode(request->arg(i));	continue; }
-			if (request->argName(i) == "password")	{ _wifiConfig.password = ESPHTTPServer.urldecode(request->arg(i)); continue; }
-			if (request->argName(i) == "ip_0")  { if (ESPHTTPServer.checkRange(request->arg(i))) 	_wifiConfig.ip[0] = request->arg(i).toInt(); continue; }
-			if (request->argName(i) == "ip_1")  { if (ESPHTTPServer.checkRange(request->arg(i))) 	_wifiConfig.ip[1] = request->arg(i).toInt(); continue; }
-			if (request->argName(i) == "ip_2")  { if (ESPHTTPServer.checkRange(request->arg(i))) 	_wifiConfig.ip[2] = request->arg(i).toInt(); continue; }
-			if (request->argName(i) == "ip_3")  { if (ESPHTTPServer.checkRange(request->arg(i))) 	_wifiConfig.ip[3] = request->arg(i).toInt(); continue; }
-			if (request->argName(i) == "nm_0")  { if (ESPHTTPServer.checkRange(request->arg(i))) 	_wifiConfig.netmask[0] = request->arg(i).toInt(); continue; }
-			if (request->argName(i) == "nm_1")  { if (ESPHTTPServer.checkRange(request->arg(i))) 	_wifiConfig.netmask[1] = request->arg(i).toInt(); continue; }
-			if (request->argName(i) == "nm_2")  { if (ESPHTTPServer.checkRange(request->arg(i))) 	_wifiConfig.netmask[2] = request->arg(i).toInt(); continue; }
-			if (request->argName(i) == "nm_3")  { if (ESPHTTPServer.checkRange(request->arg(i))) 	_wifiConfig.netmask[3] = request->arg(i).toInt(); continue; }
-			if (request->argName(i) == "gw_0")  { if (ESPHTTPServer.checkRange(request->arg(i))) 	_wifiConfig.gateway[0] = request->arg(i).toInt(); continue; }
-			if (request->argName(i) == "gw_1")  { if (ESPHTTPServer.checkRange(request->arg(i))) 	_wifiConfig.gateway[1] = request->arg(i).toInt(); continue; }
-			if (request->argName(i) == "gw_2")  { if (ESPHTTPServer.checkRange(request->arg(i))) 	_wifiConfig.gateway[2] = request->arg(i).toInt(); continue; }
-			if (request->argName(i) == "gw_3")  { if (ESPHTTPServer.checkRange(request->arg(i))) 	_wifiConfig.gateway[3] = request->arg(i).toInt(); continue; }
-			if (request->argName(i) == "dns_0") { if (ESPHTTPServer.checkRange(request->arg(i))) 	_wifiConfig.dns[0] = request->arg(i).toInt(); continue; }
-			if (request->argName(i) == "dns_1") { if (ESPHTTPServer.checkRange(request->arg(i))) 	_wifiConfig.dns[1] = request->arg(i).toInt(); continue; }
-			if (request->argName(i) == "dns_2") { if (ESPHTTPServer.checkRange(request->arg(i))) 	_wifiConfig.dns[2] = request->arg(i).toInt(); continue; }
-			if (request->argName(i) == "dns_3") { if (ESPHTTPServer.checkRange(request->arg(i))) 	_wifiConfig.dns[3] = request->arg(i).toInt(); continue; }
+			if (request->argName(i) == "ssid") 		{ _wifiConfig.ssid = urldecode(request->arg(i));	continue; }
+			if (request->argName(i) == "password")	{ _wifiConfig.password = urldecode(request->arg(i)); continue; }
+			if (request->argName(i) == "ip_0")  { if (checkRange(request->arg(i))) 	_wifiConfig.ip[0] = request->arg(i).toInt(); continue; }
+			if (request->argName(i) == "ip_1")  { if (checkRange(request->arg(i))) 	_wifiConfig.ip[1] = request->arg(i).toInt(); continue; }
+			if (request->argName(i) == "ip_2")  { if (checkRange(request->arg(i))) 	_wifiConfig.ip[2] = request->arg(i).toInt(); continue; }
+			if (request->argName(i) == "ip_3")  { if (checkRange(request->arg(i))) 	_wifiConfig.ip[3] = request->arg(i).toInt(); continue; }
+			if (request->argName(i) == "nm_0")  { if (checkRange(request->arg(i))) 	_wifiConfig.netmask[0] = request->arg(i).toInt(); continue; }
+			if (request->argName(i) == "nm_1")  { if (checkRange(request->arg(i))) 	_wifiConfig.netmask[1] = request->arg(i).toInt(); continue; }
+			if (request->argName(i) == "nm_2")  { if (checkRange(request->arg(i))) 	_wifiConfig.netmask[2] = request->arg(i).toInt(); continue; }
+			if (request->argName(i) == "nm_3")  { if (checkRange(request->arg(i))) 	_wifiConfig.netmask[3] = request->arg(i).toInt(); continue; }
+			if (request->argName(i) == "gw_0")  { if (checkRange(request->arg(i))) 	_wifiConfig.gateway[0] = request->arg(i).toInt(); continue; }
+			if (request->argName(i) == "gw_1")  { if (checkRange(request->arg(i))) 	_wifiConfig.gateway[1] = request->arg(i).toInt(); continue; }
+			if (request->argName(i) == "gw_2")  { if (checkRange(request->arg(i))) 	_wifiConfig.gateway[2] = request->arg(i).toInt(); continue; }
+			if (request->argName(i) == "gw_3")  { if (checkRange(request->arg(i))) 	_wifiConfig.gateway[3] = request->arg(i).toInt(); continue; }
+			if (request->argName(i) == "dns_0") { if (checkRange(request->arg(i))) 	_wifiConfig.dns[0] = request->arg(i).toInt(); continue; }
+			if (request->argName(i) == "dns_1") { if (checkRange(request->arg(i))) 	_wifiConfig.dns[1] = request->arg(i).toInt(); continue; }
+			if (request->argName(i) == "dns_2") { if (checkRange(request->arg(i))) 	_wifiConfig.dns[2] = request->arg(i).toInt(); continue; }
+			if (request->argName(i) == "dns_3") { if (checkRange(request->arg(i))) 	_wifiConfig.dns[3] = request->arg(i).toInt(); continue; }
 			if (request->argName(i) == "dhcp")  { _wifiConfig.dhcp = true; continue; }
-			if (request->argName(i) == "wificonf")  { if (ESPHTTPServer.checkRange(request->arg(i))) 	_saveIn = request->arg(i).toInt(); continue; }
+			if (request->argName(i) == "wificonf")  { if (checkRange(request->arg(i))) 	_saveIn = request->arg(i).toInt(); continue; }
 		}
 		request->send_P(200, "text/html", Page_ConfigRefresh);
 		if (_saveIn == 0) {save_configWifi(0);}
@@ -518,7 +519,7 @@ void WIFIMOD_CLASS::send_network_configuration_html(AsyncWebServerRequest *reque
 #endif
 #if (NO_RST > 0)
 		//yield();
-		delay(1000);\
+		delay(1000);
 		_fs->end();
 		restart_esp();
 #endif

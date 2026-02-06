@@ -347,7 +347,7 @@ void Class_ProgIsp::web_FileUpload2Chip(AsyncWebServerRequest *request) {
 	String path = "";
 	for (uint8_t i = 0; i < request->args(); i++) {
 		DEBUGLOGISP("Arg %d: %s\r\n", i, request->arg(i).c_str());
-		if (request->argName(i) == "path") 	{ path = ESPHTTPServer.urldecode(request->arg(i));	continue; }
+		if (request->argName(i) == "path") 	{ path = urldecode(request->arg(i));	continue; }
 	}
 	if (path == "/")				{	return request->send(500, "text/plain", "BAD PATH");	}
 	if (!path.startsWith("/")) 		{path = "/" + path;}
@@ -450,10 +450,10 @@ void  Class_ProgIsp::avrWebFusesWrite(AsyncWebServerRequest *request) {
 	{
 		for (uint8_t i = 0; i < request->args(); i++) {
 			DEBUGLOGISP("Arg %d: %s %s\r\n", i, request->argName(i).c_str() ,request->arg(i).c_str() );
-			if (request->argName(i) == "avrfusehigh") 	{ s_high = ESPHTTPServer.urldecode(request->arg(i));	continue; }
-			if (request->argName(i) == "avrfuselow") 	{ s_low  = ESPHTTPServer.urldecode(request->arg(i));	continue; }
-			if (request->argName(i) == "avrfuseprot") 	{ s_lock = ESPHTTPServer.urldecode(request->arg(i));	continue; }
-			if (request->argName(i) == "avrfuseext") 	{ s_ext  = ESPHTTPServer.urldecode(request->arg(i));	continue; }
+			if (request->argName(i) == "avrfusehigh") 	{ s_high = urldecode(request->arg(i));	continue; }
+			if (request->argName(i) == "avrfuselow") 	{ s_low  = urldecode(request->arg(i));	continue; }
+			if (request->argName(i) == "avrfuseprot") 	{ s_lock = urldecode(request->arg(i));	continue; }
+			if (request->argName(i) == "avrfuseext") 	{ s_ext  = urldecode(request->arg(i));	continue; }
 		}
 		request->send_P(200, "text/html", Page_AvrRefresh);
 

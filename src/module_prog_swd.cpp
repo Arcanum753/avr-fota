@@ -310,7 +310,7 @@ void Class_ProgSwd::web_FileUpload2Chip(AsyncWebServerRequest *request) {
 	String path = "";
 	for (uint8_t i = 0; i < request->args(); i++) {
 		DEBUGLOG("Arg %d: %s\r\n", i, request->arg(i).c_str());
-		if (request->argName(i) == "path") 	{ path = ESPHTTPServer.urldecode(request->arg(i));	continue; }
+		if (request->argName(i) == "path") 	{ path = urldecode(request->arg(i));	continue; }
 	}
 	if (path == "/")				{	return request->send(500, "text/plain", "BAD PATH");	}
 	if (!path.startsWith("/")) 		{path = "/" + path;}

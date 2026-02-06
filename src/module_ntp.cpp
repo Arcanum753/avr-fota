@@ -12,6 +12,7 @@
 #include "module_wifi.h"
 #include "module_udp.h"
 #include "module_ntp.h"
+#include "common.h"
 
 
 NTPMOD_CLASS ntpModClass(false);
@@ -168,17 +169,17 @@ void NTPMOD_CLASS::send_NTP_configuration_html(AsyncWebServerRequest *request) {
 		_ntpConfig.daylight = false;
 		for (uint8_t i = 0; i < request->args(); i++) {
 			if (request->argName(i) == "ntpserver0") {
-				_ntpConfig.ntpServerName0 = ESPHTTPServer.urldecode(request->arg(i));
+				_ntpConfig.ntpServerName0 = urldecode(request->arg(i));
 				DEBUGNTP("ntpServerName0: %s\r\n", _ntpConfig.ntpServerName0);
 				continue;
 			}
 			if (request->argName(i) == "ntpserver1") {
-				_ntpConfig.ntpServerName1 = ESPHTTPServer.urldecode(request->arg(i));
+				_ntpConfig.ntpServerName1 = urldecode(request->arg(i));
 				DEBUGNTP("ntpServerName1: %s\r\n", _ntpConfig.ntpServerName1);
 				continue;
 			}
 			if (request->argName(i) == "ntpserver2") {
-				_ntpConfig.ntpServerName2 = ESPHTTPServer.urldecode(request->arg(i));
+				_ntpConfig.ntpServerName2 = urldecode(request->arg(i));
 				DEBUGNTP("ntpServerName2: %s\r\n", _ntpConfig.ntpServerName2);
 				continue;
 			}
