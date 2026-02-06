@@ -2,6 +2,22 @@
 #ifndef _MODULEPROGISP_h
 #define _MODULEPROGISP_h
 
+#include "main.h"
+#ifdef  PROGTYPE_ISP
+
+#ifdef DEBUG_ISP
+#define DEBUGLOGISP(...) Serial.printf(__VA_ARGS__)
+#else
+#define DEBUGLOGISP(...)
+#endif
+
+
+#if (DEBUG_SHOWHEXBUF > 1)
+#define DEBUGLOGISPBUF(...) Serial.printf(__VA_ARGS__)
+#else
+#define DEBUGLOGISPBUF(...)
+#endif
+
 
 #define CONFIG_PROG_JSON  "/config_prog_isp.json"
 
@@ -101,7 +117,8 @@ protected:
 
 extern Class_ProgIsp progIsp;
 
+
+#endif
+
 #endif //_MODULEPROGISP_h
-
-
 

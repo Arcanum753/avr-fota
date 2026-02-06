@@ -12,7 +12,10 @@
 
 #include "module_prog_isp.h"
 #include "prog_isp.h"
-#include "debug.h"
+// #include "debug.h"
+#include "common.h"
+
+
 #if defined(ESP32)
 #include <SPIFFS.h>
 #elif defined(ESP8266)
@@ -531,28 +534,6 @@ int32_t ESP8266_AVRISP::hexFileLineParser (uint32_t beginLine, uint16_t &linepag
     return lineLen;
 }
 
-
-/*
- * hex2bin
- * Turn a Hex digit (0..9, A..F) into the equivalent binary value (0-16)
- * returns 0xFF if bad hex digit.
- */
-uint8_t ESP8266_AVRISP::hex2bin (uint8_t h)    {
-  uint8_t _ret = 0xff;
-  if (h >= '0' && h <= '9') {
-    _ret = (h - '0');
-    return _ret;
-  }
-  if (h >= 'A' && h <= 'F') {
-    _ret = ((h - 'A') + 10);
-    return _ret;
-  }
-    if (h >= 'a' && h <= 'f') {
-    _ret = ((h - 'a') + 10);
-    return _ret;
-  }
-  return _ret;
-}
 
 
 /*------------------------------------------------------------------------*/

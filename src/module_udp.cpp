@@ -8,13 +8,13 @@
 #include <ESP8266mDNS.h>
 #include <ESPAsyncUDP.h>
 #endif
+
 #include <NtpClientLib.h>
 #include <WiFiClient.h>
 #include "module_udp.h"
 
 #include "eertos.h"
-
-#include "debug.h"
+// #include "debug.h"
 
 
 IPAddress _responseIp ((const unsigned char *) LOCALHOST);

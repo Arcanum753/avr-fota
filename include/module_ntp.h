@@ -15,13 +15,13 @@
 #endif
 
 
-
 #define CONFIG_FILE_NTP             "/config_ntp.json"
 
 
 #define NTPSERVER_DFLT0 "pool.ntp.org";
 #define NTPSERVER_DFLT1 "0.ru.pool.ntp.org";
 #define NTPSERVER_DFLT2 "0.gentoo.pool.ntp.org";
+#define NTP_TIMEOUT 5000 // milliseconds
 
 const char Page_GeneralNtp[] = R"=====(
 <meta http-equiv="refresh" content="10; URL=/ntp.html">

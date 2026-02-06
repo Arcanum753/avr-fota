@@ -5,35 +5,28 @@
 #define APP_BUILDDATE  __DATE__
 #define APP_BUILDTIME  __TIME__
 
-#define USE_RESERV_WIFI 1
 #define NO_RST          0
 
-#define NTP_TIMEOUT 5000 // milliseconds
 
 #define SEC 1000 // 1000 usecs
 #define MINUTES 60  // 60 secs
 
 
-#define LOCALHOST "127.0.0.1"
-#define UDP_PORT  40001
+
 
 // #define PROGTYPE_ISP
-#define PROGTYPE_SWD
-
-#if defined(ESP32)
-#include <WiFi.h>
-#include <ESPmDNS.h>
-#include <AsyncTCP.h>
-#elif defined(ESP8266)
-#include <ESP8266WiFi.h>
-#include <ESP8266mDNS.h>
-#include <ESPAsyncTCP.h>
-#endif
 
 
+//#define PROGTYPE_SWD
+#define DEBUG_SWD
 
 #define DEBUG_NTP 
 #define DEBUG_UDP 
+
+
+// #define DEBUG_ISP 
+#define DEBUG_SHOWHEXBUF 0 // ISP
+
 
 //#define RELEASE  // Comment to enable debug output
 

@@ -5,7 +5,7 @@
  
 
 #include <vector>
-#include "debug.h"
+// #include "debug.h"
 
 #if defined(ESP32)
 #define PIN_MISO  19   // d19 miso
@@ -181,7 +181,6 @@ protected:
     AVRISP_HexFileUploaded_t    AVRISP_HexFileUploaded;
     int                         hexFileBinDataCheck ();
     int32_t                     hexFileLineParser (uint32_t begin, uint16_t & pageaddr, byte *page,  uint8_t  &chsum, uint8_t &type, uint8_t &binReadNum , uint32_t &totalBins ) ;
-    uint8_t                     hex2bin (uint8_t h);
     String                      chipFlashVerification();
     String                      verificationResult ;
 

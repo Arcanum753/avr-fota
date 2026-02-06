@@ -1,6 +1,14 @@
 #ifndef _MODULEPROGSWD_h
 #define _MODULEPROGSWD_h
 
+#include "main.h"
+#ifdef  PROGTYPE_SWD
+
+#ifdef DEBUG_SWD
+#define DEBUGLOGSWD(...) Serial.printf(__VA_ARGS__)
+#else
+#define DEBUGLOGSWD(...)
+#endif
 
 
 #define CONFIG_PROG_JSON  "/config_prog_swd.json"
@@ -15,6 +23,8 @@
 
 #define JSON_STR_LEN			512
 #define JSON_FILESIZEMAX		1024
+
+
 
 
 // TODO навести тут порядок с кодами ошибок
@@ -93,6 +103,7 @@ protected:
 
 extern Class_ProgSwd progSwd;
 
+#endif // PROGTYPE_SWD
 
 #endif //_MODULEPROGSWD_h
 

@@ -1,9 +1,15 @@
+#ifndef _SWD_h
+#define _SWD_h
+ 
+
 
 // #define DP_ABORT        0x00
 // #define DP_IDCODE       0x00
 // #define DP_CTRLSTAT     0x04
 // #define DP_SELECT       0x08
 // #define DP_RDBUFF       0x0c
+
+
 
 #define SWD_DELAY       3
 
@@ -38,3 +44,12 @@
    bool swd_DP_Write16(unsigned addr, uint32_t data);
    bool swd_DP_Read16(unsigned addr, uint32_t &data) ;
    bool swd_transfer16(unsigned port_address, bool APorDP, bool RorW, uint32_t &data);
+
+
+
+
+
+   #endif // _SWD_h
+
+
+   
