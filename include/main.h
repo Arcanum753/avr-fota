@@ -23,6 +23,7 @@
 #define DEBUG_NTP 
 #define DEBUG_UDP 
 
+#define DEBUG_WIFI
 
 // #define DEBUG_ISP 
 #define DEBUG_SHOWHEXBUF 0 // ISP
