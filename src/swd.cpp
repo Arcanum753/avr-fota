@@ -2,11 +2,15 @@
 // Many thanks to scanlime for the work on the ESP8266 SWD Library, parts of this code have inspiration and help from it
 // https://github.com/scanlime/esp8266-arm-swd
 
+#include "main.h"
+#ifdef  PROGTYPE_SWD
+
+
 #include "Arduino.h"
 #include "swd.h"
 
 #include "FSWebServerLib.h"
-#include "debug.h"
+// #include "debug.h"
 #include "debug_cm.h"
 
 bool gpioInitState = false;
@@ -241,3 +245,8 @@ bool swd_AP_Write16(unsigned addr, uint16_t data) {
   }
   return false;
 }
+
+
+#endif
+
+

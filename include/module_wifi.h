@@ -4,7 +4,10 @@
 
 
 #define WIFI_CONFIG_FILE_NAME       "config_wifi"
-#define WIFI_CONFIGS    4
+
+
+#define USE_RESERV_WIFI 1
+// #define WIFI_CONFIGS    4 // TODO 
 
 
 #define WIFI_CONFIG_FILE0           "/config_wifi0.json"

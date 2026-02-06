@@ -19,12 +19,15 @@
 
 
 
+
 #define CONFIG_FILE_UDP     "/config_udp.json"
 #define HTML_FILE_UDP       "/udp.html"
 #define UDP_DATA_LENGHT_MAX 64 // bytes
 #define UDP_DATA_MESSAGE_LEGHT 1024 // bytes
 
 
+#define LOCALHOST "127.0.0.1"
+#define UDP_PORT  40001
 #define UDP_BROADCAST_PORT_DFLT     40000
 #define UDP_BROADCAST_TIME_DFLT     5
 #define UDP_BROADCAST_KEYWORD_DFLT  "Ave_Omnissiah"
@@ -76,3 +79,4 @@ class  UDPBROADCAST_CLASS   {
 extern UDPBROADCAST_CLASS udpBroadcast;
 
 #endif // _MODUDP_h
+

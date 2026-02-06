@@ -33,7 +33,7 @@ Class_ProgSwd::Class_ProgSwd(uint8_t in): _in(in){ }
 {	_fs = fs;	}
 
 bool Class_ProgSwd::begin (){
-    DEBUGLOGISP(__PRETTY_FUNCTION__);	DEBUGLOGISP("\r\n");
+    DEBUGLOGSWD(__PRETTY_FUNCTION__);	DEBUGLOGSWD("\r\n");
     cfg_SetDefault();
     if (cfg_FileLoad() == false) {	cfg_FileSave();	}
 	swdprog.stm32Fx_begin();
@@ -45,6 +45,7 @@ bool Class_ProgSwd::begin (){
 // TODO навести тут порядок с именаяи GET/POST запросов.
 // all about webAPI. Set hooks
 void  Class_ProgSwd::web_Init()	{
+	DEBUGLOGSWD(__PRETTY_FUNCTION__);	DEBUGLOGSWD("\r\n");
 	//stm32.html vvv
 	ESPHTTPServer.on("/prog/diskinfo", HTTP_GET, [this](AsyncWebServerRequest *request) {
 		if (!ESPHTTPServer.checkAuth(request)) {	return request->requestAuthentication(); };
@@ -83,14 +84,14 @@ void  Class_ProgSwd::web_Init()	{
 
 // cfg section
 int Class_ProgSwd::cfg_FileSaveFromWeb(CfgFile_ProgSwd_t &_inStruct)  {
-    DEBUGLOGISP(__PRETTY_FUNCTION__);	DEBUGLOGISP("\r\n");
+    DEBUGLOGSWD(__PRETTY_FUNCTION__);	DEBUGLOGSWD("\r\n");
 	CfgFile_ProgSwd	=  _inStruct;
 	int _ret =  (int)cfg_FileSave();
 	return _ret ;
 }
 
 int  Class_ProgSwd::cfg_FileStructGet(CfgFile_ProgSwd_t &_inStruct)  {
-    DEBUGLOGISP(__PRETTY_FUNCTION__); DEBUGLOGISP("\r\n");
+    DEBUGLOGSWD(__PRETTY_FUNCTION__); DEBUGLOGSWD("\r\n");
     progerr_t _ret = ERROR_OK;
     if(!cfg_FileLoad()) {  return ERR_CFG; }
     _inStruct = CfgFile_ProgSwd;
@@ -98,14 +99,14 @@ int  Class_ProgSwd::cfg_FileStructGet(CfgFile_ProgSwd_t &_inStruct)  {
 }
 
 void Class_ProgSwd::cfg_SetDefault() {
-	DEBUGLOGISP(__PRETTY_FUNCTION__);	DEBUGLOGISP("\r\n");
+	DEBUGLOGSWD(__PRETTY_FUNCTION__);	DEBUGLOGSWD("\r\n");
 	// CfgFile_ProgSwd.programmer_type	= DEFAULT_PROG_TYPE;
     CfgFile_ProgSwd.project_name  	= DEFAULT_PROG_PROJNAME;
     CfgFile_ProgSwd.chip_size      	= DEFAULT_chipsize;
 }
 
 bool Class_ProgSwd::cfg_FileLoad() {
-	DEBUGLOGISP(__PRETTY_FUNCTION__); DEBUGLOGISP("\r\n");
+	DEBUGLOGSWD(__PRETTY_FUNCTION__); DEBUGLOGSWD("\r\n");
 	JsonDocument jsonDoc;
 	if (!ESPHTTPServer.load_jsonDoc(CONFIG_PROG_JSON, jsonDoc)){	return false;	}
 	// CfgFile_ProgSwd.programmer_type	= jsonDoc["type"].as<const char *>();
@@ -218,13 +219,13 @@ bool Class_ProgSwd::web_GetFilesListExe(String &_str)	{
 }
 
 int  Class_ProgSwd::prog_Programm(String _path, String _fwTime)	{
-	DEBUGLOGISP(__PRETTY_FUNCTION__);    DEBUGLOGISP("\r\n");
-	DEBUGLOGISP(" file %s time %s \r\n", _path.c_str(), _fwTime.c_str());
+	DEBUGLOGSWD(__PRETTY_FUNCTION__);    DEBUGLOGSWD("\r\n");
+	DEBUGLOGSWD(" file %s time %s \r\n", _path.c_str(), _fwTime.c_str());
 	int _res = ERR_OPENFILE;
 
 	_res  = swdprog.stm32_ChipProgrammMain(_path );
 
-	DEBUGLOGISP("Programming end \r\n");
+	DEBUGLOGSWD("Programming end \r\n");
 	return _res;
 }
 
@@ -232,21 +233,21 @@ int  Class_ProgSwd::prog_Programm(String _path, String _fwTime)	{
 
 // stm32.html vvv
 void Class_ProgSwd::web_GetFilesList (AsyncWebServerRequest *request) {
-	DEBUGLOGISP(__PRETTY_FUNCTION__);	DEBUGLOGISP("\r\n");
+	DEBUGLOGSWD(__PRETTY_FUNCTION__);	DEBUGLOGSWD("\r\n");
 	String json = "";
 	progSwd.web_GetFilesListExe(json);
 	request->send(200, "text/json", json);
 	json = "";
-    DEBUGLOGISP("List of *.hex *.bin *.binary files: %s \n\r", json);
+    DEBUGLOGSWD("List of *.hex *.bin *.binary files: %s \n\r", json);
 }
 
 void Class_ProgSwd::web_GetDiskInfoExe (AsyncWebServerRequest *request) {
-	DEBUGLOGISP(__PRETTY_FUNCTION__);	DEBUGLOGISP("\r\n");
+	DEBUGLOGSWD(__PRETTY_FUNCTION__);	DEBUGLOGSWD("\r\n");
 	String values = "";
 	progSwd.web_GetDiskInfoExe(values);
 	request->send(200, "text/json", values);
 	values = "";
-    DEBUGLOGISP("Disk info: %s \n\r", values);
+    DEBUGLOGSWD("Disk info: %s \n\r", values);
 }
 
 void Class_ProgSwd::web_FileDelete(AsyncWebServerRequest *request) {

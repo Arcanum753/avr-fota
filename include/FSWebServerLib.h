@@ -229,7 +229,7 @@ private:
 	void post_rest_config(AsyncWebServerRequest *request);
 public:    
     void restart_esp();
-    void clearConfig(bool reset);
+    
 private:
 
     uint32_t maxSketchSpace   ;

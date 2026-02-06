@@ -13,7 +13,17 @@
 #include <esp32-hal-gpio.h>
 #endif
 
-#ifdef PROGTYPE_ISP
+#if defined(ESP8266)
+#include <FS.h>
+#endif
+
+#if defined(ESP32)
+#include <ESPmDNS.h>
+#elif defined(ESP8266)
+#include <ESP8266mDNS.h>
+#endif
+
+#if defined(PROGTYPE_ISP)
 #include "module_prog_isp.h"
 #endif
 
@@ -22,9 +32,6 @@
 #include "module_prog_swd.h"
 #endif
 
-#if defined(ESP8266)
-#include <FS.h>
-#endif
 
 #include "common.h"
 
@@ -1412,24 +1419,24 @@ void AsyncFSWebServer::setUSERVERSION(String Version) {
 
 
 
-
-// Function to delete all CFG files
-void AsyncFSWebServer::clearConfig(bool reset)	{
-	if (_fs->exists(CONFIG_FILE_SYS)) 	{ _fs->remove(CONFIG_FILE_SYS);	}
-	if (_fs->exists(CONFIG_FILE_UDP)) 	{ _fs->remove(CONFIG_FILE_UDP);	}
-	// if (_fs->exists(CONFIG_FILE_NTP)) 	{ _fs->remove(CONFIG_FILE_NTP);	}
-	if (_fs->exists(WIFI_CONFIG_FILE0)) { _fs->remove(WIFI_CONFIG_FILE0);	}
-#if (USE_RESERV_WIFI > 0)
-	if (_fs->exists(WIFI_CONFIG_FILE1)) { _fs->remove(WIFI_CONFIG_FILE1);	}
-	if (_fs->exists(WIFI_CONFIG_FILE2)) { _fs->remove(WIFI_CONFIG_FILE2);	}
-	if (_fs->exists(WIFI_CONFIG_FILE3)) { _fs->remove(WIFI_CONFIG_FILE3);	}
-#endif
-	if (_fs->exists(SECRET_FILE)) {		_fs->remove(SECRET_FILE);	}
-	if (reset) {
-		if (_fs) { _fs->end();  }// If SPIFFS is started - finish it.
-		ESPHTTPServer.restart_esp();
-	}
-}
+// TODO РАСПИХАТЬ УДАЛЕНИЕ ПО МОДУЛЯМ
+// // Function to delete all CFG files
+// void AsyncFSWebServer::clearConfig(bool reset)	{
+// 	if (_fs->exists(CONFIG_FILE_SYS)) 	{ _fs->remove(CONFIG_FILE_SYS);	}
+// 	if (_fs->exists(CONFIG_FILE_UDP)) 	{ _fs->remove(CONFIG_FILE_UDP);	}
+// 	// if (_fs->exists(CONFIG_FILE_NTP)) 	{ _fs->remove(CONFIG_FILE_NTP);	}
+// 	if (_fs->exists(WIFI_CONFIG_FILE0)) { _fs->remove(WIFI_CONFIG_FILE0);	}
+// #if (USE_RESERV_WIFI > 0)
+// 	if (_fs->exists(WIFI_CONFIG_FILE1)) { _fs->remove(WIFI_CONFIG_FILE1);	}
+// 	if (_fs->exists(WIFI_CONFIG_FILE2)) { _fs->remove(WIFI_CONFIG_FILE2);	}
+// 	if (_fs->exists(WIFI_CONFIG_FILE3)) { _fs->remove(WIFI_CONFIG_FILE3);	}
+// #endif
+// 	if (_fs->exists(SECRET_FILE)) {		_fs->remove(SECRET_FILE);	}
+// 	if (reset) {
+// 		if (_fs) { _fs->end();  }// If SPIFFS is started - finish it.
+// 		ESPHTTPServer.restart_esp();
+// 	}
+// }
 
 void AsyncFSWebServer::serialShowInfo() {
 	Serial.printf("Ep8266 service chip firmware ver: %s\n\r",  VERSION_APP);

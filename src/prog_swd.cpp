@@ -4,7 +4,7 @@
 #include "Arduino.h"
 #include "FSWebServerLib.h"
 #include "debug_cm.h"
-#include "debug.h"
+// #include "debug.h"
 
 #ifdef ESP32
 #include <SPIFFS.h>
@@ -17,6 +17,8 @@ extern "C" {
   #include "mem.h"
 }
 #endif
+
+#include "module_prog_swd.h"
 #include "prog_swd.h"
 #include "swd.h"
 
@@ -32,7 +34,8 @@ ESP_PROGSWD::ESP_PROGSWD(){}
 {   _fs = fs;   }
 
 int ESP_PROGSWD::stm32_ChipProgrammMain( String &path)  {
-  DEBUGLOGISP(__PRETTY_FUNCTION__);    DEBUGLOGISP("\r\n");
+  DEBUGLOGSWD(__PRETTY_FUNCTION__);    DEBUGLOGSWD("\r\n");
+  
   // TODO пркрутить тип f1xx f4xx
 	stm32Fx_abort_all();
 	stm32Fx_halt();
@@ -52,7 +55,7 @@ void ESP_PROGSWD::stm32Fx_write_port(bool APorDP, uint8_t address, uint32_t valu
   else            {state = swd_DP_Write(address, value);}
   swd_DP_Read(DP_RDBUFF, temp);
   swd_DP_Read(DP_RDBUFF, temp);
-  if (!muted) { DEBUGLOGISP("%i %s Write reg: 0x%02x : 0x%08x r: 0x%08x \r\n", state, APorDP ? "AP" : "DP",  address, value, temp);  }
+  if (!muted) { DEBUGLOGSWD("%i %s Write reg: 0x%02x : 0x%08x r: 0x%08x \r\n", state, APorDP ? "AP" : "DP",  address, value, temp);  }
 }
 
 
@@ -64,7 +67,7 @@ uint32_t ESP_PROGSWD::stm32f_read_register(uint32_t address, bool muted)  {
   bool state3 = swd_DP_Read(DP_RDBUFF, temp);
   bool state4 = swd_DP_Read(DP_RDBUFF, temp);
   if (!muted)
-    {DEBUGLOGISP("%i %i %i %i Read Register: 0x%08x : 0x%08x\r\n", state1, state2, state3, state4, address, temp);}
+    {DEBUGLOGSWD("%i %i %i %i Read Register: 0x%08x : 0x%08x\r\n", state1, state2, state3, state4, address, temp);}
   return temp;
 }
 
@@ -73,7 +76,7 @@ void ESP_PROGSWD::stm32Fx_write_register(uint32_t address, uint32_t value, bool 
   bool state1 = swd_AP_Write(AP_TAR, address);
   bool state2 = swd_AP_Write(AP_DRW, value);
   bool state3 = swd_DP_Read(DP_RDBUFF, temp);
-  if (muted == false)	{ DEBUGLOGISP("%i %i %i Write Register: 0x%08x : 0x%08x \r\n", state1, state2, state3, address, value); }
+  if (muted == false)	{ DEBUGLOGSWD("%i %i %i Write Register: 0x%08x : 0x%08x \r\n", state1, state2, state3, address, value); }
 }
 
 
@@ -202,7 +205,7 @@ uint8_t ESP_PROGSWD::stm32_flash_file(uint32_t offset, String &path) {
 	uint32_t file_size = file.position();
 	file.seek(0, SeekSet);
 
-	DEBUGLOGISP("Going to write %i bytes to flash\r\n", file_size);
+	DEBUGLOGSWD("Going to write %i bytes to flash\r\n", file_size);
 
 	uint8_t buffer[PAGESIZE] = {0x00};
 	long millis_start = millis();
@@ -213,7 +216,7 @@ uint8_t ESP_PROGSWD::stm32_flash_file(uint32_t offset, String &path) {
 		stm32fX_write_bank(addr, buffer, cur_len);
 		addr += cur_len;
 		_percent = (uint8_t)(((float)posi / (float)file_size) * 100);
-		DEBUGLOGISP("%i percents \r\n", _percent);
+		DEBUGLOGSWD("%i percents \r\n", _percent);
     #ifdef ESP32
 		esp_task_wdt_reset();
     #elif defined(ESP8266)
@@ -226,7 +229,7 @@ uint8_t ESP_PROGSWD::stm32_flash_file(uint32_t offset, String &path) {
     ESP.wdtEnable(WDTO_8S);
     #endif
     _speed = (float)((float)(file_size / (float)(millis() - millis_start)));
-    DEBUGLOGISP("Done flashing file, it took %i ms speed: %.4f kbs\r\n", (int)(millis() - millis_start), _speed);
+    DEBUGLOGSWD("Done flashing file, it took %i ms speed: %.4f kbs\r\n", (int)(millis() - millis_start), _speed);
     return 0;
 }
 
@@ -258,7 +261,10 @@ bool ESP_PROGSWD::stm32Fx_write_flash_32bit(uint32_t address, uint32_t value, bo
   bool state2 = swd_AP_Write(AP_DRW, value);
   bool state3 = swd_DP_Read(DP_RDBUFF, temp);
        state3 = swd_DP_Read(DP_RDBUFF, temp);
-  if (muted == false) {	DEBUGLOGISP("%i %i %i Write 0x%08x : 0x%08x  read 0x%08x \r\n", state1, state2, state3, address, value, temp );	}
+  if (muted == false) {
+    DEBUGLOGSWD("%i %i %i Write 0x%08x : 0x%08x  read 0x%08x \r\n" ,
+        state1, state2, state3, address, value, temp );	
+  }
   return ret = state1 * state2 * state3;
 }
 
@@ -274,7 +280,7 @@ bool ESP_PROGSWD::stm32Fx_write_flash_16bit(uint32_t address, uint32_t value, bo
 //   while (micros() < end_micros)    {    }
   bool state3 = swd_DP_Read(DP_RDBUFF, temp);
        state3 = swd_DP_Read(DP_RDBUFF, temp);
-  if (muted == false)   { DEBUGLOGISP("%i %i %i Write 0x%08x : 0x%08x  read 0x%08x \r\n", state1, state2, state3, address, value, temp );}
+  if (muted == false)   { DEBUGLOGSWD("%i %i %i Write 0x%08x : 0x%08x  read 0x%08x \r\n", state1, state2, state3, address, value, temp );}
   return ret = state1 * state2 * state3;
 }
 
