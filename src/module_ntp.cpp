@@ -15,14 +15,14 @@
 #include "common.h"
 
 
-NTPMOD_CLASS ntpModClass(false);
+NTPMOD_CLASS modNtpClass(false);
 
 
 NTPMOD_CLASS :: NTPMOD_CLASS (bool _in) { dumb = _in; }
 
 
 // init
-void NTPMOD_CLASS::ntpBegin (){
+void NTPMOD_CLASS::begin (){
 	DEBUGNTP(__PRETTY_FUNCTION__);	DEBUGNTP("\r\n");
 	_ntpServerCount = 0;
 	

@@ -14,6 +14,8 @@
 #include "ErriezSerialTerminal.h"
 #include "module_terminal.h"
 
+#include "module_ota.h"
+
 
 
 
@@ -66,7 +68,7 @@ void loop() {
     loop_user();
     TerminalLoop();
 //    ESPHTTPServer.handle(); FIXME ??
-    ArduinoOTA.handle();
+    modOtaClass.loopHandler();
     
 }
 

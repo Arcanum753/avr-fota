@@ -32,6 +32,8 @@
 #include "module_prog_swd.h"
 #endif
 
+#include "module_ota.h"
+
 
 #include "common.h"
 
@@ -44,8 +46,6 @@ String _Version_BuildDate 	= APP_BUILDDATE;
 String _Version_BuildTime 	= APP_BUILDTIME;
 
 AsyncFSWebServer::AsyncFSWebServer(uint16_t port) : AsyncWebServer(port) {}
-
-
 
 
 void flashLED(int pin, int times, int delayTime) {
@@ -81,8 +81,8 @@ void flashLED(int pin, int times, int delayTime) {
 	if (AP_ENABLE_BUTTON >= 0) {	pinMode(AP_ENABLE_BUTTON, INPUT_PULLUP); 	}
 
 	if (AP_ENABLE_BUTTON >= 0) {
-		wifiModClass._apConfig.APenable = !digitalRead(AP_ENABLE_BUTTON); // Read AP button. If button is pressed activate AP
-		DEBUGLOG("AP Enable = %d\n", wifiModClass._apConfig.APenable);
+		modWifiClass._apConfig.APenable = !digitalRead(AP_ENABLE_BUTTON); // Read AP button. If button is pressed activate AP
+		DEBUGLOG("AP Enable = %d\n", modWifiClass._apConfig.APenable);
 	}
 
 	if (CONNECTION_LED >= 0) {
@@ -109,7 +109,7 @@ void flashLED(int pin, int times, int delayTime) {
 	loadHTTPAuth();
 	if (!load_config_Sys()) { defaultConfigSys();  	}
 
-	wifiModClass.begin(&SPIFFS); // wifi load cfg and set callback hooks
+	modWifiClass.begin(&SPIFFS); // wifi load cfg and set callback hooks
 
 	
 	//WIFI INIT start here
@@ -134,9 +134,11 @@ void flashLED(int pin, int times, int delayTime) {
 	
 	AsyncWebServer::begin();
 	serverInit(); // Configure and start Web server
-	ntpModClass.ntpBegin();
-	wifiModClass.webInit();
-	ntpModClass.webInit();
+	modWifiClass.webInit();
+	
+	modNtpClass.begin();
+	modNtpClass.webInit();
+	
 #ifdef PROGTYPE_SWD
 	progSwd.setFs(&SPIFFS);
 	progSwd.begin();
@@ -149,17 +151,14 @@ void flashLED(int pin, int times, int delayTime) {
 	progIsp.web_Init();
 #endif
 
-	String mdnsName = _sysConfig.deviceName + "_" + _sysConfig.deviceSerial;
+	String mdnsName = hostName;
 	MDNS.begin(mdnsName.c_str()); // I've not got this to work. Need some investigation.
 	MDNS.addService("http", "tcp", 80);
-	prepareSizesForUpdate();
-	ConfigureOTA(_httpAuth.wwwPassword.c_str());
+	
+	modOtaClass.setFs(&SPIFFS);
+	modOtaClass.begin(hostName, _httpAuth.wwwPassword );  //ConfigureOTA(_httpAuth.wwwPassword.c_str());
+	modOtaClass.webInit();
 	// ledInit();
-	// progSwd.begin();
-}
-
-void AsyncFSWebServer::showDBG() {
-
 }
 
 
@@ -167,9 +166,7 @@ void AsyncFSWebServer::showDBG() {
 
 bool AsyncFSWebServer::load_config_Sys() {
 	JsonDocument jsonDoc;
-	if (!load_jsonDoc(CONFIG_FILE_SYS, jsonDoc)){
-		return false;
-	}
+	if (!load_jsonDoc(CONFIG_FILE_SYS, jsonDoc)){	return false;	}
 	_sysConfig.deviceName 			= jsonDoc["deviceName"].as<const char *>();
 	_sysConfig.deviceSerial 		= jsonDoc["deviceSerial"].as<const char *>();
 	_sysConfig.deviceType 			= jsonDoc["deviceType"].as<const char *>();
@@ -429,46 +426,6 @@ void AsyncFSWebServer::handle() {
 
 }
 
-void AsyncFSWebServer::ConfigureOTA(String password) {
-	//DONE new hostname Sam Arcanum
-	String hostName = _sysConfig.deviceName+"_"+_sysConfig.deviceSerial;
-	ArduinoOTA.setHostname(hostName.c_str());
-	// No authentication by default
-	if (password != "") {
-		ArduinoOTA.setPassword(password.c_str());
-		DEBUGLOG("OTA password set %s\n", password.c_str());
-	}
-
-#ifndef RELEASE
-	ArduinoOTA.onStart([]() {
-		DEBUGLOG("\r\n ArduinoOTA start. \r\n");
-	});
-
-#if defined(ESP32)
-	ArduinoOTA.onEnd(std::bind([](fs::SPIFFSFS* fs)
-#elif defined(ESP8266)
-	ArduinoOTA.onEnd(std::bind([](FS* fs)
-#endif
-	{
-		fs->end();
-		DEBUGLOG("\r\n ArduinoOTA end. \r\n");
-	}, _fs));
-	ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
-		DEBUGLOG("\t OTA Progress: %u%% \r\n", (progress / (total / 100)));
-	});
-	ArduinoOTA.onError([](ota_error_t error) {
-		DEBUGLOG("Error[%u]: ", error);
-		if (error == OTA_AUTH_ERROR) 			{DEBUGLOG("Auth Failed\r\n");		}
-		else if (error == OTA_BEGIN_ERROR) 		{DEBUGLOG("Begin Failed\r\n");		}
-		else if (error == OTA_CONNECT_ERROR)	{DEBUGLOG("Connect Failed\r\n");	}
-		else if (error == OTA_RECEIVE_ERROR) 	{DEBUGLOG("Receive Failed\r\n");	}
-		else if (error == OTA_END_ERROR) 		{DEBUGLOG("End Failed\r\n");		}
-	});
-	DEBUGLOG("\r\n ArduinoOTA Ready \r\n");
-#endif // RELEASE
-	ArduinoOTA.begin();
-}
-
 
 // working with pages vvv
 
@@ -536,7 +493,7 @@ String getContentType(String filename, AsyncWebServerRequest *request) {
 	return "text/plain";
 }
 
-bool AsyncFSWebServer::handleFileRead(String path, AsyncWebServerRequest *request) {
+bool AsyncFSWebServer:: handleFileRead(String path, AsyncWebServerRequest *request) {
 	DEBUGLOGFH("handleFileRead: %s\r\n", path.c_str());
 	if (CONNECTION_LED >= 0) {
 		// CANNOT RUN DELAY() INSIDE CALLBACK
@@ -644,7 +601,7 @@ void AsyncFSWebServer::send_information_values_html(AsyncWebServerRequest *reque
 
 void AsyncFSWebServer::restart_esp() {
 	DEBUGLOG(__FUNCTION__);	DEBUGLOG("\r\n");
-	wifiModClass.wifiStatus = FS_STAT_RESET;
+	modWifiClass.wifiStatus = FS_STAT_RESET;
 	WiFi.disconnect(true, false);
 	_fs->end();
 	delay(1000);
@@ -727,157 +684,7 @@ bool AsyncFSWebServer::saveHTTPAuth() {
 	return true;
 }
 
-void AsyncFSWebServer::prepareSizesForUpdate (){
-	maxSketchSpace   = (ESP.getSketchSize() - 0x1000) & 0xFFFFF000;
-	freeSketchSpace  = ESP.getFreeSketchSpace();
-	DEBUGLOG("Update prepare size \n\r");
-}
 
-void AsyncFSWebServer::send_update_firmware_values_html(AsyncWebServerRequest *request) {
-	DEBUGLOG(__FUNCTION__);	DEBUGLOG("\r\n");
-	String values = "";
-	String updateOKstr = "";
-	String updateFiletype = "";
-	typeOTAfile = UNSUPPORTED;
-
-	if (_updateFileName == OTA_FILENAME_FIRMWARE) {
-		typeOTAfile = FIRMWARE;
-		updateFiletype = OTA_FIRMWARE;
-	}
-	if (_updateFileName == OTA_FILENAME_FILESYSTEM) {
-		typeOTAfile = FILESYSTEM;
-		updateFiletype = OTA_FILESYSTEM;
-	}
-	if (typeOTAfile == UNSUPPORTED) {	updateFiletype = OTA_UNSUPPORTED;	}
-
-	bool updateOK = maxSketchSpace < freeSketchSpace;
-	if (updateOK == true) {	updateOKstr = "OK" ; } 
-		else {	updateOKstr = "ERROR" ;	}
-
-	DEBUGLOG("--updateOK: %s\r\n", updateOKstr);
-	DEBUGLOG("--FreeSketchSpace: %d\r\n", freeSketchSpace);
-	DEBUGLOG("--MaxSketchSpace: %d\r\n", maxSketchSpace);
-	DEBUGLOG("--UpdateFiletype: %d\r\n", updateFiletype);
-
-	values += "upd|" 			+ updateOKstr 				+ "|div\n";
-	values += "updSizeFree|" 	+ (String)freeSketchSpace 	+ "|div\n";
-	values += "updSizeMax|" 	+ (String)maxSketchSpace  	+ "|div\n";
-	values += "updFileType|" 	+ updateFiletype		  	+ "|div\n";
-	request->send(200, "text/plain", values);
-}
-
-void AsyncFSWebServer::setUpdateMD5(AsyncWebServerRequest *request) {
-	DEBUGLOG(__FUNCTION__);	DEBUGLOG("\r\n");
-	_browserFileMD5 = "";
-	DEBUGLOG("Arg number: %d\r\n", request->args());
-	if (request->args() > 0)  {// Read hash
-		for (uint8_t i = 0; i < request->args(); i++) {
-			DEBUGLOG("Arg %s: %s\r\n", request->argName(i).c_str(), request->arg(i).c_str());
-			if (request->argName(i) == "md5") {
-				_browserFileMD5 = urldecode(request->arg(i));
-				Update.setMD5(_browserFileMD5.c_str());
-				continue;
-			}
-			if (request->argName(i) == "size") {
-				_updateFileSize = request->arg(i).toInt();
-				DEBUGLOG("Update size: %d \r\n", _updateFileSize);
-				continue;
-			}
-			if (request->argName(i) == "name") {
-				_updateFileName = request->arg(i).c_str();
-				DEBUGLOG("Update filename: %s \r\n", _updateFileName.c_str());
-				continue;
-			}
-		}
-		request->send(200, "text/html", "OK --> MD5: " + _browserFileMD5);
-	}
-
-}
-void AsyncFSWebServer::updateFileExecute (AsyncWebServerRequest *request) {
-	DEBUGLOG(__FUNCTION__);	DEBUGLOG("\r\n");
-	AsyncWebServerResponse *response = request->beginResponse(200, "text/html", (Update.hasError()) ? "FAIL" : "<META http-equiv=\"refresh\" content=\"15;URL=/update\">Update correct. Restarting...");
-	response->addHeader("Connection", "close");
-	response->addHeader("Access-Control-Allow-Origin", "*");
-	request->send(response);
-	if (this->_fs) { this->_fs->end(); }//this->_fs->end();
-	this->restart_esp();
-
-}
-
-void AsyncFSWebServer::uploadUpdateFile(AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final) {
-	String	values = "";
-	// handler for the file upload, get's the sketch bytes, and writes
-	// them through the Update object
-	static long totalSize = 0;
-	int updatePartition = 1;
-	if (!index) { //UPLOAD_FILE_START
-		if (_fs) { _fs->end(); }//SPIFFS.end();
-		//Update.runAsync(true);
-		uint32_t maxSketchSpace = ESP.getSketchSize();
-		DBG_OUTPUT_PORT.printf("Update start: %s\r\n", filename.c_str());
-		DBG_OUTPUT_PORT.printf("Max free scketch space: %u\r\n", maxSketchSpace);
-		DBG_OUTPUT_PORT.printf("New scketch size: %u\r\n", _updateFileSize);
-		if (_browserFileMD5 != NULL && _browserFileMD5 != "") {
-			Update.setMD5(_browserFileMD5.c_str());
-			DBG_OUTPUT_PORT.printf("Hash from btowser: %s\r\n", _browserFileMD5.c_str());
-		} else {
-			values += "OTA Update error no md4 hash!" ;
-			request->send(500, "text/plain", values);
-			return ;
-		}
-		#if defined(ESP32)
-		if (typeOTAfile == FILESYSTEM) 	{ updatePartition = U_SPIFFS; }
-		#elif defined(ESP8266)
-		if (typeOTAfile == FILESYSTEM) 	{ updatePartition = U_FS; }
-		#endif
-
-		if (typeOTAfile == FIRMWARE) 	{ updatePartition = U_FLASH; }
-
-		if (!Update.begin(_updateFileSize, updatePartition)) {	//start with max available size
-			Update.printError(DBG_OUTPUT_PORT);
-			Update.end();
-			values += "OTA Update error at begin" ;
-			request->send(500, "text/plain", values);
-			return ;
-		}
-		if (typeOTAfile == UNSUPPORTED || updatePartition == 1) {
-			values += "OTA Update error UNSUPPORTED file!" ;
-			request->send(500, "text/plain", values);
-			return ;
-		}
-	}
-	// Get upload file, continue if not start
-	totalSize += len;
-	//percernt formula
-	uint16_t percentLoaded = (totalSize * 100) /  _updateFileSize ;
-	if (  (percentLoaded % 5) == 0  && (percentLoaded != percentLoadedPrev)) {
-		percentLoadedPrev = percentLoaded;
-		DBG_OUTPUT_PORT.printf("Uploaded: %d bytes  %u %%\r\n", totalSize, percentLoaded);
-	}
-
-	size_t written = Update.write(data, len);
-	if (written != len) {
-		values += "OTA Update error data load! len = " + (String)len + "written = "+ (String)written + "totalSize ="+ (String)totalSize +" \r\n";
-		DBG_OUTPUT_PORT.printf(values.c_str());
-		request->send(500, "text/plain", values);
-		return ;
-	}
-	if (final) {  // UPLOAD_FILE_END
-		String updateHash;
-		DBG_OUTPUT_PORT.println("Applying update...");
-		if (Update.end(true)) { //true to set the size to the current progress
-			updateHash = Update.md5String();
-			DBG_OUTPUT_PORT.printf("Upload finished. Calculated MD5: %s\r\n", updateHash.c_str());
-			DBG_OUTPUT_PORT.printf("Update Success: %u\nRebooting...\r\n", request->contentLength());
-		} else {
-			updateHash = Update.md5String();
-			DBG_OUTPUT_PORT.printf("Upload failed. Calculated MD5: %s\r\n", updateHash.c_str());
-			Update.printError(DBG_OUTPUT_PORT);
-		}
-	}
-
-	//delay(2);
-}
 
 void AsyncFSWebServer::handle_rest_config(AsyncWebServerRequest *request) {
 	String values = "";
@@ -1128,30 +935,6 @@ void AsyncFSWebServer::serverInit() {
 
 	//system.html ^^^
 
-
-//update.html vvv
-	on("/update/updatepossible", [this](AsyncWebServerRequest *request) {
-		if (!this->checkAuth(request)) {	return request->requestAuthentication(); };
-		this->send_update_firmware_values_html(request);
-	});
-	on("/setmd5", [this](AsyncWebServerRequest *request) {
-		if (!this->checkAuth(request)) {	return request->requestAuthentication(); };
-		this->setUpdateMD5(request);
-	});
-	on("/update", HTTP_GET, [this](AsyncWebServerRequest *request) {
-		if (!this->checkAuth(request)) {	return request->requestAuthentication(); };
-		if (!this->handleFileRead("/update.html", request)) { request->send(404, "text/plain", "FileNotFound");	}
-	});
-
-	on("/update", HTTP_POST, [this](AsyncWebServerRequest *request) {
-		//what do when we finish
-		if (!this->checkAuth(request)) {	return request->requestAuthentication(); };
-		this->updateFileExecute (request);
-	}, [this](AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final) {
-		// uploading
-		this->uploadUpdateFile(request, filename, index, data, len, final);
-	});
-//update.html ^^^
 
 
 
