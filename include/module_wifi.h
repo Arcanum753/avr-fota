@@ -12,6 +12,12 @@
 #endif
 
 
+const char Page_ConfigRefresh[] = R"=====(
+<meta http-equiv="refresh" content="10; URL=/index.html">
+Please Wait....Configuring Wifi.
+)=====";
+
+
 #define WIFI_CONFIG_FILE_NAME       "config_wifi"
 
 
@@ -68,15 +74,15 @@ typedef enum {
 class  WIFIMOD_CLASS    {
     public:
     WIFIMOD_CLASS (bool _in);
-    #if defined(ESP32)  
-    void begin(fs::SPIFFSFS* fs);
-    #elif defined(ESP8266)
-    void begin(FS* fs) ;                        // esp8266/esp32 flash file system
-    #endif
     #if ESP32
     fs::SPIFFSFS*               _fs;
     #elif defined(ESP8266)
     FS*                         _fs;                        // esp8266/esp32 flash file system
+    #endif
+    #if defined(ESP32)  
+    void begin(fs::SPIFFSFS* fs);
+    #elif defined(ESP8266)
+    void begin(FS* fs) ;                        // esp8266/esp32 flash file system
     #endif
     
     #if defined(ESP32)
@@ -130,7 +136,7 @@ class  WIFIMOD_CLASS    {
 };
 
 
-extern WIFIMOD_CLASS wifiModClass;
+extern WIFIMOD_CLASS modWifiClass;
 
 
 

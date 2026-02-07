@@ -16,7 +16,7 @@
 #include <FS.h>
 #endif
 #include <ArduinoJson.h>
-#include <ArduinoOTA.h>
+
 #include <Ticker.h>
 
 #define CONNECTION_LED -1// Connection LED pin (Built in). -1 to disable
@@ -44,7 +44,6 @@
 
 
 #define AVRSERVERSTR_UPLOADBEGIN "upload begin\n"
-
 
 #define OTA_FILENAME_FIRMWARE           "firmware.bin"
 #define OTA_FILENAME_FILESYSTEM         "spiffs.bin"
@@ -80,13 +79,6 @@ typedef struct {
 } strHTTPAuth;
 
 
-
-
-const char Page_ConfigRefresh[] = R"=====(
-<meta http-equiv="refresh" content="10; URL=/index.html">
-Please Wait....Configuring Wifi.
-)=====";
-
 const char Page_IndexRefresh[] = R"=====(
 <meta http-equiv="refresh" content="10; URL=/index.html">
 Please Wait....Configuring and Restarting.
@@ -97,22 +89,11 @@ const char Page_GeneralSys[] = R"=====(
 Please Wait....Configuring.
 )=====";
 
-const char Page_GeneralUdp[] = R"=====(
-<meta http-equiv="refresh" content="10; URL=/udp.html">
-Please Wait....Configuring.
-)=====";
-
-
-
 const char Page_GeneralPrj[] = R"=====(
 <meta http-equiv="refresh" content="10; URL=/project.html">
 Please Wait....Configuring.
 )=====";
 
-const char Page_AvrRefresh[] = R"=====(
-<meta http-equiv="refresh" content="10; URL=/avr.html">
-Please Wait....Configuring.
-)=====";
 
 void flashLED(int pin, int times, int delayTime) ;
 
@@ -145,7 +126,6 @@ public:
     //Clear the user configuration data (not the Wifi config!) and optional reset the device
     void clearUserConfig(bool reset);
     void serialShowInfo();
-    void showDBG();
 
     strSysConfig    _sysConfig; // SYS configuration
     
@@ -170,9 +150,7 @@ protected:
     FS*                         _fs;                        // esp8266/esp32 flash file system
 #endif
    
-    String _browserFileMD5 = "";
-    uint32_t _updateFileSize = 0;
-    String _updateFileName = "";
+
     
     
     public:
@@ -198,7 +176,7 @@ private:
     // bool load_generic_config()
     bool loadHTTPAuth();
     bool saveHTTPAuth();
-    void ConfigureOTA(String password);
+    
     void serverInit();
 
 public:
@@ -220,10 +198,7 @@ private:
     void get_project_configuration_html(AsyncWebServerRequest *request);
     void send_wwwauth_configuration_values_html(AsyncWebServerRequest *request);
     void set_wwwauth_configuration(AsyncWebServerRequest *request);
-    void send_update_firmware_values_html(AsyncWebServerRequest *request);
-    void setUpdateMD5(AsyncWebServerRequest *request);
-    void uploadUpdateFile(AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final);
-    void updateFileExecute (AsyncWebServerRequest *request) ;
+
 	void handle_rest_config(AsyncWebServerRequest *request);
 	void post_rest_config(AsyncWebServerRequest *request);
 public:    
@@ -231,11 +206,8 @@ public:
     
 private:
 
-    uint32_t maxSketchSpace   ;
-    uint32_t freeSketchSpace   ;
-    void prepareSizesForUpdate();
-    UpdateTypeFile  typeOTAfile;
-    uint16_t percentLoadedPrev ;
+
+    
 
 
     public:

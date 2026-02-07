@@ -1,5 +1,5 @@
-#define VERSION_APP "1.5.13"
-#define VERSION_WEB "1.10.15"
+#define VERSION_APP "1.5.30"
+#define VERSION_WEB "1.10.30"
 #define SERIAL_NUMBER "0"
 #define DEVTYPE_GPIO "gpio"
 #define APP_BUILDDATE  __DATE__
@@ -15,18 +15,20 @@
 
 
 // #define PROGTYPE_ISP
-
+#define DEBUG_ISP
+#define DEBUG_SHOWHEXBUF 0 // ISP
 
 //#define PROGTYPE_SWD
 #define DEBUG_SWD
 
+
+#define DEBUG_OTA
+
 #define DEBUG_NTP 
 #define DEBUG_UDP 
-
 #define DEBUG_WIFI
 
-// #define DEBUG_ISP 
-#define DEBUG_SHOWHEXBUF 0 // ISP
+
 
 
 //#define RELEASE  // Comment to enable debug output

@@ -5,6 +5,8 @@
 #include "main.h"
 #ifdef  PROGTYPE_ISP
 
+
+
 #ifdef DEBUG_ISP
 #define DEBUGLOGISP(...) DEBUGLOG(__VA_ARGS__)
 #else
@@ -17,6 +19,12 @@
 #else
 #define DEBUGLOGISPBUF(...)
 #endif
+
+
+const char Page_AvrRefresh[] = R"=====(
+<meta http-equiv="refresh" content="10; URL=/avr.html">
+Please Wait....Configuring.
+)=====";
 
 
 #define CONFIG_PROG_JSON  "/config_prog_isp.json"

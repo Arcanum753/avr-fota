@@ -17,6 +17,11 @@
 #endif
 
 
+const char Page_GeneralUdp[] = R"=====(
+<meta http-equiv="refresh" content="10; URL=/udp.html">
+Please Wait....Configuring.
+)=====";
+
 
 
 

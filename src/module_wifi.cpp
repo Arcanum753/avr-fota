@@ -14,7 +14,7 @@
 #include "module_udp.h"
 #include "module_ntp.h"
 
-WIFIMOD_CLASS wifiModClass(false);
+WIFIMOD_CLASS modWifiClass(false);
 
 
 WIFIMOD_CLASS :: WIFIMOD_CLASS (bool _in) {
@@ -23,7 +23,7 @@ WIFIMOD_CLASS :: WIFIMOD_CLASS (bool _in) {
 
 void WIFIMOD_CLASS::s_secondTick(void* arg) {
 	WIFIMOD_CLASS* self = reinterpret_cast<WIFIMOD_CLASS*>(arg);
-	if (ESPHTTPServer._evs.count() > 0) {	ntpModClass.sendTimeData();	}
+	if (ESPHTTPServer._evs.count() > 0) {	modNtpClass.sendTimeData();	}
 //Check connection timeout if enabled
 #if (AP_ENABLE_TIMEOUT > 0)
 	// DBG_OUTPUT_PORT.printf("timer%d\r\n", ++self->connectionTimout);
@@ -325,7 +325,7 @@ void WIFIMOD_CLASS::onWiFiConnectedGotIP(WiFiEventStationModeGotIP data) {
     if (udpBroadcast.getudpPowerOn() == true ) { 
 		udpBroadcastSimple();
 	}
-	ntpModClass.ntpOnConnected();
+	modNtpClass.ntpOnConnected();
 
 }
 
@@ -336,7 +336,7 @@ void WIFIMOD_CLASS::onWiFiDisconnected(WiFiEventStationModeDisconnected data) {
 #endif
 
 	udpBroadcast.udpStop();	// always stop!
-	ntpModClass.ntpOnDisconected();
+	modNtpClass.ntpOnDisconected();
 
 	if (wifiStatus == FS_STAT_RESET) {return;}
 
@@ -521,7 +521,7 @@ void WIFIMOD_CLASS::send_network_configuration_html(AsyncWebServerRequest *reque
 		//yield();
 		delay(1000);
 		_fs->end();
-		restart_esp();
+		ESPHTTPServer.restart_esp();
 #endif
 	}
 	else {

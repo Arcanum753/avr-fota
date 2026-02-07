@@ -16,7 +16,6 @@
 
 #include "eertos.h"
 #include "common.h"
-// #include "debug.h"
 
 
 IPAddress _responseIp ((const unsigned char *) LOCALHOST);

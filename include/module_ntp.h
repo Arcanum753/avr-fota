@@ -55,7 +55,7 @@ class  NTPMOD_CLASS    {
     
     strNtpConfig    _ntpConfig; // NTP configuration
     
-    void ntpBegin ();
+    void begin ();
     void ntpOnConnected ();
     void ntpOnDisconected ();
     void webInit();
@@ -84,7 +84,7 @@ class  NTPMOD_CLASS    {
     bool  dumb = false;
 };
 
-extern NTPMOD_CLASS ntpModClass;
+extern NTPMOD_CLASS modNtpClass;
 
 
 
