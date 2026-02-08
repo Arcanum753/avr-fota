@@ -27,8 +27,10 @@
 #define DEBUG_NTP 
 #define DEBUG_UDP 
 #define DEBUG_WIFI
+#define DEBUG_JSON
 
-
+#define HIDE_SECRET
+#define HIDE_CONFIG
 
 
 //#define RELEASE  // Comment to enable debug output

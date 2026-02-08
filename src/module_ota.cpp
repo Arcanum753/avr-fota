@@ -21,11 +21,12 @@ MODULE_OTA_CLASS :: MODULE_OTA_CLASS (bool _in) {
 #if ESP32
     void MODULE_OTA_CLASS::setFs(fs::SPIFFSFS* fs)
 #elif defined(ESP8266)
-    void MODULE_OTA_CLASS::setFs(FS* fs)                         // esp8266/esp32 flash file system
+    void MODULE_OTA_CLASS::setFs(FS* fs)	// esp8266/esp32 flash file system
 #endif
 {	_fs = fs;	}
 
- void MODULE_OTA_CLASS::begin(String _hostname, String _password){
+
+void MODULE_OTA_CLASS::begin(String _hostname, String _password){
 	DEBUGOTA(__FUNCTION__);	DEBUGOTA("\r\n");
 	prepareSizesForUpdate();
 	ConfigureOTA(_hostname, _password);
@@ -36,7 +37,6 @@ void MODULE_OTA_CLASS::prepareSizesForUpdate (){
 	maxSketchSpace   = (ESP.getSketchSize() - 0x1000) & 0xFFFFF000;
 	freeSketchSpace  = ESP.getFreeSketchSpace();
 }
-
 
 
 bool  MODULE_OTA_CLASS::ConfigureOTA( String _hostname, String _password) {

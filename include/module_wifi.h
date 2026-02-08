@@ -23,6 +23,10 @@ Please Wait....Configuring Wifi.
 
 #define USE_RESERV_WIFI 1
 // #define WIFI_CONFIGS    4 // TODO 
+#define AP_ENABLE_BUTTON -1//5 // Button pin to enable AP during startup for configuration. -1 to disable
+
+#define AP_ENABLE_TIMEOUT 60 // (Seconds, max 255) If the device can not connect to WiFi it will switch to AP mode after this time. -1 to disable
+
 
 
 #define WIFI_CONFIG_FILE0           "/config_wifi0.json"

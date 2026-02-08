@@ -10,19 +10,17 @@
 #include <WiFiClient.h>
 #include <TimeLib.h>
 #include <ESPAsyncWebServer.h>
+
 #if defined(ESP32)
 #include <SPIFFS.h>
 #elif defined(ESP8266)
 #include <FS.h>
 #endif
-#include <ArduinoJson.h>
+
 
 #include <Ticker.h>
 
 #define CONNECTION_LED -1// Connection LED pin (Built in). -1 to disable
-#define AP_ENABLE_BUTTON -1//5 // Button pin to enable AP during startup for configuration. -1 to disable
-
-#define AP_ENABLE_TIMEOUT 60 // (Seconds, max 255) If the device can not connect to WiFi it will switch to AP mode after this time. -1 to disable
 
 #define JSON_STR_LEN    512
 // #define HIDE_CONFIG
@@ -32,8 +30,6 @@
 
 
 #define CONFIG_FILE_SYS             "/config_sys.json"
-
-
 #define USER_CONFIG_FILE            "/userconfig.json"
 #define GENERIC_CONFIG_FILE         "/genericconfig.json"
 #define SECRET_FILE                 "/secret.json"
@@ -163,9 +159,7 @@ private:
     void  gpioGetArgs(AsyncWebServerRequest *request);
 
 public:
-    bool save_jsonDoc(const JsonDocument& jsonDoc, const String& file);
-    bool load_jsonDoc(const String& file, JsonDocument& jsonDoc);
-    
+
     //sys
     bool load_config_Sys();
     bool save_configSys();

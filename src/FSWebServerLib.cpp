@@ -33,6 +33,8 @@
 #endif
 
 #include "module_ota.h"
+#include "module_json.h"
+
 
 
 #include "common.h"
@@ -106,6 +108,9 @@ void flashLED(int pin, int times, int delayTime) {
 #endif
 	}
 #endif // RELEASE
+
+	ModClassJson.setFs(&SPIFFS);
+
 	loadHTTPAuth();
 	if (!load_config_Sys()) { defaultConfigSys();  	}
 
@@ -166,38 +171,10 @@ void flashLED(int pin, int times, int delayTime) {
 
 bool AsyncFSWebServer::load_config_Sys() {
 	JsonDocument jsonDoc;
-	if (!load_jsonDoc(CONFIG_FILE_SYS, jsonDoc)){	return false;	}
+	if (!ModClassJson.load_jsonDoc(CONFIG_FILE_SYS, jsonDoc)){	return false;	}
 	_sysConfig.deviceName 			= jsonDoc["deviceName"].as<const char *>();
 	_sysConfig.deviceSerial 		= jsonDoc["deviceSerial"].as<const char *>();
 	_sysConfig.deviceType 			= jsonDoc["deviceType"].as<const char *>();
-	return true;
-}
-
-
-bool AsyncFSWebServer::load_jsonDoc(const String& file, JsonDocument& jsonDoc){
-	File configFile = _fs->open(file, "r");
-
-	if (!configFile) {
-		DEBUGLOG("Failed to open config file");
-		return false;
-	}
-	size_t size = configFile.size();
-	/*if (size > 1024) {
-	DEBUGLOG("Config file size is too large");
-	configFile.close();
-	return false;
-	}*/
-	char * buf = (char *) malloc(size);
-	if ( buf == NULL){ return false;	}
-	DEBUGLOGFH("File: %s, size: %d\r\n", file.c_str(), size);
-	configFile.readBytes(buf, size);
-	configFile.close();
-	auto error = deserializeJson(jsonDoc, buf);
-	free(buf);
-	if (error) {
-		DEBUGLOG("Failed to parse config file. Error: %s\r\n", error.c_str());
-		return false;
-	}
 	return true;
 }
 
@@ -214,23 +191,7 @@ void AsyncFSWebServer::defaultConfigSys() {
 
 
 
-bool AsyncFSWebServer::save_jsonDoc(const JsonDocument& jsonDoc,	const String& file) {
-	File configFile  = _fs->open(file, "w");
-	if (!configFile) {
-		DEBUGLOG("Failed to open config file for writing\r\n");
-		configFile.close();
-		return false;
-	}
-#ifndef RELEASE
-	String temp;
-	serializeJsonPretty(jsonDoc, temp);
-	Serial.println(temp.c_str());
-#endif
-	serializeJson(jsonDoc, configFile);
-	configFile.flush();
-	configFile.close();
-	return true;
-}
+
 
 bool AsyncFSWebServer::save_configSys() {
 	DEBUGLOG("Save config SYSTEM\r\n");
@@ -238,7 +199,7 @@ bool AsyncFSWebServer::save_configSys() {
 	jsonDoc["deviceName"] 	= _sysConfig.deviceName;
 	jsonDoc["deviceSerial"] = _sysConfig.deviceSerial;
 	jsonDoc["deviceType"] 	= _sysConfig.deviceType;
-	return save_jsonDoc(jsonDoc, CONFIG_FILE_SYS);
+	return ModClassJson.save_jsonDoc(jsonDoc, CONFIG_FILE_SYS);
 }
 
 bool AsyncFSWebServer::load_user_config(String name, String &value) {
@@ -401,7 +362,7 @@ bool AsyncFSWebServer::save_user_config(String name, long value) {
 
 bool AsyncFSWebServer::loadHTTPAuth() {
 	JsonDocument jsonDoc;
-	if (!load_jsonDoc(SECRET_FILE, jsonDoc)){
+	if (!ModClassJson.load_jsonDoc(SECRET_FILE, jsonDoc)){
 		_httpAuth.auth = false;
 		_httpAuth.wwwUsername = "";
 		_httpAuth.wwwPassword = "";
@@ -1021,7 +982,7 @@ void AsyncFSWebServer::serverInit() {
 	});
 	addHandler(&_evs);
 
-#define HIDE_SECRET
+
 #ifdef HIDE_SECRET
 	on(SECRET_FILE, HTTP_GET, [this](AsyncWebServerRequest *request) {
 		if (!this->checkAuth(request)) {	return request->requestAuthentication(); };
@@ -1032,7 +993,7 @@ void AsyncFSWebServer::serverInit() {
 	});
 #endif // HIDE_SECRET
 
-//#define HIDE_CONFIG
+
 #ifdef HIDE_CONFIG
 	on(CONFIG_FILE_SYS, HTTP_GET, [this](AsyncWebServerRequest *request) {
 		if (!this->checkAuth(request)) {	return request->requestAuthentication(); };

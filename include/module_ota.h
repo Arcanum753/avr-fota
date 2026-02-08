@@ -12,7 +12,7 @@
 
 
 class  MODULE_OTA_CLASS    {
-    public:
+public:
     MODULE_OTA_CLASS (bool _in);
 
 #if ESP32
@@ -20,6 +20,7 @@ class  MODULE_OTA_CLASS    {
 #elif defined(ESP8266)
     FS*                         _fs;                        // esp8266/esp32 flash file system
 #endif
+
 #if ESP32
     void setFs(fs::SPIFFSFS* fs);
 #elif defined(ESP8266)
@@ -38,14 +39,14 @@ class  MODULE_OTA_CLASS    {
 
 
 
-    protected: 
+protected: 
     bool  dumb = false;
     String _browserFileMD5 = "";
     uint32_t _updateFileSize = 0;
     String _updateFileName = "";
 
 
-    private:
+private:
     bool ConfigureOTA( String _hostname, String _password) ;
     uint16_t percentLoadedPrev ;
     uint32_t maxSketchSpace   ;
