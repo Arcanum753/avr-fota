@@ -1,5 +1,6 @@
 #include <Arduino.h>
 #include <ArduinoJson.h>
+
 #ifdef ESP32
 #include <ESPmDNS.h>
 #include <AsyncUDP.h>
@@ -12,6 +13,7 @@
 #include <NtpClientLib.h>
 #include <WiFiClient.h>
 
+#include "module_json.h"
 #include "module_udp.h"
 
 #include "eertos.h"
@@ -245,7 +247,7 @@ bool UDPBROADCAST_CLASS::save_configUDP() {
 	jsonDoc["udpTimeOut"] 	= _udpConfig.udpTimeOut;
 	jsonDoc["udpkeyword"] 	= _udpConfig.keyword;
 	jsonDoc["udpPowerOn"] 	= _udpConfig.udpPowerOn;
-	return ESPHTTPServer.save_jsonDoc(jsonDoc, CONFIG_FILE_UDP);
+	return ModClassJson.save_jsonDoc(jsonDoc, CONFIG_FILE_UDP);
 }
 
 
@@ -253,7 +255,7 @@ bool UDPBROADCAST_CLASS::save_configUDP() {
 bool UDPBROADCAST_CLASS::load_config_UDP() {
 	DEBUGUDP(__PRETTY_FUNCTION__);	DEBUGUDP("\r\n");
 	JsonDocument jsonDoc;
-	if (!ESPHTTPServer.load_jsonDoc(CONFIG_FILE_UDP, jsonDoc)){	return false;	}
+	if (!ModClassJson.load_jsonDoc(CONFIG_FILE_UDP, jsonDoc))	{	return false;	}
 // #ifndef RELEASE
 	// String temp;
 	// serializeJsonPretty(jsonDoc, temp);

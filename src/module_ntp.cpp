@@ -1,14 +1,11 @@
 #include "main.h"
-#if defined(ESP32)
-#include <SPIFFS.h>
-#include <esp32-hal-gpio.h>
-#elif defined(ESP8266)
-#include <FS.h>
-#endif
+
+
 
 #include <ArduinoJson.h>
 #include "FSWebServerLib.h"
 // #include "debug.h"
+#include "module_json.h"
 #include "module_wifi.h"
 #include "module_udp.h"
 #include "module_ntp.h"
@@ -23,6 +20,7 @@ NTPMOD_CLASS :: NTPMOD_CLASS (bool _in) { dumb = _in; }
 
 // init
 void NTPMOD_CLASS::begin (){
+
 	DEBUGNTP(__PRETTY_FUNCTION__);	DEBUGNTP("\r\n");
 	_ntpServerCount = 0;
 	
@@ -90,7 +88,7 @@ void NTPMOD_CLASS::ntpSwitchReserv (){
 
 bool NTPMOD_CLASS::load_config_NTP() {
 	JsonDocument jsonDoc;
-	if (!ESPHTTPServer.load_jsonDoc(CONFIG_FILE_NTP, jsonDoc))	{
+	if (!ModClassJson.load_jsonDoc(CONFIG_FILE_NTP, jsonDoc))	{
 		return false;
 	}
 	_ntpConfig.ntpServerName0 		= jsonDoc["ntp0"].as<const char *>();
@@ -115,7 +113,7 @@ bool NTPMOD_CLASS::save_configNTP() {
 	jsonDoc["NTPperiod"] 	= _ntpConfig.updateNTPTimeEvery;
 	jsonDoc["timeZone"] 	= _ntpConfig.timezone;
 	jsonDoc["daylight"] 	= _ntpConfig.daylight;
-	return ESPHTTPServer.save_jsonDoc(jsonDoc, CONFIG_FILE_NTP);
+	return ModClassJson.save_jsonDoc(jsonDoc, CONFIG_FILE_NTP);
 }
 
 void NTPMOD_CLASS::defaultConfigNTP() {

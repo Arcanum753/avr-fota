@@ -239,10 +239,10 @@ class AsyncWebServerRequest {
     AsyncWebServerResponse *beginResponse(Stream &stream, const String& contentType, size_t len, AwsTemplateProcessor callback=nullptr);
     AsyncWebServerResponse *beginResponse(const String& contentType, size_t len, AwsResponseFiller callback, AwsTemplateProcessor templateCallback=nullptr);
     AsyncWebServerResponse *beginChunkedResponse(const String& contentType, AwsResponseFiller callback, AwsTemplateProcessor templateCallback=nullptr);
-    AsyncResponseStream *beginResponseStream(const String& contentType, size_t bufferSize=1460);
     AsyncWebServerResponse *beginResponse_P(int code, const String& contentType, const uint8_t * content, size_t len, AwsTemplateProcessor callback=nullptr);
     AsyncWebServerResponse *beginResponse_P(int code, const String& contentType, PGM_P content, AwsTemplateProcessor callback=nullptr);
-
+    AsyncResponseStream    *beginResponseStream(const String& contentType, size_t bufferSize=1460);
+    
     size_t headers() const;                     // get header count
     bool hasHeader(const String& name) const;   // check if header exists
     bool hasHeader(const __FlashStringHelper * data) const;   // check if header exists
@@ -271,7 +271,6 @@ class AsyncWebServerRequest {
     const String& header(const __FlashStringHelper * data) const;// get request header value by F(name)    
     const String& header(size_t i) const;        // get request header value by number
     const String& headerName(size_t i) const;    // get request header name by number
-    String urlDecode(const String& text) const;
 };
 
 /*

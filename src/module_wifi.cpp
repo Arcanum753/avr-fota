@@ -10,6 +10,7 @@
 #include "FSWebServerLib.h"
 #include "common.h"
 #include "debug.h"
+#include "module_json.h"
 #include "module_wifi.h"
 #include "module_udp.h"
 #include "module_ntp.h"
@@ -105,7 +106,7 @@ bool WIFIMOD_CLASS::load_configWifi(int _in) {
 	char filename[40];
 	sprintf(filename, "/%s%d.json", WIFI_CONFIG_FILE_NAME, _in);
 	JsonDocument jsonDoc;
-	if (!ESPHTTPServer.load_jsonDoc(filename, jsonDoc)){
+	if (!ModClassJson.load_jsonDoc(filename, jsonDoc)){
 		return false;
 	}
 
@@ -125,6 +126,8 @@ bool WIFIMOD_CLASS::load_configWifi(int _in) {
 	return true;
 }
 
+
+// TODO переделать !
 bool WIFIMOD_CLASS::save_configWifi(int _in) {
 	//flag_config = false;
 	DEBUGLOGWIFI("Save config\r\n");
@@ -226,24 +229,19 @@ void WIFIMOD_CLASS::configureWifiAP() {
 
 int WIFIMOD_CLASS::scanWifi() {
 	int _scanNum = -1;
-	int y = 0;
 
 	int nets = WiFi.scanComplete();
-	if (nets == WIFI_SCAN_FAILED) {
-		WiFi.scanNetworks(true);
-	}
+	if (nets == WIFI_SCAN_FAILED) {	WiFi.scanNetworks(true);	}
 	if (nets > 0) {
 		for (int i = 0; i < nets; ++i) {
-			if (strcmp( _strWifi3,  WiFi.SSID(i).c_str()) == 0){ _scanNum = 3; y=i;}
-			if (strcmp( _strWifi2,  WiFi.SSID(i).c_str()) == 0){ _scanNum = 2; y=i;}
-			if (strcmp( _strWifi1,  WiFi.SSID(i).c_str()) == 0){ _scanNum = 1; y=i;}
-			if (strcmp( _strWifi0,  WiFi.SSID(i).c_str()) == 0){ _scanNum = 0; y=i;}
+			if (strcmp( _strWifi3,  WiFi.SSID(i).c_str()) == 0){ _scanNum = 3; }
+			if (strcmp( _strWifi2,  WiFi.SSID(i).c_str()) == 0){ _scanNum = 2; }
+			if (strcmp( _strWifi1,  WiFi.SSID(i).c_str()) == 0){ _scanNum = 1; }
+			if (strcmp( _strWifi0,  WiFi.SSID(i).c_str()) == 0){ _scanNum = 0; }
 		}
 		WiFi.scanDelete();
 	}
-	if (_scanNum >= 0) {
-		WifiScan = WF_STAT_SCANED;
-	}
+	if (_scanNum >= 0) {	WifiScan = WF_STAT_SCANED;	}
 
 	DEBUGLOGWIFI("timeout: %d _scanNum = %d nets = %d \r\n", (AP_ENABLE_TIMEOUT - connectionTimout), _scanNum, nets);
 	return _scanNum;
