@@ -15,6 +15,12 @@
 #include "terminal.h"
 #include "udphelper.h"
 #include "swd.h"
+#include "udphelper.h"
+
+#include <AsyncUDP.h>
+AsyncUDP udp_Dbg;
+
+
 
 
 // Newline character '\r' or '\n'
@@ -31,6 +37,11 @@ void TerminalInit(){
     term.addCommand("?",     InfoShow );        // общая информация и текущее состояние подключения вай-фай
 
     term.addCommand("1",    test ); // тест терминала
+
+    term.addCommand("udpp",    udpp ); 
+    term.addCommand("udpc",    udpc ); 
+    term.addCommand("udps",    udps ); 
+
 // dead monks
 // all about dbg of AVR
     // term.addCommand("flash", flash1 );
@@ -159,11 +170,17 @@ void udpp (){
         Serial.println("Please set port 10000 < port <= 65536");
         return;
     }
-    String str = udpBroadcast.udpJsonBroadcast();
+    String str = udpBroadcast.udpJsonGet();
     udpBroadcast.udpBroadcastSend(port, str);
 }
 
 void udpc ()    {
-     udpBroadcast.udpBroadcastSend(udpBroadcast.getUpdPortTx(), udpBroadcast.udpJsonBroadcast());
+     udpBroadcast.udpBroadcastSend(udpBroadcast.getUpdPortTx(), udpBroadcast.udpJsonGet());
+}
+
+
+void udps ()    {
+     udpBroadcast.udpBroadcastSend(udpBroadcast.getUpdPortTx(), "test");
+    //   udp_Dbg.broadcastTo("test", 40000);
 }
 
