@@ -201,7 +201,7 @@ String UDPBROADCAST_CLASS::udpJsonGet()   {
 	// jsonDoc["dnshost"] 			= hostname;
 	// jsonDoc["iphost"] 			= iphost;
 	jsonDoc["mac"] 			    = WiFi.macAddress();
-	jsonDoc["ntpNow"] 			= NTP.getTimeDateString() ;
+	// jsonDoc["ntpNow"] 			= NTP.getTimeDateString() ;
 
 	jsonDoc["udpPortTx"] 		= _udpConfig.udpPortTx;
 	jsonDoc["udpPortRx"] 		= _udpConfig.udpPortRx;

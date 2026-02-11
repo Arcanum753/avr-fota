@@ -10,16 +10,18 @@
 #if defined(ESP32)
 #include <SPIFFS.h>
 #include <esp32-hal-gpio.h>
+#endif
 
 #ifdef PROGTYPE_ISP
 #include "module_prog_isp.h"
 #endif
 
-#ifdef PROGTYPE_SWD
+
+#if defined(PROGTYPE_SWD)
 #include "module_prog_swd.h"
 #endif
 
-#elif defined(ESP8266)
+#if defined(ESP8266)
 #include <FS.h>
 #endif
 
@@ -59,7 +61,6 @@ void flashLED(int pin, int times, int delayTime) {
 #endif
 {
 	_fs = fs;
-	ntpModClass._ntpserveer = 0;
 	DBG_OUTPUT_PORT.begin(115200);
 	DBG_OUTPUT_PORT.print("\n\n");
 #ifndef RELEASE
@@ -101,11 +102,11 @@ void flashLED(int pin, int times, int delayTime) {
 	if (!load_config_Sys()) { defaultConfigSys();  	}
 
 	wifiModClass.begin(&SPIFFS); // wifi load cfg and set callback hooks
-	ntpModClass.ntpBegin();
 
+	
 	//WIFI INIT start here
 	String hostName = _sysConfig.deviceName + "_" + _sysConfig.deviceSerial;
-
+	
 	DEBUGLOG("Open http://");
 	DEBUGLOG(hostName.c_str());
 	DEBUGLOG(".local to see the device web page.\r\n");
@@ -113,18 +114,19 @@ void flashLED(int pin, int times, int delayTime) {
 	if (!_sysConfig.deviceType.isEmpty()) {
 		DEBUGLOG("Device type: ");	DEBUGLOG(_sysConfig.deviceType.c_str());	DEBUGLOG("\n\r");
 	}
-#if defined(ESP32)
+	#if defined(ESP32)
 	DEBUGLOG("Flash chip size: %u\r\n", ESP.getFlashChipSize());
-#endif
-#if ESP8266
+	#endif
+	#if ESP8266
 	DEBUGLOG("Flash chip size: %u\r\n", ESP.getFlashChipRealSize());
-#endif
+	#endif
 	DEBUGLOG("Scketch size: %u\r\n", 		ESP.getSketchSize());
 	DEBUGLOG("Free flash space: %u\r\n", 	ESP.getFreeSketchSpace());
-
-
+	
+	
 	AsyncWebServer::begin();
 	serverInit(); // Configure and start Web server
+	ntpModClass.ntpBegin();
 	wifiModClass.webInit();
 	ntpModClass.webInit();
 #ifdef PROGTYPE_SWD
@@ -415,14 +417,8 @@ bool AsyncFSWebServer::loadHTTPAuth() {
 }
 
 void AsyncFSWebServer::handle() {
-	ArduinoOTA.handle();
-	if (updateTimeFromNTP) {
-		ntpModClass.ntpBeginReserv();
-		// NTP.begin(_sysConfig.ntpServerName0, _sysConfig.timezone / 10, _sysConfig.daylight);
-		NTP.setInterval(15, ntpModClass._ntpConfig.updateNTPTimeEvery * 60);
-		Serial.println(NTP.getLastNTPSync());
-		updateTimeFromNTP = false;
-	}
+	
+
 }
 
 void AsyncFSWebServer::ConfigureOTA(String password) {
@@ -668,12 +664,9 @@ void AsyncFSWebServer::send_information_values_html(AsyncWebServerRequest *reque
 	values += "x_netmask|" 	+ (String)WiFi.subnetMask()[0] + "." + (String)WiFi.subnetMask()[1] + "." + (String)WiFi.subnetMask()[2] + "." + (String)WiFi.subnetMask()[3] + "|div\n";
 	values += "x_mac|" 		+ wifiModClass.getMacAddress() + "|div\n";
 	values += "x_dns|" 		+ (String)WiFi.dnsIP()[0] + "." + (String)WiFi.dnsIP()[1] + "." + (String)WiFi.dnsIP()[2] + "." + (String)WiFi.dnsIP()[3] + "|div\n";
-	values += "x_ntp_sync|" + (String)NTP.getTimeDateString(NTP.getLastNTPSync()) + "|div\n";
-	values += "x_ntp_time|" + (String)NTP.getTimeStr() + "|div\n";
-	values += "x_ntp_date|" + (String)NTP.getDateStr() + "|div\n";
-	values += "x_ntp_adr|" 	+ (String)NTP.getNtpServerName() + "|div\n";
-	values += "x_uptime|" 	+ (String)NTP.getUptimeString() + "|div\n";
-	values += "x_last_boot|" + NTP.getTimeDateString(NTP.getLastBootTime()) + "|div\n";
+
+
+	
 	#ifdef ESP32
 	values += "x_chipid|" 	+ (String)ESP.getChipModel() + "|div\n";
 	#elif defined(ESP8266)
@@ -686,11 +679,6 @@ void AsyncFSWebServer::send_information_values_html(AsyncWebServerRequest *reque
 	//delete &values;
 	values = "";
 
-}
-
-void AsyncFSWebServer::sendTimeData() {
-	DEBUGLOG(__PRETTY_FUNCTION__);	DEBUGLOG("\r\n");
-	DEBUGLOG("sendTimeData %s\r\n", NTP.getTimeDateString().c_str());
 }
 
 
@@ -1423,6 +1411,25 @@ void AsyncFSWebServer::setUSERVERSION(String Version) {
 
 
 
+
+// Function to delete all CFG files
+void AsyncFSWebServer::clearConfig(bool reset)	{
+	if (_fs->exists(CONFIG_FILE_SYS)) 	{ _fs->remove(CONFIG_FILE_SYS);	}
+	if (_fs->exists(CONFIG_FILE_UDP)) 	{ _fs->remove(CONFIG_FILE_UDP);	}
+	// if (_fs->exists(CONFIG_FILE_NTP)) 	{ _fs->remove(CONFIG_FILE_NTP);	}
+	if (_fs->exists(WIFI_CONFIG_FILE0)) { _fs->remove(WIFI_CONFIG_FILE0);	}
+#if (USE_RESERV_WIFI > 0)
+	if (_fs->exists(WIFI_CONFIG_FILE1)) { _fs->remove(WIFI_CONFIG_FILE1);	}
+	if (_fs->exists(WIFI_CONFIG_FILE2)) { _fs->remove(WIFI_CONFIG_FILE2);	}
+	if (_fs->exists(WIFI_CONFIG_FILE3)) { _fs->remove(WIFI_CONFIG_FILE3);	}
+#endif
+	if (_fs->exists(SECRET_FILE)) {		_fs->remove(SECRET_FILE);	}
+	if (reset) {
+		if (_fs) { _fs->end();  }// If SPIFFS is started - finish it.
+		ESPHTTPServer.restart_esp();
+	}
+}
+
 void AsyncFSWebServer::serialShowInfo() {
 	Serial.printf("Ep8266 service chip firmware ver: %s\n\r",  VERSION_APP);
 	Serial.printf("Ep8266 web pages ver: %s\n\r",  VERSION_WEB);
@@ -1478,3 +1485,4 @@ boolean AsyncFSWebServer::checkRange(String Value) {
 	if (Value.toInt() < 0 || Value.toInt() > 255) {		return false;	}
 	else {		return true;	}
 }
+

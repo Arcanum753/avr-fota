@@ -98,7 +98,7 @@ class  WIFIMOD_CLASS    {
     void defaultConfigWifi(int _in);
     void configureWifiAP();
     void configureWifi();
-    void clearConfig(bool reset);
+    
     void wifiSsidSetPSWDwrong(String _str) ;
     void send_network_configuration_values_html(AsyncWebServerRequest *request, int _index);
     void send_connection_state_values_html(AsyncWebServerRequest *request);

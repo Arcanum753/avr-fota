@@ -17,8 +17,7 @@
 #include "swd.h"
 #include "udphelper.h"
 
-#include <AsyncUDP.h>
-AsyncUDP udp_Dbg;
+
 
 
 
