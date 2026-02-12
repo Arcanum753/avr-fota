@@ -93,6 +93,7 @@ Please Wait....Configuring.
 
 void flashLED(int pin, int times, int delayTime) ;
 
+String getContentType(String filename, AsyncWebServerRequest *request);
 
 class AsyncFSWebServer : public AsyncWebServer {
 public:
@@ -102,7 +103,6 @@ public:
 #elif defined(ESP8266)
     void begin(FS* fs) ;                        // esp8266/esp32 flash file system
 #endif
-    void handle();
 	const String getHostName();
 	AsyncFSWebServer& setJSONCallback(JSON_CALLBACK_SIGNATURE);
 	AsyncFSWebServer& setRESTCallback(REST_CALLBACK_SIGNATURE);
@@ -146,11 +146,11 @@ protected:
     FS*                         _fs;                        // esp8266/esp32 flash file system
 #endif
    
-
     
     
     public:
     AsyncEventSource _evs = AsyncEventSource("/events");
+    
   
     
 private:
@@ -175,13 +175,9 @@ private:
 
 public:
     bool checkAuth(AsyncWebServerRequest *request);
-    void handleFileList(AsyncWebServerRequest *request);
-    //void handleFileRead_edit_html(AsyncWebServerRequest *request);
     bool handleFileRead(String path, AsyncWebServerRequest *request);
-    void handleFileCreate(AsyncWebServerRequest *request);
-    void handleFileDelete(AsyncWebServerRequest *request);
 
-    void handleFileUpload(AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final);
+    
 private:
     void send_system_version_values_html(AsyncWebServerRequest *request);
     void send_device_values_html(AsyncWebServerRequest *request);

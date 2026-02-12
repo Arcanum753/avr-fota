@@ -227,7 +227,7 @@ void NTPMOD_CLASS::send_NTP_configuration_values_html(AsyncWebServerRequest *req
 
 
 void NTPMOD_CLASS::sendTimeData() {
-	DEBUGNTP(__PRETTY_FUNCTION__);	DEBUGNTP("\r\n");
+	// DEBUGNTP(__PRETTY_FUNCTION__);	DEBUGNTP("\r\n");
 	DEBUGNTP("sendTimeData %s\r\n", NTP.getTimeDateString().c_str());
 }
 

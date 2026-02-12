@@ -4,6 +4,7 @@
 #elif defined(ESP8266)
 #include <FS.h>
 #endif
+
 #include <ESPAsyncWebServer.h>
 #include <Ticker.h>
 #include <ESPAsyncWebServer.h>
@@ -67,9 +68,7 @@ void loop() {
     TaskManager();
     loop_user();
     TerminalLoop();
-//    ESPHTTPServer.handle(); FIXME ??
     modOtaClass.loopHandler();
-    
 }
 
 void loop_user(){
