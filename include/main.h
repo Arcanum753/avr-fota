@@ -13,6 +13,9 @@
 
 
 
+//CONFIGS
+#define HIDE_SECRET
+#define HIDE_CONFIG
 
 // #define PROGTYPE_ISP
 #define DEBUG_ISP
@@ -29,9 +32,8 @@
 #define DEBUG_WIFI
 #define DEBUG_JSON
 
-#define HIDE_SECRET
-#define HIDE_CONFIG
 #define DEBUG_EDITOR
+#define DEBUG_GPIO
 
 
 //#define RELEASE  // Comment to enable debug output
