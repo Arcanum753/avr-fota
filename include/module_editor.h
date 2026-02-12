@@ -27,14 +27,9 @@ public:
 #endif
     void begin();
     void webInit();
-
-    
     void handleFileList(AsyncWebServerRequest *request);
-    
-   
     void handleFileCreate(AsyncWebServerRequest *request);
     void handleFileDelete(AsyncWebServerRequest *request);
-
 
 protected: 
 #if ESP32

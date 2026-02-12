@@ -36,7 +36,7 @@
 #include "module_wifi.h"
 #include "module_udp.h"
 #include "module_ntp.h"
-
+#include "module_gpio.h"
 
 #include "common.h"
 
@@ -145,18 +145,7 @@ void flashLED(int pin, int times, int delayTime) {
 	modNtpClass.begin();
 	modNtpClass.webInit();
 	
-#ifdef PROGTYPE_SWD
-	progSwd.setFs(&SPIFFS);
-	progSwd.begin();
-	progSwd.web_Init();
-#endif
-
-#ifdef PROGTYPE_ISP
-	progIsp.setFs(&SPIFFS);
-	progIsp.begin();
-	progIsp.web_Init();
-#endif
-
+	
 	String mdnsName = hostName;
 	MDNS.begin(mdnsName.c_str()); // I've not got this to work. Need some investigation.
 	MDNS.addService("http", "tcp", 80);
@@ -164,10 +153,24 @@ void flashLED(int pin, int times, int delayTime) {
 	modOtaClass.setFs(&SPIFFS);
 	modOtaClass.begin(hostName, _httpAuth.wwwPassword );  //ConfigureOTA(_httpAuth.wwwPassword.c_str());
 	modOtaClass.webInit();
-
+	
 	ModClassEdit.setFs(&SPIFFS);
 	ModClassEdit.webInit();
-
+	
+	ModClassGpio.setFs(&SPIFFS);
+	ModClassGpio.webInit();
+	
+	#ifdef PROGTYPE_SWD
+		progSwd.setFs(&SPIFFS);
+		progSwd.begin();
+		progSwd.web_Init();
+	#endif
+	
+	#ifdef PROGTYPE_ISP
+		progIsp.setFs(&SPIFFS);
+		progIsp.begin();
+		progIsp.web_Init();
+	#endif
 
 	// ledInit();
 }
@@ -628,6 +631,7 @@ void AsyncFSWebServer::get_project_configuration_html(AsyncWebServerRequest *req
 		// request->send_P(200, "text/html", Page_GeneralPrj);
 		// progSwd.cfg_FileSaveFromWeb(Prog_CfgFile);
 	}
+	else {	handleFileRead(request->url(), request);	}
 	DEBUGLOG(__PRETTY_FUNCTION__);	DEBUGLOG("\r\n");
 }
 // project.html ^^^
@@ -643,7 +647,7 @@ void AsyncFSWebServer::send_device_values_html(AsyncWebServerRequest *request) {
 }
 
 void AsyncFSWebServer::get_system_configuration_html(AsyncWebServerRequest *request) {
-	//DEBUGLOG(__FUNCTION__);	DEBUGLOG("\r\n");
+	DEBUGLOG(__FUNCTION__);	DEBUGLOG("\r\n");
 	
 	if (request->args() > 0) { // Save Settings
 		for (uint8_t i = 0; i < request->args(); i++) {
@@ -655,53 +659,11 @@ void AsyncFSWebServer::get_system_configuration_html(AsyncWebServerRequest *requ
 		request->send_P(200, "text/html", Page_GeneralSys);
 		save_configSys();
 	}
-	DEBUGLOG(__PRETTY_FUNCTION__);	DEBUGLOG("\r\n");
+	else {	handleFileRead(request->url(), request);	}
+	
 }
 
 // system.html ^^^
-
-// gpio.html vvv
-
-void  AsyncFSWebServer::gpioGetArgs(AsyncWebServerRequest *request) {
-	String values = "";
-	String uartStr = "";
-	if (request->args() > 0) { // get new configs from args
-		for (uint8_t i = 0; i < request->args(); i++) {
-			DEBUGLOG("Arg %d: %s %s\r\n", i, request->argName(i).c_str() , request->arg(i).c_str() );
-			if (request->argName(i) == "uartstr")	{
-				uartStr = urldecode(request->arg(i));
-				Serial.printf("%s \n\r", uartStr.c_str() );
-				continue;
-			}
-			if ( _sysConfig.deviceType == DEVTYPE_GPIO){
-				if (request->argName(i) == "led1")	{
-					// if (urldecode(request->arg(i)) == "on")  {	digitalWrite(PIN_MISO, HIGH);	}
-					// if (urldecode(request->arg(i)) == "off") {	digitalWrite(PIN_MISO, LOW);	}
-					continue;
-				}
-				if (request->argName(i) == "led2")	{
-					// if (urldecode(request->arg(i)) == "on")  {	digitalWrite(PIN_MOSI, HIGH);	}
-					// if (urldecode(request->arg(i)) == "off") {	digitalWrite(PIN_MOSI, LOW);	}
-					continue;
-				}
-				if (request->argName(i) == "led3")	{
-					// if (urldecode(request->arg(i)) == "on")  {	digitalWrite(PIN_SCK, HIGH);	}
-					// if (urldecode(request->arg(i)) == "off") {	digitalWrite(PIN_SCK, LOW);		}
-					continue;
-				}
-				if (request->argName(i) == "led4")	{
-					// if (urldecode(request->arg(i)) == "on")  {	digitalWrite(PIN_RST, HIGH);	}
-					// if (urldecode(request->arg(i)) == "off") {	digitalWrite(PIN_RST, LOW);	}
-					continue;
-				}
-			}	
-		}	
-		request->send(200, "text/plain", values);
-		DEBUGLOG(__PRETTY_FUNCTION__);	DEBUGLOG("\r\n");
-	}	
-}	
-
-// gpio.html ^^^
 
 
 String getContentType(String filename, AsyncWebServerRequest *request) {
@@ -780,12 +742,7 @@ void AsyncFSWebServer::serverInit() {
 	});
 //project.html ^^^
 
-//gpio.html vvv
-	on("/gpio", HTTP_POST, [this](AsyncWebServerRequest *request) {
-		if (!this->checkAuth(request)) {	return request->requestAuthentication(); };
-		this->gpioGetArgs(request);
-	});
-//gpio.html ^^^
+
 
 	on("/rconfig", HTTP_GET, [this](AsyncWebServerRequest *request) {
 		if (!this->checkAuth(request)) {	return request->requestAuthentication(); };

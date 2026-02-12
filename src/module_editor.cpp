@@ -24,30 +24,35 @@ void  MODULE_CLASS_EDITOR::begin(){
 void  MODULE_CLASS_EDITOR::webInit(){
     DEBUGEDIT(__FUNCTION__);	DEBUGEDIT("\r\n");
 //edit.html vvv
+
     //list directory
     ESPHTTPServer.on("/list", HTTP_GET, [this](AsyncWebServerRequest *request) {
-        if (!ESPHTTPServer.checkAuth(request)) {		return request->requestAuthentication(); }
+        if (!ESPHTTPServer.checkAuth(request)) {    return request->requestAuthentication(); }
         this->handleFileList(request);
     });
+
     //load editor
     ESPHTTPServer.on("/edit", HTTP_GET, [this](AsyncWebServerRequest *request) {
-        if (!ESPHTTPServer.checkAuth(request)) {		return request->requestAuthentication(); }
+        if (!ESPHTTPServer.checkAuth(request)) {    return request->requestAuthentication(); }
         if (!ESPHTTPServer.handleFileRead("/edit.html", request))
             {   request->send(404, "text/plain", "FileNotFound");   }
     });
+
     //create file
     ESPHTTPServer.on("/edit", HTTP_PUT, [this](AsyncWebServerRequest *request) {
-        if (!ESPHTTPServer.checkAuth(request)) {		return request->requestAuthentication(); }
+        if (!ESPHTTPServer.checkAuth(request)) {    return request->requestAuthentication(); }
         this->handleFileCreate(request);
-    });	//delete file
+    });	
+
+    //delete file
     ESPHTTPServer.on("/edit", HTTP_DELETE, [this](AsyncWebServerRequest *request) {
         if (!ESPHTTPServer.checkAuth(request)) {		return request->requestAuthentication(); }
         this->handleFileDelete(request);
     });
+
     //first callback is called after the request has ended with all parsed arguments
     //second callback handles file uploads at that location
-    ESPHTTPServer.on("/edit", HTTP_POST, [](AsyncWebServerRequest *request) {
-            request->send(200, "text/plain", ""); },
+    ESPHTTPServer.on("/edit", HTTP_POST, [](AsyncWebServerRequest *request) { request->send(200, "text/plain", ""); },
         [this](AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final) {
             this->handleFileUpload(request, filename, index, data, len, final);
     });
