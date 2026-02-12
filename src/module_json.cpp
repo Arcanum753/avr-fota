@@ -15,7 +15,7 @@ MODULE_CLASS_JSON :: MODULE_CLASS_JSON (bool _in) {
 	dumb = _in;
 }
 
-#if ESP32
+#if defined(ESP32)
     void MODULE_CLASS_JSON::setFs(fs::SPIFFSFS* fs)
 #elif defined(ESP8266)
     void MODULE_CLASS_JSON::setFs(FS* fs)	// esp8266/esp32 flash file system

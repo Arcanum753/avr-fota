@@ -31,6 +31,7 @@
 
 #define HIDE_SECRET
 #define HIDE_CONFIG
+#define DEBUG_EDITOR
 
 
 //#define RELEASE  // Comment to enable debug output

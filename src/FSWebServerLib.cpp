@@ -3,10 +3,7 @@
 
 #include "FSWebServerLib.h"
 
-#include "debug.h"
-#include "module_wifi.h"
-#include "module_udp.h"
-#include "module_ntp.h"
+
 
 #if defined(ESP32)
 #include <SPIFFS.h>
@@ -32,9 +29,13 @@
 #include "module_prog_swd.h"
 #endif
 
+#include "debug.h"
 #include "module_ota.h"
 #include "module_json.h"
-
+#include "module_editor.h"
+#include "module_wifi.h"
+#include "module_udp.h"
+#include "module_ntp.h"
 
 
 #include "common.h"
@@ -109,7 +110,7 @@ void flashLED(int pin, int times, int delayTime) {
 	}
 #endif // RELEASE
 
-	ModClassJson.setFs(&SPIFFS);
+	ModClassJson.setFs(&SPIFFS); // MUST be set as first as possible!
 
 	loadHTTPAuth();
 	if (!load_config_Sys()) { defaultConfigSys();  	}
@@ -163,6 +164,11 @@ void flashLED(int pin, int times, int delayTime) {
 	modOtaClass.setFs(&SPIFFS);
 	modOtaClass.begin(hostName, _httpAuth.wwwPassword );  //ConfigureOTA(_httpAuth.wwwPassword.c_str());
 	modOtaClass.webInit();
+
+	ModClassEdit.setFs(&SPIFFS);
+	ModClassEdit.webInit();
+
+
 	// ledInit();
 }
 
@@ -361,6 +367,7 @@ bool AsyncFSWebServer::save_user_config(String name, long value) {
 }
 
 bool AsyncFSWebServer::loadHTTPAuth() {
+	DEBUGLOG(__PRETTY_FUNCTION__);	DEBUGLOG("\r\n");
 	JsonDocument jsonDoc;
 	if (!ModClassJson.load_jsonDoc(SECRET_FILE, jsonDoc)){
 		_httpAuth.auth = false;
@@ -377,166 +384,13 @@ bool AsyncFSWebServer::loadHTTPAuth() {
 		DEBUGLOG("User: %s\r\n", _httpAuth.wwwUsername.c_str());
 		DEBUGLOG("Pass: %s\r\n", _httpAuth.wwwPassword.c_str());
 	}
-	DEBUGLOG(__PRETTY_FUNCTION__);
-	DEBUGLOG("\r\n");
 	return true;
 }
 
-void AsyncFSWebServer::handle() {
-	
-
-}
 
 
 // working with pages vvv
 
-void AsyncFSWebServer::handleFileList(AsyncWebServerRequest *request) {
-	if (!request->hasArg("dir")) { request->send(500, "text/plain", "BAD ARGS"); return; }
-	String path = request->arg("dir");
-	DEBUGLOGFH("handleFileList: %s\r\n", path.c_str());
-	String output = "[";
-
-#ifdef ESP32
-	File root =  _fs->open(path);
-	File file = root.openNextFile();
-	while (file) {
-		if (output != "[")	{output += ',';}
-		bool isDir = false;
-		output += "{\"type\":\"";
-		isDir = file.isDirectory();
-		output += (isDir) ? "dir" : "file";
-		output += "\",\"name\":\"";
-		output += String(file.name());
-		output += "\"}";
-		file = root.openNextFile();
-	}
-	#else
-	Dir dir = _fs->openDir(path);
-	while (dir.next()) {
-		File entry = dir.openFile("r");
-		if (true)//entry.name()!="secret.json") // Do not show secrets
-		{
-			if (output != "[")	{output += ',';}
-			bool isDir = false;
-			output += "{\"type\":\"";
-			output += (isDir) ? "dir" : "file";
-			output += "\",\"name\":\"";
-			output += String(entry.name()).substring(1);
-			output += "\"}";
-		}
-		entry.close();
-		}
-#endif
-
-	output += "]";
-	DEBUGLOGFH("%s\r\n", output.c_str());
-	request->send(200, "text/json", output);
-}
-
-
-
-String getContentType(String filename, AsyncWebServerRequest *request) {
-	if (request->hasArg("download")) return "application/octet-stream";
-	else if (filename.endsWith(".htm")) return "text/html";
-	else if (filename.endsWith(".html")) return "text/html";
-	else if (filename.endsWith(".css")) return "text/css";
-	else if (filename.endsWith(".js"))   return "application/javascript";
-	else if (filename.endsWith(".json")) return "application/json";
-	else if (filename.endsWith(".png")) return "image/png";
-	else if (filename.endsWith(".gif")) return "image/gif";
-	else if (filename.endsWith(".jpg")) return "image/jpeg";
-	else if (filename.endsWith(".ico")) return "image/x-icon";
-	else if (filename.endsWith(".xml")) return "text/xml";
-	else if (filename.endsWith(".pdf")) return "application/x-pdf";
-	else if (filename.endsWith(".zip")) return "application/x-zip";
-	else if (filename.endsWith(".gz"))  return "application/x-gzip";
-	else if (filename.endsWith(".hex")) return "text/html";
-	return "text/plain";
-}
-
-bool AsyncFSWebServer:: handleFileRead(String path, AsyncWebServerRequest *request) {
-	DEBUGLOGFH("handleFileRead: %s\r\n", path.c_str());
-	if (CONNECTION_LED >= 0) {
-		// CANNOT RUN DELAY() INSIDE CALLBACK
-		flashLED(CONNECTION_LED, 1, 25); // Show activity on LED
-	}
-	if (path.endsWith("/")) {	path += HTML_INDEX;	}
-	String contentType = getContentType(path, request);
-	String pathWithGz = path + ".gz";
-	if (_fs->exists(pathWithGz) || _fs->exists(path)) {
-		if (_fs->exists(pathWithGz)) { path += ".gz"; }
-		DEBUGLOGFH("Content type: %s\r\n", contentType.c_str());
-		AsyncWebServerResponse *response = request->beginResponse(*_fs, path, contentType);
-		if (path.endsWith(".gz"))
-			response->addHeader("Content-Encoding", "gzip");
-		//File file = SPIFFS.open(path, "r");
-		DEBUGLOGFH("File %s exist\r\n", path.c_str());
-		request->send(response);
-		DEBUGLOGFH("File %s Sent\r\n", path.c_str());
-
-		return true;
-	}
-	else
-		DEBUGLOGFH("Cannot find %s\n", path.c_str());
-	return false;
-}
-
-void AsyncFSWebServer::handleFileCreate(AsyncWebServerRequest *request) {
-	
-	if (request->args() == 0)		{	return request->send(500, "text/plain", "BAD ARGS");}
-	String path = request->arg(0U);
-	DEBUGLOG("handleFileCreate: %s\r\n", path.c_str());
-	if (path == "/")			{	return request->send(500, "text/plain", "BAD PATH");	}
-	if (_fs->exists(path))		{	return request->send(500, "text/plain", "FILE EXISTS");	}
-	File file = _fs->open(path, "w");
-	if (file)	{	file.close();	}
-	else		{	return request->send(500, "text/plain", "CREATE FAILED");	}
-	request->send(200, "text/plain", "");
-	path = String(); // Remove? Useless statement?
-}
-
-
-// удаление файла
-
-void AsyncFSWebServer::handleFileDelete(AsyncWebServerRequest *request) {
-	
-	if (request->args() == 0) 	{	return request->send(500, "text/plain", "BAD ARGS");	}
-	String path = request->arg(0U);
-	DEBUGLOG("handleFileDelete: %s\r\n", path.c_str());
-	if (path == "/") 		{	return request->send(500, "text/plain", "BAD PATH");	}
-	if (!_fs->exists(path)) {	return request->send(404, "text/plain", "FileNotFound");	}
-	_fs->remove(path);
-	request->send(200, "text/plain", "");
-}
-
-
-void AsyncFSWebServer::handleFileUpload(AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final) {
-	static File fsUploadFile;
-	static size_t fileSize = 0;
-
-	if (!index) { // Start
-		DEBUGLOG("handleFileUpload Name: %s\r\n", filename.c_str());
-		if (!filename.startsWith("/")) filename = "/" + filename;
-		fsUploadFile = _fs->open(filename, "w");
-		DEBUGLOG("First upload part.\r\n");
-	}
-	// Continue
-	if (fsUploadFile) {
-		DEBUGLOG("Continue upload part. Size = %u\r\n", len);
-		if (fsUploadFile.write(data, len) != len) {	DBG_OUTPUT_PORT.println("Write error during upload");	}
-		else {	fileSize += len;	}
-	}
-	//da fack?!
-	/*for (size_t i = 0; i < len; i++) {
-	if (fsUploadFile)
-	fsUploadFile.write(data[i]);
-	}*/
-	if (final) { // End
-		if (fsUploadFile) {	fsUploadFile.close();	}
-		DEBUGLOG("handleFileUpload Size: %u\n", fileSize);
-		fileSize = 0;
-	}
-}
 
 
 void AsyncFSWebServer::send_information_values_html(AsyncWebServerRequest *request) {
@@ -704,6 +558,33 @@ void AsyncFSWebServer::post_rest_config(AsyncWebServerRequest *request) {
 
 }
 
+bool AsyncFSWebServer:: handleFileRead(String path, AsyncWebServerRequest *request) {
+	DEBUGEDIT("handleFileRead: %s\r\n", path.c_str());
+	if (CONNECTION_LED >= 0) {
+		// CANNOT RUN DELAY() INSIDE CALLBACK
+		flashLED(CONNECTION_LED, 1, 25); // Show activity on LED
+	}
+	if (path.endsWith("/")) {	path += HTML_INDEX;	}
+	String contentType = getContentType(path, request);
+	String pathWithGz = path + ".gz";
+	if (_fs->exists(pathWithGz) || _fs->exists(path)) {
+		if (_fs->exists(pathWithGz)) { path += ".gz"; }
+		DEBUGEDIT("Content type: %s\r\n", contentType.c_str());
+		AsyncWebServerResponse *response = request->beginResponse(*_fs, path, contentType);
+		if (path.endsWith(".gz"))
+			response->addHeader("Content-Encoding", "gzip");
+		//File file = SPIFFS.open(path, "r");
+		DEBUGEDIT("File %s exist\r\n", path.c_str());
+		request->send(response);
+		DEBUGEDIT("File %s Sent\r\n", path.c_str());
+
+		return true;
+	}
+	else
+		DEBUGEDIT("Cannot find %s\n", path.c_str());
+	return false;
+}
+
 
 // sam arcanum web pages functions VVV
 
@@ -747,7 +628,6 @@ void AsyncFSWebServer::get_project_configuration_html(AsyncWebServerRequest *req
 		// request->send_P(200, "text/html", Page_GeneralPrj);
 		// progSwd.cfg_FileSaveFromWeb(Prog_CfgFile);
 	}
-	else {	handleFileRead(request->url(), request);	}
 	DEBUGLOG(__PRETTY_FUNCTION__);	DEBUGLOG("\r\n");
 }
 // project.html ^^^
@@ -775,7 +655,6 @@ void AsyncFSWebServer::get_system_configuration_html(AsyncWebServerRequest *requ
 		request->send_P(200, "text/html", Page_GeneralSys);
 		save_configSys();
 	}
-	else {	handleFileRead(request->url(), request);	}
 	DEBUGLOG(__PRETTY_FUNCTION__);	DEBUGLOG("\r\n");
 }
 
@@ -815,89 +694,78 @@ void  AsyncFSWebServer::gpioGetArgs(AsyncWebServerRequest *request) {
 					// if (urldecode(request->arg(i)) == "off") {	digitalWrite(PIN_RST, LOW);	}
 					continue;
 				}
-			}
-		}
+			}	
+		}	
 		request->send(200, "text/plain", values);
 		DEBUGLOG(__PRETTY_FUNCTION__);	DEBUGLOG("\r\n");
-	}
-}
+	}	
+}	
 
 // gpio.html ^^^
 
 
+String getContentType(String filename, AsyncWebServerRequest *request) {
+	if (request->hasArg("download")) return "application/octet-stream";
+	else if (filename.endsWith(".htm")) return "text/html";
+	else if (filename.endsWith(".html")) return "text/html";
+	else if (filename.endsWith(".css")) return "text/css";
+	else if (filename.endsWith(".js"))   return "application/javascript";
+	else if (filename.endsWith(".json")) return "application/json";
+	else if (filename.endsWith(".png")) return "image/png";
+	else if (filename.endsWith(".gif")) return "image/gif";
+	else if (filename.endsWith(".jpg")) return "image/jpeg";
+	else if (filename.endsWith(".ico")) return "image/x-icon";
+	else if (filename.endsWith(".xml")) return "text/xml";
+	else if (filename.endsWith(".pdf")) return "application/x-pdf";
+	else if (filename.endsWith(".zip")) return "application/x-zip";
+	else if (filename.endsWith(".gz"))  return "application/x-gzip";
+	else if (filename.endsWith(".hex")) return "text/html";
+	return "text/plain";
+}
+
 void AsyncFSWebServer::serverInit() {
 	//SERVER INIT
-//edit.html vvv
-	//list directory
-	on("/list", HTTP_GET, [this](AsyncWebServerRequest *request) {
-		if (!this->checkAuth(request)) {	return request->requestAuthentication(); };
-		this->handleFileList(request);
-	});
-	//load editor
-	on("/edit", HTTP_GET, [this](AsyncWebServerRequest *request) {
-		if (!this->checkAuth(request)) {	return request->requestAuthentication(); };
-		if (!this->handleFileRead("/edit.html", request))
-			request->send(404, "text/plain", "FileNotFound");
-	});
-	//create file
-	on("/edit", HTTP_PUT, [this](AsyncWebServerRequest *request) {
-		if (!this->checkAuth(request)) {	return request->requestAuthentication(); };
-		this->handleFileCreate(request);
-	});	//delete file
-	on("/edit", HTTP_DELETE, [this](AsyncWebServerRequest *request) {
-		if (!this->checkAuth(request)) {	return request->requestAuthentication(); };
-		this->handleFileDelete(request);
-	});
-	//first callback is called after the request has ended with all parsed arguments
-	//second callback handles file uploads at that location
-	on("/edit", HTTP_POST, [](AsyncWebServerRequest *request) {
-		 request->send(200, "text/plain", ""); },
-		[this](AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final) {
-			this->handleFileUpload(request, filename, index, data, len, final);
-	});
-//edit.html ^^^
 
 
 
-//system.html vvv
+
+//system.html vvv	
 	on("/system/restart", [this](AsyncWebServerRequest *request) {
 		if (!this->checkAuth(request)) {	return request->requestAuthentication(); };
 		DBG_OUTPUT_PORT.println(request->url());
 		request->send_P(200, "text/html", Page_IndexRefresh);
 		this->restart_esp();
-	});
+	});	
 	on("/system/wwwauth", [this](AsyncWebServerRequest *request) {
 		if (!this->checkAuth(request)) {	return request->requestAuthentication(); };
 		this->send_wwwauth_configuration_values_html(request);
-	});
+	});	
 
 
 	on("/system/infovalues", [this](AsyncWebServerRequest *request) {
 		if (!this->checkAuth(request)) {	return request->requestAuthentication(); };
 		this->send_information_values_html(request);
-	});
+	});	
 	on("/system/version", [this](AsyncWebServerRequest *request) {
 		if (!this->checkAuth(request)) {	return request->requestAuthentication(); };
 		this->send_system_version_values_html(request);
-	});
+	});	
 	on("/system.html", [this](AsyncWebServerRequest *request) {
 		if (!this->checkAuth(request)) {	return request->requestAuthentication(); };
 		this->get_system_configuration_html(request);
-	});
+	});	
 	// FIXME
 	on("/system/savewwwauth", [this](AsyncWebServerRequest *request) {
 		if (!this->checkAuth(request)) {	return request->requestAuthentication(); };
 		this->set_wwwauth_configuration(request);
-	});
+	});	
 	on("/system/devconf", HTTP_GET, [this](AsyncWebServerRequest *request) {
 		if (!this->checkAuth(request)) {	return request->requestAuthentication(); };
 		this->send_device_values_html(request);
-	});
+	});	
 
 	//system.html ^^^
-
-
-
+	
 
 
 //project.html vvv
