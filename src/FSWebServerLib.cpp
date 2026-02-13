@@ -40,7 +40,6 @@
 
 #include "common.h"
 
-
 AsyncFSWebServer ESPHTTPServer(80);
 
 String _Version_App 		= VERSION_APP;
@@ -49,7 +48,6 @@ String _Version_BuildDate 	= APP_BUILDDATE;
 String _Version_BuildTime 	= APP_BUILDTIME;
 
 AsyncFSWebServer::AsyncFSWebServer(uint16_t port) : AsyncWebServer(port) {}
-
 
 void flashLED(int pin, int times, int delayTime) {
 	int oldState = digitalRead(pin);
@@ -63,7 +61,6 @@ void flashLED(int pin, int times, int delayTime) {
 	}
 	digitalWrite(pin, oldState); // Turn on LED
 }
-
 
 #if defined(ESP32)
     void AsyncFSWebServer::begin(fs::SPIFFSFS* fs)
@@ -110,13 +107,12 @@ void flashLED(int pin, int times, int delayTime) {
 	}
 #endif // RELEASE
 
-	ModClassJson.setFs(&SPIFFS); // MUST be set as first as possible!
+	ModClassJson.setFs(&SPIFFS); // !!!MUST!!! be set as first as possible!
 
 	loadHTTPAuth();
 	if (!load_config_Sys()) { defaultConfigSys();  	}
 
 	modWifiClass.begin(&SPIFFS); // wifi load cfg and set callback hooks
-
 	
 	//WIFI INIT start here
 	String hostName = _sysConfig.deviceName + "_" + _sysConfig.deviceSerial;
@@ -187,8 +183,6 @@ bool AsyncFSWebServer::load_config_Sys() {
 	return true;
 }
 
-
-
 void AsyncFSWebServer::defaultConfigSys() {
 	// DEFAULT CONFIG SYSTEM
 	_sysConfig.deviceName 		= "esp_server";
@@ -197,10 +191,6 @@ void AsyncFSWebServer::defaultConfigSys() {
 	//_sysConfig.connectionLed = CONNECTION_LED;
 	save_configSys();
 }
-
-
-
-
 
 bool AsyncFSWebServer::save_configSys() {
 	DEBUGLOG("Save config SYSTEM\r\n");
@@ -211,163 +201,6 @@ bool AsyncFSWebServer::save_configSys() {
 	return ModClassJson.save_jsonDoc(jsonDoc, CONFIG_FILE_SYS);
 }
 
-bool AsyncFSWebServer::load_user_config(String name, String &value) {
-	File configFile = _fs->open(USER_CONFIG_FILE, "r");
-	if (!configFile) {
-		DEBUGLOG("Failed to open config file");
-		return false;
-	}
-	size_t size = configFile.size();
-	/*if (size > 1024) {
-	DEBUGLOG("Config file size is too large");
-	configFile.close();
-	return false;
-	}*/
-
-	// Allocate a buffer to store contents of the file.
-	std::unique_ptr<char[]> buf(new char[size]);
-
-	// We don't use String here because ArduinoJson library requires the input
-	// buffer to be mutable. If you don't use ArduinoJson, you may as well
-	// use configFile.readString instead.
-	configFile.readBytes(buf.get(), size);
-	configFile.close();
-	//DEBUGLOG("496 JSON file size: %d bytes\r\n", size);
-	JsonDocument jsonDoc;
-	auto error = deserializeJson(jsonDoc, buf.get());
-	if (error) {
-		DEBUGLOG("Failed to parse config file. Error: %s\r\n", error.c_str());
-		return false;
-	}
-
-#ifndef RELEASE
-	String temp;
-	serializeJsonPretty(jsonDoc, temp);
-	Serial.println(temp.c_str());
-#endif
-
-	value = jsonDoc[name].as<const char*>();
-
-	DEBUGLOG("User data initialized.\r\n");
-	DEBUGLOG(__PRETTY_FUNCTION__);
-	DEBUGLOG("\r\n");
-	return true;
-}
-
-bool AsyncFSWebServer::save_user_config(String name, String value) {
-	//add logic to test and create if non
-	DEBUGLOG(name.c_str());		DEBUGLOG("\r\n");
-	DEBUGLOG(value.c_str());	DEBUGLOG("\r\n");
-
-	File configFile;
-	if (!_fs->exists(USER_CONFIG_FILE))		{
-		configFile = _fs->open(USER_CONFIG_FILE, "w");
-		if (!configFile) {
-			DEBUGLOG("Failed to open config file for writing\r\n");
-			configFile.close();
-			return false;
-		}
-		//create blank json file
-		DEBUGLOG("Creating user config file for writing\r\n");
-		configFile.print("{}");
-		configFile.close();
-	}
-	//get existing json file
-	configFile = _fs->open(USER_CONFIG_FILE, "r");
-	if (!configFile) {
-		DEBUGLOG("Failed to open config file");
-		return false;
-	}
-	size_t size = configFile.size();
-	/*if (size > 1024) {
-	DEBUGLOG("Config file size is too large");
-	configFile.close();
-	return false;
-	}*/
-
-	// Allocate a buffer to store contents of the file.
-	std::unique_ptr<char[]> buf(new char[size]);
-
-	// We don't use String here because ArduinoJson library requires the input
-	// buffer to be mutable. If you don't use ArduinoJson, you may as well
-	// use configFile.readString instead.
-	configFile.readBytes(buf.get(), size);
-	configFile.close();
-	DEBUGLOG("Read JSON file size: %d bytes\r\n", size);
-	JsonDocument jsonDoc;
-	auto error = deserializeJson(jsonDoc, buf.get());
-
-	if (error) {
-		DEBUGLOG("Failed to parse config file. Error: %s\r\n", error.c_str());
-		return false;
-	}
-	else
-	{
-		DEBUGLOG("Parse User config file\r\n");
-	}
-
-	jsonDoc[name] = value;
-
-	configFile = _fs->open(USER_CONFIG_FILE, "w");
-	if (!configFile) {
-		DEBUGLOG("Failed to open config file for writing\r\n");
-		configFile.close();
-		return false;
-	}
-
-#ifndef RELEASE
-	DEBUGLOG("Save user config \r\n");
-	String temp;
-	serializeJsonPretty(jsonDoc, temp);
-	Serial.println(temp.c_str());
-#endif
-	serializeJson(jsonDoc, configFile);
-	configFile.flush();
-	configFile.close();
-	return true;
-}
-
-void AsyncFSWebServer::clearUserConfig(bool reset) 	{
-	if (_fs->exists(USER_CONFIG_FILE)) { _fs->remove(USER_CONFIG_FILE);	}
-
-	if (reset) {
-		if (_fs) { _fs->end();  }// If SPIFFS is started - finish it.
-		restart_esp();
-	}
-}
-
-bool AsyncFSWebServer::load_user_config(String name, int &value)	{
-	String sTemp = "";
-	bool bTemp = load_user_config(name, sTemp);
-	value = sTemp.toInt();
-	return bTemp;
-}
-
-bool AsyncFSWebServer::save_user_config(String name, int value) {
-	return AsyncFSWebServer::save_user_config(name, String(value));
-}
-
-bool AsyncFSWebServer::load_user_config(String name, float &value) {
-	String sTemp = "";
-	bool bTemp = load_user_config(name, sTemp);
-	value = sTemp.toFloat();
-	return bTemp;
-}
-
-bool AsyncFSWebServer::save_user_config(String name, float value) {
-	return AsyncFSWebServer::save_user_config(name, String(value, 8));
-}
-
-bool AsyncFSWebServer::load_user_config(String name, long &value) {
-	String sTemp = "";
-	bool bTemp = load_user_config(name, sTemp);
-	value = atol(sTemp.c_str());
-	return bTemp;
-}
-
-bool AsyncFSWebServer::save_user_config(String name, long value) {
-	return AsyncFSWebServer::save_user_config(name, String(value));
-}
 
 bool AsyncFSWebServer::loadHTTPAuth() {
 	DEBUGLOG(__PRETTY_FUNCTION__);	DEBUGLOG("\r\n");
@@ -390,12 +223,7 @@ bool AsyncFSWebServer::loadHTTPAuth() {
 	return true;
 }
 
-
-
 // working with pages vvv
-
-
-
 void AsyncFSWebServer::send_information_values_html(AsyncWebServerRequest *request) {
 	DEBUGLOG(__FUNCTION__);	DEBUGLOG("\r\n");
 	String values = "";
@@ -415,7 +243,6 @@ void AsyncFSWebServer::send_information_values_html(AsyncWebServerRequest *reque
 	values = "";
 
 }
-
 
 void AsyncFSWebServer::restart_esp() {
 	DEBUGLOG(__FUNCTION__);	DEBUGLOG("\r\n");
@@ -437,8 +264,7 @@ void AsyncFSWebServer::send_wwwauth_configuration_values_html(AsyncWebServerRequ
 
 }
 
-void
-AsyncFSWebServer::set_wwwauth_configuration(AsyncWebServerRequest *request)	{
+void AsyncFSWebServer::set_wwwauth_configuration(AsyncWebServerRequest *request)	{
 	DEBUGLOG(__PRETTY_FUNCTION__);	DEBUGLOG("\r\n");
 	DEBUGLOG("%s %d\n", __FUNCTION__, request->args());
 	if (request->args() > 0)	{
@@ -503,64 +329,6 @@ bool AsyncFSWebServer::saveHTTPAuth() {
 }
 
 
-
-void AsyncFSWebServer::handle_rest_config(AsyncWebServerRequest *request) {
-	String values = "";
-	// handle generic rest call
-	//dirty processing as no split function
-	int p = 0; //string ptr
-	int t = 0; // temp string pointer
-	String URL = request->url().substring(9);
-	String name = "";
-	String data = "";
-	String type = "";
-
-	while (p < URL.length())	{
-		t = URL.indexOf("/", p);
-		if (t >= 0)		{
-			name = URL.substring(p, t);
-			p = t + 1;
-		}
-		else	{
-			name = URL.substring(p);
-			p = URL.length();
-		}
-		if (name.substring(1, 2) == "_")	{
-			type = name.substring(0, 2);
-			if (type == "i_")	{	type = "input";	}
-			else	if (type == "d_")	{	type = "div";	}
-			else	if (type == "c_")	{	type = "chk";	}
-			name = name.substring(2);
-		}
-		else	{	type = "input";		}
-
-		load_user_config(name, data);
-		values += name + "|" + data + "|" + type + "\n";
-	}
-	request->send(200, "text/plain", values);
-
-	DEBUGLOG(__PRETTY_FUNCTION__);	DEBUGLOG("\r\n");
-
-}
-
-
-void AsyncFSWebServer::post_rest_config(AsyncWebServerRequest *request) {
-	DEBUGLOG(__PRETTY_FUNCTION__);	DEBUGLOG("\r\n");
-	String target = "/";
-	for (uint8_t i = 0; i < request->args(); i++) {
-		DEBUGLOG("Arg %d: %s\r\n", i, request->arg(i).c_str());
-		DEBUGLOG(request->argName(i).c_str());
-		DEBUGLOG(" : ");
-		DEBUGLOG(urldecode(request->arg(i)).c_str());
-		//check for post redirect
-		if (request->argName(i) == "afterpost")		{	target = urldecode(request->arg(i));	}
-		//or savedata in Json File
-		else {	save_user_config(request->argName(i), request->arg(i));	}
-	}
-	request->redirect(target);
-
-}
-
 bool AsyncFSWebServer:: handleFileRead(String path, AsyncWebServerRequest *request) {
 	DEBUGEDIT("handleFileRead: %s\r\n", path.c_str());
 	if (CONNECTION_LED >= 0) {
@@ -587,9 +355,6 @@ bool AsyncFSWebServer:: handleFileRead(String path, AsyncWebServerRequest *reque
 		DEBUGEDIT("Cannot find %s\n", path.c_str());
 	return false;
 }
-
-
-// sam arcanum web pages functions VVV
 
 // *.html vvv
 void AsyncFSWebServer::send_system_version_values_html(AsyncWebServerRequest *request) { // answer for "get" request
@@ -645,10 +410,8 @@ void AsyncFSWebServer::send_device_values_html(AsyncWebServerRequest *request) {
 	values += "progtype|"	+ _sysConfig.deviceType		+ "|input\n";
 	request->send(200, "text/plain", values);
 }
-
 void AsyncFSWebServer::get_system_configuration_html(AsyncWebServerRequest *request) {
 	DEBUGLOG(__FUNCTION__);	DEBUGLOG("\r\n");
-	
 	if (request->args() > 0) { // Save Settings
 		for (uint8_t i = 0; i < request->args(); i++) {
 			DEBUGLOG("Arg %d: %s %s\r\n", i, request->argName(i).c_str() ,request->arg(i).c_str() );
@@ -662,35 +425,28 @@ void AsyncFSWebServer::get_system_configuration_html(AsyncWebServerRequest *requ
 	else {	handleFileRead(request->url(), request);	}
 	
 }
-
 // system.html ^^^
 
-
 String getContentType(String filename, AsyncWebServerRequest *request) {
-	if (request->hasArg("download")) return "application/octet-stream";
-	else if (filename.endsWith(".htm")) return "text/html";
-	else if (filename.endsWith(".html")) return "text/html";
-	else if (filename.endsWith(".css")) return "text/css";
-	else if (filename.endsWith(".js"))   return "application/javascript";
-	else if (filename.endsWith(".json")) return "application/json";
-	else if (filename.endsWith(".png")) return "image/png";
-	else if (filename.endsWith(".gif")) return "image/gif";
-	else if (filename.endsWith(".jpg")) return "image/jpeg";
-	else if (filename.endsWith(".ico")) return "image/x-icon";
-	else if (filename.endsWith(".xml")) return "text/xml";
-	else if (filename.endsWith(".pdf")) return "application/x-pdf";
-	else if (filename.endsWith(".zip")) return "application/x-zip";
-	else if (filename.endsWith(".gz"))  return "application/x-gzip";
-	else if (filename.endsWith(".hex")) return "text/html";
+	if 	(request->hasArg("download")) 		{return "application/octet-stream";}
+	else if (filename.endsWith(".htm"))  	{return "text/html";}
+	else if (filename.endsWith(".html")) 	{return "text/html";}
+	else if (filename.endsWith(".css")) 	{return "text/css";}
+	else if (filename.endsWith(".js"))   	{return "application/javascript";}
+	else if (filename.endsWith(".json")) 	{return "application/json";}
+	else if (filename.endsWith(".png")) 	{return "image/png";}
+	else if (filename.endsWith(".gif")) 	{return "image/gif";}
+	else if (filename.endsWith(".jpg")) 	{return "image/jpeg";}
+	else if (filename.endsWith(".ico")) 	{return "image/x-icon";}
+	else if (filename.endsWith(".xml")) 	{return "text/xml";}
+	else if (filename.endsWith(".pdf")) 	{return "application/x-pdf";}
+	else if (filename.endsWith(".zip")) 	{return "application/x-zip";}
+	else if (filename.endsWith(".gz"))  	{return "application/x-gzip";}
+	else if (filename.endsWith(".hex")) 	{return "text/html";} // TODO ??
 	return "text/plain";
 }
 
 void AsyncFSWebServer::serverInit() {
-	//SERVER INIT
-
-
-
-
 //system.html vvv	
 	on("/system/restart", [this](AsyncWebServerRequest *request) {
 		if (!this->checkAuth(request)) {	return request->requestAuthentication(); };
@@ -702,7 +458,6 @@ void AsyncFSWebServer::serverInit() {
 		if (!this->checkAuth(request)) {	return request->requestAuthentication(); };
 		this->send_wwwauth_configuration_values_html(request);
 	});	
-
 
 	on("/system/infovalues", [this](AsyncWebServerRequest *request) {
 		if (!this->checkAuth(request)) {	return request->requestAuthentication(); };
@@ -726,9 +481,7 @@ void AsyncFSWebServer::serverInit() {
 		this->send_device_values_html(request);
 	});	
 
-	//system.html ^^^
-	
-
+//system.html ^^^
 
 //project.html vvv
 	on("/project/info", HTTP_GET, [this](AsyncWebServerRequest *request) {
@@ -741,54 +494,6 @@ void AsyncFSWebServer::serverInit() {
 		this->get_project_configuration_html(request); // save values from the page
 	});
 //project.html ^^^
-
-
-
-	on("/rconfig", HTTP_GET, [this](AsyncWebServerRequest *request) {
-		if (!this->checkAuth(request)) {	return request->requestAuthentication(); };
-		this->handle_rest_config(request);
-	});
-
-	on("/pconfig", HTTP_POST, [this](AsyncWebServerRequest *request) {
-		if (!this->checkAuth(request)) {	return request->requestAuthentication(); };
-		this->post_rest_config(request);
-	});
-
-	on("/json", [this](AsyncWebServerRequest *request) {
-		if (!this->checkAuth(request)) {	return request->requestAuthentication(); };
-		if (jsoncallback) {
-			this->jsoncallback(request);
-		}
-		else {
-			String values = "";
-			request->send(200, "text/plain", values);
-			values = "";
-		}
-	});
-
-	on("/rest", [this](AsyncWebServerRequest *request) {
-		if (!this->checkAuth(request)) {	return request->requestAuthentication(); };
-		if (restcallback)		{
-			this->restcallback(request);
-		}	else	{
-			String values = "";
-			request->send(200, "text/plain", values);
-			values = "";
-		}
-
-	});
-
-	on("/post", [this](AsyncWebServerRequest *request) {
-		if (!this->checkAuth(request)) {	return request->requestAuthentication(); };
-		if (postcallback)	{
-			this->postcallback(request);
-		}	else	{
-			String values = "";
-			request->send(200, "text/plain", values);
-			values = "";
-		}
-
-	});
 
 	//called when the url is not defined here
 	//use it to load content from SPIFFS
@@ -827,15 +532,6 @@ void AsyncFSWebServer::serverInit() {
 		response->addHeader("Access-Control-Allow-Origin", "*");
 		request->send(response);
 	});
-
-	on(USER_CONFIG_FILE, HTTP_GET, [this](AsyncWebServerRequest *request) {
-		if (!this->checkAuth(request)) {	return request->requestAuthentication(); };
-		AsyncWebServerResponse *response = request->beginResponse(403, "text/plain", "Forbidden");
-		response->addHeader("Connection", "close");
-		response->addHeader("Access-Control-Allow-Origin", "*");
-		request->send(response);
-	});
-
 #endif // HIDE_CONFIG
 
 	//get heap status, analog input value and all GPIO statuses in one json call
@@ -863,46 +559,6 @@ bool AsyncFSWebServer::checkAuth(AsyncWebServerRequest *request) {
 const String AsyncFSWebServer::getHostName() {
 	return _sysConfig.deviceName+"_"+_sysConfig.deviceSerial;
 }
-
-AsyncFSWebServer& AsyncFSWebServer::setJSONCallback(JSON_CALLBACK_SIGNATURE) {
-	this->jsoncallback = jsoncallback;
-	return *this;
-}
-
-AsyncFSWebServer& AsyncFSWebServer::setRESTCallback(REST_CALLBACK_SIGNATURE) {
-	this->restcallback = restcallback;
-	return *this;
-}
-
-AsyncFSWebServer& AsyncFSWebServer::setPOSTCallback(POST_CALLBACK_SIGNATURE) {
-	this->postcallback = postcallback;
-	return *this;
-}
-
-void AsyncFSWebServer::setUSERVERSION(String Version) {
-	_Version_App = Version;
-}
-
-
-
-// TODO РАСПИХАТЬ УДАЛЕНИЕ ПО МОДУЛЯМ
-// // Function to delete all CFG files
-// void AsyncFSWebServer::clearConfig(bool reset)	{
-// 	if (_fs->exists(CONFIG_FILE_SYS)) 	{ _fs->remove(CONFIG_FILE_SYS);	}
-// 	if (_fs->exists(CONFIG_FILE_UDP)) 	{ _fs->remove(CONFIG_FILE_UDP);	}
-// 	// if (_fs->exists(CONFIG_FILE_NTP)) 	{ _fs->remove(CONFIG_FILE_NTP);	}
-// 	if (_fs->exists(WIFI_CONFIG_FILE0)) { _fs->remove(WIFI_CONFIG_FILE0);	}
-// #if (USE_RESERV_WIFI > 0)
-// 	if (_fs->exists(WIFI_CONFIG_FILE1)) { _fs->remove(WIFI_CONFIG_FILE1);	}
-// 	if (_fs->exists(WIFI_CONFIG_FILE2)) { _fs->remove(WIFI_CONFIG_FILE2);	}
-// 	if (_fs->exists(WIFI_CONFIG_FILE3)) { _fs->remove(WIFI_CONFIG_FILE3);	}
-// #endif
-// 	if (_fs->exists(SECRET_FILE)) {		_fs->remove(SECRET_FILE);	}
-// 	if (reset) {
-// 		if (_fs) { _fs->end();  }// If SPIFFS is started - finish it.
-// 		ESPHTTPServer.restart_esp();
-// 	}
-// }
 
 void AsyncFSWebServer::serialShowInfo() {
 	Serial.printf("Ep8266 service chip firmware ver: %s\n\r",  VERSION_APP);
