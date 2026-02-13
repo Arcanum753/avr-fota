@@ -26,13 +26,11 @@
 
 
 #define DEBUG_OTA
-
+#define DEBUG_EDITOR
 #define DEBUG_NTP 
 #define DEBUG_UDP 
 #define DEBUG_WIFI
 #define DEBUG_JSON
-
-#define DEBUG_EDITOR
 #define DEBUG_GPIO
 
 

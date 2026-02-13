@@ -30,8 +30,6 @@
 
 
 #define CONFIG_FILE_SYS             "/config_sys.json"
-#define USER_CONFIG_FILE            "/userconfig.json"
-#define GENERIC_CONFIG_FILE         "/genericconfig.json"
 #define SECRET_FILE                 "/secret.json"
 
 #define JSON_CALLBACK_SIGNATURE std::function<void(AsyncWebServerRequest *request)> jsoncallback
@@ -104,32 +102,16 @@ public:
     void begin(FS* fs) ;                        // esp8266/esp32 flash file system
 #endif
 	const String getHostName();
-	AsyncFSWebServer& setJSONCallback(JSON_CALLBACK_SIGNATURE);
-	AsyncFSWebServer& setRESTCallback(REST_CALLBACK_SIGNATURE);
-	AsyncFSWebServer& setPOSTCallback(POST_CALLBACK_SIGNATURE);
-	void setUSERVERSION(String Version);
 
-	bool save_user_config(String name, String value);
-	bool load_user_config(String name, String &value);
-	bool save_user_config(String name, int value);
-	bool load_user_config(String name, int &value);
-	bool save_user_config(String name, float value);
-	bool load_user_config(String name, float &value);
-	bool save_user_config(String name, long value);
-	bool load_user_config(String name, long &value);
+
+
 
     //Clear the configuration data (not the user config!) and optional reset the device
     //Clear the user configuration data (not the Wifi config!) and optional reset the device
-    void clearUserConfig(bool reset);
     void serialShowInfo();
 
     strSysConfig    _sysConfig; // SYS configuration
-    
 
-    strMetarConfig    _metarConfig; // METAR configuration
-
-    String getMetar();
-    String FilesListGet() ;
 
 private:
 	JSON_CALLBACK_SIGNATURE;
