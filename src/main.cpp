@@ -7,15 +7,14 @@
 
 #include <ESPAsyncWebServer.h>
 #include <Ticker.h>
-#include <ESPAsyncWebServer.h>
 
 #include "main.h"
 #include "FSWebServerLib.h"
 #include "eertos.h"
-#include "ErriezSerialTerminal.h"
-#include "module_terminal.h"
+#include "module_terminal/ErriezSerialTerminal.h"
+#include "module_terminal/module_terminal.h"
 
-#include "module_ota.h"
+#include "module_ota/module_ota.h"
 
 
 

@@ -4,7 +4,9 @@
 #include "main.h"
 #include <WiFiClient.h>
 #include <TimeLib.h>
-#include <NtpClientLib.h>
+
+
+#include "module_ntp/NtpClientLib.h"
 
 
 

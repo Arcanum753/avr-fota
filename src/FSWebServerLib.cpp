@@ -26,17 +26,18 @@
 
 
 #if defined(PROGTYPE_SWD)
-#include "module_prog_swd.h"
+#include "module_prog_swd/swd.h"
 #endif
 
 #include "debug.h"
-#include "module_ota.h"
-#include "module_json.h"
-#include "module_editor.h"
-#include "module_wifi.h"
-#include "module_udp.h"
-#include "module_ntp.h"
-#include "module_gpio.h"
+
+#include "module_editor/module_editor.h"
+#include "module_gpio/module_gpio.h"
+#include "module_ota/module_ota.h"
+#include "module_json/module_json.h"
+#include "module_wifi/module_wifi.h"
+#include "module_udp/module_udp.h"
+#include "module_ntp/module_ntp.h"
 
 #include "common.h"
 

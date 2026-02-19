@@ -10,11 +10,13 @@
 #include <ESPAsyncUDP.h>
 #endif
 
-#include <NtpClientLib.h>
 #include <WiFiClient.h>
 
-#include "module_json.h"
-#include "module_udp.h"
+#include <module_ntp/NtpClientLib.h>
+#include "module_prog_swd/swd.h"
+#include "module_json/module_json.h"
+#include "module_udp/module_udp.h"
+
 
 #include "eertos.h"
 #include "common.h"

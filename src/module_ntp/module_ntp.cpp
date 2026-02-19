@@ -5,13 +5,12 @@
 #include <ArduinoJson.h>
 #include "FSWebServerLib.h"
 // #include "debug.h"
-#include "module_json.h"
-#include "module_wifi.h"
-#include "module_udp.h"
-#include "module_ntp.h"
+
+#include "module_json/module_json.h"
+#include "module_wifi/module_wifi.h"
+#include "module_udp/module_udp.h"
+#include "module_ntp/module_ntp.h"
 #include "common.h"
-
-
 NTPMOD_CLASS modNtpClass(false);
 
 
