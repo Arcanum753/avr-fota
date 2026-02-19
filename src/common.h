@@ -11,4 +11,5 @@ unsigned char h2int(char c);
 
 
 #endif // _COMMON_h
-//eof
+
+
