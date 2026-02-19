@@ -1,10 +1,8 @@
 #include "main.h"
-#ifdef  PROGTYPE_SWD
 
 #include "Arduino.h"
 #include "FSWebServerLib.h"
 #include "debug_cm.h"
-// #include "debug.h"
 
 #ifdef ESP32
 #include <SPIFFS.h>
@@ -114,7 +112,7 @@ void ESP_PROGSWD::stm32f1_progOff (void) {
 
 /*_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-*/
 uint32_t ESP_PROGSWD::stm32Fx_begin()  {
-  DEBUGLOG(__FUNCTION__);	DEBUGLOG("\r\n");
+  DEBUGLOGSWD(__FUNCTION__);	DEBUGLOGSWD("\r\n");
   swd_gpio_init();
   uint32_t temp = 0;
   temp = swd_init();
@@ -133,7 +131,7 @@ void ESP_PROGSWD::stm32Fx_abort_all()  {
 
 // stm32F1xxx //black magic stm32f1.c
 void ESP_PROGSWD::stm32f1_flash_unlock(uint32_t bank_offset) {
-  DEBUGLOG(__FUNCTION__);	DEBUGLOG("\r\n");
+  DEBUGLOGSWD(__FUNCTION__);	DEBUGLOGSWD("\r\n");
   // command for unlock flash mem
   stm32Fx_write_register(FLASH_KEYR + bank_offset, KEY1, 0 ); // base + 0x04
   stm32Fx_write_register(FLASH_KEYR + bank_offset, KEY2, 0 ); // base + 0x04
@@ -141,7 +139,7 @@ void ESP_PROGSWD::stm32f1_flash_unlock(uint32_t bank_offset) {
 
 // stm32F1xxx
 void ESP_PROGSWD::stm32f1_unlock_erase_flash() {
-  DEBUGLOG(__FUNCTION__);	DEBUGLOG("\r\n");
+  DEBUGLOGSWD(__FUNCTION__);	DEBUGLOGSWD("\r\n");
   long timeout = millis();
 
   stm32f1_flash_unlock(FLASH_BANK1_OFFSET);
@@ -166,7 +164,7 @@ bool ESP_PROGSWD::stm32f1_flash_busy(void) {
 /*_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-*/
 // stm32F4xxx
 void ESP_PROGSWD::stm32f4_flash_unlock_dap() {
-  DEBUGLOG(__FUNCTION__);	DEBUGLOG("\r\n");
+  DEBUGLOGSWD(__FUNCTION__);	DEBUGLOGSWD("\r\n");
   //swd_dap
   stm32Fx_write_register(SWD_FLASH_PECR, KEY1, 0 ); // base + 0x04
   stm32Fx_write_register(SWD_FLASH_PECR, KEY2, 0 ); // base + 0x04
@@ -174,7 +172,7 @@ void ESP_PROGSWD::stm32f4_flash_unlock_dap() {
 void ESP_PROGSWD::stm32f4_erase_flash_dap() {
 
   stm32f4_flash_unlock_dap();
-  DEBUGLOG(__FUNCTION__);	DEBUGLOG("\r\n");
+  DEBUGLOGSWD(__FUNCTION__);	DEBUGLOGSWD("\r\n");
 
   // stm32Fx_write_register(SWD_FLASH_PRGKEYR, FLASH_CR_MER | FLASH_CR_STRT | FLASH_CR_PSIZE_WORD); // base + 0x10
   long timeout = millis();
@@ -287,7 +285,6 @@ bool ESP_PROGSWD::stm32Fx_write_flash_16bit(uint32_t address, uint32_t value, bo
 
 
 
-#endif
 
 
 

@@ -1,5 +1,4 @@
 #include "main.h"
-#ifdef  PROGTYPE_ISP
 
 #include <cstddef>
 #include <Arduino.h>
@@ -15,9 +14,10 @@
 
 #include "FSWebServerLib.h"
 // #include "debug.h"
-#include "module_ntp.h"
-#include "prog_isp.h"
+#include "module_json/module_json.h"
+#include "module_ntp/module_ntp.h"
 
+#include "prog_isp.h"
 #include "module_prog_isp.h"
 #include "common.h"
 
@@ -139,7 +139,7 @@ bool Class_ProgIsp::cfg_FileLoad() {
 	DEBUGLOGISP(__PRETTY_FUNCTION__); DEBUGLOGISP("\r\n");
 
 	JsonDocument jsonDoc;
-	if (!ESPHTTPServer.load_jsonDoc(CONFIG_PROG_JSON, jsonDoc)){	return false;	}
+	if (!ModClassJson.load_jsonDoc(CONFIG_PROG_JSON, jsonDoc)){	return false;	}
 	// CfgFile_progIsp.programmer_type	= jsonDoc["type"].as<const char *>();
     CfgFile_progIsp.project_name		= jsonDoc["project"].as<const char *>();
     CfgFile_progIsp.chip_size			= jsonDoc["chipsize"].as<uint32_t>();
@@ -152,7 +152,7 @@ bool Class_ProgIsp::cfg_FileSave(){
 	// jsonDoc["type"]			= CfgFile_progIsp.programmer_type;
     jsonDoc["project"]		= CfgFile_progIsp.project_name;
     jsonDoc["chipsize"]     = CfgFile_progIsp.chip_size;
-	return ESPHTTPServer.save_jsonDoc(jsonDoc, CONFIG_PROG_JSON);
+	return ModClassJson.save_jsonDoc(jsonDoc, CONFIG_PROG_JSON);
 }
 
 
@@ -481,5 +481,4 @@ void  Class_ProgIsp::avrWebFusesWrite(AsyncWebServerRequest *request) {
 
 
 
-#endif
 

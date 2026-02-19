@@ -1,5 +1,3 @@
-#include "main.h"
-#ifdef PROGTYPE_SWD
 
 #include <cstddef>
 #include <Arduino.h>
@@ -16,9 +14,10 @@
 #include "FSWebServerLib.h"
 #include "debug.h"
 
-#include "module_ntp.h"
-#include "prog_swd.h"
+#include "module_ntp/module_ntp.h"
+#include "module_json/module_json.h"
 
+#include "prog_swd.h"
 #include "module_prog_swd.h"
 #include "common.h"
 
@@ -108,7 +107,7 @@ void Class_ProgSwd::cfg_SetDefault() {
 bool Class_ProgSwd::cfg_FileLoad() {
 	DEBUGLOGSWD(__PRETTY_FUNCTION__); DEBUGLOGSWD("\r\n");
 	JsonDocument jsonDoc;
-	if (!ESPHTTPServer.load_jsonDoc(CONFIG_PROG_JSON, jsonDoc)){	return false;	}
+	if (!ModClassJson.load_jsonDoc(CONFIG_PROG_JSON, jsonDoc)){	return false;	}
 	// CfgFile_ProgSwd.programmer_type	= jsonDoc["type"].as<const char *>();
     CfgFile_ProgSwd.project_name		= jsonDoc["project"].as<const char *>();
     CfgFile_ProgSwd.chip_size			= jsonDoc["chipsize"].as<uint32_t>();
@@ -121,7 +120,7 @@ bool Class_ProgSwd::cfg_FileSave(){
 	// jsonDoc["type"]			= CfgFile_ProgSwd.programmer_type;
     jsonDoc["project"]		= CfgFile_ProgSwd.project_name;
     jsonDoc["chipsize"]     = CfgFile_ProgSwd.chip_size;
-	return ESPHTTPServer.save_jsonDoc(jsonDoc, CONFIG_PROG_JSON);
+	return ModClassJson.save_jsonDoc(jsonDoc, CONFIG_PROG_JSON);
 }
 
 
@@ -327,6 +326,5 @@ void Class_ProgSwd::web_FileUpload2Chip(AsyncWebServerRequest *request) {
 // stm32.html ^^^
 
 
-#endif
 
 

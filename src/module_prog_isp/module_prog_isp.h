@@ -3,7 +3,7 @@
 #define _MODULEPROGISP_h
 
 #include "main.h"
-#ifdef  PROGTYPE_ISP
+
 
 
 
@@ -126,7 +126,7 @@ protected:
 extern Class_ProgIsp progIsp;
 
 
-#endif
+
 
 #endif //_MODULEPROGISP_h
 

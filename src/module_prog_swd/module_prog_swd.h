@@ -1,8 +1,8 @@
 #ifndef _MODULEPROGSWD_h
 #define _MODULEPROGSWD_h
 
+
 #include "main.h"
-#ifdef  PROGTYPE_SWD
 
 #ifdef DEBUG_SWD
 #define DEBUGLOGSWD(...) DEBUGLOG(__VA_ARGS__)
@@ -103,7 +103,6 @@ protected:
 
 extern Class_ProgSwd progSwd;
 
-#endif // PROGTYPE_SWD
 
 #endif //_MODULEPROGSWD_h
 

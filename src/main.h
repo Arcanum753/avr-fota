@@ -18,11 +18,11 @@
 #define HIDE_CONFIG
 
 // #define PROGTYPE_ISP
-#define DEBUG_ISP
+// #define DEBUG_ISP
 #define DEBUG_SHOWHEXBUF 0 // ISP
 
 //#define PROGTYPE_SWD
-#define DEBUG_SWD
+// #define DEBUG_SWD
 
 
 #define DEBUG_OTA

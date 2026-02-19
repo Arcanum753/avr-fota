@@ -1,6 +1,4 @@
 #include "main.h"
-#ifdef  PROGTYPE_ISP
-
 
 #include <cstddef>
 #include <Arduino.h>
@@ -9,6 +7,8 @@
 
 
 #include "FSWebServerLib.h"
+
+#include "module_json/module_json.h"
 
 #include "module_prog_isp.h"
 #include "prog_isp.h"
@@ -623,7 +623,7 @@ bool ESP8266_AVRISP::cfgFileLoad() {
     DEBUGLOGISP(__PRETTY_FUNCTION__);   DEBUGLOGISP("\r\n");
 
     JsonDocument jsonDoc;
-    if (!ESPHTTPServer.load_jsonDoc(CONFIG_AVRPROG_JSON, jsonDoc)){	return false;	}
+    if (!ModClassJson.load_jsonDoc(CONFIG_AVRPROG_JSON, jsonDoc)){	return false;	}
 
     _AVRISP_CfgFile.hex_filename           = jsonDoc["hex_filename"]     .as<const char *>();
     _AVRISP_CfgFile.hex_version            = jsonDoc["hex_vesion"]       .as<const char *>();
@@ -652,8 +652,7 @@ bool ESP8266_AVRISP::cfgFileSave(){
     //jsonDoc["chipsize"]             = _AVRISP_CfgFile.chipsize;
     //jsonDoc["avr_sign"]               = _AVRISP_CfgFile.avr_signature;
 
-    return ESPHTTPServer.save_jsonDoc(jsonDoc, CONFIG_AVRPROG_JSON);
-	return true;
+    return ModClassJson.save_jsonDoc(jsonDoc, CONFIG_AVRPROG_JSON);
 }
 
 int  ESP8266_AVRISP:: cfgFilSetUploadeAsNow (String _fwTime){
@@ -679,5 +678,5 @@ int  ESP8266_AVRISP:: cfgFilSetUploadeAsNow (String _fwTime){
 
 
 
-#endif
+
 
