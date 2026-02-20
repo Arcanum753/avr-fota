@@ -5,13 +5,12 @@
 #define APP_BUILDDATE  __DATE__
 #define APP_BUILDTIME  __TIME__
 
-#define NO_RST          0
-
 
 #define SEC 1000 // 1000 usecs
 #define MINUTES 60  // 60 secs
 
 
+#define NO_RST          0
 
 //CONFIGS
 #define HIDE_SECRET
@@ -35,6 +34,8 @@
 
 
 //#define RELEASE  // Comment to enable debug output
+
+void printGitInfo() ;
 
 void loop_user();
 void ledInit();

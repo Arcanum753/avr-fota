@@ -5,6 +5,7 @@
 #include <FS.h>
 #endif
 
+#include "version.h"
 #include <ESPAsyncWebServer.h>
 #include <Ticker.h>
 
@@ -38,25 +39,10 @@ void setup() {
 	SPIFFS.begin(); // Not really needed, checked inside library and started if
 					// needed
 
+    printGitInfo();
 	// WiFi is started inside library
     ESPHTTPServer.begin(&SPIFFS);
-    #if defined(ESP32)
-	
-	#endif
-    Serial.print("*** Ep8266 service chip firmware ver: ");
-    Serial.print(VERSION_APP);
-    Serial.println(" ***");
 
-    Serial.print("*** Ep8266 web pages ver: ");
-    Serial.print(VERSION_WEB);
-    Serial.println(" ***");
-
-    Serial.print("*** build DateTime: ");
-    Serial.print(__DATE__);
-    Serial.print(" ");
-    Serial.print(__TIME__);
-    Serial.println(" ***");
-   
     TerminalInit();
     
     
@@ -92,3 +78,45 @@ void ledInit(){
     // pinMode(PIN_RST, OUTPUT);
 
 }
+
+
+
+
+void printGitInfo() {
+    Serial.println("\n");
+    #if defined(ESP32)
+    Serial.println("*** ESP32 FIRMWARE INFORMATION ***");
+	#endif
+    #if defined(ESP8266)
+    Serial.println(" ESP8266 FIRMWARE INFORMATION");
+	#endif
+    
+    Serial.println("Git Branch: " + String(GIT_BRANCH));
+    Serial.println("Git Commit: " + String(GIT_COMMIT));
+    
+    Serial.print(" Chip firmware ver: ");
+    Serial.print(VERSION_APP);
+    
+    #if defined(ESP32)
+    Serial.println(" ESP32 WebPages version");
+	#endif
+    #if defined(ESP8266)
+    Serial.println(" ESP8266 WebPages version");
+	#endif
+    Serial.print(VERSION_WEB);
+       
+    Serial.print(" Build Date and time: ");
+    Serial.print(__DATE__);
+    Serial.print(" ");
+    Serial.println(__TIME__);
+    
+    
+}
+// // Эти макросы будут определены из Python-скрипта
+// #ifndef GIT_BRANCH
+// #define GIT_BRANCH "unknown"
+// #endif
+
+// #ifndef GIT_HASH
+// #define GIT_HASH "unknown"
+// #endif
