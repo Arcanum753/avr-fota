@@ -161,7 +161,7 @@ public:
 
     
 private:
-    void send_system_version_values_html(AsyncWebServerRequest *request);
+    void send_system_version_html(AsyncWebServerRequest *request);
     void send_device_values_html(AsyncWebServerRequest *request);
     void send_project_configuration_values_html(AsyncWebServerRequest *request);
 

@@ -24,14 +24,6 @@
 // #define DEBUG_SWD
 
 
-#define DEBUG_OTA
-#define DEBUG_EDITOR
-#define DEBUG_NTP 
-#define DEBUG_UDP 
-#define DEBUG_WIFI
-#define DEBUG_JSON
-#define DEBUG_GPIO
-
 
 //#define RELEASE  // Comment to enable debug output
 

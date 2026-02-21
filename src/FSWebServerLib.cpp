@@ -1,8 +1,8 @@
+
 #include "main.h"
+#include "version.h"
 #include <ArduinoJson.h>
-
 #include "FSWebServerLib.h"
-
 
 
 #if defined(ESP32)
@@ -366,7 +366,7 @@ bool AsyncFSWebServer:: handleFileRead(String path, AsyncWebServerRequest *reque
 }
 
 // *.html vvv
-void AsyncFSWebServer::send_system_version_values_html(AsyncWebServerRequest *request) { // answer for "get" request
+void AsyncFSWebServer::send_system_version_html(AsyncWebServerRequest *request) { // answer for "get" request
 	//DEBUGLOG(__FUNCTION__);	DEBUGLOG("\r\n");
 	String values = "";
 	values += "devicename|"  	+ _sysConfig.deviceName  		+ "|div\n";
@@ -374,7 +374,15 @@ void AsyncFSWebServer::send_system_version_values_html(AsyncWebServerRequest *re
 	values += "devicetype|" 	+ _sysConfig.deviceType 		+ "|div\n";
 	values += "versionapp|" 	+ _Version_App + "|div\n";
 	values += "versionweb|" 	+ _Version_Web + "|div\n";
-	values += "versiondatetime|" + _Version_BuildDate + " " + _Version_BuildTime + "|div\n";
+	
+	//values += "versiondatetime|" + _Version_BuildDate + " " + _Version_BuildTime + "|div\n";
+
+	values += "gitbranch|" ;values += GIT_BRANCH ;values += "|div\n";
+	values += "gitcommit|" ;values += GIT_COMMIT ;values += "|div\n";
+	values += "buildenv|" ;values += BUILD_ENV ;values += "|div\n";
+	values += "versiondatetime|" ;values += BUILD_TIME ;values += "|div\n";
+	
+
 	request->send(200, "text/plain", values);
 }
 // *.html ^^^
@@ -474,7 +482,7 @@ void AsyncFSWebServer::serverInit() {
 	});	
 	on("/system/version", [this](AsyncWebServerRequest *request) {
 		if (!this->checkAuth(request)) {	return request->requestAuthentication(); };
-		this->send_system_version_values_html(request);
+		this->send_system_version_html(request);
 	});	
 	on("/system.html", [this](AsyncWebServerRequest *request) {
 		if (!this->checkAuth(request)) {	return request->requestAuthentication(); };

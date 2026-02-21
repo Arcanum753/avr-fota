@@ -4,3 +4,6 @@
 .vscode/launch.json
 .vscode/ipch
 *.bak
+# Firmware binaries
+/proj_fwbins/
+*.bin
