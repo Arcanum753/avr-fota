@@ -12,8 +12,9 @@
 #include <ESPAsyncWebServer.h>
 #include "FSWebServerLib.h"
 #include "ErriezSerialTerminal.h"
-#include "module_terminal/module_terminal.h"
-#include "module_udp/module_udp.h"
+
+#include "core_terminal/module_terminal.h"
+#include "core_udp/module_udp.h"
 
 #include "module_prog_swd/swd.h"
 

@@ -11,10 +11,10 @@
 #include "common.h"
 #include "debug.h"
 
-#include "module_json/module_json.h"
-#include "module_wifi/module_wifi.h"
-#include "module_udp/module_udp.h"
-#include "module_ntp/module_ntp.h"
+#include "core_json/module_json.h"
+#include "core_wifi/module_wifi.h"
+#include "core_udp/module_udp.h"
+#include "core_ntp/module_ntp.h"
 
 WIFIMOD_CLASS modWifiClass(false);
 
