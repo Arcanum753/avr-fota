@@ -92,10 +92,8 @@ void flashLED(int pin, int times, int delayTime) {
 		DEBUGLOG("AP Enable = %d\n", modWifiClass._apConfig.APenable);
 	}
 
-	if (CONNECTION_LED >= 0) {
-		digitalWrite(CONNECTION_LED, HIGH);
-		 // Turn LED off
-	}
+	if (CONNECTION_LED >= 0) {		digitalWrite(CONNECTION_LED, HIGH);	}
+	// Turn LED off
     if (!_fs) { _fs->begin();  }// If SPIFFS is not started
 #ifndef RELEASE
 	{ // List files
@@ -146,6 +144,7 @@ void flashLED(int pin, int times, int delayTime) {
 	modWifiClass.webInit();
 	
 	modNtpClass.begin();
+
 	modNtpClass.webInit();
 	
 	
@@ -340,10 +339,8 @@ bool AsyncFSWebServer::saveHTTPAuth() {
 
 bool AsyncFSWebServer:: handleFileRead(String path, AsyncWebServerRequest *request) {
 	DEBUGEDIT("handleFileRead: %s\r\n", path.c_str());
-	if (CONNECTION_LED >= 0) {
-		// CANNOT RUN DELAY() INSIDE CALLBACK
-		flashLED(CONNECTION_LED, 1, 25); // Show activity on LED
-	}
+	if (CONNECTION_LED >= 0) {	flashLED(CONNECTION_LED, 1, 25); 	}	// Show activity on LED
+	// CANNOT RUN DELAY() INSIDE CALLBACK
 	if (path.endsWith("/")) {	path += HTML_INDEX;	}
 	String contentType = getContentType(path, request);
 	String pathWithGz = path + ".gz";
@@ -357,7 +354,6 @@ bool AsyncFSWebServer:: handleFileRead(String path, AsyncWebServerRequest *reque
 		DEBUGEDIT("File %s exist\r\n", path.c_str());
 		request->send(response);
 		DEBUGEDIT("File %s Sent\r\n", path.c_str());
-
 		return true;
 	}
 	else

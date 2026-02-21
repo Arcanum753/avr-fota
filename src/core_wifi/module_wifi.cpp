@@ -6,6 +6,8 @@
 #include <FS.h>
 #endif
 
+#include <DNSServer.h>
+
 #include <ArduinoJson.h>
 #include "FSWebServerLib.h"
 #include "common.h"
@@ -16,8 +18,8 @@
 #include "core_udp/module_udp.h"
 #include "core_ntp/module_ntp.h"
 
-WIFIMOD_CLASS modWifiClass(false);
-
+WIFIMOD_CLASS 	modWifiClass(false);
+DNSServer 		dnsServer;
 
 WIFIMOD_CLASS :: WIFIMOD_CLASS (bool _in) {
 	 dumb = _in;
@@ -25,7 +27,8 @@ WIFIMOD_CLASS :: WIFIMOD_CLASS (bool _in) {
 
 void WIFIMOD_CLASS::s_secondTick(void* arg) {
 	WIFIMOD_CLASS* self = reinterpret_cast<WIFIMOD_CLASS*>(arg);
-	if (ESPHTTPServer._evs.count() > 0) {	modNtpClass.sendTimeData();	}
+	if (self->wifiStatus == FS_STAT_APMODE) {	dnsServer.processNextRequest();	}
+	if (ESPHTTPServer._evs.count() > 0) 	{	modNtpClass.sendTimeData();	}
 //Check connection timeout if enabled
 #if (AP_ENABLE_TIMEOUT > 0)
 	// DBG_OUTPUT_PORT.printf("timer%d\r\n", ++self->connectionTimout);
@@ -193,8 +196,8 @@ bool WIFIMOD_CLASS::save_configWifi(int _in) {
 
 void WIFIMOD_CLASS::defaultConfigWifi(int _in) {
 	// DEFAULT CONFIG
-	_wifiConfig.ssid = "YOUR_DEFAULT_WIFI_SSID";
-	_wifiConfig.password = "YOUR_DEFAULT_WIFI_PASSWD";
+	_wifiConfig.ssid 		= "YOUR_DEFAULT_WIFI_SSID";
+	_wifiConfig.password 	= "YOUR_DEFAULT_WIFI_PASSWD";
 	_wifiConfig.dhcp 		= 1;
 	_wifiConfig.ip 			= IPAddress(192, 168, 1, 4);
 	_wifiConfig.netmask 	= IPAddress(255, 255, 255, 0);
@@ -205,16 +208,29 @@ void WIFIMOD_CLASS::defaultConfigWifi(int _in) {
 	DEBUGLOGWIFI(__PRETTY_FUNCTION__);	DEBUGLOGWIFI("\r\n");
 }
 
+
+void WIFIMOD_CLASS::startDNSCaptive() {
+    // Перехватываем все DNS запросы и направляем на IP точки доступа
+    dnsServer.start(53, "*", WiFi.softAPIP());
+    DEBUGLOGWIFI("DNS captive portal started on port 53\n");
+}
+
 void WIFIMOD_CLASS::configureWifiAP() {
 	DEBUGLOGWIFI(__PRETTY_FUNCTION__);	DEBUGLOGWIFI("\r\n");
 
+	udpBroadcast.udpStop();	// always stop!
+	modNtpClass.ntpOnDisconected();
+
+
+	String APname = ESPHTTPServer._sysConfig.deviceName + "_" + ESPHTTPServer._sysConfig.deviceSerial;
+
 	if (WiFi.status() == WL_CONNECTED) { WiFi.disconnect();	}
 	WiFi.mode(WIFI_AP);
+
 	wifiStatus = FS_STAT_APMODE;
 
 	
 
-	String APname = ESPHTTPServer._sysConfig.deviceName + "_" + ESPHTTPServer._sysConfig.deviceSerial;
 	if (ESPHTTPServer._httpAuth.auth) {
 		WiFi.softAP(APname, ESPHTTPServer._httpAuth.wwwPassword);
 		DEBUGLOGWIFI("AP Pass enabled: %s \r\n", ESPHTTPServer._httpAuth.wwwPassword.c_str());
@@ -223,6 +239,7 @@ void WIFIMOD_CLASS::configureWifiAP() {
 		WiFi.softAP(APname.c_str());
 		DEBUGLOGWIFI("AP Pass disabled \r\n");
 	}
+	startDNSCaptive();
 	if (CONNECTION_LED >= 0) {	flashLED(CONNECTION_LED, 3, 250);	}
 	DBG_OUTPUT_PORT.printf("AP Mode enabled. SSID: %s IP: %s\r\n", WiFi.softAPSSID().c_str(), WiFi.softAPIP().toString().c_str());
 	connectionTimout = 0;
@@ -562,7 +579,6 @@ void WIFIMOD_CLASS::webInit ()	{
 	});
 	ESPHTTPServer.on("/wifi/values/3", [this](AsyncWebServerRequest *request) {
 		if (!ESPHTTPServer.checkAuth(request)) {	return request->requestAuthentication(); };
-
 		this->send_network_configuration_values_html(request, 3);
 	});
 
@@ -600,7 +616,19 @@ void WIFIMOD_CLASS::webInit ()	{
 		json = "";
 	});
 
-	
+	//captive
+	// Добавьте в инициализацию веб-сервера (где registerCallbacks или аналогично)
+	ESPHTTPServer.on("/generate_204", HTTP_GET, [](AsyncWebServerRequest *request) {
+		request->redirect("http://" + WiFi.softAPIP().toString());
+	});
+
+	ESPHTTPServer.on("/hotspot-detect.html", HTTP_GET, [](AsyncWebServerRequest *request) {
+		request->redirect("http://" + WiFi.softAPIP().toString());
+	});
+
+	ESPHTTPServer.on("/ncsi.txt", HTTP_GET, [](AsyncWebServerRequest *request) {
+		request->send(200, "text/plain", "Microsoft NCSI");
+	});
 
 }
 //wifi.html ^^^

@@ -94,16 +94,14 @@ void printGitInfo() {
     Serial.println("Git Branch: " + String(GIT_BRANCH));
     Serial.println("Git Commit: " + String(GIT_COMMIT));
     
-    Serial.print(" Chip firmware ver: ");
-    Serial.print(VERSION_APP);
+    Serial.println(" Chip firmware ver: " + String(VERSION_APP));
     
     #if defined(ESP32)
-    Serial.println(" ESP32 WebPages version");
+    Serial.println(" ESP32 WebPages version: "+ String(VERSION_WEB));
 	#endif
     #if defined(ESP8266)
-    Serial.println(" ESP8266 WebPages version");
+    Serial.println(" ESP8266 WebPages version: "+ String(VERSION_WEB));
 	#endif
-    Serial.print(VERSION_WEB);
        
     Serial.print(" Build Date and time: ");
     Serial.print(__DATE__);

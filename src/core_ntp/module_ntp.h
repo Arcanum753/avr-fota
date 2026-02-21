@@ -43,11 +43,7 @@ typedef struct {
 class  NTPMOD_CLASS    {
     public:
     NTPMOD_CLASS (bool _in);
-    #if defined(ESP32)  
-    void begin(fs::SPIFFSFS* fs);
-    #elif defined(ESP8266)
-    void begin(FS* fs) ;                        // esp8266/esp32 flash file system
-    #endif
+
     #if ESP32
     fs::SPIFFSFS*               _fs;
     #elif defined(ESP8266)

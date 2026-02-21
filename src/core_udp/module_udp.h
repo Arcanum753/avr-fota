@@ -71,13 +71,14 @@ class  UDPBROADCAST_CLASS   {
         String      getudpKeyword()     ;
         bool        getudpPowerOn() ;
         String      udpJsonGet()  ;  
-    private:
+        uint8_t     isStart();
+        private:
         bool load_config_UDP();
         bool save_configUDP();
         void defaultConfigUDP();
         
-    protected: 
-        bool     isStarted = false;
+        protected: 
+        uint8_t     isStarted = false;
         uint16_t portRx = UDP_PORT;
         uint16_t portTx = UDP_PORT+1;
 };
