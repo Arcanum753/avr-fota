@@ -14,8 +14,8 @@
 
 #include "FSWebServerLib.h"
 // #include "debug.h"
-#include "module_json/module_json.h"
-#include "module_ntp/module_ntp.h"
+#include "core_json/module_json.h"
+#include "core_ntp/module_ntp.h"
 
 #include "prog_isp.h"
 #include "module_prog_isp.h"
