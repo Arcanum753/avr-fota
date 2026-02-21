@@ -6,7 +6,7 @@
 #include <TimeLib.h>
 
 
-#include "module_ntp/NtpClientLib.h"
+#include "core_ntp/NtpClientLib.h"
 
 
 

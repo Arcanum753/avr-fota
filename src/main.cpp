@@ -12,10 +12,10 @@
 #include "main.h"
 #include "FSWebServerLib.h"
 #include "eertos.h"
-#include "module_terminal/ErriezSerialTerminal.h"
-#include "module_terminal/module_terminal.h"
 
-#include "module_ota/module_ota.h"
+#include "core_terminal/ErriezSerialTerminal.h"
+#include "core_terminal/module_terminal.h"
+#include "core_ota/module_ota.h"
 
 
 

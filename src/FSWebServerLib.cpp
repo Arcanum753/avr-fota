@@ -29,15 +29,21 @@
 #include "module_prog_swd/swd.h"
 #endif
 
+#if defined(TYPE_GPIO)
+#include "module_gpio/module_gpio.h"
+#endif
+
+
 #include "debug.h"
 
-#include "module_editor/module_editor.h"
-#include "module_gpio/module_gpio.h"
-#include "module_ota/module_ota.h"
-#include "module_json/module_json.h"
-#include "module_wifi/module_wifi.h"
-#include "module_udp/module_udp.h"
-#include "module_ntp/module_ntp.h"
+#include "core_editor/module_editor.h"
+#include "core_ota/module_ota.h"
+#include "core_json/module_json.h"
+#include "core_wifi/module_wifi.h"
+#include "core_udp/module_udp.h"
+#include "core_ntp/module_ntp.h"
+
+
 
 #include "common.h"
 
@@ -153,9 +159,11 @@ void flashLED(int pin, int times, int delayTime) {
 	
 	ModClassEdit.setFs(&SPIFFS);
 	ModClassEdit.webInit();
-	
+
+#if defined(TYPE_GPIO)
 	ModClassGpio.setFs(&SPIFFS);
 	ModClassGpio.webInit();
+#endif
 	
 	#ifdef PROGTYPE_SWD
 		progSwd.setFs(&SPIFFS);
