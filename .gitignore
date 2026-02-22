@@ -7,3 +7,5 @@
 # Firmware binaries
 /proj_fwbins/
 *.bin
+# Web debug folders
+/web_debug/
