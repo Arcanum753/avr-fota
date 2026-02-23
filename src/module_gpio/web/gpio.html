@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html>	<head>
+	<title>ESP gpio</title>
+	<meta http-equiv="Content-type" content="text/html; charset=utf-8">
+	<link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+	<markup>./page_head.html</markup>
+	<div class="c">
+		<h2 class="title" style="background: #7D8EE2">  <span id="devicename">  </span> gpio control  </h2>	
+	</div>
+	<div class="c">
+		<table border="0" cellspacing="0" cellpadding="3" align="center" >
+			<tr> <td >UART :</td> 
+				 <td> <input type="text" id="uart_str" name="uartstr" maxlength="100" value=""></td>
+				 <td> <input type="button" onclick="sendUart()" value="Send to UART">  </td>
+			</tr>
+			<tr>
+				<td><input id="led1" type="checkbox" ></td>
+				<td><input id="led2" type="checkbox" ></td>
+				<td><input id="led3" type="checkbox" ></td>
+				<td><input id="led4" type="checkbox" ></td>
+				<td> <input type="button" onclick="sendLed()" value="Set leds">  </td>
+			</tr>
+		</table>
+		
+	</div>
+
+	<markup>./page_bottom.html</markup>
+	<script src="GetJson.js" defer></script>
+	<script src="GetMarkup.js" defer></script>
+	<script src="microajax.js" defer></script>
+	<script>
+		window.onload = function() {
+			setTimeout(() => {
+				ApplyCVT("/system/version");
+			}, 250);
+		};
+
+		function sendUart() {
+			uartstr = document.getElementById('uart_str').value;
+			console.log(uartstr);
+			const xhr = new XMLHttpRequest();
+			xhr.open('POST', '/gpio?uartstr=' + uartstr );
+          	xhr.send();
+      	}
+		  function sendLed() {
+			const led1 = document.getElementById("led1");
+			const led2 = document.getElementById("led2");
+			const led3 = document.getElementById("led3");
+			const led4 = document.getElementById("led4");
+			
+			const led1val = `&led1=${led1.checked ? "on" : "off"}`;
+			const led2val = `&led2=${led2.checked ? "on" : "off"}`;
+			const led3val = `&led3=${led3.checked ? "on" : "off"}`;
+			const led4val = `&led4=${led4.checked ? "on" : "off"}`;
+
+			ledstr = '/gpio?' + led1val + led2val + led3val + led4val;
+
+			console.log(ledstr);
+			const xhr = new XMLHttpRequest();
+			xhr.open('POST',  ledstr );
+          	xhr.send();
+			
+      	}
+	</script>
+		
+
+</body>
+
+</html>
