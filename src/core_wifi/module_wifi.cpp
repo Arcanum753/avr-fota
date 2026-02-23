@@ -15,8 +15,16 @@
 
 #include "core_json/module_json.h"
 #include "core_wifi/module_wifi.h"
+
+
+#if defined(MODULE_UDP)
 #include "core_udp/module_udp.h"
+#endif
+
+
 #include "core_ntp/module_ntp.h"
+
+
 
 WIFIMOD_CLASS 	modWifiClass(false);
 DNSServer 		dnsServer;
@@ -27,11 +35,17 @@ WIFIMOD_CLASS :: WIFIMOD_CLASS (bool _in) {
 
 void WIFIMOD_CLASS::s_secondTick(void* arg) {
 	WIFIMOD_CLASS* self = reinterpret_cast<WIFIMOD_CLASS*>(arg);
+
+	//DNS captive
 	if (self->wifiStatus == FS_STAT_APMODE) {	dnsServer.processNextRequest();	}
-	if (ESPHTTPServer._evs.count() > 0) 	{	modNtpClass.sendTimeData();	}
+	
+	if (ESPHTTPServer._evs.count() > 0) 	{	
+#if defined(MODULE_NTP)
+		modNtpClass.sendTimeData();	
+#endif
+	}
 //Check connection timeout if enabled
 #if (AP_ENABLE_TIMEOUT > 0)
-	// DBG_OUTPUT_PORT.printf("timer%d\r\n", ++self->connectionTimout);
 	if (self->wifiStatus == FS_STAT_CONNECTING) 	{
 		if (++self->connectionTimout >= AP_ENABLE_TIMEOUT){
 			DBG_OUTPUT_PORT.printf("Connection Timeout. Switching to AP Mode.\r\n");
@@ -50,9 +64,7 @@ void WIFIMOD_CLASS::s_secondTick(void* arg) {
 		self->WifiScan = WF_SCAN_NO_NEED;
 	}
 
-	if (self->WifiScan != WF_SCAN_NO_NEED) {
-		self->load_configWifi(self->scanWifi());
-	}
+	if (self->WifiScan != WF_SCAN_NO_NEED) { self->load_configWifi(self->scanWifi()); }
 	
 #endif //AP_ENABLE_TIMEOUT
 }
@@ -104,9 +116,8 @@ void WIFIMOD_CLASS::s_secondTick(void* arg) {
 
 
 bool WIFIMOD_CLASS::load_configWifi(int _in) {
-	if (_in < 0){
-		return false;
-	}
+	if (_in < 0){ return false; }
+	
 	char filename[40];
 	sprintf(filename, "/%s%d.json", WIFI_CONFIG_FILE_NAME, _in);
 	JsonDocument jsonDoc;
@@ -218,8 +229,13 @@ void WIFIMOD_CLASS::startDNSCaptive() {
 void WIFIMOD_CLASS::configureWifiAP() {
 	DEBUGLOGWIFI(__PRETTY_FUNCTION__);	DEBUGLOGWIFI("\r\n");
 
-	udpBroadcast.udpStop();	// always stop!
-	modNtpClass.ntpOnDisconected();
+#if defined(MODULE_NTP)
+		modNtpClass.ntpOnDisconected();
+#endif
+#if defined(MODULE_UDP)
+		
+		udpBroadcast.udpStop();	// always stop!
+#endif
 
 
 	String APname = ESPHTTPServer._sysConfig.deviceName + "_" + ESPHTTPServer._sysConfig.deviceSerial;
@@ -331,17 +347,21 @@ void WIFIMOD_CLASS::onWiFiConnectedGotIP(WiFiEventStationModeGotIP data) {
 	
 	wifiStatus = FS_STAT_CONNECTED;
 
-	//udp start to listen
+#if defined(MODULE_UDP)
+//udp start to listen
 	udpBroadcast.webInit();
 	udpBroadcast.begin(udpBroadcast.getUpdPortRx());
-	// TODO NTPBEGIN
-
-	// FIXME put it into udp module
+	
 	//udp broadcast - we are online!
     if (udpBroadcast.getudpPowerOn() == true ) { 
 		udpBroadcastSimple();
 	}
-	modNtpClass.ntpOnConnected();
+#endif
+
+#if defined(MODULE_NTP)
+`	modNtpClass.ntpOnConnected();
+#endif
+
 
 }
 
@@ -351,8 +371,16 @@ void WIFIMOD_CLASS::onWiFiDisconnected() {
 void WIFIMOD_CLASS::onWiFiDisconnected(WiFiEventStationModeDisconnected data) {
 #endif
 
+
+#if defined(MODULE_UDP)
 	udpBroadcast.udpStop();	// always stop!
+#endif
+
+#if defined(MODULE_NTP)
 	modNtpClass.ntpOnDisconected();
+#endif
+
+
 
 	if (wifiStatus == FS_STAT_RESET) {return;}
 

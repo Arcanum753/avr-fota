@@ -29,9 +29,19 @@
 #include "module_prog_swd/swd.h"
 #endif
 
-#if defined(TYPE_GPIO)
+#if defined(MODULE_GPIO)
 #include "module_gpio/module_gpio.h"
 #endif
+
+#if defined(MODULE_UDP)
+#include "module_udp/module_udp.h"
+#endif
+
+
+#include "core_ntp/module_ntp.h"
+
+
+
 
 
 #include "debug.h"
@@ -40,8 +50,6 @@
 #include "core_ota/module_ota.h"
 #include "core_json/module_json.h"
 #include "core_wifi/module_wifi.h"
-#include "core_udp/module_udp.h"
-#include "core_ntp/module_ntp.h"
 
 
 
@@ -143,9 +151,11 @@ void flashLED(int pin, int times, int delayTime) {
 	serverInit(); // Configure and start Web server
 	modWifiClass.webInit();
 	
+#if defined(MODULE_NTP)
 	modNtpClass.begin();
-
 	modNtpClass.webInit();
+#endif
+
 	
 	
 	String mdnsName = hostName;
@@ -159,7 +169,7 @@ void flashLED(int pin, int times, int delayTime) {
 	ModClassEdit.setFs(&SPIFFS);
 	ModClassEdit.webInit();
 
-#if defined(TYPE_GPIO)
+#if defined(MODULE_GPIO)
 	ModClassGpio.setFs(&SPIFFS);
 	ModClassGpio.webInit();
 #endif
@@ -195,7 +205,7 @@ void AsyncFSWebServer::defaultConfigSys() {
 	// DEFAULT CONFIG SYSTEM
 	_sysConfig.deviceName 		= "esp_server";
 	_sysConfig.deviceSerial 	= SERIAL_NUMBER;
-	_sysConfig.deviceType 		= DEVTYPE_GPIO;
+	_sysConfig.deviceType 		= DEVMODULE_GPIO;
 	//_sysConfig.connectionLed = CONNECTION_LED;
 	save_configSys();
 }

@@ -14,7 +14,13 @@
 #include "FSWebServerLib.h"
 #include "debug.h"
 
+
+
 #include "core_ntp/module_ntp.h"
+
+
+
+
 #include "core_json/module_json.h"
 
 #include "prog_swd.h"
@@ -318,7 +324,12 @@ void Class_ProgSwd::web_FileUpload2Chip(AsyncWebServerRequest *request) {
 	DEBUGLOG("\t upload status: %s\r\n", path.c_str());
 	request->send(200, "text/plain", "");
 
-	progSwd.prog_Programm(path,  NTP.getTimeDateString());
+	String ntpStr = "";
+
+#if defined(MODULE_NTP)
+	ntpStr = NTP.getTimeDateString();
+#endif
+	progSwd.prog_Programm(path, ntpStr );
 
 	//здесь уже выход из программирования
 }

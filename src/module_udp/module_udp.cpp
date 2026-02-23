@@ -13,11 +13,10 @@
 #include <WiFiClient.h>
 
 #include <core_ntp/NtpClientLib.h>
-
 #include "core_json/module_json.h"
-#include "core_udp/module_udp.h"
 
-#include "module_prog_swd/swd.h"
+#include "module_udp/module_udp.h"
+
 
 #include "eertos.h"
 #include "common.h"
