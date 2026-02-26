@@ -3,7 +3,8 @@
 // https://github.com/scanlime/esp8266-arm-swd
 
 #include "main.h"
-#ifdef  PROGTYPE_SWD
+
+
 
 
 #include "Arduino.h"
@@ -12,6 +13,8 @@
 #include "FSWebServerLib.h"
 // #include "debug.h"
 #include "debug_cm.h"
+
+#include"module_prog_swd.h"
 
 bool gpioInitState = false;
 bool turn_state = 0;
@@ -24,7 +27,7 @@ void swd_gpio_init()  {
 }
 
 uint32_t swd_init() { //Returns the ID
-  DEBUGLOG(__FUNCTION__);	DEBUGLOG("\r\n");
+  DEBUGLOGSWD(__FUNCTION__);	DEBUGLOGSWD("\r\n");
   swd_write(0xffffffff, 32);
   swd_write(0xffffffff, 32);
   swd_write(0xe79e, 16);
@@ -35,7 +38,7 @@ uint32_t swd_init() { //Returns the ID
 
   uint32_t idcode;
   swd_DP_Read(DP_IDCODE, idcode);
-  DEBUGLOG("idcode: %08x \r\n", idcode);
+  DEBUGLOGSWD("idcode: %08x \r\n", idcode);
   return idcode;
 }
 
@@ -247,6 +250,5 @@ bool swd_AP_Write16(unsigned addr, uint16_t data) {
 }
 
 
-#endif
 
 

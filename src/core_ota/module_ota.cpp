@@ -5,7 +5,7 @@
 #include <FS.h>
 #endif
 
-
+#include"version.h"
 #include <ArduinoJson.h>
 #include <ArduinoOTA.h>
 #include "FSWebServerLib.h"
@@ -46,16 +46,12 @@ bool  MODULE_OTA_CLASS::ConfigureOTA( String _hostname, String _password) {
 	if (_hostname != "") {
 	ArduinoOTA.setHostname(_hostname.c_str());
 	DEBUGOTA("OTA password set %s\n", _password.c_str());
-	} else {
-		return false;
-	}
+	} else { return false;	}
 
 	if (_password != "") {
 		ArduinoOTA.setPassword(_password.c_str());
 		DEBUGOTA("OTA password set %s\n", _password.c_str());
-	} else {
-		return false;
-	}	
+	} else { return false;	}	
 
 
 #ifndef RELEASE
@@ -73,7 +69,7 @@ bool  MODULE_OTA_CLASS::ConfigureOTA( String _hostname, String _password) {
 		DEBUGOTA("\r\n ArduinoOTA end. \r\n");
 	}, _fs));
 	ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
-		DEBUGOTA("\t OTA Progress: %u%% \r\n", (progress / (total / 100)));
+		DEBUGOTA("\t OTA update progress: %u%% \r\n", (progress / (total / 100)));
 	});
 	ArduinoOTA.onError([](ota_error_t error) {
 		DEBUGOTA("Error[%u]: ", error);
@@ -99,17 +95,20 @@ bool  MODULE_OTA_CLASS::ConfigureOTA( String _hostname, String _password) {
  void MODULE_OTA_CLASS::webInit() {
 	DEBUGOTA(__FUNCTION__);	DEBUGOTA("\r\n");
 	//update.html vvv
-
-		ESPHTTPServer.on("/update/updatepossible", [this](AsyncWebServerRequest *request) {
-			 if (!ESPHTTPServer.checkAuth(request)) {	return request->requestAuthentication(); };
-			 send_update_firmware_values_html(request);
-		});
-		ESPHTTPServer.on("/setmd5", [this](AsyncWebServerRequest *request) {
-			 if (!ESPHTTPServer.checkAuth(request)) {	return request->requestAuthentication(); };
-			 setUpdateMD5(request);
+		ESPHTTPServer.on("/update/setmd5", [this](AsyncWebServerRequest *request) {
+			if (!ESPHTTPServer.checkAuth(request)) {	return request->requestAuthentication(); };
+			html_md5_set(request);
 		});
 
-		
+		ESPHTTPServer.on("/update/firmwarefilecheck", [this](AsyncWebServerRequest *request) {
+			 if (!ESPHTTPServer.checkAuth(request)) {	return request->requestAuthentication(); };
+			 html_filename_check(request);
+		});
+
+	
+
+
+
 		ESPHTTPServer.on("/update", HTTP_GET, [this](AsyncWebServerRequest *request) {
 			if (!ESPHTTPServer.checkAuth(request)) {	return request->requestAuthentication(); };
 			if (!ESPHTTPServer.handleFileRead("/update.html", request)) { request->send(404, "text/plain", "FileNotFound");	}
@@ -127,8 +126,6 @@ bool  MODULE_OTA_CLASS::ConfigureOTA( String _hostname, String _password) {
 
  }
 
-
-
  
 void MODULE_OTA_CLASS::uploadUpdateFile(AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final) {
 	String	values = "";
@@ -136,13 +133,21 @@ void MODULE_OTA_CLASS::uploadUpdateFile(AsyncWebServerRequest *request, String f
 	// them through the Update object
 	static long totalSize = 0;
 	int updatePartition = 1;
-	if (!index) { //UPLOAD_FILE_START
+	if ( index == 0) 	{ //UPLOAD_FILE_START
 		if (_fs) { _fs->end(); }//SPIFFS.end();
 		//Update.runAsync(true);
 		uint32_t maxSketchSpace = ESP.getSketchSize();
+
+		if (typeOTAfile == FILE_TYPE_UNSUPPORTED || updatePartition == 1) {
+			values += "OTA Update error UNSUPPORTED file!" ;
+			request->send(500, "text/plain", values);
+			return ;
+		}
+		
 		DEBUGOTA("Update start: %s\r\n", filename.c_str());
 		DEBUGOTA("Max free scketch space: %u\r\n", maxSketchSpace);
 		DEBUGOTA("New scketch size: %u\r\n", _updateFileSize);
+		
 		if (_browserFileMD5 != NULL && _browserFileMD5 != "") {
 			Update.setMD5(_browserFileMD5.c_str());
 			DEBUGOTA("Hash from btowser: %s\r\n", _browserFileMD5.c_str());
@@ -152,12 +157,13 @@ void MODULE_OTA_CLASS::uploadUpdateFile(AsyncWebServerRequest *request, String f
 			return ;
 		}
 		#if defined(ESP32)
-		if (typeOTAfile == FILESYSTEM) 	{ updatePartition = U_SPIFFS; }
+		if (typeOTAfile == FILE_TYPE_FILESYSTEM) 	{ updatePartition = U_SPIFFS; }
 		#elif defined(ESP8266)
 		if (typeOTAfile == FILESYSTEM) 	{ updatePartition = U_FS; }
 		#endif
 
-		if (typeOTAfile == FIRMWARE) 	{ updatePartition = U_FLASH; }
+		if (typeOTAfile == FILE_TYPE_FIRMWARE) 	{ updatePartition = U_FLASH; }
+
 
 		if (!Update.begin(_updateFileSize, updatePartition)) {	//start with max available size
 #ifdef DEBUG_OTA
@@ -165,11 +171,6 @@ void MODULE_OTA_CLASS::uploadUpdateFile(AsyncWebServerRequest *request, String f
 #endif
 			Update.end();
 			values += "OTA Update error at begin" ;
-			request->send(500, "text/plain", values);
-			return ;
-		}
-		if (typeOTAfile == UNSUPPORTED || updatePartition == 1) {
-			values += "OTA Update error UNSUPPORTED file!" ;
 			request->send(500, "text/plain", values);
 			return ;
 		}
@@ -211,48 +212,70 @@ void MODULE_OTA_CLASS::uploadUpdateFile(AsyncWebServerRequest *request, String f
 }
 
 
-
-
-
-
-void MODULE_OTA_CLASS::send_update_firmware_values_html(AsyncWebServerRequest *request) {
+void MODULE_OTA_CLASS::html_filename_check(AsyncWebServerRequest *request) {
 	DEBUGOTA(__FUNCTION__);	DEBUGOTA("\r\n");
 	String values = "";
 	String updateOKstr = "";
 	String updateFiletype = "";
-	typeOTAfile = UNSUPPORTED;
-
-	if (_updateFileName == OTA_FILENAME_FIRMWARE) {
-		typeOTAfile = FIRMWARE;
-		updateFiletype = OTA_FIRMWARE;
-	}
-	if (_updateFileName == OTA_FILENAME_FILESYSTEM) {
-		typeOTAfile = FILESYSTEM;
-		updateFiletype = OTA_FILESYSTEM;
-	}
-	if (typeOTAfile == UNSUPPORTED) {	updateFiletype = OTA_UNSUPPORTED;	}
+	String updateFileMatcheD = "";
+	
+	updateFiletype = OTA_STR_UNSUPPORTED;	
+	updateFileMatcheD = OTA_STR_NAMEDIFF;	
+	
+ 	fileCompareResult result;
+	fileNameCheck(_updateFileName, &result);
+	
+	
+	if (result.fileType == FILE_TYPE_UNSUPPORTED)	{	updateFiletype = OTA_STR_UNSUPPORTED;	}
+	if (result.fileType == FILE_TYPE_FIRMWARE) 		{	updateFiletype = OTA_STR_FIRMWARE;	}
+	if (result.fileType == FILE_TYPE_FILESYSTEM)	{	updateFiletype = OTA_STR_FILESYSTEM;	}
+	if (result.nameMatch == 1) 						{updateFileMatcheD = OTA_STR_NAMEMATCH;	}
 
 	bool updateOK = maxSketchSpace < freeSketchSpace;
 	if (updateOK == true) {	updateOKstr = "OK" ; } 
-		else {	updateOKstr = "ERROR" ;	}
+	else {	updateOKstr = "ERROR" ;	}
 
-	DEBUGOTA("--updateOK: %s\r\n", updateOKstr);
-	DEBUGOTA("--FreeSketchSpace: %d\r\n", freeSketchSpace);
-	DEBUGOTA("--MaxSketchSpace: %d\r\n", maxSketchSpace);
-	DEBUGOTA("--UpdateFiletype: %d\r\n", updateFiletype);
+	DEBUGOTA("\t updStatus: %s\r\n", updateOKstr);
+	DEBUGOTA("\t FreeSketchSpace: %d\r\n", freeSketchSpace);
+	DEBUGOTA("\t MaxSketchSpace: %d\r\n", maxSketchSpace);
+	DEBUGOTA("\t UpdateFiletype: %d\r\n", updateFiletype);
 
-	values += "upd|" 			+ updateOKstr 				+ "|div\n";
-	values += "updSizeFree|" 	+ (String)freeSketchSpace 	+ "|div\n";
-	values += "updSizeMax|" 	+ (String)maxSketchSpace  	+ "|div\n";
-	values += "updFileType|" 	+ updateFiletype		  	+ "|div\n";
+	DEBUGOTA("\t pdSizeFree: %d\r\n", freeSketchSpace);
+	DEBUGOTA("\t updSizeMax: %d\r\n", maxSketchSpace);
+
+	DEBUGOTA("\t updVerDiffName: %s %d %d %d %d\r\n"
+		,updateFileMatcheD
+		,result.majorDiff	
+		,result.coreDiff	
+		,result.moduleDiff	
+		,result.buildDiff	
+	);
+
+	
+	values += "updStatus|"			+ updateOKstr 				+ "|div\n";
+	values += "updSizeFree|" 		+ (String)freeSketchSpace 	+ "|div\n";
+	values += "updSizeMax|" 		+ (String)maxSketchSpace  	+ "|div\n";
+	values += "updFileType|" 		+ updateFiletype		  	+ "|div\n";
+	
+	values += "updVerDiffName|" 	+ updateFileMatcheD		  		+ "|div\n";
+	values += "updVerDiffMaj|"	 	+ (String)result.majorDiff		+ "|div\n";
+	values += "updVerDiffCore|"		+ (String)result.coreDiff		+ "|div\n";
+	values += "updVerDiffMod|" 		+ (String)result.moduleDiff		+ "|div\n";
+	values += "updVerDiffBuild|" 	+ (String)result.buildDiff		+ "|div\n";
+	
+
+
 	request->send(200, "text/plain", values);
 }
 
-void MODULE_OTA_CLASS::setUpdateMD5(AsyncWebServerRequest *request) {
+
+
+void MODULE_OTA_CLASS::html_md5_set(AsyncWebServerRequest *request) {
 	DEBUGOTA(__FUNCTION__);	DEBUGOTA("\r\n");
 	_browserFileMD5 = "";
+	
 	DEBUGOTA("Arg number: %d\r\n", request->args());
-	if (request->args() > 0)  {// Read hash
+	if (request->args() > 0)  {	// Read hash
 		for (uint8_t i = 0; i < request->args(); i++) {
 			DEBUGOTA("Arg %s: %s\r\n", request->argName(i).c_str(), request->arg(i).c_str());
 			if (request->argName(i) == "md5") {
@@ -279,18 +302,117 @@ void MODULE_OTA_CLASS::setUpdateMD5(AsyncWebServerRequest *request) {
 
 void MODULE_OTA_CLASS::updateFileExecute (AsyncWebServerRequest *request) {
 	DEBUGOTA(__FUNCTION__);	DEBUGOTA("\r\n");
-	AsyncWebServerResponse *response = request->beginResponse(200, "text/html", (Update.hasError()) ? "FAIL" : "<META http-equiv=\"refresh\" content=\"15;URL=/update\">Update correct. Restarting...");
+	AsyncWebServerResponse *response = request->beginResponse(200, "text/html", 
+		(Update.hasError()) ? "FAIL" : "<META http-equiv=\"refresh\" content=\"15;URL=/update\">Update correct. Restarting..."
+	);
 	response->addHeader("Connection", "close");
 	response->addHeader("Access-Control-Allow-Origin", "*");
 	request->send(response);
-	if (this->_fs) { this->_fs->end(); }//this->_fs->end();
+	if (this->_fs) { this->_fs->end(); } //this->_fs->end();
 	ESPHTTPServer.restart_esp();
 
 }
 
 
+int8_t MODULE_OTA_CLASS::fileNameCheck (String filename, fileCompareResult* result) {
+	DEBUGOTA(__FUNCTION__);	DEBUGOTA("\r\n");
+	int8_t _ret = -1;
+    // Инициализируем результат значениями по умолчанию
+    result->nameMatch = -1;
+    result->majorDiff = 0;
+    result->coreDiff = 0;
+    result->moduleDiff = 0;
+    result->buildDiff = 0;
+    result->fileType = FILE_TYPE_UNSUPPORTED;
+    
+    if (filename.length() == 0) { DEBUGOTA("\t len0 "); return _ret;  	}
+    // Определяем тип файла
+    if (filename.endsWith(".bin")) {
+        if (filename.indexOf("_fs-") > 0) {
+            result->fileType = FILE_TYPE_FILESYSTEM;
+        } else 
+		if (filename.indexOf("-") > 0) {
+            // Есть дефис и нет _fs (проверка на _fs не нужна, так как мы уже в else)
+            result->fileType = FILE_TYPE_FIRMWARE;
+        }
+    }
+    
+    // 2. Проверяем имя сборки
+    if (filename.startsWith(BUILD_ENV) == false) {
+        // Имя не совпало - выходим, но тип уже определён
+		DEBUGOTA("\t sw ");
+        return _ret;
+    }
+    
+    // Определяем разделитель в зависимости от типа файла
+    String separator;
+    if (result->fileType == FILE_TYPE_FILESYSTEM) {	
+        separator = String(BUILD_ENV) + "_fs-"; 
+    } else if (result->fileType == FILE_TYPE_FIRMWARE) {	
+        separator = String(BUILD_ENV) + "-"; 
+    } else {	
+		DEBUGOTA("\t sep ");
+        return _ret;  // неизвестный тип файла
+    }
+    
+    // Проверяем наличие разделителя
+    if (!filename.startsWith(separator)) { DEBUGOTA("\t sw2 ");	return _ret;   }
+    
+    // Имя совпало (прошло все проверки)
+    result->nameMatch = 1;
+    
+    // Извлекаем часть с версией
+    String versionPart = filename.substring(separator.length());
+    
+    // Отрезаем .bin в конце
+    int binPos = versionPart.lastIndexOf(".bin");
+    if (binPos <= 0) { DEBUGOTA("\t binPos "); return  _ret; }
+    
+    String versionStr = versionPart.substring(0, binPos);
+    
+    // Разбираем версию из строки (формат X.YYY.ZZZ.WWWW)
+    int firstDot = versionStr.indexOf('.');
+    int secondDot = versionStr.indexOf('.', firstDot + 1);
+    int thirdDot = versionStr.indexOf('.', secondDot + 1);
+    
+    if (firstDot < 0 || secondDot < 0 || thirdDot < 0) {
+		DEBUGOTA("\t fst ");
+        return _ret;  // неверный формат
+    }
+    
+    // Извлекаем компоненты
+    String majorStr   = versionStr.substring(0, firstDot);
+    String coreStr    = versionStr.substring(firstDot + 1, secondDot);
+    String moduleStr  = versionStr.substring(secondDot + 1, thirdDot);
+    String buildStr   = versionStr.substring(thirdDot + 1);
 
+	DEBUGOTA("\t majorStr: %s ", majorStr);
+	DEBUGOTA("\t coreStr: %s ", coreStr);
+	DEBUGOTA("\t moduleStr: %s ", moduleStr);
+	DEBUGOTA("\t buildStr: %s\r\n", buildStr);
+    
+    // Преобразуем в числа
+    int fileMajor = majorStr.toInt();
+    int fileCore = coreStr.toInt();
+    int fileModule = moduleStr.toInt();
+    int fileBuild = buildStr.toInt();
+    
+    // Вычисляем разницы - ИСПРАВЛЕНО: используем правильные имена макросов
+    result->majorDiff = fileMajor - VERSION_MAJOR;
+    result->coreDiff = fileCore - VERSION_CORE;
+    result->moduleDiff = fileModule - VERSION_MODULE;
+    result->buildDiff = fileBuild - VERSION_BUILD;
 
+    // Проверяем, что версия файла НЕ СТАРШЕ текущей (все разницы >= 0)
+    if ((result->majorDiff >= 0) && 
+        (result->coreDiff >= 0) && 
+        (result->moduleDiff >= 0) && 
+        (result->buildDiff >= 0)) { 
+        _ret = 1; 
+    }
+
+    return _ret;
+}
 
 
 

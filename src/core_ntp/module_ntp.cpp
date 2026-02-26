@@ -135,16 +135,16 @@ void NTPMOD_CLASS::webInit ()	{
 	DEBUGNTP(__PRETTY_FUNCTION__);	DEBUGNTP("\r\n");
 	
 	ESPHTTPServer.on("/ntp/info", HTTP_GET, [this](AsyncWebServerRequest *request) {
-		this->send_NTP_info_html(request);
+		send_NTP_info_html(request);
 	});
 	
 	ESPHTTPServer.on("/ntp/conf", HTTP_GET, [this](AsyncWebServerRequest *request) {
-		this->send_NTP_configuration_values_html(request);
+		send_NTP_configuration_values_html(request);
 	});
 
 	ESPHTTPServer.on("/ntp.html", HTTP_POST, [this](AsyncWebServerRequest *request) {
 		if (!ESPHTTPServer.checkAuth(request)) {		return request->requestAuthentication(); }
-		this->send_NTP_configuration_html(request);
+		send_NTP_configuration_html(request);
 	});
 }
 

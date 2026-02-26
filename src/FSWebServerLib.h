@@ -49,11 +49,6 @@
 
 #define HTML_INDEX  "index.html"
 
-enum UpdateTypeFile {
-        UNSUPPORTED = 0
-    ,   FIRMWARE
-    ,   FILESYSTEM
-  };
 
 typedef struct {
     String deviceName;
@@ -163,11 +158,11 @@ public:
 
     
 private:
-    void send_system_version_html(AsyncWebServerRequest *request);
+    void html_version_info(AsyncWebServerRequest *request);
     void send_device_values_html(AsyncWebServerRequest *request);
     void send_project_configuration_values_html(AsyncWebServerRequest *request);
 
-    void send_information_values_html(AsyncWebServerRequest *request);
+    void html_send_chipinfo(AsyncWebServerRequest *request);
     void get_system_configuration_html(AsyncWebServerRequest *request);
     void get_project_configuration_html(AsyncWebServerRequest *request);
     void send_wwwauth_configuration_values_html(AsyncWebServerRequest *request);

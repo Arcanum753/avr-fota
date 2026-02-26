@@ -15,7 +15,7 @@ DEBUG = False  # Установите True для отладочного выв�
 FW_BINS_ROOT = "proj_fwbins"
 
 # Имя файла с версией
-VERSION_HEADER = "version_full.h"
+VERSION_HEADER = "version.h"
 VERSION_HEADER_PATH = f"src/{VERSION_HEADER}"
 
 # Суффикс для файла прошивки (перед .bin) - пустая строка, так как прошивка без суффикса
@@ -32,7 +32,7 @@ def debug_print(*args, **kwargs):
 
 def get_firmware_version(project_dir):
     """
-    Читает FIRMWARE_VERSION из version_full.h
+    Читает FIRMWARE_VERSION из version.h
     Возвращает строку вида "0.022.10.5451" или None, если файл не найден
     """
     version_file = project_dir / VERSION_HEADER_PATH

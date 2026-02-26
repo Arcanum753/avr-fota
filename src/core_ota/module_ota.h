@@ -11,11 +11,35 @@
 #endif
 
 
-#define OTA_FILENAME_FIRMWARE           "firmware.bin"
-#define OTA_FILENAME_FILESYSTEM         "spiffs.bin"
-#define OTA_FIRMWARE                    "FIRMWARE"
-#define OTA_FILESYSTEM                  "FILESYSTEM"
-#define OTA_UNSUPPORTED                 "UNSUPPORTED"
+#define OTA_STR_FILENAME_FIRMWARE           "firmware.bin"
+#define OTA_STR_FILENAME_FILESYSTEM         "spiffs.bin"
+#define OTA_STR_FILESYSTEM                  "FILESYSTEM"
+#define OTA_STR_FIRMWARE                    "FIRMWARE"
+#define OTA_STR_UNSUPPORTED                 "UNSUPPORTED"
+#define OTA_STR_NAMEMATCH                   "MATCHED"
+#define OTA_STR_NAMEDIFF                   "DIFFERENCE"
+
+
+// #define FILE_TYPE_UNKNOWN -1
+// #define FILE_TYPE_FIRMWARE 0
+// #define FILE_TYPE_FILESYSTEM 1
+
+enum UpdateTypeFile {
+       FILE_TYPE_UNSUPPORTED = -1
+    ,  FILE_TYPE_FIRMWARE = 0
+    ,  FILE_TYPE_FILESYSTEM = 1
+  };
+
+
+// Структура для результатов сравнения
+struct fileCompareResult {
+    int8_t  nameMatch;      // -1 - не совпадает, 1 - совпадает
+    int8_t  majorDiff;      // мажорная версия
+    int16_t  coreDiff;      // разница в версии ядра (0 если равно, >0 если у файла больше, <0 если у файла меньше)
+    int16_t  moduleDiff;    // разница в версии модуля
+    int32_t  buildDiff;     // разница в номере сборки 
+    UpdateTypeFile   fileType;      // -1 неизвестно, 0 прошивка, 1 ФС
+};
 
 
 class  MODULE_OTA_CLASS    {
@@ -37,9 +61,12 @@ public:
     void begin(String _hostname, String _password);
     void webInit() ;
     void loopHandler() ;
-
-    void send_update_firmware_values_html(AsyncWebServerRequest *request);
-    void setUpdateMD5(AsyncWebServerRequest *request);
+    
+    void html_filename_check(AsyncWebServerRequest *request);
+    
+    int8_t fileNameCheck (String filename, fileCompareResult* result) ;
+    
+    void html_md5_set(AsyncWebServerRequest *request);
     void uploadUpdateFile(AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final);
     void updateFileExecute (AsyncWebServerRequest *request) ;
 
@@ -53,7 +80,6 @@ protected:
     String _updateFileName = "";
 
 
-private:
     bool ConfigureOTA( String _hostname, String _password) ;
     uint16_t percentLoadedPrev ;
     uint32_t maxSketchSpace   ;

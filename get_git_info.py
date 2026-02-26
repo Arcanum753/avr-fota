@@ -19,9 +19,9 @@ MODULE_COUNTER_FILE = "module_counter.txt"  # module и build в папке мо
 
 # Формат вывода
 MAJOR_DIGITS = 1     # количество цифр для major (0)
-CORE_DIGITS = 3      # количество цифр для core (015)
-MODULE_DIGITS = 3    # количество цифр для module (007)
-BUILD_DIGITS = 4     # количество цифр для build (1243)
+CORE_DIGITS = 2      # количество цифр для core (015)
+MODULE_DIGITS = 2    # количество цифр для module (007)
+BUILD_DIGITS = 0     # количество цифр для build (1243)
 
 # ============================================================
 # ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
@@ -269,10 +269,19 @@ def generate_version_header():
 #define MODULE_VERSION {module_counters['module']:03d}
 
 // Номер сборки (из module_counter.txt в папке модуля)
-#define BUILD_NUMBER {module_counters['build']:04d}
+#define BUILD_NUMBER {module_counters['build']}
+
+// ============================================================
+// Версии как строки с ведущими нулями (для форматирования)
+// ============================================================
+
+#define CORE_VERSION_STR "{root_counters['core']:03d}"
+#define MODULE_VERSION_STR "{module_counters['module']:03d}"
+#define BUILD_NUMBER_STR "{module_counters['build']:04d}"
 
 // Полная версия в формате 0.C.M.B
 #define FIRMWARE_VERSION "{full_version}"
+#define FIRMWARE_VERSION_STR "{full_version}"
 
 // ============================================================
 // Git информация
@@ -311,7 +320,6 @@ def generate_version_header():
     print(f"Version file created: {version_file}")
     print(f"Firmware version: {full_version}")
     print(f"{'='*60}\n")
-
 # ============================================================
 # ЗАПУСК
 # ============================================================

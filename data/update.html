@@ -14,12 +14,25 @@
     <form method='POST' action='/update' enctype='multipart/form-data'>
         <table align = "center"> 
             <tr><td> <input id="fileName" type='file' name='update' onchange="summd5()" > </td> </tr>
-            <tr><td id="md5row" hidden>
+            <tr><td id="md5row" >
                     Calculated file MD5 hash: <span id="clientHash">Select a file</span><br>
                     Size: <span id="fileSize"></span> Bytes <br>
                     Filename: <span id="fileNameLoaded"></span>
                 </td>
-            <tr><td> <input id="updateButton" type='submit'   value='Update ESP chip firmware.' disabled > </td> </tr>
+
+                <tr><td id="VersionDiff" >
+                     <span id="updStatus"> </span><br>
+                     <span id="updSizeFree"> </span><br>
+                     <span id="updSizeMax"> </span><br>
+                     <span id="updFileType"> </span><br>
+
+                     <span id="updVerDiffName"> </span><br>
+                     <span id="updVerDiffMaj"> </span><br>
+                     <span id="updVerDiffCore"> </span><br>
+                     <span id="updVerDiffMod"> </span><br>
+                     <span id="updVerDiffBuild"> </span><br>
+                </td>
+            <tr><td> <input id="updateButton" type='submit'   value='Update ESP chip firmware.' > </td> </tr>
             </tr>
             
         </table>
@@ -45,9 +58,7 @@
 
         function summd5() {
             input = document.getElementById("fileName");
-            if (running) {
-                return;
-            }
+            if (running) { return; }
             if (!input.files.length) {
                 console.error('Please select a file');
                 return;
@@ -84,39 +95,117 @@
             time = new Date().getTime();
             fileReader.readAsBinaryString(file);
         }
-        
+                
         function fileChechInfoGet() {
-          const _buttonEn = document.getElementById('updateButton') ;
-          const _buttonVal = document.getElementById('updateButton');
-          let _filetype;
-          let _filesize ;
-          
-          const xhr = new XMLHttpRequest();
-          xhr.open('get', "/update/updatepossible")
-          xhr.send();
-          xhr.addEventListener('loadend', () => {
-            const fieldsRows = ParseCVT(xhr.response).reverse();
-            for (fields of fieldsRows) {
-              if (fields[0] == "updFileType" ) {
-                  _filetype = fields[1];
-                } 
-            }
-            if (_filetype == "FIRMWARE"  ) {
-                _buttonEn.disabled = false;
-                _buttonVal.value = 'Update FIRMWARE';
+            const _button = document.getElementById('updateButton');
+            const _versionDiff = document.getElementById('VersionDiff');
+
+            // Получаем ссылки на все элементы отображения
+            const updStatus = document.getElementById('updStatus');
+            const updSizeFree = document.getElementById('updSizeFree');
+            const updSizeMax = document.getElementById('updSizeMax');
+            const updFileType = document.getElementById('updFileType');
+            const updVerDiffName = document.getElementById('updVerDiffName');
+            const updVerDiffMaj = document.getElementById('updVerDiffMaj');
+            const updVerDiffCore = document.getElementById('updVerDiffCore');
+            const updVerDiffMod = document.getElementById('updVerDiffMod');
+            const updVerDiffBuild = document.getElementById('updVerDiffBuild');
             
-            }
-            if (_filetype == "FILESYSTEM"  ) {
-              _buttonEn.disabled = false;
-              _buttonVal.value = 'Update FILESYSTEM';
-            }
-            if (_filetype == "UNSUPPORTED"  ) {
-              _buttonEn.disabled = true;
-              _buttonVal.value = 'UNSUPPORTED FILE!';
-            }
-          });
+            const xhr = new XMLHttpRequest();
+            xhr.open('get', "/update/firmwarefilecheck");
+            xhr.send();
+            
+            xhr.addEventListener('loadend', () => {
+                const fieldsRows = ParseCVT(xhr.response);
+                
+                // Переменные для хранения значений
+                let fileType = "UNSUPPORTED";
+                let nameMatch = "NO";
+                let majorDiff = 0, coreDiff = 0, moduleDiff = 0, buildDiff = 0;
+                let status = "", sizeFree = "", sizeMax = "";
+                
+                // Парсим все поля ответа
+                for (let fields of fieldsRows) {
+                    const key = fields[0];
+                    const value = fields[1];
+                    
+                    switch(key) {
+                        case "updStatus": 
+                            status = value;
+                            updStatus.innerHTML = "Status: " + value;
+                            break;
+                        case "updSizeFree": 
+                            sizeFree = value;
+                            updSizeFree.innerHTML = "Free space: " + value + " bytes";
+                            break;
+                        case "updSizeMax": 
+                            sizeMax = value;
+                            updSizeMax.innerHTML = "Max space: " + value + " bytes";
+                            break;
+                        case "updFileType": 
+                            fileType = value;
+                            updFileType.innerHTML = "File type: " + value;
+                            break;
+                        case "updVerDiffName": 
+                            nameMatch = value;
+                            updVerDiffName.innerHTML = "Device: " + value;
+                            break;
+                        case "updVerDiffMaj": 
+                            majorDiff = parseInt(value);
+                            break;
+                        case "updVerDiffCore": 
+                            coreDiff = parseInt(value);
+                            break;
+                        case "updVerDiffMod": 
+                            moduleDiff = parseInt(value);
+                            break;
+                        case "updVerDiffBuild": 
+                            buildDiff = parseInt(value);
+                            break;
+                    }
+                }
+                
+                // Отображаем различия версий
+                updVerDiffMaj.innerHTML = "Major diff: " + formatDiff(majorDiff);
+                updVerDiffCore.innerHTML = "Core diff: " + formatDiff(coreDiff);
+                updVerDiffMod.innerHTML = "Module diff: " + formatDiff(moduleDiff);
+                updVerDiffBuild.innerHTML = "Build diff: " + formatDiff(buildDiff);
+                
+                // Определяем, можно ли обновляться
+                let canUpdate = true;
+                let buttonText = "";
+                
+                if (nameMatch != "OK") {
+                    canUpdate = false;
+                    buttonText = "WRONG DEVICE!";
+                } else if (fileType == "UNSUPPORTED") {
+                    canUpdate = false;
+                    buttonText = "UNSUPPORTED FILE!";
+                } else if (status != "OK") {
+                    canUpdate = false;
+                    buttonText = "INSUFFICIENT SPACE!";
+                } else {
+                    // Проверяем версии
+                    if (coreDiff < 0) {
+                        canUpdate = false;
+                        buttonText = "CORE IS OLDER!";
+                    } else {
+                        buttonText = "Update " + fileType;
+                    }
+                }
+                
+                // Активируем/деактивируем кнопку
+                _button.disabled = !canUpdate;
+                _button.value = buttonText;
+            });
         }
-        
+
+        function formatDiff(diff) {
+            if (diff > 0) return "+" + diff + " (newer)";
+            if (diff < 0) return diff + " (older)";
+            return "0 (same)";
+        }
+
     </script>
    
 </body>

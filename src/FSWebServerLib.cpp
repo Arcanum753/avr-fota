@@ -25,6 +25,7 @@
 #endif
 
 #if defined(PROGTYPE_SWD)
+#include "module_prog_swd/module_prog_swd.h"
 #include "module_prog_swd/swd.h"
 #endif
 
@@ -51,10 +52,9 @@
 
 AsyncFSWebServer ESPHTTPServer(80);
 
-String _Version_App 		= VERSION_APP;
+String _Version_App 		= FIRMWARE_VERSION;
 String _Version_Web 		= VERSION_WEB;
-String _Version_BuildDate 	= APP_BUILDDATE;
-String _Version_BuildTime 	= APP_BUILDTIME;
+String _Version_BuildDate 	= BUILD_TIME;
 
 AsyncFSWebServer::AsyncFSWebServer(uint16_t port) : AsyncWebServer(port) {}
 
@@ -238,11 +238,9 @@ bool AsyncFSWebServer::loadHTTPAuth() {
 }
 
 // working with pages vvv
-void AsyncFSWebServer::send_information_values_html(AsyncWebServerRequest *request) {
+void AsyncFSWebServer::html_send_chipinfo(AsyncWebServerRequest *request) {
 	DEBUGLOG(__FUNCTION__);	DEBUGLOG("\r\n");
 	String values = "";
-
-
 	
 	#ifdef ESP32
 	values += "x_chipid|" 	+ (String)ESP.getChipModel() + "|div\n";
@@ -368,7 +366,7 @@ bool AsyncFSWebServer:: handleFileRead(String path, AsyncWebServerRequest *reque
 }
 
 // *.html vvv
-void AsyncFSWebServer::send_system_version_html(AsyncWebServerRequest *request) { // answer for "get" request
+void AsyncFSWebServer::html_version_info(AsyncWebServerRequest *request) { // answer for "get" request
 	//DEBUGLOG(__FUNCTION__);	DEBUGLOG("\r\n");
 	String values = "";
 	values += "devicename|"  	+ _sysConfig.deviceName  		+ "|div\n";
@@ -480,11 +478,11 @@ void AsyncFSWebServer::serverInit() {
 
 	on("/system/infovalues", [this](AsyncWebServerRequest *request) {
 		if (!this->checkAuth(request)) {	return request->requestAuthentication(); };
-		this->send_information_values_html(request);
+		this->html_send_chipinfo(request);
 	});	
 	on("/system/version", [this](AsyncWebServerRequest *request) {
 		if (!this->checkAuth(request)) {	return request->requestAuthentication(); };
-		this->send_system_version_html(request);
+		this->html_version_info(request);
 	});	
 	on("/system.html", [this](AsyncWebServerRequest *request) {
 		if (!this->checkAuth(request)) {	return request->requestAuthentication(); };
@@ -580,9 +578,6 @@ const String AsyncFSWebServer::getHostName() {
 }
 
 void AsyncFSWebServer::serialShowInfo() {
-	Serial.printf("Ep8266 service chip firmware ver: %s\n\r",  VERSION_APP);
-	Serial.printf("Ep8266 web pages ver: %s\n\r",  VERSION_WEB);
-	Serial.printf("build DateTime: %s %s  \n\r",  __DATE__, __TIME__);
 	Serial.printf("wifi ssid: %s \n", WiFi.SSID().c_str());
 	Serial.printf("GotIP Address: %s \n", WiFi.localIP().toString().c_str());
 
@@ -591,7 +586,6 @@ void AsyncFSWebServer::serialShowInfo() {
     #elif defined(ESP8266)
 	Serial.printf("WifiHostName  %s \n\r", 	WiFi.hostname().c_str());
     #endif
-
 
 	Serial.printf("Gateway: %s\r\n", WiFi.gatewayIP().toString().c_str());
 	Serial.printf("DNS: %s\r\n", WiFi.dnsIP().toString().c_str());

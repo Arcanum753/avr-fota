@@ -18,7 +18,7 @@
 
 
 #if defined(MODULE_UDP)
-#include "core_udp/module_udp.h"
+#include "module_udp/module_udp.h"
 #endif
 
 
@@ -48,13 +48,13 @@ void WIFIMOD_CLASS::s_secondTick(void* arg) {
 #if (AP_ENABLE_TIMEOUT > 0)
 	if (self->wifiStatus == FS_STAT_CONNECTING) 	{
 		if (++self->connectionTimout >= AP_ENABLE_TIMEOUT){
-			DBG_OUTPUT_PORT.printf("Connection Timeout. Switching to AP Mode.\r\n");
+			DEBUGLOGWIFI("Connection Timeout. Switching to AP Mode.\r\n");
 			self->WifiScan = WF_SCAN_NO_NEED;
 			self->configureWifiAP();
 		}
 	}
 	if (self->wifiStatus == FS_STAT_WRONGPASSWORDS) {
-		DBG_OUTPUT_PORT.printf("All passwords wrong. Switching to AP Mode.\r\n");
+		DEBUGLOGWIFI("All passwords wrong. Switching to AP Mode.\r\n");
 		self->WifiScan = WF_SCAN_NO_NEED;
 		self->configureWifiAP();
 	}
@@ -257,7 +257,7 @@ void WIFIMOD_CLASS::configureWifiAP() {
 	}
 	startDNSCaptive();
 	if (CONNECTION_LED >= 0) {	flashLED(CONNECTION_LED, 3, 250);	}
-	DBG_OUTPUT_PORT.printf("AP Mode enabled. SSID: %s IP: %s\r\n", WiFi.softAPSSID().c_str(), WiFi.softAPIP().toString().c_str());
+	DEBUGLOGWIFI("AP Mode enabled. SSID: %s IP: %s\r\n", WiFi.softAPSSID().c_str(), WiFi.softAPIP().toString().c_str());
 	connectionTimout = 0;
 }
 
@@ -291,7 +291,7 @@ void WIFIMOD_CLASS::configureWifi() { // set esp8266 as wifi client
 	//encourge clean recovery after disconnect species5618, 08-March-2018
 	WiFi.mode(WIFI_STA);
 	if (WifiScan == WF_STAT_SCANED){
-		DBG_OUTPUT_PORT.printf("Connecting to %s\r\n", _wifiConfig.ssid.c_str());
+		DEBUGLOGWIFI("Connecting to %s\r\n", _wifiConfig.ssid.c_str());
 		WiFi.begin(_wifiConfig.ssid.c_str(), _wifiConfig.password.c_str());
 	}  else  {
 		WiFi.scanNetworks(true);
@@ -323,7 +323,7 @@ void WIFIMOD_CLASS::onWiFiConnected(WiFiEventStationModeConnected data) {
 
 
 // Do functions when we get IP.
-//means we get nor,al connection
+//means we get nor,al connection 	
 #if defined(ESP32)
 void WIFIMOD_CLASS::onWiFiConnectedGotIP() {
 #elif defined(ESP8266)
@@ -335,10 +335,9 @@ void WIFIMOD_CLASS::onWiFiConnectedGotIP(WiFiEventStationModeGotIP data) {
 		 //turnLedESPHTTPServer.on();
 	}
 
-	DBG_OUTPUT_PORT.printf("GotIP Address: %s \n", WiFi.localIP().toString().c_str());
-	DBG_OUTPUT_PORT.printf("Gateway:    %s\r\n", WiFi.gatewayIP().toString().c_str());
-	DBG_OUTPUT_PORT.printf("DNS:        %s\r\n", WiFi.dnsIP().toString().c_str());
-	DBG_OUTPUT_PORT.printf("Led %d on\n", CONNECTION_LED);
+	DEBUGLOGWIFI("GotIP Address: %s \n", WiFi.localIP().toString().c_str());
+	DEBUGLOGWIFI("Gateway:    %s\r\n", WiFi.gatewayIP().toString().c_str());
+	DEBUGLOGWIFI("DNS:        %s\r\n", WiFi.dnsIP().toString().c_str());
 	wifiDisconnectedSince = 0;
 	
 	
