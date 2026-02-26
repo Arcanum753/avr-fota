@@ -11,6 +11,13 @@
 #endif
 
 
+#define OTA_FILENAME_FIRMWARE           "firmware.bin"
+#define OTA_FILENAME_FILESYSTEM         "spiffs.bin"
+#define OTA_FIRMWARE                    "FIRMWARE"
+#define OTA_FILESYSTEM                  "FILESYSTEM"
+#define OTA_UNSUPPORTED                 "UNSUPPORTED"
+
+
 class  MODULE_OTA_CLASS    {
 public:
     MODULE_OTA_CLASS (bool _in);

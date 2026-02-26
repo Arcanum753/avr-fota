@@ -17,6 +17,12 @@
 #include <FS.h>
 #endif
 
+#ifdef DEBUG_LED
+#define DEBUGLOGLED(...) Serial.printf(__VA_ARGS__)
+#else
+#define DEBUGLOGLED(...)
+#endif
+
 
 #include <Ticker.h>
 
@@ -39,11 +45,7 @@
 
 #define AVRSERVERSTR_UPLOADBEGIN "upload begin\n"
 
-#define OTA_FILENAME_FIRMWARE           "firmware.bin"
-#define OTA_FILENAME_FILESYSTEM         "spiffs.bin"
-#define OTA_FIRMWARE                    "FIRMWARE"
-#define OTA_FILESYSTEM                  "FILESYSTEM"
-#define OTA_UNSUPPORTED                 "UNSUPPORTED"
+
 
 #define HTML_INDEX  "index.html"
 

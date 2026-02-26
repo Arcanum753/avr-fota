@@ -24,7 +24,6 @@
 #include "module_prog_isp.h"
 #endif
 
-
 #if defined(PROGTYPE_SWD)
 #include "module_prog_swd/swd.h"
 #endif
@@ -37,12 +36,7 @@
 #include "module_udp/module_udp.h"
 #endif
 
-
 #include "core_ntp/module_ntp.h"
-
-
-
-
 
 #include "debug.h"
 
@@ -66,7 +60,9 @@ AsyncFSWebServer::AsyncFSWebServer(uint16_t port) : AsyncWebServer(port) {}
 
 void flashLED(int pin, int times, int delayTime) {
 	int oldState = digitalRead(pin);
-	DEBUGLOG("---Flash LED during %d ms %d times. Old state = %d\r\n", delayTime, times, oldState);
+
+
+	DEBUGLOGLED("---Flash LED during %d ms %d times. Old state = %d\r\n", delayTime, times, oldState);
 
 	for (int i = 0; i < times; i++) {
 		digitalWrite(pin, LOW); // Turn on LED

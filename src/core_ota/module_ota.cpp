@@ -99,6 +99,7 @@ bool  MODULE_OTA_CLASS::ConfigureOTA( String _hostname, String _password) {
  void MODULE_OTA_CLASS::webInit() {
 	DEBUGOTA(__FUNCTION__);	DEBUGOTA("\r\n");
 	//update.html vvv
+
 		ESPHTTPServer.on("/update/updatepossible", [this](AsyncWebServerRequest *request) {
 			 if (!ESPHTTPServer.checkAuth(request)) {	return request->requestAuthentication(); };
 			 send_update_firmware_values_html(request);
@@ -107,6 +108,8 @@ bool  MODULE_OTA_CLASS::ConfigureOTA( String _hostname, String _password) {
 			 if (!ESPHTTPServer.checkAuth(request)) {	return request->requestAuthentication(); };
 			 setUpdateMD5(request);
 		});
+
+		
 		ESPHTTPServer.on("/update", HTTP_GET, [this](AsyncWebServerRequest *request) {
 			if (!ESPHTTPServer.checkAuth(request)) {	return request->requestAuthentication(); };
 			if (!ESPHTTPServer.handleFileRead("/update.html", request)) { request->send(404, "text/plain", "FileNotFound");	}

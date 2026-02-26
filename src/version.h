@@ -1,5 +1,5 @@
 // Auto-generated version file
-// Generated: 2026-02-26 11:48:50
+// Generated: 2026-02-26 13:05:25
 
 #ifndef VERSION_H
 #define VERSION_H
@@ -15,21 +15,21 @@
 #define CORE_VERSION 001
 
 // Версия модуля (из module_counter.txt в папке модуля)
-#define MODULE_VERSION 002
+#define MODULE_VERSION 003
 
 // Номер сборки (из module_counter.txt в папке модуля)
-#define BUILD_NUMBER 0009
+#define BUILD_NUMBER 0017
 
 // Полная версия в формате 0.C.M.B
-#define FIRMWARE_VERSION "0.001.002.0009"
+#define FIRMWARE_VERSION "0.001.003.0017"
 
 // ============================================================
 // Git информация
 // ============================================================
 
-#define GIT_BRANCH "fix-core-code"
-#define GIT_COMMIT "6341b62"
-#define GIT_COMMIT_FULL "6341b62b2f7445a4a50a8b209695070d2005a25d"
+#define GIT_BRANCH "fix-core-ota"
+#define GIT_COMMIT "9d64c71"
+#define GIT_COMMIT_FULL "9d64c715d4b0fe623efdb75bbe5b66162d385249"
 #define GIT_TAG "no-tag"
 #define GIT_DIRTY true
 
@@ -38,8 +38,8 @@
 // ============================================================
 
 #define BUILD_ENV "esp32-swd"
-#define BUILD_TIME "2026-02-26 11:48:50"
-#define BUILD_TIMESTAMP "20260226_114850"
+#define BUILD_TIME "2026-02-26 13:05:25"
+#define BUILD_TIMESTAMP "20260226_130525"
 #define ACTIVE_MODULE "module_prog_swd"
 
 // ============================================================
