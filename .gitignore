@@ -9,3 +9,4 @@
 *.bin
 # Web debug folders
 /web_debug/
+.version_hashes
