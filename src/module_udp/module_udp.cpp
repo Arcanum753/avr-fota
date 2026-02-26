@@ -13,11 +13,10 @@
 #include <WiFiClient.h>
 
 #include <core_ntp/NtpClientLib.h>
-
 #include "core_json/module_json.h"
-#include "core_udp/module_udp.h"
 
-#include "module_prog_swd/swd.h"
+#include "module_udp/module_udp.h"
+
 
 #include "eertos.h"
 #include "common.h"
@@ -44,13 +43,13 @@ bool    UDPBROADCAST_CLASS::getudpPowerOn() 	{	return _udpConfig.udpPowerOn;		}
 
 void UDPBROADCAST_CLASS::begin(uint16_t _port) {
 	DEBUGUDP(__FUNCTION__);	DEBUGUDP("\r\n");
-	if (isStarted == true)	{	return;	}
+	if (isStarted == 1)	{	return;	}
     portRx = _port;
     //Start to listen UDP packets on port _port.
 	SetTimerTask(udpBroadcastTimer, SEC * MINUTES * udpBroadcast.getudpTimeOut());
     if(udp_listen.listen(portRx)) {
       	DEBUGUDP("UDP Listening on IP: %s and port %u \n\r",  WiFi.localIP().toString().c_str(), portRx);
-        isStarted = true;
+        isStarted = 1;
         
         udp_listen.onPacket(processUdpListenPacketHandler) ;
 	
@@ -83,7 +82,8 @@ void processUdpListenPacketHandler(AsyncUDPPacket &packet) {
 }
 
 void UDPBROADCAST_CLASS::udpStop()	{
-	isStarted = false;
+	DEBUGUDP(__FUNCTION__);	DEBUGUDP("\r\n");
+	isStarted = 0;
 	udp_listen.close();
 }
 		
@@ -104,7 +104,7 @@ void  udpBroadcastSimple( ){
 
 
  void  UDPBROADCAST_CLASS::udpBroadcastSend(uint16_t _port, String _strin){
-	if (isStarted == false) {	return;	}
+	if (isStarted == 0) {	return;	}
     portTx = _port;
 
     if (portTx == getUpdPortRx()) {
@@ -121,6 +121,7 @@ void  udpBroadcastSimple( ){
 
 void udpBroadcastTimer() {
   uint16_t timeout = udpBroadcast.getudpTimeOut();
+  if (udpBroadcast.isStart() == 0) {	return;	}
   if (timeout > 60) {	timeout = 60;	}
   if (timeout == 0)	{	return;	}
 	if (timeout > 0 )	{
@@ -189,6 +190,10 @@ void UDPBROADCAST_CLASS::get_udp_configuration_html(AsyncWebServerRequest *reque
 }
 
 
+
+uint8_t UDPBROADCAST_CLASS::isStart()   {
+	return  isStarted;
+}
 
 String UDPBROADCAST_CLASS::udpJsonGet()   {
   	// DEBUGUDP(__PRETTY_FUNCTION__); DEBUGUDP("\r\n");

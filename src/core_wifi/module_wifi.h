@@ -118,6 +118,7 @@ class  WIFIMOD_CLASS    {
     bool load_configWifi(int _in);
     bool save_configWifi(int _in);
     void defaultConfigWifi(int _in);
+    void startDNSCaptive();
     void configureWifiAP();
     void configureWifi();
     

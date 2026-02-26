@@ -14,9 +14,19 @@
 #include "ErriezSerialTerminal.h"
 
 #include "core_terminal/module_terminal.h"
-#include "core_udp/module_udp.h"
 
+#if defined(MODULE_UDP)
+#include "module_udp/module_udp.h"
+#endif
+
+
+#include "core_ntp/module_ntp.h"
+
+#if defined(PROGTYPE_SWD)
 #include "module_prog_swd/swd.h"
+#endif
+
+
 
 
 
@@ -170,17 +180,29 @@ void udpp (){
         Serial.println("Please set port 10000 < port <= 65536");
         return;
     }
+#if defined(MODULE_UDP)
+	
     String str = udpBroadcast.udpJsonGet();
     udpBroadcast.udpBroadcastSend(port, str);
+#endif
 }
 
 void udpc ()    {
-     udpBroadcast.udpBroadcastSend(udpBroadcast.getUpdPortTx(), udpBroadcast.udpJsonGet());
+
+#if defined(MODULE_UDP)
+    udpBroadcast.udpBroadcastSend(udpBroadcast.getUpdPortTx(), udpBroadcast.udpJsonGet());
+#endif
+
+
 }
 
 
 void udps ()    {
-     udpBroadcast.udpBroadcastSend(udpBroadcast.getUpdPortTx(), "test");
-    //   udp_Dbg.broadcastTo("test", 40000);
+#if defined(MODULE_UDP)
+udpBroadcast.udpBroadcastSend(udpBroadcast.getUpdPortTx(), "test");
+#endif
+
+
+    
 }
 
