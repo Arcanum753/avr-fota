@@ -1,2 +1,2 @@
 major=0
-core=3
+core=4

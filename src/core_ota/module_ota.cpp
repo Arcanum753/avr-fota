@@ -126,97 +126,147 @@ bool  MODULE_OTA_CLASS::ConfigureOTA( String _hostname, String _password) {
 
  }
 
- 
-void MODULE_OTA_CLASS::uploadUpdateFile(AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final) {
-	String	values = "";
-	// handler for the file upload, get's the sketch bytes, and writes
-	// them through the Update object
-	static long totalSize = 0;
-	int updatePartition = 1;
-	if ( index == 0) 	{ //UPLOAD_FILE_START
-		if (_fs) { _fs->end(); }//SPIFFS.end();
-		//Update.runAsync(true);
-		uint32_t maxSketchSpace = ESP.getSketchSize();
+ void MODULE_OTA_CLASS::uploadUpdateFile(AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final) {
+    String	values = "";
+    // handler for the file upload, get's the sketch bytes, and writes
+    // them through the Update object
+    static long totalSize = 0;
+    static bool errorOccurred = false;  // Флаг для отслеживания ошибки
+    int updatePartition = 1;
+    
+    if (index == 0) { //UPLOAD_FILE_START
+        // Сбрасываем флаг ошибки при старте новой загрузки
+        errorOccurred = false;
+        totalSize = 0;
+        
+        if (_fs) { _fs->end(); } //SPIFFS.end();
+        
+        uint32_t maxSketchSpace = ESP.getSketchSize();
 
-		if (typeOTAfile == FILE_TYPE_UNSUPPORTED ) {
-			values += "OTA Update error UNSUPPORTED file!" ;
-			request->send(500, "text/plain", values);
-			return ;
-		}
-		if (!isValidFilename(filename)) {
-            DEBUGOTA("Invalid filename in upload\n");
-            request->send(500, "text/plain", "Invalid filename");
+        if (typeOTAfile == FILE_TYPE_UNSUPPORTED) {
+            values = "OTA Update error UNSUPPORTED file!";
+            DEBUGOTA("%s\n", values.c_str());
+            request->send(500, "text/plain", values);
+            errorOccurred = true;
+            return;
+        }
+        
+        if (!isValidFilename(filename)) {
+            values = "Invalid filename";
+            DEBUGOTA("%s: %s\n", values.c_str(), filename.c_str());
+            request->send(500, "text/plain", values);
+            errorOccurred = true;
             return;
         }
 
-		
-		DEBUGOTA("Update start: %s\r\n", filename.c_str());
-		DEBUGOTA("Max free scketch space: %u\r\n", maxSketchSpace);
-		DEBUGOTA("New scketch size: %u\r\n", _updateFileSize);
-		
-		if (_browserFileMD5 != NULL && _browserFileMD5 != "") {
-			Update.setMD5(_browserFileMD5.c_str());
-			DEBUGOTA("Hash from btowser: %s\r\n", _browserFileMD5.c_str());
-		} else {
-			values += "OTA Update error no md4 hash!" ;
-			request->send(500, "text/plain", values);
-			return ;
-		}
-		#if defined(ESP32)
-		if (typeOTAfile == FILE_TYPE_FILESYSTEM) 	{ updatePartition = U_SPIFFS; }
-		#elif defined(ESP8266)
-		if (typeOTAfile == FILE_TYPE_FILESYSTEM) 	{ updatePartition = U_FS; }
-		#endif
+        DEBUGOTA("Update start: %s\r\n", filename.c_str());
+        DEBUGOTA("Max free sketch space: %u\r\n", maxSketchSpace);
+        DEBUGOTA("New sketch size: %u\r\n", _updateFileSize);
 
-		if (typeOTAfile == FILE_TYPE_FIRMWARE) 	{ updatePartition = U_FLASH; }
-
-
-		if (!Update.begin(_updateFileSize, updatePartition)) {	//start with max available size
-#ifdef DEBUG_OTA
-			Update.printError(DEBUGOTASER);
+        if (_browserFileMD5 != NULL && _browserFileMD5 != "") {
+            Update.setMD5(_browserFileMD5.c_str());
+            DEBUGOTA("Hash from browser: %s\r\n", _browserFileMD5.c_str());
+        } else {
+            values = "OTA Update error no MD5 hash!";
+            DEBUGOTA("%s\n", values.c_str());
+            request->send(500, "text/plain", values);
+            errorOccurred = true;
+            return;
+        }
+        
+#if defined(ESP32)
+        if (typeOTAfile == FILE_TYPE_FILESYSTEM) { updatePartition = U_SPIFFS; }
+#elif defined(ESP8266)
+        if (typeOTAfile == FILE_TYPE_FILESYSTEM) { updatePartition = U_FS; }
 #endif
-			Update.end();
-			values += "OTA Update error at begin" ;
-			request->send(500, "text/plain", values);
-			return ;
-		}
-	}
-	// Get upload file, continue if not start
-	totalSize += len;
-	//percernt formula
-	uint16_t percentLoaded = (totalSize * 100) /  _updateFileSize ;
-	if (  (percentLoaded % 5) == 0  && (percentLoaded != percentLoadedPrev)) {
-		percentLoadedPrev = percentLoaded;
-		DEBUGOTA("Uploaded: %d bytes  %u %%\r\n", totalSize, percentLoaded);
-	}
 
-	size_t written = Update.write(data, len);
-	if (written != len) {
-		values += "OTA Update error data load! len = " + (String)len + " written = "+ (String)written + " totalSize ="+ (String)totalSize +" \r\n";
-		DEBUGOTA(values.c_str());
-		request->send(500, "text/plain", values);
-		return ;
-	}
-	if (final) {  // UPLOAD_FILE_END
-		String updateHash;
-		DEBUGOTA("Applying update...");
-		if (Update.end(true)) { //true to set the size to the current progress
-			updateHash = Update.md5String();
-			DEBUGOTA("Upload finished. Calculated MD5: %s\r\n", updateHash.c_str());
-			DEBUGOTA("Update Success: %u\nRebooting...\r\n", request->contentLength());
-		} else {
-			updateHash = Update.md5String();
-			DEBUGOTA("Upload failed. Calculated MD5: %s\r\n", updateHash.c_str());
+        if (typeOTAfile == FILE_TYPE_FIRMWARE) { updatePartition = U_FLASH; }
 
+        if (!Update.begin(_updateFileSize, updatePartition)) {
 #ifdef DEBUG_OTA
-			Update.printError(DEBUGOTASER);
+            Update.printError(DEBUGOTASER);
 #endif
-		}
-	}
+            Update.end();
+            values = "OTA Update error at begin";
+            DEBUGOTA("%s\n", values.c_str());
+            request->send(500, "text/plain", values);
+            errorOccurred = true;
+            return;
+        }
+    }
+    
+    // Если уже была ошибка - просто игнорируем остальные данные
+    if (errorOccurred) {
+        return;
+    }
+    
+    // Get upload file, continue if not start
+    totalSize += len;
+    
+    // percent formula
+    uint16_t percentLoaded = (totalSize * 100) / _updateFileSize;
+    if ((percentLoaded % 5) == 0 && (percentLoaded != percentLoadedPrev)) {
+        percentLoadedPrev = percentLoaded;
+        DEBUGOTA("Uploaded: %d bytes %u %%\r\n", totalSize, percentLoaded);
+    }
 
-	//delay(2); //TODO da fuck?!
+    size_t written = Update.write(data, len);
+    if (written != len) {
+        // Формируем сообщение об ошибке
+        values = "OTA Update error data load!";
+        DEBUGOTA("%s len=%d written=%d total=%d\n", 
+                 values.c_str(), len, written, totalSize);
+        
+        // Отправляем ошибку клиенту
+        request->send(500, "text/plain", values);
+        
+        // Помечаем, что была ошибка
+        errorOccurred = true;
+        
+        // Отменяем обновление
+        Update.abort();
+        
+        // Возвращаем ФС обратно
+        if (_fs) {
+            DEBUGOTA("Remounting filesystem...\n");
+#if defined(ESP32)
+            _fs->begin(true);  // ESP32 SPIFFS.begin(bool formatIfFailed)
+#elif defined(ESP8266)
+            _fs->begin();      // ESP8266 FS.begin()
+#endif
+        }
+        return;
+    }
+    
+    if (final) { // UPLOAD_FILE_END
+        if (errorOccurred) {
+            return; // уже была ошибка
+        }
+        
+        String updateHash;
+        DEBUGOTA("Applying update...");
+        if (Update.end(true)) { //true to set the size to the current progress
+            updateHash = Update.md5String();
+            DEBUGOTA("Upload finished. Calculated MD5: %s\r\n", updateHash.c_str());
+            DEBUGOTA("Update Success: %u\nRebooting...\r\n", request->contentLength());
+        } else {
+            updateHash = Update.md5String();
+            DEBUGOTA("Upload failed. Calculated MD5: %s\r\n", updateHash.c_str());
+#ifdef DEBUG_OTA
+            Update.printError(DEBUGOTASER);
+#endif
+            // При ошибке в конце тоже возвращаем ФС
+            if (_fs) {
+                DEBUGOTA("Remounting filesystem after failure...\n");
+#if defined(ESP32)
+                _fs->begin(true);
+#elif defined(ESP8266)
+                _fs->begin();
+#endif
+            }
+        }
+    }
 }
-
 
 
 void MODULE_OTA_CLASS::html_md5_set(AsyncWebServerRequest *request) {
