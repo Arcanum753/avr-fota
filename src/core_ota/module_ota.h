@@ -17,7 +17,7 @@
 #define OTA_STR_FIRMWARE                    "FIRMWARE"
 #define OTA_STR_UNSUPPORTED                 "UNSUPPORTED"
 #define OTA_STR_NAMEMATCH                   "MATCHED"
-#define OTA_STR_NAMEDIFF                   "DIFFERENCE"
+#define OTA_STR_NAMEDIFF                    "UNMATCHED"
 
 
 // #define FILE_TYPE_UNKNOWN -1
@@ -79,7 +79,8 @@ protected:
     uint32_t _updateFileSize = 0;
     String _updateFileName = "";
 
-
+private:
+    bool isValidFilename(const String& filename);
     bool ConfigureOTA( String _hostname, String _password) ;
     uint16_t percentLoadedPrev ;
     uint32_t maxSketchSpace   ;

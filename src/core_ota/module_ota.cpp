@@ -138,11 +138,17 @@ void MODULE_OTA_CLASS::uploadUpdateFile(AsyncWebServerRequest *request, String f
 		//Update.runAsync(true);
 		uint32_t maxSketchSpace = ESP.getSketchSize();
 
-		if (typeOTAfile == FILE_TYPE_UNSUPPORTED || updatePartition == 1) {
+		if (typeOTAfile == FILE_TYPE_UNSUPPORTED ) {
 			values += "OTA Update error UNSUPPORTED file!" ;
 			request->send(500, "text/plain", values);
 			return ;
 		}
+		if (!isValidFilename(filename)) {
+            DEBUGOTA("Invalid filename in upload\n");
+            request->send(500, "text/plain", "Invalid filename");
+            return;
+        }
+
 		
 		DEBUGOTA("Update start: %s\r\n", filename.c_str());
 		DEBUGOTA("Max free scketch space: %u\r\n", maxSketchSpace);
@@ -159,7 +165,7 @@ void MODULE_OTA_CLASS::uploadUpdateFile(AsyncWebServerRequest *request, String f
 		#if defined(ESP32)
 		if (typeOTAfile == FILE_TYPE_FILESYSTEM) 	{ updatePartition = U_SPIFFS; }
 		#elif defined(ESP8266)
-		if (typeOTAfile == FILESYSTEM) 	{ updatePartition = U_FS; }
+		if (typeOTAfile == FILE_TYPE_FILESYSTEM) 	{ updatePartition = U_FS; }
 		#endif
 
 		if (typeOTAfile == FILE_TYPE_FIRMWARE) 	{ updatePartition = U_FLASH; }
@@ -186,7 +192,7 @@ void MODULE_OTA_CLASS::uploadUpdateFile(AsyncWebServerRequest *request, String f
 
 	size_t written = Update.write(data, len);
 	if (written != len) {
-		values += "OTA Update error data load! len = " + (String)len + "written = "+ (String)written + "totalSize ="+ (String)totalSize +" \r\n";
+		values += "OTA Update error data load! len = " + (String)len + " written = "+ (String)written + " totalSize ="+ (String)totalSize +" \r\n";
 		DEBUGOTA(values.c_str());
 		request->send(500, "text/plain", values);
 		return ;
@@ -209,63 +215,6 @@ void MODULE_OTA_CLASS::uploadUpdateFile(AsyncWebServerRequest *request, String f
 	}
 
 	//delay(2); //TODO da fuck?!
-}
-
-
-void MODULE_OTA_CLASS::html_filename_check(AsyncWebServerRequest *request) {
-	DEBUGOTA(__FUNCTION__);	DEBUGOTA("\r\n");
-	String values = "";
-	String updateOKstr = "";
-	String updateFiletype = "";
-	String updateFileMatcheD = "";
-	
-	updateFiletype = OTA_STR_UNSUPPORTED;	
-	updateFileMatcheD = OTA_STR_NAMEDIFF;	
-	
- 	fileCompareResult result;
-	fileNameCheck(_updateFileName, &result);
-	
-	
-	if (result.fileType == FILE_TYPE_UNSUPPORTED)	{	updateFiletype = OTA_STR_UNSUPPORTED;	}
-	if (result.fileType == FILE_TYPE_FIRMWARE) 		{	updateFiletype = OTA_STR_FIRMWARE;	}
-	if (result.fileType == FILE_TYPE_FILESYSTEM)	{	updateFiletype = OTA_STR_FILESYSTEM;	}
-	if (result.nameMatch == 1) 						{updateFileMatcheD = OTA_STR_NAMEMATCH;	}
-
-	bool updateOK = maxSketchSpace < freeSketchSpace;
-	if (updateOK == true) {	updateOKstr = "OK" ; } 
-	else {	updateOKstr = "ERROR" ;	}
-
-	DEBUGOTA("\t updStatus: %s\r\n", updateOKstr);
-	DEBUGOTA("\t FreeSketchSpace: %d\r\n", freeSketchSpace);
-	DEBUGOTA("\t MaxSketchSpace: %d\r\n", maxSketchSpace);
-	DEBUGOTA("\t UpdateFiletype: %d\r\n", updateFiletype);
-
-	DEBUGOTA("\t pdSizeFree: %d\r\n", freeSketchSpace);
-	DEBUGOTA("\t updSizeMax: %d\r\n", maxSketchSpace);
-
-	DEBUGOTA("\t updVerDiffName: %s %d %d %d %d\r\n"
-		,updateFileMatcheD
-		,result.majorDiff	
-		,result.coreDiff	
-		,result.moduleDiff	
-		,result.buildDiff	
-	);
-
-	
-	values += "updStatus|"			+ updateOKstr 				+ "|div\n";
-	values += "updSizeFree|" 		+ (String)freeSketchSpace 	+ "|div\n";
-	values += "updSizeMax|" 		+ (String)maxSketchSpace  	+ "|div\n";
-	values += "updFileType|" 		+ updateFiletype		  	+ "|div\n";
-	
-	values += "updVerDiffName|" 	+ updateFileMatcheD		  		+ "|div\n";
-	values += "updVerDiffMaj|"	 	+ (String)result.majorDiff		+ "|div\n";
-	values += "updVerDiffCore|"		+ (String)result.coreDiff		+ "|div\n";
-	values += "updVerDiffMod|" 		+ (String)result.moduleDiff		+ "|div\n";
-	values += "updVerDiffBuild|" 	+ (String)result.buildDiff		+ "|div\n";
-	
-
-
-	request->send(200, "text/plain", values);
 }
 
 
@@ -300,6 +249,76 @@ void MODULE_OTA_CLASS::html_md5_set(AsyncWebServerRequest *request) {
 }
 
 
+void MODULE_OTA_CLASS::html_filename_check(AsyncWebServerRequest *request) {
+	DEBUGOTA(__FUNCTION__);	DEBUGOTA("\r\n");
+	String values = "";
+	String updateOKstr = "";
+	String updateFiletype = "";
+	String updateFileMatcheD = "";
+	
+	updateFiletype = OTA_STR_UNSUPPORTED;	
+	updateFileMatcheD = OTA_STR_NAMEDIFF;	
+	
+
+	 if (_updateFileName.length() == 0 || !isValidFilename(_updateFileName)) {
+		 updateOKstr = "ERROR" ;
+		 values += "updStatus|"			+ updateOKstr 				+ "|div\n";
+		 request->send(200, "text/plain", values);
+		return;  	
+	}
+
+ 	fileCompareResult result;
+	fileNameCheck(_updateFileName, &result);
+	
+	
+	if (result.fileType == FILE_TYPE_UNSUPPORTED)	{	updateFiletype = OTA_STR_UNSUPPORTED;	}
+	if (result.fileType == FILE_TYPE_FIRMWARE) 		{	updateFiletype = OTA_STR_FIRMWARE;	}
+	if (result.fileType == FILE_TYPE_FILESYSTEM)	{	updateFiletype = OTA_STR_FILESYSTEM;	}
+	if (result.nameMatch == 1) 						{updateFileMatcheD = OTA_STR_NAMEMATCH;	}
+
+	bool updateOK = maxSketchSpace < freeSketchSpace;
+	if (updateOK == true) {	updateOKstr = "OK" ; } 
+	else {	updateOKstr = "ERROR" ;	}
+
+
+	DEBUGOTA("\t _updateFileName: %s\r\n", _updateFileName.c_str());
+	DEBUGOTA("\t updStatus: %s\r\n", updateOKstr);
+	DEBUGOTA("\t FreeSketchSpace: %d\r\n", freeSketchSpace);
+	DEBUGOTA("\t MaxSketchSpace: %d\r\n", maxSketchSpace);
+	DEBUGOTA("\t UpdateFiletype: %d\r\n", updateFiletype);
+
+	DEBUGOTA("\t pdSizeFree: %d\r\n", freeSketchSpace);
+	DEBUGOTA("\t updSizeMax: %d\r\n", maxSketchSpace);
+
+	DEBUGOTA("\t updVerDiffName: %s %d %d %d %d\r\n"
+		,updateFileMatcheD
+		,result.majorDiff	
+		,result.coreDiff	
+		,result.moduleDiff	
+		,result.buildDiff	
+	);
+
+	
+	values += "updStatus|"			+ updateOKstr 				+ "|div\n";
+	values += "updFileType|" 		+ updateFiletype		  	+ "|div\n";
+	values += "updSizeFree|" 		+ (String)freeSketchSpace 	+ "|div\n";
+	values += "updSizeMax|" 		+ (String)maxSketchSpace  	+ "|div\n";
+	
+	values += "updVerDiffName|" 	+ updateFileMatcheD		  		+ "|div\n";
+	values += "updVerDiffMaj|"	 	+ (String)result.majorDiff		+ "|div\n";
+	values += "updVerDiffCore|"		+ (String)result.coreDiff		+ "|div\n";
+	values += "updVerDiffMod|" 		+ (String)result.moduleDiff		+ "|div\n";
+	values += "updVerDiffBuild|" 	+ (String)result.buildDiff		+ "|div\n";
+	
+
+
+	request->send(200, "text/plain", values);
+}
+
+
+
+
+
 void MODULE_OTA_CLASS::updateFileExecute (AsyncWebServerRequest *request) {
 	DEBUGOTA(__FUNCTION__);	DEBUGOTA("\r\n");
 	AsyncWebServerResponse *response = request->beginResponse(200, "text/html", 
@@ -324,8 +343,19 @@ int8_t MODULE_OTA_CLASS::fileNameCheck (String filename, fileCompareResult* resu
     result->moduleDiff = 0;
     result->buildDiff = 0;
     result->fileType = FILE_TYPE_UNSUPPORTED;
+	
     
-    if (filename.length() == 0) { DEBUGOTA("\t len0 "); return _ret;  	}
+    if (filename.length() == 0) { return _ret;  	}
+
+	String cleanFilename = "";
+    for (int i = 0; i < filename.length(); i++) {
+        char c = filename.charAt(i);
+        if (c >= 32 && c <= 126) { // только печатные ASCII
+            cleanFilename += c;
+        }
+    }
+    filename = cleanFilename;
+
     // Определяем тип файла
     if (filename.endsWith(".bin")) {
         if (filename.indexOf("_fs-") > 0) {
@@ -337,10 +367,9 @@ int8_t MODULE_OTA_CLASS::fileNameCheck (String filename, fileCompareResult* resu
         }
     }
     
-    // 2. Проверяем имя сборки
+    // Проверяем имя сборки
     if (filename.startsWith(BUILD_ENV) == false) {
         // Имя не совпало - выходим, но тип уже определён
-		DEBUGOTA("\t sw ");
         return _ret;
     }
     
@@ -351,12 +380,11 @@ int8_t MODULE_OTA_CLASS::fileNameCheck (String filename, fileCompareResult* resu
     } else if (result->fileType == FILE_TYPE_FIRMWARE) {	
         separator = String(BUILD_ENV) + "-"; 
     } else {	
-		DEBUGOTA("\t sep ");
         return _ret;  // неизвестный тип файла
     }
     
     // Проверяем наличие разделителя
-    if (!filename.startsWith(separator)) { DEBUGOTA("\t sw2 ");	return _ret;   }
+    if (!filename.startsWith(separator)) {	return _ret;   }
     
     // Имя совпало (прошло все проверки)
     result->nameMatch = 1;
@@ -366,7 +394,7 @@ int8_t MODULE_OTA_CLASS::fileNameCheck (String filename, fileCompareResult* resu
     
     // Отрезаем .bin в конце
     int binPos = versionPart.lastIndexOf(".bin");
-    if (binPos <= 0) { DEBUGOTA("\t binPos "); return  _ret; }
+    if (binPos <= 0) {  return  _ret; }
     
     String versionStr = versionPart.substring(0, binPos);
     
@@ -376,7 +404,6 @@ int8_t MODULE_OTA_CLASS::fileNameCheck (String filename, fileCompareResult* resu
     int thirdDot = versionStr.indexOf('.', secondDot + 1);
     
     if (firstDot < 0 || secondDot < 0 || thirdDot < 0) {
-		DEBUGOTA("\t fst ");
         return _ret;  // неверный формат
     }
     
@@ -397,7 +424,7 @@ int8_t MODULE_OTA_CLASS::fileNameCheck (String filename, fileCompareResult* resu
     int fileModule = moduleStr.toInt();
     int fileBuild = buildStr.toInt();
     
-    // Вычисляем разницы - ИСПРАВЛЕНО: используем правильные имена макросов
+    // Вычисляем разницe 
     result->majorDiff = fileMajor - VERSION_MAJOR;
     result->coreDiff = fileCore - VERSION_CORE;
     result->moduleDiff = fileModule - VERSION_MODULE;
@@ -417,7 +444,21 @@ int8_t MODULE_OTA_CLASS::fileNameCheck (String filename, fileCompareResult* resu
 
 
 
-
+bool MODULE_OTA_CLASS::isValidFilename(const String& filename) {
+    if (filename.length() == 0 || filename.length() > 100) return false;
+    
+    for (int i = 0; i < filename.length(); i++) {
+        char c = filename.charAt(i);
+        // Разрешаем только буквы, цифры, точки, дефисы, подчёркивания
+        if (!((c >= 'a' && c <= 'z') || 
+              (c >= 'A' && c <= 'Z') || 
+              (c >= '0' && c <= '9') || 
+              c == '.' || c == '-' || c == '_')) {
+            return false;
+        }
+    }
+    return true;
+}
 
 
 

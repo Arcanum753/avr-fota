@@ -32,7 +32,14 @@
                      <span id="updVerDiffMod"> </span><br>
                      <span id="updVerDiffBuild"> </span><br>
                 </td>
-            <tr><td> <input id="updateButton" type='submit'   value='Update ESP chip firmware.' > </td> </tr>
+            <tr><td> 
+                <input id="updateButton" type='submit' value='Update ESP chip firmware.' disabled>
+                <br>
+                <label>
+                    <input type="checkbox" id="ignoreCheck" onchange="updateButtonState()">
+                    Ignore validation and force upload
+                </label>
+            </td> </tr>
             </tr>
             
         </table>
@@ -56,6 +63,13 @@
                   running = false,
                   ua = navigator.userAgent.toLowerCase();
 
+        // Сохраняем последние результаты проверки
+        let lastCheckResult = {
+            canUpdate: false,
+            fileType: "UNSUPPORTED",
+            buttonText: ""
+        };
+
         function summd5() {
             input = document.getElementById("fileName");
             if (running) { return; }
@@ -63,33 +77,56 @@
                 console.error('Please select a file');
                 return;
             }
+            
             var fileReader = new FileReader(),
-                    file = input.files[0],
-                    time;
+                file = input.files[0],
+                time;
+            
             fileReader.onload = function (e) {
                 running = false;
                 if (file.size != e.target.result.length) {
-                    console.error('ERROR:Browser reported success but could not read the file until the end');
+                    console.error('ERROR: Browser reported success but could not read the file until the end');
                 } else {
                     md5hash = SparkMD5.hashBinary(e.target.result);
                     console.info('Finished loading!');
-                    console.info('Computed hash: ' + md5hash); // compute hash
+                    console.info('Computed hash: ' + md5hash);
                     console.info('Total time: ' + (new Date().getTime() - time) + 'ms');
                     
                     document.getElementById('md5row').hidden = false;
-                    
                     document.getElementById('clientHash').innerHTML = md5hash;
                     document.getElementById('fileSize').innerHTML = file.size;
                     document.getElementById('fileNameLoaded').innerHTML = file.name;
                     
-                    setValues('/setmd5?md5=' + md5hash + '&size=' + file.size + '&name=' + file.name);
-                    setTimeout(fileChechInfoGet, 250);
+                    // Отправляем данные через XHR GET
+                    const xhr = new XMLHttpRequest();
+                    const url = '/update/setmd5?md5=' + encodeURIComponent(md5hash) + 
+                                '&size=' + file.size + 
+                                '&name=' + encodeURIComponent(file.name);
+                    
+                    xhr.open('GET', url, true);
+                    
+                    xhr.onload = function() {
+                        if (xhr.status == 200) {
+                            console.info('MD5 data sent successfully');
+                            setTimeout(fileChechInfoGet, 250);
+                        } else {
+                            console.error('Error sending MD5 data: ' + xhr.status);
+                        }
+                    };
+                    
+                    xhr.onerror = function() {
+                        console.error('Network error sending MD5 data');
+                    };
+                    
+                    xhr.send();
                 }
             };
+            
             fileReader.onerror = function () {
                 running = false;
                 console.error('ERROR: FileReader onerror was triggered, maybe the browser aborted due to high memory usage');
             };
+            
             running = true;
             console.info('Starting normal test (' + file.name + ')');
             time = new Date().getTime();
@@ -99,6 +136,7 @@
         function fileChechInfoGet() {
             const _button = document.getElementById('updateButton');
             const _versionDiff = document.getElementById('VersionDiff');
+            const ignoreCheck = document.getElementById('ignoreCheck');
 
             // Получаем ссылки на все элементы отображения
             const updStatus = document.getElementById('updStatus');
@@ -171,7 +209,7 @@
                 updVerDiffMod.innerHTML = "Module diff: " + formatDiff(moduleDiff);
                 updVerDiffBuild.innerHTML = "Build diff: " + formatDiff(buildDiff);
                 
-                // Определяем, можно ли обновляться
+                // Определяем, можно ли обновляться по результатам проверки
                 let canUpdate = true;
                 let buttonText = "";
                 
@@ -194,10 +232,31 @@
                     }
                 }
                 
-                // Активируем/деактивируем кнопку
-                _button.disabled = !canUpdate;
-                _button.value = buttonText;
+                // Сохраняем результаты проверки
+                lastCheckResult = {
+                    canUpdate: canUpdate,
+                    fileType: fileType,
+                    buttonText: buttonText
+                };
+                
+                // Обновляем состояние кнопки с учётом чекбокса
+                updateButtonState();
             });
+        }
+
+        function updateButtonState() {
+            const _button = document.getElementById('updateButton');
+            const ignoreCheck = document.getElementById('ignoreCheck');
+            
+            if (ignoreCheck.checked) {
+                // Чекбокс отмечен - игнорируем проверки
+                _button.disabled = false;
+                _button.value = "Upload (forced)";
+            } else {
+                // Чекбокс не отмечен - используем результаты проверки
+                _button.disabled = !lastCheckResult.canUpdate;
+                _button.value = lastCheckResult.buttonText || "Update ESP chip firmware.";
+            }
         }
 
         function formatDiff(diff) {
