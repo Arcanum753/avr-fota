@@ -5,7 +5,7 @@
 
 #include "main.h"
 
-#ifdef DEBUG_WIFI
+#ifdef DEBUGLOG_WIFI
 #define DEBUGLOGWIFI(...) DEBUGLOG(__VA_ARGS__)
 #else
 #define DEBUGLOGWIFI(...)

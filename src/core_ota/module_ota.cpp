@@ -234,7 +234,12 @@ void MODULE_OTA_CLASS::html_fileuploadProgress(AsyncWebServerRequest *request) {
         request->send(500, "text/plain", values);
         errorOccurred = true;
         responseSent = true;  
+        #if defined(ESP32)
         Update.abort();
+        #endif
+        #if defined(ESP8266)
+            Update.end();
+        #endif
         if (_fs) {
             DEBUGOTA("Remounting filesystem...\n");
 #if defined(ESP32)
