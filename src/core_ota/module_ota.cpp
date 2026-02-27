@@ -150,7 +150,7 @@ void MODULE_OTA_CLASS::html_fileuploadProgress(AsyncWebServerRequest *request) {
         responseSent = false;  
         totalSize = 0;
         uint32_t maxSketchSpace = ESP.getSketchSize();
-
+        uint32_t freeSketchSpace = ESP.getFreeSketchSpace();
         if (typeOTAfile == FILE_TYPE_UNSUPPORTED) {
             values = "OTA Update error UNSUPPORTED file!";
             DEBUGOTA("%s\n", values.c_str());
@@ -165,6 +165,16 @@ void MODULE_OTA_CLASS::html_fileuploadProgress(AsyncWebServerRequest *request) {
             request->send(500, "text/plain", values);
             errorOccurred = true;
             return;
+        }
+
+        if (typeOTAfile == FILE_TYPE_FIRMWARE) {
+            if (_updateFileSize > freeSketchSpace) {
+                values = "Firmware too large for available space!";
+                DEBUGOTA("%s %u > %u\n", values.c_str(), _updateFileSize, freeSketchSpace);
+                request->send(500, "text/plain", values);
+                errorOccurred = true;
+                return;
+            }
         }
 
         DEBUGOTA("Update start: %s\r\n", filename.c_str());
@@ -324,12 +334,16 @@ void MODULE_OTA_CLASS::html_filename_check(AsyncWebServerRequest *request) {
 	fileNameCheck(_updateFileName, &result);
 	
 	
-	if (result.fileType == FILE_TYPE_UNSUPPORTED)	{	updateFiletype = OTA_STR_UNSUPPORTED;	}
+	if (result.fileType == FILE_TYPE_UNSUPPORTED)	{ 	updateFiletype = OTA_STR_UNSUPPORTED;	}
 	if (result.fileType == FILE_TYPE_FIRMWARE) 		{	updateFiletype = OTA_STR_FIRMWARE;	}
 	if (result.fileType == FILE_TYPE_FILESYSTEM)	{	updateFiletype = OTA_STR_FILESYSTEM;	}
 	if (result.nameMatch == 1) 						{updateFileMatcheD = OTA_STR_NAMEMATCH;	}
-
-	bool updateOK = maxSketchSpace < freeSketchSpace;
+    typeOTAfile = result.fileType;
+	bool updateOK = true;
+    
+    if (typeOTAfile == FILE_TYPE_FIRMWARE) {
+        updateOK = maxSketchSpace < freeSketchSpace;
+    }
 	if (updateOK == true) {	updateOKstr = "OK" ; } 
 	else {	updateOKstr = "ERROR" ;	}
 
