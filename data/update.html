@@ -11,7 +11,8 @@
     <markup>./page_head.html</markup>
     <h2 class="title" style="background: #7D8EE2; padding: 8px;"> ESP chip firmware &amp filesystem self update page</h2>
     <hr>
-    <form method='POST' action='/update' enctype='multipart/form-data'>
+    <!-- Убрали action и method из формы, теперь отправка через XHR -->
+    <form id="uploadForm" enctype='multipart/form-data'>
         <table align = "center"> 
             <tr><td> <input id="fileName" type='file' name='update' onchange="summd5()" > </td> </tr>
             <tr><td id="md5row" >
@@ -33,7 +34,7 @@
                      <span id="updVerDiffBuild"> </span><br>
                 </td>
             <tr><td> 
-                <input id="updateButton" type='submit' value='Update ESP chip firmware.' disabled>
+                <input id="updateButton" type='button' value='Update ESP chip firmware.' disabled onclick="uploadFile()">
                 <br>
                 <label>
                     <input type="checkbox" id="ignoreCheck" onchange="updateButtonState()">
@@ -97,7 +98,7 @@
                     document.getElementById('fileSize').innerHTML = file.size;
                     document.getElementById('fileNameLoaded').innerHTML = file.name;
                     
-                    // Отправляем данные через XHR GET
+                    // Отправляем данные через XHR GET (оставили как есть)
                     const xhr = new XMLHttpRequest();
                     const url = '/update/setmd5?md5=' + encodeURIComponent(md5hash) + 
                                 '&size=' + file.size + 
@@ -263,6 +264,57 @@
             if (diff > 0) return "+" + diff + " (newer)";
             if (diff < 0) return diff + " (older)";
             return "0 (same)";
+        }
+
+        // Новая функция для отправки файла через XHR
+        function uploadFile() {
+            const fileInput = document.getElementById('fileName');
+            const file = fileInput.files[0];
+            
+            if (!file) {
+                alert('Please select a file first');
+                return;
+            }
+            
+            const formData = new FormData();
+            formData.append('update', file);
+            
+            const xhr = new XMLHttpRequest();
+            
+            // Отслеживаем прогресс загрузки
+            xhr.upload.addEventListener('progress', function(e) {
+                if (e.lengthComputable) {
+                    const percentComplete = (e.loaded / e.total) * 100;
+                    console.log(`Upload progress: ${Math.round(percentComplete)}%`);
+                    // Здесь можно обновлять прогресс-бар
+                }
+            });
+            
+            xhr.open('POST', '/update', true);
+            
+            xhr.onload = function() {
+                if (xhr.status === 200) {
+                    console.log('Upload successful');
+                    // Проверяем, не является ли ответ HTML с редиректом
+                    if (xhr.responseText.includes('refresh') || xhr.responseText.includes('Restarting')) {
+                        setTimeout(() => {
+                            window.location.href = '/index.html';
+                        }, 3000);
+                    } else {
+                        alert('Update successful! Device will restart.');
+                    }
+                } else {
+                    console.error('Upload failed:', xhr.status);
+                    alert('Upload failed with status: ' + xhr.status);
+                }
+            };
+            
+            xhr.onerror = function() {
+                console.error('Network error during upload');
+                alert('Network error during upload');
+            };
+            
+            xhr.send(formData);
         }
 
     </script>
