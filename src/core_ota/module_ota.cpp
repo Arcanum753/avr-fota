@@ -105,7 +105,10 @@ bool  MODULE_OTA_CLASS::ConfigureOTA( String _hostname, String _password) {
 			 html_filename_check(request);
 		});
 
-	
+		ESPHTTPServer.on("/update/progress", [this](AsyncWebServerRequest *request) {
+			 if (!ESPHTTPServer.checkAuth(request)) {	return request->requestAuthentication(); };
+			 html_fileuploadProgress(request);
+		});
 
 
 
@@ -120,27 +123,32 @@ bool  MODULE_OTA_CLASS::ConfigureOTA( String _hostname, String _password) {
 			 updateFileExecute (request);
 		}, [this](AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final) {
 			// uploading
-			 uploadUpdateFile(request, filename, index, data, len, final);
+			 html_uploadUpdateFile(request, filename, index, data, len, final);
 		});
 	//update.html ^^^
 
  }
 
- void MODULE_OTA_CLASS::uploadUpdateFile(AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final) {
+void MODULE_OTA_CLASS::html_fileuploadProgress(AsyncWebServerRequest *request) {
+	DEBUGOTA(__FUNCTION__);	DEBUGOTA("\r\n");
+	String values = "";
+    values += "percent|"    + (String)fileUpadedpercent + "|div\n";
+    request->send(200, "text/plain", values);
+}
+
+ void MODULE_OTA_CLASS::html_uploadUpdateFile(AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final) {
     String	values = "";
     // handler for the file upload, get's the sketch bytes, and writes
     // them through the Update object
     static long totalSize = 0;
     static bool errorOccurred = false;  // Флаг для отслеживания ошибки
+    static bool responseSent = false;  
     int updatePartition = 1;
     
     if (index == 0) { //UPLOAD_FILE_START
-        // Сбрасываем флаг ошибки при старте новой загрузки
         errorOccurred = false;
+        responseSent = false;  
         totalSize = 0;
-        
-        if (_fs) { _fs->end(); } //SPIFFS.end();
-        
         uint32_t maxSketchSpace = ESP.getSketchSize();
 
         if (typeOTAfile == FILE_TYPE_UNSUPPORTED) {
@@ -181,8 +189,8 @@ bool  MODULE_OTA_CLASS::ConfigureOTA( String _hostname, String _password) {
 #endif
 
         if (typeOTAfile == FILE_TYPE_FIRMWARE) { updatePartition = U_FLASH; }
-
-        if (!Update.begin(_updateFileSize, updatePartition)) {
+        if (_fs) { _fs->end(); } //SPIFFS.end();
+        if (Update.begin(_updateFileSize, updatePartition) == false ) {
 #ifdef DEBUG_OTA
             Update.printError(DEBUGOTASER);
 #endif
@@ -195,16 +203,15 @@ bool  MODULE_OTA_CLASS::ConfigureOTA( String _hostname, String _password) {
         }
     }
     
-    // Если уже была ошибка - просто игнорируем остальные данные
-    if (errorOccurred) {
-        return;
-    }
+    if (errorOccurred)  { return; }
+    if (responseSent)   { return; }
     
     // Get upload file, continue if not start
     totalSize += len;
     
     // percent formula
     uint16_t percentLoaded = (totalSize * 100) / _updateFileSize;
+    fileUpadedpercent = percentLoaded;
     if ((percentLoaded % 5) == 0 && (percentLoaded != percentLoadedPrev)) {
         percentLoadedPrev = percentLoaded;
         DEBUGOTA("Uploaded: %d bytes %u %%\r\n", totalSize, percentLoaded);
@@ -212,21 +219,12 @@ bool  MODULE_OTA_CLASS::ConfigureOTA( String _hostname, String _password) {
 
     size_t written = Update.write(data, len);
     if (written != len) {
-        // Формируем сообщение об ошибке
         values = "OTA Update error data load!";
-        DEBUGOTA("%s len=%d written=%d total=%d\n", 
-                 values.c_str(), len, written, totalSize);
-        
-        // Отправляем ошибку клиенту
+        DEBUGOTA("%s len=%d written=%d total=%d\n", values.c_str(), len, written, totalSize);
         request->send(500, "text/plain", values);
-        
-        // Помечаем, что была ошибка
         errorOccurred = true;
-        
-        // Отменяем обновление
+        responseSent = true;  
         Update.abort();
-        
-        // Возвращаем ФС обратно
         if (_fs) {
             DEBUGOTA("Remounting filesystem...\n");
 #if defined(ESP32)
@@ -249,6 +247,11 @@ bool  MODULE_OTA_CLASS::ConfigureOTA( String _hostname, String _password) {
             updateHash = Update.md5String();
             DEBUGOTA("Upload finished. Calculated MD5: %s\r\n", updateHash.c_str());
             DEBUGOTA("Update Success: %u\nRebooting...\r\n", request->contentLength());
+
+            values = "Update successful! Device will restart in 3 seconds..."; 
+            request->send(200, "text/plain", values);  
+            responseSent = true;  
+            delay(100); 
         } else {
             updateHash = Update.md5String();
             DEBUGOTA("Upload failed. Calculated MD5: %s\r\n", updateHash.c_str());

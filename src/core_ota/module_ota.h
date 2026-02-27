@@ -62,18 +62,22 @@ public:
     void webInit() ;
     void loopHandler() ;
     
-    void html_filename_check(AsyncWebServerRequest *request);
+    void html_md5_set(AsyncWebServerRequest *request);
     
+    void html_filename_check(AsyncWebServerRequest *request);
     int8_t fileNameCheck (String filename, fileCompareResult* result) ;
     
-    void html_md5_set(AsyncWebServerRequest *request);
-    void uploadUpdateFile(AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final);
+
+    void html_uploadUpdateFile(AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final);
+    void html_fileuploadProgress(AsyncWebServerRequest *request);
+    
     void updateFileExecute (AsyncWebServerRequest *request) ;
 
 
 
 
 protected: 
+    uint16_t fileUpadedpercent = 0;
     bool  dumb = false;
     String _browserFileMD5 = "";
     uint32_t _updateFileSize = 0;

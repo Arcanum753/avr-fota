@@ -21,7 +21,7 @@
 #endif
 
 #if defined(PROGTYPE_ISP)
-#include "module_prog_isp.h"
+#include "module_prog_isp/module_prog_isp.h"
 #endif
 
 #if defined(PROGTYPE_SWD)

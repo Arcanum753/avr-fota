@@ -1,5 +1,5 @@
 // Auto-generated version file
-// Generated: 2026-02-27 11:11:40
+// Generated: 2026-02-27 16:03:02
 
 #ifndef VERSION_H
 #define VERSION_H
@@ -24,40 +24,40 @@
 #define PROJECT_VERSION_MAJOR 0
 
 // Версия ядра (из version_counter.txt)
-#define CORE_VERSION 4
-#define CORE_VERSION_RAW 4
-#define CORE_VERSION_STR "4"
+#define CORE_VERSION 5
+#define CORE_VERSION_RAW 5
+#define CORE_VERSION_STR "5"
 
 // Версия модуля (из module_counter.txt в папке модуля)
-#define MODULE_VERSION 6
-#define MODULE_VERSION_RAW 6
-#define MODULE_VERSION_STR "6"
+#define MODULE_VERSION 2
+#define MODULE_VERSION_RAW 2
+#define MODULE_VERSION_STR "2"
 
 // Номер сборки (из module_counter.txt в папке модуля)
-#define BUILD_NUMBER 102
-#define BUILD_NUMBER_RAW 102
-#define BUILD_NUMBER_STR "102"
+#define BUILD_NUMBER 31
+#define BUILD_NUMBER_RAW 31
+#define BUILD_NUMBER_STR "31"
 
 // Полная версия в формате MAJOR.CORE.MODULE.BUILD
-#define FIRMWARE_VERSION "0.4.6.102"
-#define FIRMWARE_VERSION_STR "0.4.6.102"
+#define FIRMWARE_VERSION "0.5.2.31"
+#define FIRMWARE_VERSION_STR "0.5.2.31"
 
 // ============================================================
 // КОМПОНЕНТЫ ВЕРСИИ ДЛЯ МАТЕМАТИЧЕСКИХ ОПЕРАЦИЙ
 // ============================================================
 
 #define VERSION_MAJOR 0
-#define VERSION_CORE 4
-#define VERSION_MODULE 6
-#define VERSION_BUILD 102
+#define VERSION_CORE 5
+#define VERSION_MODULE 2
+#define VERSION_BUILD 31
 
 // ============================================================
 // GIT ИНФОРМАЦИЯ
 // ============================================================
 
 #define GIT_BRANCH "fix-core-ota"
-#define GIT_COMMIT "8f63bdd"
-#define GIT_COMMIT_FULL "8f63bddd26c17a661db3f9c3b83f2c00638545b4"
+#define GIT_COMMIT "18d9670"
+#define GIT_COMMIT_FULL "18d9670332d749ef58872f0fb924552b746394f6"
 #define GIT_TAG "no-tag"
 #define GIT_DIRTY true
 
@@ -65,18 +65,18 @@
 // ИНФОРМАЦИЯ О СБОРКЕ
 // ============================================================
 
-#define BUILD_ENV "esp32-swd"
-#define BUILD_TIME "2026-02-27 11:11:40"
-#define BUILD_TIMESTAMP "20260227_111140"
+#define BUILD_ENV "esp32-isp"
+#define BUILD_TIME "2026-02-27 16:03:02"
+#define BUILD_TIMESTAMP "20260227_160302"
 #define BUILD_DATE "20260227"
 #define BUILD_YEAR 2026
 #define BUILD_MONTH 02
 #define BUILD_DAY 27
-#define BUILD_HOUR 11
-#define BUILD_MINUTE 11
-#define BUILD_SECOND 40
+#define BUILD_HOUR 16
+#define BUILD_MINUTE 03
+#define BUILD_SECOND 02
 
-#define ACTIVE_MODULE "module_prog_swd"
+#define ACTIVE_MODULE "module_prog_isp"
 
 // ============================================================
 // УДОБНЫЕ МАКРОСЫ ДЛЯ ПРОВЕРОК
