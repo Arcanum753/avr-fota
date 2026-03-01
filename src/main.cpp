@@ -18,6 +18,7 @@
 #include "core_ota/module_ota.h"
 
 
+#include "version.h"
 
 
 // pin used for entering setup mode
@@ -88,33 +89,28 @@ void printGitInfo() {
     Serial.println("*** ESP32 FIRMWARE INFORMATION ***");
 	#endif
     #if defined(ESP8266)
-    Serial.println(" ESP8266 FIRMWARE INFORMATION");
+    Serial.println("*** ESP8266 FIRMWARE INFORMATION ***");
 	#endif
+    Serial.println(" Chip firmware ver: " + String(FIRMWARE_VERSION));
     
     Serial.println("Git Branch: " + String(GIT_BRANCH));
     Serial.println("Git Commit: " + String(GIT_COMMIT));
-    
-    Serial.println(" Chip firmware ver: " + String(VERSION_APP));
+    Serial.println("Build Date and time: " + String(BUILD_TIME));
+
+    Serial.println("Envoirement: " + String(BUILD_ENV));
+    Serial.println("Module: " + String(ACTIVE_MODULE));
     
     #if defined(ESP32)
     Serial.println(" ESP32 WebPages version: "+ String(VERSION_WEB));
 	#endif
     #if defined(ESP8266)
     Serial.println(" ESP8266 WebPages version: "+ String(VERSION_WEB));
-	#endif
-       
-    Serial.print(" Build Date and time: ");
-    Serial.print(__DATE__);
-    Serial.print(" ");
-    Serial.println(__TIME__);
-    
+	#endif  
     
 }
-// // Эти макросы будут определены из Python-скрипта
-// #ifndef GIT_BRANCH
-// #define GIT_BRANCH "unknown"
-// #endif
 
-// #ifndef GIT_HASH
-// #define GIT_HASH "unknown"
-// #endif
+
+// #define BUILD_ENV "esp32-swd"
+
+
+// #define ACTIVE_MODULE "module_prog_swd"

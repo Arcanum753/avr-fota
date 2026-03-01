@@ -225,7 +225,8 @@ else:
     for fs_name in FS_BIN_NAMES:
         env.AddPostAction(f"$BUILD_DIR/{fs_name}", copy_fs_image)
     
-    # Устанавливаем переменную окружения перед запуском buildfs
+    # Сохраняем путь к подготовленной папке в переменной окружения
+    os.environ["PLATFORMIO_FS_DATA_DIR"] = str(target_web_dir)
     os.environ["PLATFORMIO_FS_BUILD"] = "1"
     
     print("\nTriggering filesystem build...")
@@ -234,11 +235,15 @@ else:
     
     def run_fs_build():
         time.sleep(1)
-        # Передаём переменную окружения дочернему процессу
+        # Передаём переменные окружения дочернему процессу
         subprocess.run(
             ["pio", "run", "--target", "buildfs", "--environment", env_name],
             cwd=project_dir,
-            env={**os.environ, "PLATFORMIO_FS_BUILD": "1"}
+            env={
+                **os.environ, 
+                "PLATFORMIO_FS_BUILD": "1",
+                "PLATFORMIO_FS_DATA_DIR": str(target_web_dir)
+            }
         )
     
     import threading

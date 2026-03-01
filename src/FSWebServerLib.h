@@ -17,6 +17,12 @@
 #include <FS.h>
 #endif
 
+#ifdef DEBUG_LED
+#define DEBUGLOGLED(...) Serial.printf(__VA_ARGS__)
+#else
+#define DEBUGLOGLED(...)
+#endif
+
 
 #include <Ticker.h>
 
@@ -39,19 +45,10 @@
 
 #define AVRSERVERSTR_UPLOADBEGIN "upload begin\n"
 
-#define OTA_FILENAME_FIRMWARE           "firmware.bin"
-#define OTA_FILENAME_FILESYSTEM         "spiffs.bin"
-#define OTA_FIRMWARE                    "FIRMWARE"
-#define OTA_FILESYSTEM                  "FILESYSTEM"
-#define OTA_UNSUPPORTED                 "UNSUPPORTED"
+
 
 #define HTML_INDEX  "index.html"
 
-enum UpdateTypeFile {
-        UNSUPPORTED = 0
-    ,   FIRMWARE
-    ,   FILESYSTEM
-  };
 
 typedef struct {
     String deviceName;
@@ -161,11 +158,11 @@ public:
 
     
 private:
-    void send_system_version_html(AsyncWebServerRequest *request);
+    void html_version_info(AsyncWebServerRequest *request);
     void send_device_values_html(AsyncWebServerRequest *request);
     void send_project_configuration_values_html(AsyncWebServerRequest *request);
 
-    void send_information_values_html(AsyncWebServerRequest *request);
+    void html_send_chipinfo(AsyncWebServerRequest *request);
     void get_system_configuration_html(AsyncWebServerRequest *request);
     void get_project_configuration_html(AsyncWebServerRequest *request);
     void send_wwwauth_configuration_values_html(AsyncWebServerRequest *request);

@@ -1,6 +1,8 @@
 #include <Arduino.h>
 #include <ArduinoJson.h>
 
+#include "version.h"
+
 #ifdef ESP32
 #include <ESPmDNS.h>
 #include <AsyncUDP.h>
@@ -221,7 +223,7 @@ String UDPBROADCAST_CLASS::udpJsonGet()   {
 	jsonDoc["udpPowerOn"] 		= _udpConfig.udpPowerOn;
 	jsonDoc["keyword"] 			= _udpConfig.keyword;
 
-	jsonDoc["espVer"]	 		= VERSION_APP;
+	jsonDoc["espVer"]	 		= FIRMWARE_VERSION;
 	jsonDoc["webVer"] 			= VERSION_WEB;
 	jsonDoc["buildDate"] 		= __DATE__;
 	jsonDoc["buildTime"] 		= __TIME__;

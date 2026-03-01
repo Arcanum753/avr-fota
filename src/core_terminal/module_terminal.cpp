@@ -72,7 +72,10 @@ void TerminalLoop() {    term.readSerial(); }
 void TerminalHelp (void)    {   term.helpShow();    }
 void TerminalEcho (void)    {   term.EchoOnOff();  }
 // Terminals shows actual net info
-void InfoShow() {    ESPHTTPServer.serialShowInfo();  }
+void InfoShow() {    
+    printGitInfo();
+    ESPHTTPServer.serialShowInfo();  
+}
 // show list of files at SPIFS
 void DirsShow() {
     // Serial.printf("list of files: \n\r %s \n\r", avrprog.fsDirListGet().c_str());

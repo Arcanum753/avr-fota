@@ -8,14 +8,14 @@
 
 
 #ifdef DEBUG_ISP
-#define DEBUGLOGISP(...) DEBUGLOG(__VA_ARGS__)
+#define DEBUGLOGISP(...)  Serial.printf(__VA_ARGS__)
 #else
 #define DEBUGLOGISP(...)
 #endif
 
 
 #if (DEBUG_SHOWHEXBUF > 1)
-#define DEBUGLOGISPBUF(...) DEBUGLOG(__VA_ARGS__)
+#define DEBUGLOGISPBUF(...)  Serial.printf(__VA_ARGS__)
 #else
 #define DEBUGLOGISPBUF(...)
 #endif

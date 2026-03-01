@@ -5,7 +5,7 @@
 #include <FS.h>
 #endif
 
-
+#include"version.h"
 #include <ArduinoJson.h>
 #include <ArduinoOTA.h>
 #include "FSWebServerLib.h"
@@ -46,16 +46,12 @@ bool  MODULE_OTA_CLASS::ConfigureOTA( String _hostname, String _password) {
 	if (_hostname != "") {
 	ArduinoOTA.setHostname(_hostname.c_str());
 	DEBUGOTA("OTA password set %s\n", _password.c_str());
-	} else {
-		return false;
-	}
+	} else { return false;	}
 
 	if (_password != "") {
 		ArduinoOTA.setPassword(_password.c_str());
 		DEBUGOTA("OTA password set %s\n", _password.c_str());
-	} else {
-		return false;
-	}	
+	} else { return false;	}	
 
 
 #ifndef RELEASE
@@ -73,7 +69,7 @@ bool  MODULE_OTA_CLASS::ConfigureOTA( String _hostname, String _password) {
 		DEBUGOTA("\r\n ArduinoOTA end. \r\n");
 	}, _fs));
 	ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
-		DEBUGOTA("\t OTA Progress: %u%% \r\n", (progress / (total / 100)));
+		DEBUGOTA("\t OTA update progress: %u%% \r\n", (progress / (total / 100)));
 	});
 	ArduinoOTA.onError([](ota_error_t error) {
 		DEBUGOTA("Error[%u]: ", error);
@@ -99,14 +95,23 @@ bool  MODULE_OTA_CLASS::ConfigureOTA( String _hostname, String _password) {
  void MODULE_OTA_CLASS::webInit() {
 	DEBUGOTA(__FUNCTION__);	DEBUGOTA("\r\n");
 	//update.html vvv
-		ESPHTTPServer.on("/update/updatepossible", [this](AsyncWebServerRequest *request) {
-			 if (!ESPHTTPServer.checkAuth(request)) {	return request->requestAuthentication(); };
-			 send_update_firmware_values_html(request);
+		ESPHTTPServer.on("/update/setmd5", [this](AsyncWebServerRequest *request) {
+			if (!ESPHTTPServer.checkAuth(request)) {	return request->requestAuthentication(); };
+			html_md5_set(request);
 		});
-		ESPHTTPServer.on("/setmd5", [this](AsyncWebServerRequest *request) {
+
+		ESPHTTPServer.on("/update/firmwarefilecheck", [this](AsyncWebServerRequest *request) {
 			 if (!ESPHTTPServer.checkAuth(request)) {	return request->requestAuthentication(); };
-			 setUpdateMD5(request);
+			 html_filename_check(request);
 		});
+
+		ESPHTTPServer.on("/update/progress", [this](AsyncWebServerRequest *request) {
+			 if (!ESPHTTPServer.checkAuth(request)) {	return request->requestAuthentication(); };
+			 html_fileuploadProgress(request);
+		});
+
+
+
 		ESPHTTPServer.on("/update", HTTP_GET, [this](AsyncWebServerRequest *request) {
 			if (!ESPHTTPServer.checkAuth(request)) {	return request->requestAuthentication(); };
 			if (!ESPHTTPServer.handleFileRead("/update.html", request)) { request->send(404, "text/plain", "FileNotFound");	}
@@ -118,138 +123,176 @@ bool  MODULE_OTA_CLASS::ConfigureOTA( String _hostname, String _password) {
 			 updateFileExecute (request);
 		}, [this](AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final) {
 			// uploading
-			 uploadUpdateFile(request, filename, index, data, len, final);
+			 html_uploadUpdateFile(request, filename, index, data, len, final);
 		});
 	//update.html ^^^
 
  }
 
-
-
- 
-void MODULE_OTA_CLASS::uploadUpdateFile(AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final) {
-	String	values = "";
-	// handler for the file upload, get's the sketch bytes, and writes
-	// them through the Update object
-	static long totalSize = 0;
-	int updatePartition = 1;
-	if (!index) { //UPLOAD_FILE_START
-		if (_fs) { _fs->end(); }//SPIFFS.end();
-		//Update.runAsync(true);
-		uint32_t maxSketchSpace = ESP.getSketchSize();
-		DEBUGOTA("Update start: %s\r\n", filename.c_str());
-		DEBUGOTA("Max free scketch space: %u\r\n", maxSketchSpace);
-		DEBUGOTA("New scketch size: %u\r\n", _updateFileSize);
-		if (_browserFileMD5 != NULL && _browserFileMD5 != "") {
-			Update.setMD5(_browserFileMD5.c_str());
-			DEBUGOTA("Hash from btowser: %s\r\n", _browserFileMD5.c_str());
-		} else {
-			values += "OTA Update error no md4 hash!" ;
-			request->send(500, "text/plain", values);
-			return ;
-		}
-		#if defined(ESP32)
-		if (typeOTAfile == FILESYSTEM) 	{ updatePartition = U_SPIFFS; }
-		#elif defined(ESP8266)
-		if (typeOTAfile == FILESYSTEM) 	{ updatePartition = U_FS; }
-		#endif
-
-		if (typeOTAfile == FIRMWARE) 	{ updatePartition = U_FLASH; }
-
-		if (!Update.begin(_updateFileSize, updatePartition)) {	//start with max available size
-#ifdef DEBUG_OTA
-			Update.printError(DEBUGOTASER);
-#endif
-			Update.end();
-			values += "OTA Update error at begin" ;
-			request->send(500, "text/plain", values);
-			return ;
-		}
-		if (typeOTAfile == UNSUPPORTED || updatePartition == 1) {
-			values += "OTA Update error UNSUPPORTED file!" ;
-			request->send(500, "text/plain", values);
-			return ;
-		}
-	}
-	// Get upload file, continue if not start
-	totalSize += len;
-	//percernt formula
-	uint16_t percentLoaded = (totalSize * 100) /  _updateFileSize ;
-	if (  (percentLoaded % 5) == 0  && (percentLoaded != percentLoadedPrev)) {
-		percentLoadedPrev = percentLoaded;
-		DEBUGOTA("Uploaded: %d bytes  %u %%\r\n", totalSize, percentLoaded);
-	}
-
-	size_t written = Update.write(data, len);
-	if (written != len) {
-		values += "OTA Update error data load! len = " + (String)len + "written = "+ (String)written + "totalSize ="+ (String)totalSize +" \r\n";
-		DEBUGOTA(values.c_str());
-		request->send(500, "text/plain", values);
-		return ;
-	}
-	if (final) {  // UPLOAD_FILE_END
-		String updateHash;
-		DEBUGOTA("Applying update...");
-		if (Update.end(true)) { //true to set the size to the current progress
-			updateHash = Update.md5String();
-			DEBUGOTA("Upload finished. Calculated MD5: %s\r\n", updateHash.c_str());
-			DEBUGOTA("Update Success: %u\nRebooting...\r\n", request->contentLength());
-		} else {
-			updateHash = Update.md5String();
-			DEBUGOTA("Upload failed. Calculated MD5: %s\r\n", updateHash.c_str());
-
-#ifdef DEBUG_OTA
-			Update.printError(DEBUGOTASER);
-#endif
-		}
-	}
-
-	//delay(2); //TODO da fuck?!
-}
-
-
-
-
-
-
-void MODULE_OTA_CLASS::send_update_firmware_values_html(AsyncWebServerRequest *request) {
+void MODULE_OTA_CLASS::html_fileuploadProgress(AsyncWebServerRequest *request) {
 	DEBUGOTA(__FUNCTION__);	DEBUGOTA("\r\n");
 	String values = "";
-	String updateOKstr = "";
-	String updateFiletype = "";
-	typeOTAfile = UNSUPPORTED;
-
-	if (_updateFileName == OTA_FILENAME_FIRMWARE) {
-		typeOTAfile = FIRMWARE;
-		updateFiletype = OTA_FIRMWARE;
-	}
-	if (_updateFileName == OTA_FILENAME_FILESYSTEM) {
-		typeOTAfile = FILESYSTEM;
-		updateFiletype = OTA_FILESYSTEM;
-	}
-	if (typeOTAfile == UNSUPPORTED) {	updateFiletype = OTA_UNSUPPORTED;	}
-
-	bool updateOK = maxSketchSpace < freeSketchSpace;
-	if (updateOK == true) {	updateOKstr = "OK" ; } 
-		else {	updateOKstr = "ERROR" ;	}
-
-	DEBUGOTA("--updateOK: %s\r\n", updateOKstr);
-	DEBUGOTA("--FreeSketchSpace: %d\r\n", freeSketchSpace);
-	DEBUGOTA("--MaxSketchSpace: %d\r\n", maxSketchSpace);
-	DEBUGOTA("--UpdateFiletype: %d\r\n", updateFiletype);
-
-	values += "upd|" 			+ updateOKstr 				+ "|div\n";
-	values += "updSizeFree|" 	+ (String)freeSketchSpace 	+ "|div\n";
-	values += "updSizeMax|" 	+ (String)maxSketchSpace  	+ "|div\n";
-	values += "updFileType|" 	+ updateFiletype		  	+ "|div\n";
-	request->send(200, "text/plain", values);
+    values += "percent|"    + (String)fileUpadedpercent + "|div\n";
+    request->send(200, "text/plain", values);
 }
 
-void MODULE_OTA_CLASS::setUpdateMD5(AsyncWebServerRequest *request) {
+ void MODULE_OTA_CLASS::html_uploadUpdateFile(AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final) {
+    String	values = "";
+    // handler for the file upload, get's the sketch bytes, and writes
+    // them through the Update object
+    static long totalSize = 0;
+    static bool errorOccurred = false;  // Флаг для отслеживания ошибки
+    static bool responseSent = false;  
+    int updatePartition = 1;
+    
+    if (index == 0) { //UPLOAD_FILE_START
+        errorOccurred = false;
+        responseSent = false;  
+        totalSize = 0;
+        uint32_t maxSketchSpace = ESP.getSketchSize();
+        uint32_t freeSketchSpace = ESP.getFreeSketchSpace();
+        if (typeOTAfile == FILE_TYPE_UNSUPPORTED) {
+            values = "OTA Update error UNSUPPORTED file!";
+            DEBUGOTA("%s\n", values.c_str());
+            request->send(500, "text/plain", values);
+            errorOccurred = true;
+            return;
+        }
+        
+        if (!isValidFilename(filename)) {
+            values = "Invalid filename";
+            DEBUGOTA("%s: %s\n", values.c_str(), filename.c_str());
+            request->send(500, "text/plain", values);
+            errorOccurred = true;
+            return;
+        }
+
+        if (typeOTAfile == FILE_TYPE_FIRMWARE) {
+            if (_updateFileSize > freeSketchSpace) {
+                values = "Firmware too large for available space!";
+                DEBUGOTA("%s %u > %u\n", values.c_str(), _updateFileSize, freeSketchSpace);
+                request->send(500, "text/plain", values);
+                errorOccurred = true;
+                return;
+            }
+        }
+
+        DEBUGOTA("Update start: %s\r\n", filename.c_str());
+        DEBUGOTA("Max free sketch space: %u\r\n", maxSketchSpace);
+        DEBUGOTA("New sketch size: %u\r\n", _updateFileSize);
+
+        if (_browserFileMD5 != NULL && _browserFileMD5 != "") {
+            Update.setMD5(_browserFileMD5.c_str());
+            DEBUGOTA("Hash from browser: %s\r\n", _browserFileMD5.c_str());
+        } else {
+            values = "OTA Update error no MD5 hash!";
+            DEBUGOTA("%s\n", values.c_str());
+            request->send(500, "text/plain", values);
+            errorOccurred = true;
+            return;
+        }
+        
+#if defined(ESP32)
+        if (typeOTAfile == FILE_TYPE_FILESYSTEM) { updatePartition = U_SPIFFS; }
+#elif defined(ESP8266)
+        if (typeOTAfile == FILE_TYPE_FILESYSTEM) { updatePartition = U_FS; }
+#endif
+
+        if (typeOTAfile == FILE_TYPE_FIRMWARE) { updatePartition = U_FLASH; }
+        if (_fs) { _fs->end(); } //SPIFFS.end();
+        if (Update.begin(_updateFileSize, updatePartition) == false ) {
+#ifdef DEBUG_OTA
+            Update.printError(DEBUGOTASER);
+#endif
+            Update.end();
+            values = "OTA Update error at begin";
+            DEBUGOTA("%s\n", values.c_str());
+            request->send(500, "text/plain", values);
+            errorOccurred = true;
+            return;
+        }
+    }
+    
+    if (errorOccurred)  { return; }
+    if (responseSent)   { return; }
+    
+    // Get upload file, continue if not start
+    totalSize += len;
+    
+    // percent formula
+    uint16_t percentLoaded = (totalSize * 100) / _updateFileSize;
+    fileUpadedpercent = percentLoaded;
+    if ((percentLoaded % 5) == 0 && (percentLoaded != percentLoadedPrev)) {
+        percentLoadedPrev = percentLoaded;
+        DEBUGOTA("Uploaded: %d bytes %u %%\r\n", totalSize, percentLoaded);
+    }
+
+    size_t written = Update.write(data, len);
+    if (written != len) {
+        values = "OTA Update error data load!";
+        DEBUGOTA("%s len=%d written=%d total=%d\n", values.c_str(), len, written, totalSize);
+        request->send(500, "text/plain", values);
+        errorOccurred = true;
+        responseSent = true;  
+        #if defined(ESP32)
+        Update.abort();
+        #endif
+        #if defined(ESP8266)
+            Update.end();
+        #endif
+        if (_fs) {
+            DEBUGOTA("Remounting filesystem...\n");
+#if defined(ESP32)
+            _fs->begin(true);  // ESP32 SPIFFS.begin(bool formatIfFailed)
+#elif defined(ESP8266)
+            _fs->begin();      // ESP8266 FS.begin()
+#endif
+        }
+        return;
+    }
+    
+    if (final) { // UPLOAD_FILE_END
+        if (errorOccurred) {
+            return; // уже была ошибка
+        }
+        
+        String updateHash;
+        DEBUGOTA("Applying update...");
+        if (Update.end(true)) { //true to set the size to the current progress
+            updateHash = Update.md5String();
+            DEBUGOTA("Upload finished. Calculated MD5: %s\r\n", updateHash.c_str());
+            DEBUGOTA("Update Success: %u\nRebooting...\r\n", request->contentLength());
+
+            values = "Update successful! Device will restart in 3 seconds..."; 
+            request->send(200, "text/plain", values);  
+            responseSent = true;  
+            delay(100); 
+        } else {
+            updateHash = Update.md5String();
+            DEBUGOTA("Upload failed. Calculated MD5: %s\r\n", updateHash.c_str());
+#ifdef DEBUG_OTA
+            Update.printError(DEBUGOTASER);
+#endif
+            // При ошибке в конце тоже возвращаем ФС
+            if (_fs) {
+                DEBUGOTA("Remounting filesystem after failure...\n");
+#if defined(ESP32)
+                _fs->begin(true);
+#elif defined(ESP8266)
+                _fs->begin();
+#endif
+            }
+        }
+    }
+}
+
+
+void MODULE_OTA_CLASS::html_md5_set(AsyncWebServerRequest *request) {
 	DEBUGOTA(__FUNCTION__);	DEBUGOTA("\r\n");
 	_browserFileMD5 = "";
+	
 	DEBUGOTA("Arg number: %d\r\n", request->args());
-	if (request->args() > 0)  {// Read hash
+	if (request->args() > 0)  {	// Read hash
 		for (uint8_t i = 0; i < request->args(); i++) {
 			DEBUGOTA("Arg %s: %s\r\n", request->argName(i).c_str(), request->arg(i).c_str());
 			if (request->argName(i) == "md5") {
@@ -274,25 +317,220 @@ void MODULE_OTA_CLASS::setUpdateMD5(AsyncWebServerRequest *request) {
 }
 
 
-void MODULE_OTA_CLASS::updateFileExecute (AsyncWebServerRequest *request) {
+void MODULE_OTA_CLASS::html_filename_check(AsyncWebServerRequest *request) {
 	DEBUGOTA(__FUNCTION__);	DEBUGOTA("\r\n");
-	AsyncWebServerResponse *response = request->beginResponse(200, "text/html", (Update.hasError()) ? "FAIL" : "<META http-equiv=\"refresh\" content=\"15;URL=/update\">Update correct. Restarting...");
-	response->addHeader("Connection", "close");
-	response->addHeader("Access-Control-Allow-Origin", "*");
-	request->send(response);
-	if (this->_fs) { this->_fs->end(); }//this->_fs->end();
-	ESPHTTPServer.restart_esp();
+	String values = "";
+	String updateOKstr = "";
+	String updateFiletype = "";
+	String updateFileMatcheD = "";
+	
+	updateFiletype = OTA_STR_UNSUPPORTED;	
+	updateFileMatcheD = OTA_STR_NAMEDIFF;	
+	
 
+	 if (_updateFileName.length() == 0 || !isValidFilename(_updateFileName)) {
+		 updateOKstr = "ERROR" ;
+		 values += "updStatus|"			+ updateOKstr 				+ "|div\n";
+		 request->send(200, "text/plain", values);
+		return;  	
+	}
+
+ 	fileCompareResult result;
+	fileNameCheck(_updateFileName, &result);
+	
+	
+	if (result.fileType == FILE_TYPE_UNSUPPORTED)	{ 	updateFiletype = OTA_STR_UNSUPPORTED;	}
+	if (result.fileType == FILE_TYPE_FIRMWARE) 		{	updateFiletype = OTA_STR_FIRMWARE;	}
+	if (result.fileType == FILE_TYPE_FILESYSTEM)	{	updateFiletype = OTA_STR_FILESYSTEM;	}
+	if (result.nameMatch == 1) 						{updateFileMatcheD = OTA_STR_NAMEMATCH;	}
+    typeOTAfile = result.fileType;
+	bool updateOK = true;
+    
+    if (typeOTAfile == FILE_TYPE_FIRMWARE) {
+        updateOK = maxSketchSpace < freeSketchSpace;
+    }
+	if (updateOK == true) {	updateOKstr = "OK" ; } 
+	else {	updateOKstr = "ERROR" ;	}
+
+
+	DEBUGOTA("\t _updateFileName: %s\r\n", _updateFileName.c_str());
+	DEBUGOTA("\t updStatus: %s\r\n", updateOKstr);
+	DEBUGOTA("\t FreeSketchSpace: %d\r\n", freeSketchSpace);
+	DEBUGOTA("\t MaxSketchSpace: %d\r\n", maxSketchSpace);
+	DEBUGOTA("\t UpdateFiletype: %d\r\n", updateFiletype);
+
+	DEBUGOTA("\t pdSizeFree: %d\r\n", freeSketchSpace);
+	DEBUGOTA("\t updSizeMax: %d\r\n", maxSketchSpace);
+
+	DEBUGOTA("\t updVerDiffName: %s %d %d %d %d\r\n"
+		,updateFileMatcheD
+		,result.majorDiff	
+		,result.coreDiff	
+		,result.moduleDiff	
+		,result.buildDiff	
+	);
+
+	
+	values += "updStatus|"			+ updateOKstr 				+ "|div\n";
+	values += "updFileType|" 		+ updateFiletype		  	+ "|div\n";
+	values += "updSizeFree|" 		+ (String)freeSketchSpace 	+ "|div\n";
+	values += "updSizeMax|" 		+ (String)maxSketchSpace  	+ "|div\n";
+	
+	values += "updVerDiffName|" 	+ updateFileMatcheD		  		+ "|div\n";
+	values += "updVerDiffMaj|"	 	+ (String)result.majorDiff		+ "|div\n";
+	values += "updVerDiffCore|"		+ (String)result.coreDiff		+ "|div\n";
+	values += "updVerDiffMod|" 		+ (String)result.moduleDiff		+ "|div\n";
+	values += "updVerDiffBuild|" 	+ (String)result.buildDiff		+ "|div\n";
+	
+
+
+	request->send(200, "text/plain", values);
 }
 
 
 
 
 
+void MODULE_OTA_CLASS::updateFileExecute (AsyncWebServerRequest *request) {
+	DEBUGOTA(__FUNCTION__);	DEBUGOTA("\r\n");
+	AsyncWebServerResponse *response = request->beginResponse(200, "text/html", 
+		(Update.hasError()) ? "FAIL" : "<META http-equiv=\"refresh\" content=\"15;URL=/update\">Update correct. Restarting..."
+	);
+	response->addHeader("Connection", "close");
+	response->addHeader("Access-Control-Allow-Origin", "*");
+	request->send(response);
+	if (this->_fs) { this->_fs->end(); } //this->_fs->end();
+	ESPHTTPServer.restart_esp();
+
+}
+
+
+int8_t MODULE_OTA_CLASS::fileNameCheck (String filename, fileCompareResult* result) {
+	DEBUGOTA(__FUNCTION__);	DEBUGOTA("\r\n");
+	int8_t _ret = -1;
+    // Инициализируем результат значениями по умолчанию
+    result->nameMatch = -1;
+    result->majorDiff = 0;
+    result->coreDiff = 0;
+    result->moduleDiff = 0;
+    result->buildDiff = 0;
+    result->fileType = FILE_TYPE_UNSUPPORTED;
+	
+    
+    if (filename.length() == 0) { return _ret;  	}
+
+	String cleanFilename = "";
+    for (int i = 0; i < filename.length(); i++) {
+        char c = filename.charAt(i);
+        if (c >= 32 && c <= 126) { // только печатные ASCII
+            cleanFilename += c;
+        }
+    }
+    filename = cleanFilename;
+
+    // Определяем тип файла
+    if (filename.endsWith(".bin")) {
+        if (filename.indexOf("_fs-") > 0) {
+            result->fileType = FILE_TYPE_FILESYSTEM;
+        } else 
+		if (filename.indexOf("-") > 0) {
+            // Есть дефис и нет _fs (проверка на _fs не нужна, так как мы уже в else)
+            result->fileType = FILE_TYPE_FIRMWARE;
+        }
+    }
+    
+    // Проверяем имя сборки
+    if (filename.startsWith(BUILD_ENV) == false) {
+        // Имя не совпало - выходим, но тип уже определён
+        return _ret;
+    }
+    
+    // Определяем разделитель в зависимости от типа файла
+    String separator;
+    if (result->fileType == FILE_TYPE_FILESYSTEM) {	
+        separator = String(BUILD_ENV) + "_fs-"; 
+    } else if (result->fileType == FILE_TYPE_FIRMWARE) {	
+        separator = String(BUILD_ENV) + "-"; 
+    } else {	
+        return _ret;  // неизвестный тип файла
+    }
+    
+    // Проверяем наличие разделителя
+    if (!filename.startsWith(separator)) {	return _ret;   }
+    
+    // Имя совпало (прошло все проверки)
+    result->nameMatch = 1;
+    
+    // Извлекаем часть с версией
+    String versionPart = filename.substring(separator.length());
+    
+    // Отрезаем .bin в конце
+    int binPos = versionPart.lastIndexOf(".bin");
+    if (binPos <= 0) {  return  _ret; }
+    
+    String versionStr = versionPart.substring(0, binPos);
+    
+    // Разбираем версию из строки (формат X.YYY.ZZZ.WWWW)
+    int firstDot = versionStr.indexOf('.');
+    int secondDot = versionStr.indexOf('.', firstDot + 1);
+    int thirdDot = versionStr.indexOf('.', secondDot + 1);
+    
+    if (firstDot < 0 || secondDot < 0 || thirdDot < 0) {
+        return _ret;  // неверный формат
+    }
+    
+    // Извлекаем компоненты
+    String majorStr   = versionStr.substring(0, firstDot);
+    String coreStr    = versionStr.substring(firstDot + 1, secondDot);
+    String moduleStr  = versionStr.substring(secondDot + 1, thirdDot);
+    String buildStr   = versionStr.substring(thirdDot + 1);
+
+	DEBUGOTA("\t majorStr: %s ", majorStr);
+	DEBUGOTA("\t coreStr: %s ", coreStr);
+	DEBUGOTA("\t moduleStr: %s ", moduleStr);
+	DEBUGOTA("\t buildStr: %s\r\n", buildStr);
+    
+    // Преобразуем в числа
+    int fileMajor = majorStr.toInt();
+    int fileCore = coreStr.toInt();
+    int fileModule = moduleStr.toInt();
+    int fileBuild = buildStr.toInt();
+    
+    // Вычисляем разницe 
+    result->majorDiff = fileMajor - VERSION_MAJOR;
+    result->coreDiff = fileCore - VERSION_CORE;
+    result->moduleDiff = fileModule - VERSION_MODULE;
+    result->buildDiff = fileBuild - VERSION_BUILD;
+
+    // Проверяем, что версия файла НЕ СТАРШЕ текущей (все разницы >= 0)
+    if ((result->majorDiff >= 0) && 
+        (result->coreDiff >= 0) && 
+        (result->moduleDiff >= 0) && 
+        (result->buildDiff >= 0)) { 
+        _ret = 1; 
+    }
+
+    return _ret;
+}
 
 
 
 
+bool MODULE_OTA_CLASS::isValidFilename(const String& filename) {
+    if (filename.length() == 0 || filename.length() > 100) return false;
+    
+    for (int i = 0; i < filename.length(); i++) {
+        char c = filename.charAt(i);
+        // Разрешаем только буквы, цифры, точки, дефисы, подчёркивания
+        if (!((c >= 'a' && c <= 'z') || 
+              (c >= 'A' && c <= 'Z') || 
+              (c >= '0' && c <= '9') || 
+              c == '.' || c == '-' || c == '_')) {
+            return false;
+        }
+    }
+    return true;
+}
 
 
 
