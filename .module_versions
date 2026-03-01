@@ -1,0 +1,10 @@
+core_editor=2
+core_json=2
+core_ntp=3
+core_ota=3
+core_terminal=2
+core_wifi=6
+module_gpio=1
+module_prog_isp=5
+module_prog_swd=5
+module_udp=4

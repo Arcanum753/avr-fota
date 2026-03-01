@@ -14,20 +14,18 @@ Import("env")
 DEBUG = False  # Установите True для отладочного вывода
 
 # ========== ФОРМАТ ВЕРСИИ ==========
-# Формат: MAJOR.CORE.MODULE.BUILD
+# Формат: MAJOR.MINOR.DATE.BUILD
 MAJOR_DIGITS = 1     # количество цифр для major (0)
-CORE_DIGITS = 2      # количество цифр для core (015)
-MODULE_DIGITS = 2    # количество цифр для module (007)
-BUILD_DIGITS = 3     # количество цифр для build (1243)
+MINOR_DIGITS = 3     # количество цифр для minor (015)
+BUILD_DIGITS = 4     # количество цифр для build (1243)
 
 # Ведущие нули для отдельных компонентов
-CORE_LEADING_ZEROS = False      # добавлять ведущие нули к core
-MODULE_LEADING_ZEROS = False     # добавлять ведущие нули к module
-BUILD_LEADING_ZEROS = False      # добавлять ведущие нули к build
+MINOR_LEADING_ZEROS = True      # добавлять ведущие нули к minor
+BUILD_LEADING_ZEROS = True       # добавлять ведущие нули к build
 
 # ========== ФАЙЛЫ СЧЁТЧИКОВ ==========
-ROOT_COUNTER_FILE = "version_counter.txt"   # major и core в корне проекта
-MODULE_COUNTER_FILE = "module_counter.txt"  # module и build в папке модуля
+ROOT_COUNTER_FILE = "version_counter.txt"   # major и minor в корне проекта
+BUILD_COUNTER_FILE = "build_counter.txt"    # build счётчик (можно в корне или отдельно)
 HASH_STORAGE_FILE = ".version_hashes"       # файл для хранения git хэшей
 
 # ========== РЕЖИМЫ РАБОТЫ ==========
@@ -38,11 +36,13 @@ BUILD_INCREMENT_MODE = "auto"  # auto, always, never
 
 # ========== GIT ИНТЕГРАЦИЯ ==========
 ENABLE_GIT_INFO = True          # добавлять Git информацию в version.h
-TRACK_CORE_CHANGES = True       # отслеживать изменения в core для инкремента
-TRACK_MODULE_CHANGES = True     # отслеживать изменения в module для инкремента
+TRACK_MINOR_CHANGES = True      # отслеживать изменения в проекте для инкремента minor
 
 # ========== ЗАЩИТА ОТ ДВОЙНОГО ЗАПУСКА ==========
 ENABLE_DOUBLE_RUN_PROTECTION = True  # предотвращает множественный запуск при одной сборке
+
+# ========== ФОРМАТ ДАТЫ ==========
+DATE_FORMAT = "%Y%m%d%H%M"  # формат: yyyyMMddHHmm, например: 202503011430
 
 # ========== ФОРМАТ ВЫВОДА ==========
 SHOW_BUILD_INFO = True           # показывать информацию о сборке в консоль
@@ -127,53 +127,15 @@ def is_real_build():
     return False
 
 # ============================================================
-# ОПРЕДЕЛЕНИЕ МОДУЛЯ
-# ============================================================
-
-def get_module_name(env, src_dir):
-    """
-    Определяет активный модуль:
-    1. Сначала по src_filter (самый точный способ)
-    2. Если не нашли, по имени окружения (swd/isp/gpio)
-    """
-    # Способ 1: из src_filter
-    src_filter = env.subst("${SRC_FILTER}")
-    if not src_filter:
-        src_filter = env.subst("${platformio.src_filter}")
-    
-    match = re.search(r'\+<module_([^>/]+)/?>', src_filter)
-    if match:
-        module_name = f"module_{match.group(1)}"
-        if (src_dir / module_name).exists():
-            debug_print(f"Found module in src_filter: {module_name}")
-            return module_name
-        else:
-            debug_print(f"Warning: module {module_name} found in src_filter but directory missing")
-    
-    # Способ 2: по имени окружения
-    env_lower = env.subst("$PIOENV").lower()
-    parts = env_lower.split('-')
-    if len(parts) >= 2:
-        module_type = parts[-1]
-        for d in src_dir.iterdir():
-            if d.is_dir() and d.name.startswith("module_"):
-                if module_type in d.name.lower():
-                    debug_print(f"Found module by env name: {d.name}")
-                    return d.name
-    
-    debug_print("No module found for this environment")
-    return None
-
-# ============================================================
 # РАБОТА СО СЧЁТЧИКАМИ
 # ============================================================
 
 def read_root_counters(project_dir):
     """
-    Читает значения из version_counter.txt (major и core)
+    Читает значения из version_counter.txt (major и minor)
     """
     counter_file = project_dir / ROOT_COUNTER_FILE
-    counters = {"major": 0, "core": 0}
+    counters = {"major": 0, "minor": 0}
     
     if counter_file.exists():
         try:
@@ -184,7 +146,7 @@ def read_root_counters(project_dir):
                         key, value = line.split('=')
                         if key in counters:
                             counters[key] = int(value)
-            debug_print(f"Root counters: major={counters['major']}, core={counters['core']}")
+            debug_print(f"Root counters: major={counters['major']}, minor={counters['minor']}")
         except Exception as e:
             debug_print(f"Error reading root counter file: {e}")
     else:
@@ -192,57 +154,45 @@ def read_root_counters(project_dir):
     
     return counters
 
-def write_root_counters(project_dir, major, core):
-    """Записывает major и core в version_counter.txt"""
+def write_root_counters(project_dir, major, minor):
+    """Записывает major и minor в version_counter.txt"""
     counter_file = project_dir / ROOT_COUNTER_FILE
     try:
         with open(counter_file, 'w') as f:
             f.write(f"major={major}\n")
-            f.write(f"core={core}\n")
-        debug_print(f"Written root counters: major={major}, core={core}")
+            f.write(f"minor={minor}\n")
+        debug_print(f"Written root counters: major={major}, minor={minor}")
     except Exception as e:
         debug_print(f"Error writing root counter file: {e}")
 
-def read_module_counters(module_dir):
+def read_build_counter(project_dir):
     """
-    Читает значения из module_counter.txt (module и build)
+    Читает значение build счётчика
     """
-    counters = {"module": 0, "build": 0}
+    counter_file = project_dir / BUILD_COUNTER_FILE
+    build = 0
     
-    if not module_dir:
-        return counters
-    
-    counter_file = module_dir / MODULE_COUNTER_FILE
     if counter_file.exists():
         try:
             with open(counter_file, 'r') as f:
-                for line in f:
-                    line = line.strip()
-                    if '=' in line:
-                        key, value = line.split('=')
-                        if key in counters:
-                            counters[key] = int(value)
-            debug_print(f"Module counters: module={counters['module']}, build={counters['build']}")
+                build = int(f.read().strip())
+            debug_print(f"Build counter: {build}")
         except Exception as e:
-            debug_print(f"Error reading module counter file: {e}")
+            debug_print(f"Error reading build counter file: {e}")
     else:
-        debug_print(f"Module counter file not found: {counter_file}")
+        debug_print(f"Build counter file not found: {counter_file}")
     
-    return counters
+    return build
 
-def write_module_counters(module_dir, module_counter, build_counter):
-    """Записывает module и build в module_counter.txt"""
-    if not module_dir:
-        return
-    
-    counter_file = module_dir / MODULE_COUNTER_FILE
+def write_build_counter(project_dir, build):
+    """Записывает build счётчик"""
+    counter_file = project_dir / BUILD_COUNTER_FILE
     try:
         with open(counter_file, 'w') as f:
-            f.write(f"module={module_counter}\n")
-            f.write(f"build={build_counter}\n")
-        debug_print(f"Written module counters: module={module_counter}, build={build_counter}")
+            f.write(str(build))
+        debug_print(f"Written build counter: {build}")
     except Exception as e:
-        debug_print(f"Error writing module counter file: {e}")
+        debug_print(f"Error writing build counter file: {e}")
 
 # ============================================================
 # GIT ФУНКЦИИ ДЛЯ ОТСЛЕЖИВАНИЯ ИЗМЕНЕНИЙ
@@ -302,40 +252,21 @@ def store_hash(project_dir, key, hash_value):
     except Exception as e:
         debug_print(f"Error storing hash: {e}")
 
-def should_increment_core(project_dir, src_dir):
-    """Проверяет изменения в core-модулях"""
-    if not TRACK_CORE_CHANGES or not ENABLE_GIT_INFO:
+def should_increment_minor(project_dir, src_dir):
+    """
+    Проверяет изменения во всём проекте для инкремента minor.
+    Сравнивает хэш всего проекта с сохранённым.
+    """
+    if not TRACK_MINOR_CHANGES or not ENABLE_GIT_INFO:
         return False
     
-    core_dirs = [d.name for d in src_dir.iterdir() 
-                 if d.is_dir() and d.name.startswith("core_")]
-    
-    if not core_dirs:
-        return False
-    
-    any_changed = False
-    for core_dir in core_dirs:
-        current_hash = get_last_commit_hash(project_dir, f"src/{core_dir}")
-        stored_hash = get_stored_hash(project_dir, core_dir)
-        
-        if current_hash and current_hash != stored_hash:
-            debug_print(f"Core {core_dir} changed: {stored_hash} -> {current_hash}")
-            any_changed = True
-            store_hash(project_dir, core_dir, current_hash)
-    
-    return any_changed
-
-def should_increment_module(project_dir, module_dir, module_name):
-    """Проверяет изменения в модуле"""
-    if not TRACK_MODULE_CHANGES or not ENABLE_GIT_INFO:
-        return False
-    
-    current_hash = get_last_commit_hash(project_dir, f"src/{module_name}")
-    stored_hash = get_stored_hash(project_dir, module_name)
+    # Получаем хэш всего проекта (последний коммит)
+    current_hash = get_last_commit_hash(project_dir, ".")
+    stored_hash = get_stored_hash(project_dir, "project")
     
     if current_hash and current_hash != stored_hash:
-        debug_print(f"Module {module_name} changed: {stored_hash} -> {current_hash}")
-        store_hash(project_dir, module_name, current_hash)
+        debug_print(f"Project changed: {stored_hash} -> {current_hash}")
+        store_hash(project_dir, "project", current_hash)
         return True
     
     return False
@@ -443,14 +374,18 @@ def format_version_component(value, digits, leading_zeros):
     else:
         return str(value)
 
-def build_version_string(major, core, module, build):
-    """Собирает полную строку версии"""
+def get_date_string():
+    """Возвращает дату в заданном формате yyyyMMddHHmm"""
+    now = datetime.datetime.now()
+    return now.strftime(DATE_FORMAT)
+
+def build_version_string(major, minor, date_str, build):
+    """Собирает полную строку версии в формате MAJOR.MINOR.DATE.BUILD"""
     major_str = format_version_component(major, MAJOR_DIGITS, False)
-    core_str = format_version_component(core, CORE_DIGITS, CORE_LEADING_ZEROS)
-    module_str = format_version_component(module, MODULE_DIGITS, MODULE_LEADING_ZEROS)
+    minor_str = format_version_component(minor, MINOR_DIGITS, MINOR_LEADING_ZEROS)
     build_str = format_version_component(build, BUILD_DIGITS, BUILD_LEADING_ZEROS)
     
-    return f"{major_str}.{core_str}.{module_str}.{build_str}"
+    return f"{major_str}.{minor_str}.{date_str}.{build_str}"
 
 # ============================================================
 # ОСНОВНАЯ ФУНКЦИЯ
@@ -458,7 +393,7 @@ def build_version_string(major, core, module, build):
 
 def generate_version_header():
     """
-    Генерирует version.h с полной информацией о версии.
+    Генерирует version.h с полной информацией о версии в формате MAJOR.MINOR.DATE.BUILD.
     Инкрементирует счётчики только при реальной сборке.
     """
     
@@ -472,7 +407,7 @@ def generate_version_header():
     version_file = src_dir / "version.h"
     
     info_print(f"\n{'='*60}")
-    info_print(f"VERSION BUILDER for: {env_name}")
+    info_print(f"VERSION BUILDER (MAJOR.MINOR.DATE.BUILD) for: {env_name}")
     info_print(f"{'='*60}")
     
     # Определяем, реальная это сборка или нет
@@ -482,57 +417,45 @@ def generate_version_header():
     else:
         info_print("  Configuration only - no counters incremented")
     
-    # Определяем активный модуль
-    module_name = get_module_name(env, src_dir)
-    info_print(f"  Active module: {module_name if module_name else 'none'}")
-    
-    # Читаем корневые счётчики
+    # Читаем корневые счётчики (major и minor)
     root_counters = read_root_counters(project_dir)
     
-    # Читаем счётчики модуля
-    module_counters = {"module": 0, "build": 0}
-    module_dir = None
-    if module_name:
-        module_dir = src_dir / module_name
-        module_counters = read_module_counters(module_dir)
+    # Читаем build счётчик
+    build_counter = read_build_counter(project_dir)
     
     # Инкрементируем счётчики при реальной сборке
     if building:
-        inc_core = should_increment_core(project_dir, src_dir)
-        if inc_core:
-            root_counters["core"] += 1
-            info_print(f"  Core changed: incrementing to {root_counters['core']}")
+        inc_minor = should_increment_minor(project_dir, src_dir)
+        if inc_minor:
+            root_counters["minor"] += 1
+            info_print(f"  Minor changed: incrementing to {root_counters['minor']}")
         
-        if module_name:
-            inc_module = should_increment_module(project_dir, module_dir, module_name)
-            if inc_module:
-                module_counters["module"] += 1
-                info_print(f"  Module changed: incrementing to {module_counters['module']}")
+        build_counter += 1
+        info_print(f"  Build number: {build_counter}")
         
-        module_counters["build"] += 1
-        info_print(f"  Build number: {module_counters['build']}")
-        
-        write_root_counters(project_dir, root_counters["major"], root_counters["core"])
-        if module_dir:
-            write_module_counters(module_dir, module_counters["module"], module_counters["build"])
+        write_root_counters(project_dir, root_counters["major"], root_counters["minor"])
+        write_build_counter(project_dir, build_counter)
     else:
         info_print("  No counters incremented")
     
     # Получаем Git информацию
     git_info = get_git_info(project_dir)
     
+    # Получаем дату
+    date_str = get_date_string()
+    
     # Формируем полную версию
     full_version = build_version_string(
         root_counters['major'],
-        root_counters['core'],
-        module_counters['module'],
-        module_counters['build']
+        root_counters['minor'],
+        date_str,
+        build_counter
     )
     
     # Форматируем отдельные компоненты
-    core_str = format_version_component(root_counters['core'], CORE_DIGITS, CORE_LEADING_ZEROS)
-    module_str = format_version_component(module_counters['module'], MODULE_DIGITS, MODULE_LEADING_ZEROS)
-    build_str = format_version_component(module_counters['build'], BUILD_DIGITS, BUILD_LEADING_ZEROS)
+    major_str = format_version_component(root_counters['major'], MAJOR_DIGITS, False)
+    minor_str = format_version_component(root_counters['minor'], MINOR_DIGITS, MINOR_LEADING_ZEROS)
+    build_str = format_version_component(build_counter, BUILD_DIGITS, BUILD_LEADING_ZEROS)
     
     # Генерируем version.h
     content = f'''// Auto-generated version file
@@ -544,38 +467,41 @@ def generate_version_header():
 // ============================================================
 // НАСТРОЙКИ ФОРМАТИРОВАНИЯ (из скрипта сборки)
 // ============================================================
-// Формат: MAJOR.CORE.MODULE.BUILD
+// Формат: MAJOR.MINOR.DATE.BUILD
 // MAJOR_DIGITS = {MAJOR_DIGITS}
-// CORE_DIGITS = {CORE_DIGITS}
-// MODULE_DIGITS = {MODULE_DIGITS}
+// MINOR_DIGITS = {MINOR_DIGITS}
 // BUILD_DIGITS = {BUILD_DIGITS}
-// CORE_LEADING_ZEROS = {CORE_LEADING_ZEROS}
-// MODULE_LEADING_ZEROS = {MODULE_LEADING_ZEROS}
+// MINOR_LEADING_ZEROS = {MINOR_LEADING_ZEROS}
 // BUILD_LEADING_ZEROS = {BUILD_LEADING_ZEROS}
+// DATE_FORMAT = "{DATE_FORMAT}"
 
 // ============================================================
-// ВЕРСИЯ В ФОРМАТЕ MAJOR.CORE.MODULE.BUILD
+// ВЕРСИЯ В ФОРМАТЕ MAJOR.MINOR.DATE.BUILD
 // ============================================================
 
 // Глобальная версия проекта (из {ROOT_COUNTER_FILE})
 #define PROJECT_VERSION_MAJOR {root_counters['major']}
 
-// Версия ядра (из {ROOT_COUNTER_FILE})
-#define CORE_VERSION {root_counters['core']}
-#define CORE_VERSION_RAW {root_counters['core']}
-#define CORE_VERSION_STR "{core_str}"
+// Минорная версия (инкремент при каждом коммите)
+#define PROJECT_VERSION_MINOR {root_counters['minor']}
+#define PROJECT_VERSION_MINOR_RAW {root_counters['minor']}
+#define PROJECT_VERSION_MINOR_STR "{minor_str}"
 
-// Версия модуля (из {MODULE_COUNTER_FILE} в папке модуля)
-#define MODULE_VERSION {module_counters['module']}
-#define MODULE_VERSION_RAW {module_counters['module']}
-#define MODULE_VERSION_STR "{module_str}"
+// Дата и время сборки (yyyyMMddHHmm)
+#define BUILD_DATE_STR "{date_str}"
+#define BUILD_DATE_RAW {date_str}
+#define BUILD_DATE_YEAR {datetime.datetime.now().strftime('%Y')}
+#define BUILD_DATE_MONTH {datetime.datetime.now().strftime('%m')}
+#define BUILD_DATE_DAY {datetime.datetime.now().strftime('%d')}
+#define BUILD_TIME_HOUR {datetime.datetime.now().strftime('%H')}
+#define BUILD_TIME_MINUTE {datetime.datetime.now().strftime('%M')}
 
-// Номер сборки (из {MODULE_COUNTER_FILE} в папке модуля)
-#define BUILD_NUMBER {module_counters['build']}
-#define BUILD_NUMBER_RAW {module_counters['build']}
+// Номер сборки
+#define BUILD_NUMBER {build_counter}
+#define BUILD_NUMBER_RAW {build_counter}
 #define BUILD_NUMBER_STR "{build_str}"
 
-// Полная версия в формате MAJOR.CORE.MODULE.BUILD
+// Полная версия в формате MAJOR.MINOR.DATE.BUILD
 #define FIRMWARE_VERSION "{full_version}"
 #define FIRMWARE_VERSION_STR "{full_version}"
 
@@ -584,9 +510,9 @@ def generate_version_header():
 // ============================================================
 
 #define VERSION_MAJOR {root_counters['major']}
-#define VERSION_CORE {root_counters['core']}
-#define VERSION_MODULE {module_counters['module']}
-#define VERSION_BUILD {module_counters['build']}
+#define VERSION_MINOR {root_counters['minor']}
+#define VERSION_DATE {date_str}
+#define VERSION_BUILD {build_counter}
 
 // ============================================================
 // GIT ИНФОРМАЦИЯ
@@ -613,8 +539,6 @@ def generate_version_header():
 #define BUILD_MINUTE {datetime.datetime.now().strftime('%M')}
 #define BUILD_SECOND {datetime.datetime.now().strftime('%S')}
 
-#define ACTIVE_MODULE "{module_name if module_name else 'none'}"
-
 // ============================================================
 // УДОБНЫЕ МАКРОСЫ ДЛЯ ПРОВЕРОК
 // ============================================================
@@ -625,10 +549,10 @@ def generate_version_header():
 #define IS_GIT_DIRTY GIT_DIRTY
 
 // Версия как число (для сравнений)
-#define VERSION_NUM ((VERSION_MAJOR << 24) | (VERSION_CORE << 16) | (VERSION_MODULE << 8) | VERSION_BUILD)
+#define VERSION_NUM ((VERSION_MAJOR << 24) | (VERSION_MINOR << 16) | (int(VERSION_DATE) << 8) | VERSION_BUILD)
 
 // Полная версия как строка (альтернативный макрос)
-#define FW_VERSION TOSTRING(VERSION_MAJOR) "." TOSTRING(VERSION_CORE) "." TOSTRING(VERSION_MODULE) "." TOSTRING(VERSION_BUILD)
+#define FW_VERSION TOSTRING(VERSION_MAJOR) "." TOSTRING(VERSION_MINOR) "." TOSTRING(VERSION_DATE) "." TOSTRING(VERSION_BUILD)
 
 // ============================================================
 // ПРОВЕРКА ЦЕЛОСТНОСТИ

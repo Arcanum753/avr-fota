@@ -31,14 +31,15 @@ enum UpdateTypeFile {
   };
 
 
-// Структура для результатов сравнения
+// Структура для результатов сравнения (новый формат MAJOR.MINOR.DATE.BUILD)
 struct fileCompareResult {
-    int8_t  nameMatch;      // -1 - не совпадает, 1 - совпадает
-    int8_t  majorDiff;      // мажорная версия
-    int16_t  coreDiff;      // разница в версии ядра (0 если равно, >0 если у файла больше, <0 если у файла меньше)
-    int16_t  moduleDiff;    // разница в версии модуля
-    int32_t  buildDiff;     // разница в номере сборки 
-    UpdateTypeFile   fileType;      // -1 неизвестно, 0 прошивка, 1 ФС
+    int8_t  nameMatch;      // -1 - не проверялось, 0 - не совпадает, 1 - совпадает
+    int8_t  majorDiff;      // разница в мажорной версии
+    int16_t minorDiff;      // разница в минорной версии (инкремент при коммитах)
+    int32_t dateDiff;       // разница в дате (YYYYMMDDHHMM как число)
+    int32_t buildDiff;      // разница в номере сборки
+    UpdateTypeFile fileType; // тип файла
+    uint8_t isDebug;        // 1 - если есть номер билда в имени, 0 - если нет
 };
 
 

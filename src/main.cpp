@@ -98,7 +98,6 @@ void printGitInfo() {
     Serial.println("Build Date and time: " + String(BUILD_TIME));
 
     Serial.println("Envoirement: " + String(BUILD_ENV));
-    Serial.println("Module: " + String(ACTIVE_MODULE));
     
     #if defined(ESP32)
     Serial.println(" ESP32 WebPages version: "+ String(VERSION_WEB));

@@ -316,78 +316,80 @@ void MODULE_OTA_CLASS::html_md5_set(AsyncWebServerRequest *request) {
 
 }
 
-
 void MODULE_OTA_CLASS::html_filename_check(AsyncWebServerRequest *request) {
-	DEBUGOTA(__FUNCTION__);	DEBUGOTA("\r\n");
-	String values = "";
-	String updateOKstr = "";
-	String updateFiletype = "";
-	String updateFileMatcheD = "";
-	
-	updateFiletype = OTA_STR_UNSUPPORTED;	
-	updateFileMatcheD = OTA_STR_NAMEDIFF;	
-	
-
-	 if (_updateFileName.length() == 0 || !isValidFilename(_updateFileName)) {
-		 updateOKstr = "ERROR" ;
-		 values += "updStatus|"			+ updateOKstr 				+ "|div\n";
-		 request->send(200, "text/plain", values);
-		return;  	
-	}
-
- 	fileCompareResult result;
-	fileNameCheck(_updateFileName, &result);
-	
-	
-	if (result.fileType == FILE_TYPE_UNSUPPORTED)	{ 	updateFiletype = OTA_STR_UNSUPPORTED;	}
-	if (result.fileType == FILE_TYPE_FIRMWARE) 		{	updateFiletype = OTA_STR_FIRMWARE;	}
-	if (result.fileType == FILE_TYPE_FILESYSTEM)	{	updateFiletype = OTA_STR_FILESYSTEM;	}
-	if (result.nameMatch == 1) 						{updateFileMatcheD = OTA_STR_NAMEMATCH;	}
-    typeOTAfile = result.fileType;
-	bool updateOK = true;
+    DEBUGOTA(__FUNCTION__); DEBUGOTA("\r\n");
+    String values = "";
+    String updateOKstr = "";
+    String updateFiletype = "";
+    String updateFileMatcheD = "";
+    String updateIsDebug = "";
     
+    updateFiletype = OTA_STR_UNSUPPORTED;   
+    updateFileMatcheD = OTA_STR_NAMEDIFF;   
+    updateIsDebug = "0";
+
+    if (_updateFileName.length() == 0 || !isValidFilename(_updateFileName)) {
+        updateOKstr = "ERROR" ;
+        values += "updStatus|" + updateOKstr + "|div\n";
+        request->send(200, "text/plain", values);
+        return;   
+    }
+
+    fileCompareResult result;
+    fileNameCheck(_updateFileName, &result);
+    
+    // Определяем тип файла
+    if (result.fileType == FILE_TYPE_UNSUPPORTED)   { updateFiletype = OTA_STR_UNSUPPORTED; }
+    if (result.fileType == FILE_TYPE_FIRMWARE)      { updateFiletype = OTA_STR_FIRMWARE; }
+    if (result.fileType == FILE_TYPE_FILESYSTEM)    { updateFiletype = OTA_STR_FILESYSTEM; }
+    
+    // Проверка имени
+    if (result.nameMatch == 1) { updateFileMatcheD = OTA_STR_NAMEMATCH; }
+    
+    // Флаг отладочной версии
+    updateIsDebug = String(result.isDebug);
+    
+    typeOTAfile = result.fileType;
+    
+    // Проверка свободного места (только для прошивки)
+    bool updateOK = true;
     if (typeOTAfile == FILE_TYPE_FIRMWARE) {
         updateOK = maxSketchSpace < freeSketchSpace;
     }
-	if (updateOK == true) {	updateOKstr = "OK" ; } 
-	else {	updateOKstr = "ERROR" ;	}
+    if (updateOK == true) { 
+        updateOKstr = "OK"; 
+    } else { 
+        updateOKstr = "ERROR"; 
+    }
 
+    DEBUGOTA("\t _updateFileName: %s\r\n", _updateFileName.c_str());
+    DEBUGOTA("\t updStatus: %s\r\n", updateOKstr);
+    DEBUGOTA("\t FreeSketchSpace: %d\r\n", freeSketchSpace);
+    DEBUGOTA("\t MaxSketchSpace: %d\r\n", maxSketchSpace);
+    DEBUGOTA("\t UpdateFiletype: %s\r\n", updateFiletype.c_str());
+    DEBUGOTA("\t isDebug: %s\r\n", updateIsDebug.c_str());
+    DEBUGOTA("\t updVerDiffName: %s %d %d %d %d\r\n",
+             updateFileMatcheD.c_str(),
+             result.majorDiff,
+             result.minorDiff,      // теперь minor вместо core
+             result.dateDiff,        // дата
+             result.buildDiff);
 
-	DEBUGOTA("\t _updateFileName: %s\r\n", _updateFileName.c_str());
-	DEBUGOTA("\t updStatus: %s\r\n", updateOKstr);
-	DEBUGOTA("\t FreeSketchSpace: %d\r\n", freeSketchSpace);
-	DEBUGOTA("\t MaxSketchSpace: %d\r\n", maxSketchSpace);
-	DEBUGOTA("\t UpdateFiletype: %d\r\n", updateFiletype);
+    // Формируем ответ
+    values += "updStatus|"         + updateOKstr           + "|div\n";
+    values += "updFileType|"       + updateFiletype        + "|div\n";
+    values += "updSizeFree|"       + String(freeSketchSpace) + "|div\n";
+    values += "updSizeMax|"        + String(maxSketchSpace)  + "|div\n";
+    
+    values += "updVerDiffName|"    + updateFileMatcheD     + "|div\n";
+    values += "updVerDiffMaj|"     + String(result.majorDiff) + "|div\n";
+    values += "updVerDiffMinor|"   + String(result.minorDiff) + "|div\n";  // переименовано
+    values += "updVerDiffDate|"    + String(result.dateDiff)  + "|div\n";  // новый
+    values += "updVerDiffBuild|"   + String(result.buildDiff) + "|div\n";
+    values += "updIsDebug|"        + updateIsDebug          + "|div\n";    // новый
 
-	DEBUGOTA("\t pdSizeFree: %d\r\n", freeSketchSpace);
-	DEBUGOTA("\t updSizeMax: %d\r\n", maxSketchSpace);
-
-	DEBUGOTA("\t updVerDiffName: %s %d %d %d %d\r\n"
-		,updateFileMatcheD
-		,result.majorDiff	
-		,result.coreDiff	
-		,result.moduleDiff	
-		,result.buildDiff	
-	);
-
-	
-	values += "updStatus|"			+ updateOKstr 				+ "|div\n";
-	values += "updFileType|" 		+ updateFiletype		  	+ "|div\n";
-	values += "updSizeFree|" 		+ (String)freeSketchSpace 	+ "|div\n";
-	values += "updSizeMax|" 		+ (String)maxSketchSpace  	+ "|div\n";
-	
-	values += "updVerDiffName|" 	+ updateFileMatcheD		  		+ "|div\n";
-	values += "updVerDiffMaj|"	 	+ (String)result.majorDiff		+ "|div\n";
-	values += "updVerDiffCore|"		+ (String)result.coreDiff		+ "|div\n";
-	values += "updVerDiffMod|" 		+ (String)result.moduleDiff		+ "|div\n";
-	values += "updVerDiffBuild|" 	+ (String)result.buildDiff		+ "|div\n";
-	
-
-
-	request->send(200, "text/plain", values);
+    request->send(200, "text/plain", values);
 }
-
-
 
 
 
@@ -404,22 +406,25 @@ void MODULE_OTA_CLASS::updateFileExecute (AsyncWebServerRequest *request) {
 
 }
 
-
-int8_t MODULE_OTA_CLASS::fileNameCheck (String filename, fileCompareResult* result) {
-	DEBUGOTA(__FUNCTION__);	DEBUGOTA("\r\n");
-	int8_t _ret = -1;
+int8_t MODULE_OTA_CLASS::fileNameCheck(String filename, fileCompareResult* result) {
+    DEBUGOTA(__FUNCTION__); DEBUGOTA("\r\n");
+    int8_t _ret = -1;
+    
     // Инициализируем результат значениями по умолчанию
     result->nameMatch = -1;
     result->majorDiff = 0;
-    result->coreDiff = 0;
-    result->moduleDiff = 0;
+    result->minorDiff = 0;
+    result->dateDiff = 0;
     result->buildDiff = 0;
+    result->isDebug = 0;  // по умолчанию не debug
     result->fileType = FILE_TYPE_UNSUPPORTED;
-	
     
-    if (filename.length() == 0) { return _ret;  	}
+    if (filename.length() == 0) { 
+        return _ret;  
+    }
 
-	String cleanFilename = "";
+    // Очищаем имя файла от непечатных символов
+    String cleanFilename = "";
     for (int i = 0; i < filename.length(); i++) {
         char c = filename.charAt(i);
         if (c >= 32 && c <= 126) { // только печатные ASCII
@@ -432,33 +437,35 @@ int8_t MODULE_OTA_CLASS::fileNameCheck (String filename, fileCompareResult* resu
     if (filename.endsWith(".bin")) {
         if (filename.indexOf("_fs-") > 0) {
             result->fileType = FILE_TYPE_FILESYSTEM;
-        } else 
-		if (filename.indexOf("-") > 0) {
-            // Есть дефис и нет _fs (проверка на _fs не нужна, так как мы уже в else)
+        } else if (filename.indexOf("-") > 0) {
             result->fileType = FILE_TYPE_FIRMWARE;
         }
     }
     
     // Проверяем имя сборки
     if (filename.startsWith(BUILD_ENV) == false) {
-        // Имя не совпало - выходим, но тип уже определён
+        DEBUGOTA("\t Wrong device: expected %s, got %s\r\n", BUILD_ENV, filename.substring(0, strlen(BUILD_ENV)).c_str());
         return _ret;
     }
     
     // Определяем разделитель в зависимости от типа файла
     String separator;
-    if (result->fileType == FILE_TYPE_FILESYSTEM) {	
+    if (result->fileType == FILE_TYPE_FILESYSTEM) {    
         separator = String(BUILD_ENV) + "_fs-"; 
-    } else if (result->fileType == FILE_TYPE_FIRMWARE) {	
+    } else if (result->fileType == FILE_TYPE_FIRMWARE) {    
         separator = String(BUILD_ENV) + "-"; 
-    } else {	
-        return _ret;  // неизвестный тип файла
+    } else {    
+        DEBUGOTA("\t Unknown file type\r\n");
+        return _ret;
     }
     
     // Проверяем наличие разделителя
-    if (!filename.startsWith(separator)) {	return _ret;   }
+    if (!filename.startsWith(separator)) {
+        DEBUGOTA("\t Wrong separator\r\n");
+        return _ret;
+    }
     
-    // Имя совпало (прошло все проверки)
+    // Имя совпало
     result->nameMatch = 1;
     
     // Извлекаем часть с версией
@@ -466,55 +473,94 @@ int8_t MODULE_OTA_CLASS::fileNameCheck (String filename, fileCompareResult* resu
     
     // Отрезаем .bin в конце
     int binPos = versionPart.lastIndexOf(".bin");
-    if (binPos <= 0) {  return  _ret; }
+    if (binPos <= 0) {
+        DEBUGOTA("\t No .bin extension\r\n");
+        return _ret;
+    }
     
     String versionStr = versionPart.substring(0, binPos);
     
-    // Разбираем версию из строки (формат X.YYY.ZZZ.WWWW)
+    // Проверяем, есть ли в версии номер билда (4 компонента)
+    int dotCount = 0;
+    for (int i = 0; i < versionStr.length(); i++) {
+        if (versionStr.charAt(i) == '.') dotCount++;
+    }
+    
+    // Если есть 3 точки, значит 4 компонента (есть номер билда)
+    result->isDebug = (dotCount >= 3) ? 1 : 0;
+    
+    DEBUGOTA("\t Version string: %s, dots=%d, isDebug=%d\r\n", 
+             versionStr.c_str(), dotCount, result->isDebug);
+    
+    // Разбираем версию из строки (формат MAJOR.MINOR.DATE.BUILD)
     int firstDot = versionStr.indexOf('.');
     int secondDot = versionStr.indexOf('.', firstDot + 1);
     int thirdDot = versionStr.indexOf('.', secondDot + 1);
     
-    if (firstDot < 0 || secondDot < 0 || thirdDot < 0) {
-        return _ret;  // неверный формат
+    if (firstDot < 0 || secondDot < 0) {
+        DEBUGOTA("\t Invalid version format (need at least 3 parts)\r\n");
+        return _ret;
     }
     
     // Извлекаем компоненты
-    String majorStr   = versionStr.substring(0, firstDot);
-    String coreStr    = versionStr.substring(firstDot + 1, secondDot);
-    String moduleStr  = versionStr.substring(secondDot + 1, thirdDot);
-    String buildStr   = versionStr.substring(thirdDot + 1);
+    String majorStr = versionStr.substring(0, firstDot);
+    String minorStr = versionStr.substring(firstDot + 1, secondDot);
+    String dateStr = versionStr.substring(secondDot + 1, (thirdDot > 0) ? thirdDot : versionStr.length());
+    String buildStr = (thirdDot > 0) ? versionStr.substring(thirdDot + 1) : "";
 
-	DEBUGOTA("\t majorStr: %s ", majorStr);
-	DEBUGOTA("\t coreStr: %s ", coreStr);
-	DEBUGOTA("\t moduleStr: %s ", moduleStr);
-	DEBUGOTA("\t buildStr: %s\r\n", buildStr);
+    DEBUGOTA("\t Parsed: major=%s, minor=%s, date=%s, build=%s\r\n", 
+             majorStr.c_str(), minorStr.c_str(), dateStr.c_str(), buildStr.c_str());
     
     // Преобразуем в числа
-    int fileMajor = majorStr.toInt();
-    int fileCore = coreStr.toInt();
-    int fileModule = moduleStr.toInt();
-    int fileBuild = buildStr.toInt();
+    int32_t fileMajor = majorStr.toInt();
+    int32_t fileMinor = minorStr.toInt();
+    int32_t fileDate  = dateStr.toInt();
+    int32_t fileBuild = buildStr.toInt();
     
-    // Вычисляем разницe 
-    result->majorDiff = fileMajor - VERSION_MAJOR;
-    result->coreDiff = fileCore - VERSION_CORE;
-    result->moduleDiff = fileModule - VERSION_MODULE;
-    result->buildDiff = fileBuild - VERSION_BUILD;
-
-    // Проверяем, что версия файла НЕ СТАРШЕ текущей (все разницы >= 0)
-    if ((result->majorDiff >= 0) && 
-        (result->coreDiff >= 0) && 
-        (result->moduleDiff >= 0) && 
-        (result->buildDiff >= 0)) { 
-        _ret = 1; 
+    // Получаем текущие значения из version.h
+    int32_t currentMajor = VERSION_MAJOR;
+    int32_t currentMinor = VERSION_MINOR;
+    int32_t currentBuild = VERSION_BUILD;
+    
+    // Получаем текущую дату в том же формате (YYYYMMDDHHMM)
+    time_t now = time(nullptr);
+    struct tm *timeinfo = localtime(&now);
+    char currentDateStr[13];
+    sprintf(currentDateStr, "%04d%02d%02d%02d%02d", 
+            timeinfo->tm_year + 1900,
+            timeinfo->tm_mon + 1,
+            timeinfo->tm_mday,
+            timeinfo->tm_hour,
+            timeinfo->tm_min);
+    int32_t currentDate = atol(currentDateStr);
+    
+    DEBUGOTA("\t Current: major=%d, minor=%d, date=%d, build=%d\r\n", 
+             currentMajor, currentMinor, currentDate, currentBuild);
+    
+    // Вычисляем разницы
+    result->majorDiff = fileMajor - currentMajor;
+    result->minorDiff = fileMinor - currentMinor;
+    result->dateDiff = fileDate - currentDate;
+    result->buildDiff = (result->isDebug) ? (fileBuild - currentBuild) : 0;
+    
+    DEBUGOTA("\t Diffs: major=%d, minor=%d, date=%d, build=%d\r\n", 
+             result->majorDiff, result->minorDiff, result->dateDiff, result->buildDiff);
+    
+    // Проверяем, можно ли обновляться
+    // MAJOR и MINOR не должны быть меньше текущих (нельзя откатываться)
+    // DATE может быть любой (файл мог быть собран раньше)
+    // BUILD может быть любым (инкремент при каждой сборке)
+    bool canUpdate = (result->majorDiff >= 0) && (result->minorDiff >= 0);
+    
+    if (canUpdate) {
+        _ret = 1;
+        DEBUGOTA("\t File is valid for update\r\n");
+    } else {
+        DEBUGOTA("\t File is NOT valid for update (older major/minor)\r\n");
     }
-
+    
     return _ret;
 }
-
-
-
 
 bool MODULE_OTA_CLASS::isValidFilename(const String& filename) {
     if (filename.length() == 0 || filename.length() > 100) return false;
