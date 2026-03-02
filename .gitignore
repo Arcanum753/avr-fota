@@ -10,3 +10,6 @@
 # Web debug folders
 /web_debug/
 .version_hashes
+build_counter.txt
+.module_versions
+.module_hashes
