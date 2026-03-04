@@ -8,15 +8,39 @@
 // #include "debug.h"
 
 #if defined(ESP32)
+#ifndef PIN_MISO
 #define PIN_MISO  19   // d19 miso
+#endif
+
+#ifndef PIN_MOSI
 #define PIN_MOSI  23   // d23 mosi
+#endif
+
+#ifndef PIN_SCK
 #define PIN_SCK   18   // d18 sck
+#endif
+
+#ifndef PIN_RST
 #define PIN_RST   5    // d5 rst
+#endif
+
 #elif defined(ESP8266)
+#ifndef PIN_MISO
 #define PIN_MISO  12   // d6 miso
+#endif
+
+#ifndef PIN_MOSI
 #define PIN_MOSI  13   // d7 mosi
+#endif
+
+#ifndef PIN_SCK
 #define PIN_SCK   14   // d5 sck
+#endif
+
+#ifndef PIN_RST
 #define PIN_RST   5    // d1 rst
+#endif
+
 #endif
 
 #define JSON_STR_LEN    512

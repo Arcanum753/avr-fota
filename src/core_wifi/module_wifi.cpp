@@ -313,7 +313,8 @@ void WIFIMOD_CLASS::onWiFiConnected(WiFiEventStationModeConnected data) {
 
 	DBG_OUTPUT_PORT.println("WiFi Connected: Waiting for DHCP");
 	if (CONNECTION_LED >= 0) {
-		digitalWrite(CONNECTION_LED, LOW); // Turn LED on
+		digitalWrite(CONNECTION_LED, LOW); 
+		// Turn LED on
 		//turnLedESPHTTPServer.on();
 		DEBUGLOGWIFI("Led %d on\n", CONNECTION_LED);
 	}

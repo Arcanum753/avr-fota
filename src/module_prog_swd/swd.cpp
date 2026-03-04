@@ -22,8 +22,8 @@ bool turn_state = 0;
 
 void swd_gpio_init()  {
   if (!gpioInitState) { gpioInitState = true; }
-  pinMode(swd_data_pin,   INPUT_PULLUP);
-  pinMode(swd_clock_pin,  OUTPUT);
+  pinMode(SWDPIN_DATA,   INPUT_PULLUP);
+  pinMode(SWDPIN_CLK,  OUTPUT);
 }
 
 uint32_t swd_init() { //Returns the ID
@@ -123,11 +123,11 @@ bool swd_calculate_parity(uint32_t in_data) {
 void swd_write(uint32_t in_data, uint8_t bits) {
     if (turn_state == 0) {	swd_turn(1);	}
     while (bits--)  {
-        digitalWrite(swd_data_pin, in_data & 1);
-        digitalWrite(swd_clock_pin, LOW);
+        digitalWrite(SWDPIN_DATA, in_data & 1);
+        digitalWrite(SWDPIN_CLK, LOW);
         delayMicroseconds(SWD_DELAY);
         in_data >>= 1;
-        digitalWrite(swd_clock_pin, HIGH);
+        digitalWrite(SWDPIN_CLK, HIGH);
         delayMicroseconds(SWD_DELAY);
     }
 }
@@ -138,11 +138,11 @@ uint32_t swd_read(uint8_t bits) {
   uint32_t input_bit = 1;
   if (turn_state == 1)  { swd_turn(0);  }
   while (bits--)  {
-    if (digitalRead(swd_data_pin))    { out_data |= input_bit;  }
-    digitalWrite(swd_clock_pin, LOW);
+    if (digitalRead(SWDPIN_DATA))    { out_data |= input_bit;  }
+    digitalWrite(SWDPIN_CLK, LOW);
     delayMicroseconds(SWD_DELAY);
     input_bit <<= 1;
-    digitalWrite(swd_clock_pin, HIGH);
+    digitalWrite(SWDPIN_CLK, HIGH);
     delayMicroseconds(SWD_DELAY);
   }
   return out_data;
@@ -150,13 +150,13 @@ uint32_t swd_read(uint8_t bits) {
 
 //1 = Write 0 = Read
 void swd_turn(bool WorR)  {
-  digitalWrite(swd_data_pin, HIGH);
-  pinMode(swd_data_pin, INPUT_PULLUP);
-  digitalWrite(swd_clock_pin, LOW);
+  digitalWrite(SWDPIN_DATA, HIGH);
+  pinMode(SWDPIN_DATA, INPUT_PULLUP);
+  digitalWrite(SWDPIN_CLK, LOW);
   delayMicroseconds(SWD_DELAY);
-  digitalWrite(swd_clock_pin, HIGH);
+  digitalWrite(SWDPIN_CLK, HIGH);
   delayMicroseconds(SWD_DELAY);
-  if (WorR) { pinMode(swd_data_pin, OUTPUT);  }
+  if (WorR) { pinMode(SWDPIN_DATA, OUTPUT);  }
   turn_state = WorR;
 }
  
@@ -173,11 +173,11 @@ bool swd_calculate_parity16(uint16_t in_data) {
 void swd_write16 (uint16_t in_data, uint8_t bits) {
   if (turn_state == 0) {    swd_turn(1);  }
   while (bits--)  {
-    digitalWrite(swd_data_pin, in_data & 1);
-    digitalWrite(swd_clock_pin, LOW);
+    digitalWrite(SWDPIN_DATA, in_data & 1);
+    digitalWrite(SWDPIN_CLK, LOW);
     delayMicroseconds(SWD_DELAY);
     in_data >>= 1;
-    digitalWrite(swd_clock_pin, HIGH);
+    digitalWrite(SWDPIN_CLK, HIGH);
     delayMicroseconds(SWD_DELAY);
   }
 }
@@ -188,11 +188,11 @@ uint16_t swd_read16(uint8_t bits) {
   if (turn_state == 1)
     swd_turn(0);
   while (bits--)  {
-    if (digitalRead(swd_data_pin))    {      out_data |= input_bit;    }
-    digitalWrite(swd_clock_pin, LOW);
+    if (digitalRead(SWDPIN_DATA))    {      out_data |= input_bit;    }
+    digitalWrite(SWDPIN_CLK, LOW);
     delayMicroseconds(SWD_DELAY);
     input_bit <<= 1;
-    digitalWrite(swd_clock_pin, HIGH);
+    digitalWrite(SWDPIN_CLK, HIGH);
     delayMicroseconds(SWD_DELAY);
   }
   return out_data;
