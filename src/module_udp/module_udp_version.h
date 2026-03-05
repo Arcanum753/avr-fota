@@ -1,6 +1,6 @@
 // Auto-generated version file for module: module_udp
-// Generated: 2026-03-04 23:31
-// Environment: esp32-swd
+// Generated: 2026-03-05 17:25
+// Environment: TestSolo
 
 #ifndef MODULE_UDP_VERSION_H
 #define MODULE_UDP_VERSION_H
@@ -9,13 +9,13 @@
 // ВЕРСИЯ МОДУЛЯ module_udp
 // ============================================================
 
-#define MODULE_UDP_VERSION 5
+#define MODULE_UDP_VERSION 6
 
 // ============================================================
 // ДАТА ПОСЛЕДНЕГО ИЗМЕНЕНИЯ
 // ============================================================
 
-#define MODULE_UDP_COMMIT_DATE "%Y->- (version-format) 3c3be6c0cdb75af9d2fb817766c93eea8d0f6b60:%M"
+#define MODULE_UDP_COMMIT_DATE "%Y->- (HEAD -> fix-modules) 38815bb3d5db62910f2c2c7d6de3227cba3b89a2:%M"
 #define MODULE_UDP_COMMIT_YEAR 1970
 #define MODULE_UDP_COMMIT_MONTH 1
 #define MODULE_UDP_COMMIT_DAY 1
@@ -26,6 +26,6 @@
 // ИНФОРМАЦИЯ О ГЕНЕРАЦИИ
 // ============================================================
 
-#define MODULE_UDP_GENERATED_TIME "2026-03-04 23:31"
+#define MODULE_UDP_GENERATED_TIME "2026-03-05 17:25"
 
 #endif // MODULE_UDP_VERSION_H

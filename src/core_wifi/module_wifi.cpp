@@ -24,7 +24,7 @@
 
 #include "core_ntp/module_ntp.h"
 
-
+#include "common_gpio.h"
 
 WIFIMOD_CLASS 	modWifiClass(false);
 DNSServer 		dnsServer;
@@ -214,7 +214,7 @@ void WIFIMOD_CLASS::defaultConfigWifi(int _in) {
 	_wifiConfig.netmask 	= IPAddress(255, 255, 255, 0);
 	_wifiConfig.gateway 	= IPAddress(192, 168, 1, 1);
 	_wifiConfig.dns 		= IPAddress(192, 168, 1, 1);
-	//config.connectionLed = CONNECTION_LED;
+	
 	save_configWifi(_in);
 	DEBUGLOGWIFI(__PRETTY_FUNCTION__);	DEBUGLOGWIFI("\r\n");
 }
@@ -256,7 +256,7 @@ void WIFIMOD_CLASS::configureWifiAP() {
 		DEBUGLOGWIFI("AP Pass disabled \r\n");
 	}
 	startDNSCaptive();
-	if (CONNECTION_LED >= 0) {	flashLED(CONNECTION_LED, 3, 250);	}
+	if (CONNECTION_LED >= 0) {	flashLED(CONNECTION_LED, 5, 250);	}
 	DEBUGLOGWIFI("AP Mode enabled. SSID: %s IP: %s\r\n", WiFi.softAPSSID().c_str(), WiFi.softAPIP().toString().c_str());
 	connectionTimout = 0;
 }
@@ -313,9 +313,7 @@ void WIFIMOD_CLASS::onWiFiConnected(WiFiEventStationModeConnected data) {
 
 	DBG_OUTPUT_PORT.println("WiFi Connected: Waiting for DHCP");
 	if (CONNECTION_LED >= 0) {
-		digitalWrite(CONNECTION_LED, LOW); 
-		// Turn LED on
-		//turnLedESPHTTPServer.on();
+		espLedOn(); // Turn LED on
 		DEBUGLOGWIFI("Led %d on\n", CONNECTION_LED);
 	}
 	wifiDisconnectedSince = 0;
@@ -330,11 +328,7 @@ void WIFIMOD_CLASS::onWiFiConnectedGotIP() {
 #elif defined(ESP8266)
 void WIFIMOD_CLASS::onWiFiConnectedGotIP(WiFiEventStationModeGotIP data) {
 #endif
-	if (CONNECTION_LED >= 0) {
-		digitalWrite(CONNECTION_LED, LOW);
-		 // Turn LED on
-		 //turnLedESPHTTPServer.on();
-	}
+	if (CONNECTION_LED >= 0) { espLedOn(); 	} // Turn LED on
 
 	DEBUGLOGWIFI("GotIP Address: %s \n", WiFi.localIP().toString().c_str());
 	DEBUGLOGWIFI("Gateway:    %s\r\n", WiFi.gatewayIP().toString().c_str());
@@ -392,10 +386,7 @@ DEBUGLOGWIFI(" case STA_DISCONNECTED \r\n");
 		WiFi.disconnect();		// anyway need it to avoid wifi logic errors
 	}
 
-	if (CONNECTION_LED >= 0) {
-		digitalWrite(CONNECTION_LED, HIGH);
-		// flashLED(config.connectionLed, 2, 100);
-	} // Turn LED off
+	if (CONNECTION_LED >= 0) {	espLedOff();	}// Turn LED off
 	// FIXME
 	if (wifiDisconnectedSince == 0) { wifiDisconnectedSince = millis(); }
 	DEBUGLOGWIFI("Disconnected for %d seconds \r\n", (int)((millis() - wifiDisconnectedSince) / 1000));

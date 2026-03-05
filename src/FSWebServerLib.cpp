@@ -46,6 +46,8 @@
 #include "core_json/module_json.h"
 #include "core_wifi/module_wifi.h"
 
+#include "common_gpio.h"
+
 
 
 #include "common.h"
@@ -58,20 +60,6 @@ String _Version_BuildDate 	= BUILD_TIME;
 
 AsyncFSWebServer::AsyncFSWebServer(uint16_t port) : AsyncWebServer(port) {}
 
-void flashLED(int pin, int times, int delayTime) {
-	int oldState = digitalRead(pin);
-
-
-	DEBUGLOGLED("---Flash LED during %d ms %d times. Old state = %d\r\n", delayTime, times, oldState);
-
-	for (int i = 0; i < times; i++) {
-		digitalWrite(pin, LOW); // Turn on LED
-		delay(delayTime);
-		digitalWrite(pin, HIGH); // Turn on LED
-		delay(delayTime);
-	}
-	digitalWrite(pin, oldState); // Turn on LED
-}
 
 #if defined(ESP32)
     void AsyncFSWebServer::begin(fs::SPIFFSFS* fs)
@@ -96,8 +84,7 @@ void flashLED(int pin, int times, int delayTime) {
 		DEBUGLOG("AP Enable = %d\n", modWifiClass._apConfig.APenable);
 	}
 
-	if (CONNECTION_LED >= 0) {		digitalWrite(CONNECTION_LED, HIGH);	}
-	// Turn LED off
+	if (CONNECTION_LED >= 0) {		espLedOff();	}	// Turn LED off
     if (!_fs) { _fs->begin();  }// If SPIFFS is not started
 #ifndef RELEASE
 	{ // List files
@@ -343,8 +330,8 @@ bool AsyncFSWebServer::saveHTTPAuth() {
 
 bool AsyncFSWebServer:: handleFileRead(String path, AsyncWebServerRequest *request) {
 	DEBUGEDIT("handleFileRead: %s\r\n", path.c_str());
-	if (CONNECTION_LED >= 0) {	flashLED(CONNECTION_LED, 1, 25); 	}	// Show activity on LED
 	// CANNOT RUN DELAY() INSIDE CALLBACK
+	if (CONNECTION_LED >= 0) {	flashLED(CONNECTION_LED, 1, 30); 	}	// Show activity on LED
 	if (path.endsWith("/")) {	path += HTML_INDEX;	}
 	String contentType = getContentType(path, request);
 	String pathWithGz = path + ".gz";

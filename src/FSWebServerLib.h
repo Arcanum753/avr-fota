@@ -17,11 +17,6 @@
 #include <FS.h>
 #endif
 
-#ifdef DEBUG_LED
-#define DEBUGLOGLED(...) Serial.printf(__VA_ARGS__)
-#else
-#define DEBUGLOGLED(...)
-#endif
 
 
 #include <Ticker.h>
@@ -86,7 +81,6 @@ Please Wait....Configuring.
 )=====";
 
 
-void flashLED(int pin, int times, int delayTime) ;
 
 String getContentType(String filename, AsyncWebServerRequest *request);
 
