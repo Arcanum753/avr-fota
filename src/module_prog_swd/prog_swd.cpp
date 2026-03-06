@@ -216,9 +216,9 @@ uint8_t ESP_PROGSWD::stm32_flash_file(uint32_t offset, String &path) {
 		_percent = (uint8_t)(((float)posi / (float)file_size) * 100);
 		DEBUGLOGSWD("%i percents \r\n", _percent);
     #ifdef ESP32
-		esp_task_wdt_reset();
+		  esp_task_wdt_reset();
     #elif defined(ESP8266)
-        ESP.wdtDisable();
+      ESP.wdtDisable();
     #endif
 	}
     file.close();

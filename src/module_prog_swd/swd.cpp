@@ -185,8 +185,7 @@ void swd_write16 (uint16_t in_data, uint8_t bits) {
 uint16_t swd_read16(uint8_t bits) {
   uint16_t out_data = 0;
   uint16_t input_bit = 1;
-  if (turn_state == 1)
-    swd_turn(0);
+  if (turn_state == 1) {swd_turn(0);}
   while (bits--)  {
     if (digitalRead(SWDPIN_DATA))    {      out_data |= input_bit;    }
     digitalWrite(SWDPIN_CLK, LOW);

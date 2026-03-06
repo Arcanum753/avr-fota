@@ -74,8 +74,6 @@ AsyncFSWebServer::AsyncFSWebServer(uint16_t port) : AsyncWebServer(port) {}
 	DBG_OUTPUT_PORT.setDebugOutput(true);
 #endif // RELEASE
 
-// CONNECTION_LED pin defined as output
-	if (CONNECTION_LED >= 0) {	pinMode(CONNECTION_LED, OUTPUT);	}
 	// If this pin is HIGH during startup ESP will run in AP_ONLY mode. Backdoor to change WiFi settings when configured WiFi is not available.
 	if (AP_ENABLE_BUTTON >= 0) {	pinMode(AP_ENABLE_BUTTON, INPUT_PULLUP); 	}
 
@@ -117,9 +115,6 @@ AsyncFSWebServer::AsyncFSWebServer(uint16_t port) : AsyncWebServer(port) {}
 	DEBUGLOG(hostName.c_str());
 	DEBUGLOG(".local to see the device web page.\r\n");
 	DEBUGLOG("Device serial number:");	DEBUGLOG(_sysConfig.deviceSerial.c_str());	DEBUGLOG("\n\r");
-	if (!_sysConfig.deviceType.isEmpty()) {
-		DEBUGLOG("Device type: ");	DEBUGLOG(_sysConfig.deviceType.c_str());	DEBUGLOG("\n\r");
-	}
 	#if defined(ESP32)
 	DEBUGLOG("Flash chip size: %u\r\n", ESP.getFlashChipSize());
 	#endif
@@ -134,10 +129,8 @@ AsyncFSWebServer::AsyncFSWebServer(uint16_t port) : AsyncWebServer(port) {}
 	serverInit(); // Configure and start Web server
 	modWifiClass.webInit();
 	
-#if defined(MODULE_NTP)
 	modNtpClass.begin();
 	modNtpClass.webInit();
-#endif
 
 	
 	
@@ -189,7 +182,6 @@ void AsyncFSWebServer::defaultConfigSys() {
 	_sysConfig.deviceName 		= "esp_server";
 	_sysConfig.deviceSerial 	= SERIAL_NUMBER;
 	_sysConfig.deviceType 		= DEVMODULE_GPIO;
-	//_sysConfig.connectionLed = CONNECTION_LED;
 	save_configSys();
 }
 
@@ -339,8 +331,7 @@ bool AsyncFSWebServer:: handleFileRead(String path, AsyncWebServerRequest *reque
 		if (_fs->exists(pathWithGz)) { path += ".gz"; }
 		DEBUGEDIT("Content type: %s\r\n", contentType.c_str());
 		AsyncWebServerResponse *response = request->beginResponse(*_fs, path, contentType);
-		if (path.endsWith(".gz"))
-			response->addHeader("Content-Encoding", "gzip");
+		if (path.endsWith(".gz")) {response->addHeader("Content-Encoding", "gzip");}
 		//File file = SPIFFS.open(path, "r");
 		DEBUGEDIT("File %s exist\r\n", path.c_str());
 		request->send(response);

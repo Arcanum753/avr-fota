@@ -8,20 +8,15 @@
 #define DEBUGLOGLED(...)
 #endif
 
-#if defined(ESP8266)
-#define LED_ON LOW
-#define LED_OFF HIGH
-#endif
-
-#if defined(ESP32)
-#define LED_ON      HIGH
-#define LED_OFF     LOW
-#endif
 
 
-void flashLED(int pin, int times, int delayTime) ;
+void flashLEDinit();
+void flashLED(uint8_t pin, uint16_t times, uint32_t delayTime) ;
+void flashLEDTaskOn();
+void flashLEDTaskOff();
 
 void espLedOn ();
 void espLedOff ();
+void flashLEDOnConnected();
 
 #endif // _COMMON_GPIO_h

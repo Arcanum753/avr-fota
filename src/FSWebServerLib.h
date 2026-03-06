@@ -21,7 +21,6 @@
 
 #include <Ticker.h>
 
-//#define CONNECTION_LED -1// Connection LED pin (Built in). -1 to disable
 
 #define JSON_STR_LEN    512
 // #define HIDE_CONFIG

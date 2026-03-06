@@ -30,4 +30,3 @@
 void printGitInfo() ;
 
 void loop_user();
-void ledInit();
