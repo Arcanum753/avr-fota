@@ -186,14 +186,14 @@ void udpp (){
 #if defined(MODULE_UDP)
 	
     String str = udpBroadcast.udpJsonGet();
-    udpBroadcast.udpBroadcastSend(port, str);
+    udpBroadcast. udpBroadcastSend(port, str);
 #endif
 }
 
 void udpc ()    {
 
 #if defined(MODULE_UDP)
-    udpBroadcast.udpBroadcastSend(udpBroadcast.getUpdPortTx(), udpBroadcast.udpJsonGet());
+  udpBroadcastSimple();
 #endif
 
 

@@ -1,6 +1,6 @@
 // Auto-generated version file for module: module_prog_swd
-// Generated: 2026-03-01 23:13
-// Environment: esp8266-gpio
+// Generated: 2026-03-05 17:25
+// Environment: TestSolo
 
 #ifndef MODULE_PROG_SWD_VERSION_H
 #define MODULE_PROG_SWD_VERSION_H
@@ -9,13 +9,13 @@
 // ВЕРСИЯ МОДУЛЯ module_prog_swd
 // ============================================================
 
-#define MODULE_PROG_SWD_VERSION 5
+#define MODULE_PROG_SWD_VERSION 7
 
 // ============================================================
 // ДАТА ПОСЛЕДНЕГО ИЗМЕНЕНИЯ
 // ============================================================
 
-#define MODULE_PROG_SWD_COMMIT_DATE "%Y->- (origin/fix-core-ota, fix-core-ota) cc8114c7416a35617b95baa1ce03290f004be55e:%M"
+#define MODULE_PROG_SWD_COMMIT_DATE "%Y->- (HEAD -> fix-modules) 38815bb3d5db62910f2c2c7d6de3227cba3b89a2:%M"
 #define MODULE_PROG_SWD_COMMIT_YEAR 1970
 #define MODULE_PROG_SWD_COMMIT_MONTH 1
 #define MODULE_PROG_SWD_COMMIT_DAY 1
@@ -26,6 +26,6 @@
 // ИНФОРМАЦИЯ О ГЕНЕРАЦИИ
 // ============================================================
 
-#define MODULE_PROG_SWD_GENERATED_TIME "2026-03-01 23:13"
+#define MODULE_PROG_SWD_GENERATED_TIME "2026-03-05 17:25"
 
 #endif // MODULE_PROG_SWD_VERSION_H

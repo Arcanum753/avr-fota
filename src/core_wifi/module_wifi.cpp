@@ -24,7 +24,7 @@
 
 #include "core_ntp/module_ntp.h"
 
-
+#include "common_gpio.h"
 
 WIFIMOD_CLASS 	modWifiClass(false);
 DNSServer 		dnsServer;
@@ -38,12 +38,8 @@ void WIFIMOD_CLASS::s_secondTick(void* arg) {
 
 	//DNS captive
 	if (self->wifiStatus == FS_STAT_APMODE) {	dnsServer.processNextRequest();	}
-	
-	if (ESPHTTPServer._evs.count() > 0) 	{	
-#if defined(MODULE_NTP)
-		modNtpClass.sendTimeData();	
-#endif
-	}
+	// if (ESPHTTPServer._evs.count() > 0) 	{	modNtpClass.sendTimeData();	 }
+
 //Check connection timeout if enabled
 #if (AP_ENABLE_TIMEOUT > 0)
 	if (self->wifiStatus == FS_STAT_CONNECTING) 	{
@@ -58,13 +54,14 @@ void WIFIMOD_CLASS::s_secondTick(void* arg) {
 		self->WifiScan = WF_SCAN_NO_NEED;
 		self->configureWifiAP();
 	}
-
+	
 	if (self->WifiScan == WF_STAT_SCANED)	{
 		self->configureWifi();
 		self->WifiScan = WF_SCAN_NO_NEED;
 	}
-
+	
 	if (self->WifiScan != WF_SCAN_NO_NEED) { self->load_configWifi(self->scanWifi()); }
+	if (self->wifiStatus == FS_STAT_CONNECTED && (CONNECTION_LED >= 0) ) { flashLEDOnConnected(); }
 	
 #endif //AP_ENABLE_TIMEOUT
 }
@@ -214,7 +211,7 @@ void WIFIMOD_CLASS::defaultConfigWifi(int _in) {
 	_wifiConfig.netmask 	= IPAddress(255, 255, 255, 0);
 	_wifiConfig.gateway 	= IPAddress(192, 168, 1, 1);
 	_wifiConfig.dns 		= IPAddress(192, 168, 1, 1);
-	//config.connectionLed = CONNECTION_LED;
+	
 	save_configWifi(_in);
 	DEBUGLOGWIFI(__PRETTY_FUNCTION__);	DEBUGLOGWIFI("\r\n");
 }
@@ -228,25 +225,14 @@ void WIFIMOD_CLASS::startDNSCaptive() {
 
 void WIFIMOD_CLASS::configureWifiAP() {
 	DEBUGLOGWIFI(__PRETTY_FUNCTION__);	DEBUGLOGWIFI("\r\n");
-
-#if defined(MODULE_NTP)
-		modNtpClass.ntpOnDisconected();
-#endif
+	modNtpClass.ntpOnDisconected();
 #if defined(MODULE_UDP)
-		
 		udpBroadcast.udpStop();	// always stop!
 #endif
-
-
 	String APname = ESPHTTPServer._sysConfig.deviceName + "_" + ESPHTTPServer._sysConfig.deviceSerial;
-
 	if (WiFi.status() == WL_CONNECTED) { WiFi.disconnect();	}
 	WiFi.mode(WIFI_AP);
-
 	wifiStatus = FS_STAT_APMODE;
-
-	
-
 	if (ESPHTTPServer._httpAuth.auth) {
 		WiFi.softAP(APname, ESPHTTPServer._httpAuth.wwwPassword);
 		DEBUGLOGWIFI("AP Pass enabled: %s \r\n", ESPHTTPServer._httpAuth.wwwPassword.c_str());
@@ -256,7 +242,7 @@ void WIFIMOD_CLASS::configureWifiAP() {
 		DEBUGLOGWIFI("AP Pass disabled \r\n");
 	}
 	startDNSCaptive();
-	if (CONNECTION_LED >= 0) {	flashLED(CONNECTION_LED, 3, 250);	}
+	if (CONNECTION_LED >= 0) {	flashLED(CONNECTION_LED, 5, 250);	}
 	DEBUGLOGWIFI("AP Mode enabled. SSID: %s IP: %s\r\n", WiFi.softAPSSID().c_str(), WiFi.softAPIP().toString().c_str());
 	connectionTimout = 0;
 }
@@ -311,12 +297,8 @@ void WIFIMOD_CLASS::onWiFiConnected()	{
 void WIFIMOD_CLASS::onWiFiConnected(WiFiEventStationModeConnected data) {
 #endif
 
-	DBG_OUTPUT_PORT.println("WiFi Connected: Waiting for DHCP");
-	if (CONNECTION_LED >= 0) {
-		digitalWrite(CONNECTION_LED, LOW); // Turn LED on
-		//turnLedESPHTTPServer.on();
-		DEBUGLOGWIFI("Led %d on\n", CONNECTION_LED);
-	}
+	DEBUGLOGWIFI("WiFi Connected: Waiting for DHCP\n\r");
+	if (CONNECTION_LED >= 0) {espLedOn(); 	}	// Turn LED on
 	wifiDisconnectedSince = 0;
 
 }
@@ -329,11 +311,7 @@ void WIFIMOD_CLASS::onWiFiConnectedGotIP() {
 #elif defined(ESP8266)
 void WIFIMOD_CLASS::onWiFiConnectedGotIP(WiFiEventStationModeGotIP data) {
 #endif
-	if (CONNECTION_LED >= 0) {
-		digitalWrite(CONNECTION_LED, LOW);
-		 // Turn LED on
-		 //turnLedESPHTTPServer.on();
-	}
+	if (CONNECTION_LED >= 0) { espLedOn(); 	} // Turn LED on
 
 	DEBUGLOGWIFI("GotIP Address: %s \n", WiFi.localIP().toString().c_str());
 	DEBUGLOGWIFI("Gateway:    %s\r\n", WiFi.gatewayIP().toString().c_str());
@@ -352,14 +330,10 @@ void WIFIMOD_CLASS::onWiFiConnectedGotIP(WiFiEventStationModeGotIP data) {
 	udpBroadcast.begin(udpBroadcast.getUpdPortRx());
 	
 	//udp broadcast - we are online!
-    if (udpBroadcast.getudpPowerOn() == true ) { 
-		udpBroadcastSimple();
-	}
+    if (udpBroadcast.getudpPowerOn() == true ) {  udpBroadcastSimple(); }
 #endif
 
-#if defined(MODULE_NTP)
-`	modNtpClass.ntpOnConnected();
-#endif
+	modNtpClass.ntpOnConnected();
 
 
 }
@@ -374,12 +348,7 @@ void WIFIMOD_CLASS::onWiFiDisconnected(WiFiEventStationModeDisconnected data) {
 #if defined(MODULE_UDP)
 	udpBroadcast.udpStop();	// always stop!
 #endif
-
-#if defined(MODULE_NTP)
 	modNtpClass.ntpOnDisconected();
-#endif
-
-
 
 	if (wifiStatus == FS_STAT_RESET) {return;}
 
@@ -391,11 +360,7 @@ DEBUGLOGWIFI(" case STA_DISCONNECTED \r\n");
 		WiFi.disconnect();		// anyway need it to avoid wifi logic errors
 	}
 
-	if (CONNECTION_LED >= 0) {
-		digitalWrite(CONNECTION_LED, HIGH);
-		// flashLED(config.connectionLed, 2, 100);
-	} // Turn LED off
-	// FIXME
+	if (CONNECTION_LED >= 0) {	espLedOff();	}// Turn LED off
 	if (wifiDisconnectedSince == 0) { wifiDisconnectedSince = millis(); }
 	DEBUGLOGWIFI("Disconnected for %d seconds \r\n", (int)((millis() - wifiDisconnectedSince) / 1000));
 	wifiStatus = FS_STAT_CONNECTING;
@@ -466,8 +431,6 @@ void WIFIMOD_CLASS::send_info_values_html(AsyncWebServerRequest *request) {
 	values += "x_netmask|" 	+ (String)WiFi.subnetMask()[0] + "." + (String)WiFi.subnetMask()[1] + "." + (String)WiFi.subnetMask()[2] + "." + (String)WiFi.subnetMask()[3] + "|div\n";
 	values += "x_mac|" 		+ getMacAddress() + "|div\n";
 	values += "x_dns|" 		+ (String)WiFi.dnsIP()[0] + "." + (String)WiFi.dnsIP()[1] + "." + (String)WiFi.dnsIP()[2] + "." + (String)WiFi.dnsIP()[3] + "|div\n";
-
-
 
 	request->send(200, "text/plain", values);
 	state = "";

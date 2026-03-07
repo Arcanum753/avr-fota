@@ -46,6 +46,8 @@
 #include "core_json/module_json.h"
 #include "core_wifi/module_wifi.h"
 
+#include "common_gpio.h"
+
 
 
 #include "common.h"
@@ -58,20 +60,6 @@ String _Version_BuildDate 	= BUILD_TIME;
 
 AsyncFSWebServer::AsyncFSWebServer(uint16_t port) : AsyncWebServer(port) {}
 
-void flashLED(int pin, int times, int delayTime) {
-	int oldState = digitalRead(pin);
-
-
-	DEBUGLOGLED("---Flash LED during %d ms %d times. Old state = %d\r\n", delayTime, times, oldState);
-
-	for (int i = 0; i < times; i++) {
-		digitalWrite(pin, LOW); // Turn on LED
-		delay(delayTime);
-		digitalWrite(pin, HIGH); // Turn on LED
-		delay(delayTime);
-	}
-	digitalWrite(pin, oldState); // Turn on LED
-}
 
 #if defined(ESP32)
     void AsyncFSWebServer::begin(fs::SPIFFSFS* fs)
@@ -86,8 +74,6 @@ void flashLED(int pin, int times, int delayTime) {
 	DBG_OUTPUT_PORT.setDebugOutput(true);
 #endif // RELEASE
 
-// CONNECTION_LED pin defined as output
-	if (CONNECTION_LED >= 0) {	pinMode(CONNECTION_LED, OUTPUT);	}
 	// If this pin is HIGH during startup ESP will run in AP_ONLY mode. Backdoor to change WiFi settings when configured WiFi is not available.
 	if (AP_ENABLE_BUTTON >= 0) {	pinMode(AP_ENABLE_BUTTON, INPUT_PULLUP); 	}
 
@@ -96,8 +82,7 @@ void flashLED(int pin, int times, int delayTime) {
 		DEBUGLOG("AP Enable = %d\n", modWifiClass._apConfig.APenable);
 	}
 
-	if (CONNECTION_LED >= 0) {		digitalWrite(CONNECTION_LED, HIGH);	}
-	// Turn LED off
+	if (CONNECTION_LED >= 0) {		espLedOff();	}	// Turn LED off
     if (!_fs) { _fs->begin();  }// If SPIFFS is not started
 #ifndef RELEASE
 	{ // List files
@@ -130,9 +115,6 @@ void flashLED(int pin, int times, int delayTime) {
 	DEBUGLOG(hostName.c_str());
 	DEBUGLOG(".local to see the device web page.\r\n");
 	DEBUGLOG("Device serial number:");	DEBUGLOG(_sysConfig.deviceSerial.c_str());	DEBUGLOG("\n\r");
-	if (!_sysConfig.deviceType.isEmpty()) {
-		DEBUGLOG("Device type: ");	DEBUGLOG(_sysConfig.deviceType.c_str());	DEBUGLOG("\n\r");
-	}
 	#if defined(ESP32)
 	DEBUGLOG("Flash chip size: %u\r\n", ESP.getFlashChipSize());
 	#endif
@@ -147,10 +129,8 @@ void flashLED(int pin, int times, int delayTime) {
 	serverInit(); // Configure and start Web server
 	modWifiClass.webInit();
 	
-#if defined(MODULE_NTP)
 	modNtpClass.begin();
 	modNtpClass.webInit();
-#endif
 
 	
 	
@@ -202,7 +182,6 @@ void AsyncFSWebServer::defaultConfigSys() {
 	_sysConfig.deviceName 		= "esp_server";
 	_sysConfig.deviceSerial 	= SERIAL_NUMBER;
 	_sysConfig.deviceType 		= DEVMODULE_GPIO;
-	//_sysConfig.connectionLed = CONNECTION_LED;
 	save_configSys();
 }
 
@@ -343,8 +322,8 @@ bool AsyncFSWebServer::saveHTTPAuth() {
 
 bool AsyncFSWebServer:: handleFileRead(String path, AsyncWebServerRequest *request) {
 	DEBUGEDIT("handleFileRead: %s\r\n", path.c_str());
-	if (CONNECTION_LED >= 0) {	flashLED(CONNECTION_LED, 1, 25); 	}	// Show activity on LED
 	// CANNOT RUN DELAY() INSIDE CALLBACK
+	if (CONNECTION_LED >= 0) {	flashLED(CONNECTION_LED, 1, 30); 	}	// Show activity on LED
 	if (path.endsWith("/")) {	path += HTML_INDEX;	}
 	String contentType = getContentType(path, request);
 	String pathWithGz = path + ".gz";
@@ -352,8 +331,7 @@ bool AsyncFSWebServer:: handleFileRead(String path, AsyncWebServerRequest *reque
 		if (_fs->exists(pathWithGz)) { path += ".gz"; }
 		DEBUGEDIT("Content type: %s\r\n", contentType.c_str());
 		AsyncWebServerResponse *response = request->beginResponse(*_fs, path, contentType);
-		if (path.endsWith(".gz"))
-			response->addHeader("Content-Encoding", "gzip");
+		if (path.endsWith(".gz")) {response->addHeader("Content-Encoding", "gzip");}
 		//File file = SPIFFS.open(path, "r");
 		DEBUGEDIT("File %s exist\r\n", path.c_str());
 		request->send(response);

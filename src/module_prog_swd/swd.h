@@ -14,11 +14,26 @@
 #define SWD_DELAY       3
 
 #if defined(ESP32)
-#define swd_clock_pin   21 //;swclk
-#define swd_data_pin    19 //;swd
+
+#ifndef SWDPIN_CLK
+#define SWDPIN_CLK  21   // d19 swclk
+#endif
+
+#ifndef SWDPIN_DATA
+#define SWDPIN_DATA  19   // d19 miso
+#endif
+
+ 
 #elif defined(ESP8266)
-#define swd_clock_pin   5 //;swclk
-#define swd_data_pin    4 //;swd
+
+#ifndef SWDPIN_CLK
+#define SWDPIN_CLK  5   // d19 swclk
+#endif
+
+#ifndef SWDPIN_DATA
+#define SWDPIN_DATA  4   // d19 miso
+#endif
+
 #endif
 
 

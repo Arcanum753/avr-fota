@@ -17,16 +17,10 @@
 #include <FS.h>
 #endif
 
-#ifdef DEBUG_LED
-#define DEBUGLOGLED(...) Serial.printf(__VA_ARGS__)
-#else
-#define DEBUGLOGLED(...)
-#endif
 
 
 #include <Ticker.h>
 
-//#define CONNECTION_LED -1// Connection LED pin (Built in). -1 to disable
 
 #define JSON_STR_LEN    512
 // #define HIDE_CONFIG
@@ -86,7 +80,6 @@ Please Wait....Configuring.
 )=====";
 
 
-void flashLED(int pin, int times, int delayTime) ;
 
 String getContentType(String filename, AsyncWebServerRequest *request);
 

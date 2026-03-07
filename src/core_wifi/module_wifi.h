@@ -141,7 +141,7 @@ class  WIFIMOD_CLASS    {
 };
 
 
-extern WIFIMOD_CLASS modWifiClass;
+extern WIFIMOD_CLASS modWifiClass; 
 
 
 
