@@ -1,10 +1,10 @@
 
 #if defined(ESP32)
 #include <SPIFFS.h>
+#include "esp_task_wdt.h"
 #elif defined(ESP8266)
 #include <FS.h>
 #endif
-#include "esp_task_wdt.h"
 #include "version.h"
 #include <ESPAsyncWebServer.h>
 #include <Ticker.h>
@@ -47,7 +47,12 @@ void setup() {
 }
 
 void loop() {
+    #if defined(ESP32)
     esp_task_wdt_reset();
+    #endif
+    #if defined(ESP8266)
+    ESP.wdtFeed(); 
+    #endif
     TaskManager();
     loop_user();
     TerminalLoop();
