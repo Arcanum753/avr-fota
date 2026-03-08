@@ -25,25 +25,20 @@
 
 Ticker _secondEERtos;
 
-// unsigned long previousMillis = 0;
-// unsigned long interval = 10000;
-
 void setup() {
   
     Serial.begin(115200);
     InitRTOS(); // init eertos
-	_secondEERtos.attach_ms(1, &TimerService); // init eertos time manager
-	SPIFFS.begin(); // Not really needed, checked inside library and started if
-					// needed
-
+	SPIFFS.begin(); 
     printGitInfo();
 	// WiFi is started inside library
     ESPHTTPServer.begin(&SPIFFS);
-
+    
     TerminalInit();
     flashLEDinit(); 
     flashLED(CONNECTION_LED, 50, 250);
     // flashLEDTaskOn();
+	_secondEERtos.attach_ms(1, &TimerService); // init eertos time manager and start.
 }
 
 void loop() {

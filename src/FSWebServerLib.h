@@ -99,6 +99,7 @@ public:
     //Clear the configuration data (not the user config!) and optional reset the device
     //Clear the user configuration data (not the Wifi config!) and optional reset the device
     void serialShowInfo();
+    String getResetReason() ;
 
     strSysConfig    _sysConfig; // SYS configuration
 

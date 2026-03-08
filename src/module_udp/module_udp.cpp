@@ -219,6 +219,7 @@ void UDPBROADCAST_CLASS::get_udp_configuration_html(AsyncWebServerRequest *reque
 String UDPBROADCAST_CLASS::udpJsonGet() {
     String ret = "";
     JsonDocument jsonDoc;
+    
     jsonDoc["deviceName"]   = ESPHTTPServer._sysConfig.deviceName;
     jsonDoc["deviceSerial"] = ESPHTTPServer._sysConfig.deviceSerial;
     jsonDoc["deviceType"]   = ESPHTTPServer._sysConfig.deviceType;
@@ -227,12 +228,18 @@ String UDPBROADCAST_CLASS::udpJsonGet() {
     jsonDoc["udpPortTx"]    = _udpConfig.udpPortTx;
     jsonDoc["udpPortRx"]    = _udpConfig.udpPortRx;
     jsonDoc["udpTimeOut"]   = _udpConfig.udpTimeOut;
-    jsonDoc["udpPowerOn"]   = _udpConfig.udpPowerOn;
     jsonDoc["keyword"]      = _udpConfig.keyword;
+
+    jsonDoc["target"]       = BUILD_ENV;
+    jsonDoc["buildtime"]    = BUILD_TIME;
+    jsonDoc["gitbranch"]    = GIT_BRANCH;
+    jsonDoc["gitcommit"]    = GIT_COMMIT;
+    jsonDoc["uptime"]       = (String)NTP.getUptimeString();
+    jsonDoc["rstreason"]    =  ESPHTTPServer.getResetReason();
+
+    
     jsonDoc["espVer"]       = FIRMWARE_VERSION;
     jsonDoc["webVer"]       = VERSION_WEB;
-    jsonDoc["buildDate"]    = __DATE__;
-    jsonDoc["buildTime"]    = __TIME__;
 	
 	serializeJsonPretty(jsonDoc, ret);
     return ret;

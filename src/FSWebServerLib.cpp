@@ -226,8 +226,10 @@ void AsyncFSWebServer::html_send_chipinfo(AsyncWebServerRequest *request) {
 	#elif defined(ESP8266)
 	values += "x_chipid|" + (String)ESP.getChipId() + "|div\n";
 	#endif
-	values += "x_sdk|" + (String)ESP.getSdkVersion() + "|div\n";
+
 	values += "x_mhz|" + (String)ESP.getCpuFreqMHz() + "|div\n";
+	values += "x_sdk|" + (String)ESP.getSdkVersion() + "|div\n";
+	values += "x_reason|" + getResetReason() + "|div\n";
 
 	request->send(200, "text/plain", values);
 	//delete &values;
@@ -466,7 +468,7 @@ void AsyncFSWebServer::serverInit() {
 		if (!this->checkAuth(request)) {	return request->requestAuthentication(); };
 		this->get_system_configuration_html(request);
 	});	
-	// FIXME
+	
 	on("/system/savewwwauth", [this](AsyncWebServerRequest *request) {
 		if (!this->checkAuth(request)) {	return request->requestAuthentication(); };
 		this->set_wwwauth_configuration(request);
@@ -574,3 +576,33 @@ void AsyncFSWebServer::serialShowInfo() {
 }
 
 
+String AsyncFSWebServer:: getResetReason() {
+    String reason = "Unknown";
+    
+    #if defined(ESP32)
+        esp_reset_reason_t r = esp_reset_reason();
+        switch(r) {
+            case ESP_RST_POWERON:    {reason = "Power on"; break;}
+            case ESP_RST_SW:         {reason = "Software reset"; break;}
+            case ESP_RST_PANIC:      {reason = "Exception/Panic"; break;}
+            case ESP_RST_TASK_WDT:   {reason = "Task watchdog"; break;}
+            case ESP_RST_WDT:        {reason = "Hardware watchdog"; break;}
+            case ESP_RST_BROWNOUT:   {reason = "Brownout"; break;}
+            default: {break;}
+        }
+		#elif defined(ESP8266)
+        rst_info *resetInfo = ESP.getResetInfoPtr();
+        switch(resetInfo->reason) {
+			case REASON_DEFAULT_RST:      { reason = "Power on"; break;}
+            case REASON_WDT_RST:          { reason = "Watchdog"; break;}
+            case REASON_EXCEPTION_RST:    { reason = "Exception"; break;}
+            case REASON_SOFT_WDT_RST:     { reason = "Software watchdog"; break;}
+            case REASON_SOFT_RESTART:     { reason = "Software restart"; break;}
+            case REASON_DEEP_SLEEP_AWAKE: { reason = "Deep sleep wake"; break;}
+            case REASON_EXT_SYS_RST:      { reason = "External reset"; break;}
+			default: {break;}
+        }
+    #endif
+    
+    return reason;
+}
