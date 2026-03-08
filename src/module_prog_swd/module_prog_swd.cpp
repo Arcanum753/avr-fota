@@ -113,7 +113,7 @@ void Class_ProgSwd::cfg_SetDefault() {
 bool Class_ProgSwd::cfg_FileLoad() {
 	DEBUGLOGSWD(__PRETTY_FUNCTION__); DEBUGLOGSWD("\r\n");
 	JsonDocument jsonDoc;
-	if (!ModClassJson.load_jsonDoc(CONFIG_PROG_JSON, jsonDoc)){	return false;	}
+	if (ModClassJson.load_jsonDoc(CONFIG_PROG_JSON, jsonDoc) == false ){	return false;	}
 	// CfgFile_ProgSwd.programmer_type	= jsonDoc["type"].as<const char *>();
     CfgFile_ProgSwd.project_name		= jsonDoc["project"].as<const char *>();
     CfgFile_ProgSwd.chip_size			= jsonDoc["chipsize"].as<uint32_t>();

@@ -134,11 +134,7 @@ void MODULE_CLASS_EDITOR::handleFileList(AsyncWebServerRequest *request) {
 
 
 
-
-
-
 void MODULE_CLASS_EDITOR::handleFileCreate(AsyncWebServerRequest *request) {
-	
 	if (request->args() == 0)		{	return request->send(500, "text/plain", "BAD ARGS");}
 	String path = request->arg(0U);
 	DEBUGEDIT("handleFileCreate: %s\r\n", path.c_str());
@@ -155,7 +151,6 @@ void MODULE_CLASS_EDITOR::handleFileCreate(AsyncWebServerRequest *request) {
 // удаление файла
 
 void MODULE_CLASS_EDITOR::handleFileDelete(AsyncWebServerRequest *request) {
-	
 	if (request->args() == 0) 	{	return request->send(500, "text/plain", "BAD ARGS");	}
 	String path = request->arg(0U);
 	DEBUGEDIT("handleFileDelete: %s\r\n", path.c_str());

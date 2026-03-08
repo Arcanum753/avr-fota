@@ -139,7 +139,7 @@ bool Class_ProgIsp::cfg_FileLoad() {
 	DEBUGLOGISP(__PRETTY_FUNCTION__); DEBUGLOGISP("\r\n");
 
 	JsonDocument jsonDoc;
-	if (!ModClassJson.load_jsonDoc(CONFIG_PROG_JSON, jsonDoc)){	return false;	}
+	if (ModClassJson.load_jsonDoc(CONFIG_PROG_JSON, jsonDoc) == false){	return false;	}
 	// CfgFile_progIsp.programmer_type	= jsonDoc["type"].as<const char *>();
     CfgFile_progIsp.project_name		= jsonDoc["project"].as<const char *>();
     CfgFile_progIsp.chip_size			= jsonDoc["chipsize"].as<uint32_t>();

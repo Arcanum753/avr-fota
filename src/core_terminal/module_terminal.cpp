@@ -74,7 +74,7 @@ void TerminalEcho (void)    {   term.EchoOnOff();  }
 // Terminals shows actual net info
 void InfoShow() {    
     printGitInfo();
-    ESPHTTPServer.serialShowInfo();  
+    ESPHTTPServer.serialShowAbout();  
 }
 // show list of files at SPIFS
 void DirsShow() {

@@ -54,12 +54,9 @@
 
 AsyncFSWebServer ESPHTTPServer(80);
 
-String _Version_App 		= FIRMWARE_VERSION;
-String _Version_Web 		= VERSION_WEB;
-String _Version_BuildDate 	= BUILD_TIME;
+
 
 AsyncFSWebServer::AsyncFSWebServer(uint16_t port) : AsyncWebServer(port) {}
-
 
 #if defined(ESP32)
     void AsyncFSWebServer::begin(fs::SPIFFSFS* fs)
@@ -76,70 +73,37 @@ AsyncFSWebServer::AsyncFSWebServer(uint16_t port) : AsyncWebServer(port) {}
 
 	// If this pin is HIGH during startup ESP will run in AP_ONLY mode. Backdoor to change WiFi settings when configured WiFi is not available.
 	if (AP_ENABLE_BUTTON >= 0) {	pinMode(AP_ENABLE_BUTTON, INPUT_PULLUP); 	}
-
 	if (AP_ENABLE_BUTTON >= 0) {
 		modWifiClass._apConfig.APenable = !digitalRead(AP_ENABLE_BUTTON); // Read AP button. If button is pressed activate AP
 		DEBUGLOG("AP Enable = %d\n", modWifiClass._apConfig.APenable);
 	}
-
 	if (CONNECTION_LED >= 0) {		espLedOff();	}	// Turn LED off
     if (!_fs) { _fs->begin();  }// If SPIFFS is not started
-#ifndef RELEASE
-	{ // List files
-#if defined(ESP32)
-		File dir = _fs->open("/");
-
-#elif defined(ESP8266)
-		Dir dir = _fs->openDir("/");
-		while (dir.next()) {
-			String fileName = dir.fileName();
-			size_t fileSize = dir.fileSize();
-			DEBUGLOG("FS File: %s, size: %s\n", fileName.c_str(), formatBytes(fileSize).c_str());
-		}
-		DEBUGLOG("\n");
-#endif
-	}
-#endif // RELEASE
 
 	ModClassJson.setFs(&SPIFFS); // !!!MUST!!! be set as first as possible!
 
 	loadHTTPAuth();
-	if (!load_config_Sys()) { defaultConfigSys();  	}
+	defaultConfigSys();
+	if (load_config_Sys() == false) {  save_configSys(); 	}
 
 	modWifiClass.begin(&SPIFFS); // wifi load cfg and set callback hooks
 	
-	//WIFI INIT start here
-	String hostName = _sysConfig.deviceName + "_" + _sysConfig.deviceSerial;
 	
-	DEBUGLOG("Open http://");
-	DEBUGLOG(hostName.c_str());
-	DEBUGLOG(".local to see the device web page.\r\n");
-	DEBUGLOG("Device serial number:");	DEBUGLOG(_sysConfig.deviceSerial.c_str());	DEBUGLOG("\n\r");
-	#if defined(ESP32)
-	DEBUGLOG("Flash chip size: %u\r\n", ESP.getFlashChipSize());
-	#endif
-	#if ESP8266
-	DEBUGLOG("Flash chip size: %u\r\n", ESP.getFlashChipRealSize());
-	#endif
-	DEBUGLOG("Scketch size: %u\r\n", 		ESP.getSketchSize());
-	DEBUGLOG("Free flash space: %u\r\n", 	ESP.getFreeSketchSpace());
-	
+	serialShowAbout();
 	
 	AsyncWebServer::begin();
 	serverInit(); // Configure and start Web server
-	modWifiClass.webInit();
+	modWifiClass.webInit();	//WIFI INIT start here
 	
 	modNtpClass.begin();
 	modNtpClass.webInit();
-
 	
-	
-	String mdnsName = hostName;
+	String mdnsName =  getHostName();
 	MDNS.begin(mdnsName.c_str()); // I've not got this to work. Need some investigation.
 	MDNS.addService("http", "tcp", 80);
 	
 	modOtaClass.setFs(&SPIFFS);
-	modOtaClass.begin(hostName, _httpAuth.wwwPassword );  //ConfigureOTA(_httpAuth.wwwPassword.c_str());
+	modOtaClass.begin(getHostName(), _httpAuth.wwwPassword );  //ConfigureOTA(_httpAuth.wwwPassword.c_str());
 	modOtaClass.webInit();
 	
 	ModClassEdit.setFs(&SPIFFS);
@@ -161,48 +125,16 @@ AsyncFSWebServer::AsyncFSWebServer(uint16_t port) : AsyncWebServer(port) {}
 		progIsp.begin();
 		progIsp.web_Init();
 	#endif
-
-	// ledInit();
 }
-
-
-//duplicate config stuff for user level config items
-
-bool AsyncFSWebServer::load_config_Sys() {
-	JsonDocument jsonDoc;
-	if (!ModClassJson.load_jsonDoc(CONFIG_FILE_SYS, jsonDoc)){	return false;	}
-	_sysConfig.deviceName 			= jsonDoc["deviceName"].as<const char *>();
-	_sysConfig.deviceSerial 		= jsonDoc["deviceSerial"].as<const char *>();
-	_sysConfig.deviceType 			= jsonDoc["deviceType"].as<const char *>();
-	return true;
-}
-
-void AsyncFSWebServer::defaultConfigSys() {
-	// DEFAULT CONFIG SYSTEM
-	_sysConfig.deviceName 		= "esp_server";
-	_sysConfig.deviceSerial 	= SERIAL_NUMBER;
-	_sysConfig.deviceType 		= DEVMODULE_GPIO;
-	save_configSys();
-}
-
-bool AsyncFSWebServer::save_configSys() {
-	DEBUGLOG("Save config SYSTEM\r\n");
-	JsonDocument jsonDoc;
-	jsonDoc["deviceName"] 	= _sysConfig.deviceName;
-	jsonDoc["deviceSerial"] = _sysConfig.deviceSerial;
-	jsonDoc["deviceType"] 	= _sysConfig.deviceType;
-	return ModClassJson.save_jsonDoc(jsonDoc, CONFIG_FILE_SYS);
-}
-
 
 bool AsyncFSWebServer::loadHTTPAuth() {
 	DEBUGLOG(__PRETTY_FUNCTION__);	DEBUGLOG("\r\n");
 	JsonDocument jsonDoc;
-	if (!ModClassJson.load_jsonDoc(SECRET_FILE, jsonDoc)){
+	if (ModClassJson.load_jsonDoc(SECRET_FILE, jsonDoc) == false){
 		_httpAuth.auth = false;
 		_httpAuth.wwwUsername = "";
 		_httpAuth.wwwPassword = "";
-		DEBUGLOG("Huh");
+		DEBUGLOG("Huh\n\r");
 		return false;
 	}
 	_httpAuth.auth = jsonDoc["auth"];
@@ -345,28 +277,6 @@ bool AsyncFSWebServer:: handleFileRead(String path, AsyncWebServerRequest *reque
 	return false;
 }
 
-// *.html vvv
-void AsyncFSWebServer::html_version_info(AsyncWebServerRequest *request) { // answer for "get" request
-	//DEBUGLOG(__FUNCTION__);	DEBUGLOG("\r\n");
-	String values = "";
-	values += "devicename|"  	+ _sysConfig.deviceName  		+ "|div\n";
-	values += "deviceserial|" 	+ _sysConfig.deviceSerial 		+ "|div\n";
-	values += "devicetype|" 	+ _sysConfig.deviceType 		+ "|div\n";
-	values += "versionapp|" 	+ _Version_App + "|div\n";
-	values += "versionweb|" 	+ _Version_Web + "|div\n";
-	
-	//values += "versiondatetime|" + _Version_BuildDate + " " + _Version_BuildTime + "|div\n";
-
-	values += "gitbranch|" ;values += GIT_BRANCH ;values += "|div\n";
-	values += "gitcommit|" ;values += GIT_COMMIT ;values += "|div\n";
-	values += "buildenv|" ;values += BUILD_ENV ;values += "|div\n";
-	values += "versiondatetime|" ;values += BUILD_TIME ;values += "|div\n";
-	
-
-	request->send(200, "text/plain", values);
-}
-// *.html ^^^
-
 
 // project.html vvv
 void AsyncFSWebServer::send_project_configuration_values_html(AsyncWebServerRequest *request) { // answer for "get" request
@@ -429,8 +339,8 @@ String getContentType(String filename, AsyncWebServerRequest *request) {
 	else if (filename.endsWith(".htm"))  	{return "text/html";}
 	else if (filename.endsWith(".html")) 	{return "text/html";}
 	else if (filename.endsWith(".css")) 	{return "text/css";}
-	else if (filename.endsWith(".js"))   	{return "application/javascript";}
 	else if (filename.endsWith(".json")) 	{return "application/json";}
+	else if (filename.endsWith(".js"))   	{return "application/javascript";}
 	else if (filename.endsWith(".png")) 	{return "image/png";}
 	else if (filename.endsWith(".gif")) 	{return "image/gif";}
 	else if (filename.endsWith(".jpg")) 	{return "image/jpeg";}
@@ -553,27 +463,8 @@ bool AsyncFSWebServer::checkAuth(AsyncWebServerRequest *request) {
 
 }
 
-const String AsyncFSWebServer::getHostName() {
-	return _sysConfig.deviceName+"_"+_sysConfig.deviceSerial;
-}
 
-void AsyncFSWebServer::serialShowInfo() {
-	Serial.printf("wifi ssid: %s \n", WiFi.SSID().c_str());
-	Serial.printf("GotIP Address: %s \n", WiFi.localIP().toString().c_str());
 
-	#if defined(ESP32)
-    Serial.printf("WifiHostName  %s \n\r", 	WiFi.getHostname());
-    #elif defined(ESP8266)
-	Serial.printf("WifiHostName  %s \n\r", 	WiFi.hostname().c_str());
-    #endif
-
-	Serial.printf("Gateway: %s\r\n", WiFi.gatewayIP().toString().c_str());
-	Serial.printf("DNS: %s\r\n", WiFi.dnsIP().toString().c_str());
-
-	String hostname = _sysConfig.deviceName+"_"+_sysConfig.deviceSerial;
-	Serial.printf("local DNS hostname  http://%s.local \n\r", hostname.c_str());
-	Serial.printf("or you can connect directly  http://%s \n\r", WiFi.localIP().toString().c_str());
-}
 
 
 String AsyncFSWebServer:: getResetReason() {
@@ -606,3 +497,97 @@ String AsyncFSWebServer:: getResetReason() {
     
     return reason;
 }
+
+
+
+
+
+
+
+void AsyncFSWebServer::serialShowAbout() {
+	Serial.printf("\n\r\t\t**About** \n\r ");
+	Serial.printf("Project env: %s\n\r ", BUILD_ENV);	
+	Serial.printf("git branch: %s\n\r ", GIT_BRANCH);	
+	Serial.printf("ver date: %s\n\r ", BUILD_TIME);	
+	Serial.printf("ver build: %s\n\r ", String (VERSION_BUILD));	
+	
+	Serial.printf("Device serial number: %s\n\r ", _sysConfig.deviceSerial.c_str());	
+	#if defined(ESP32)
+	Serial.printf("Flash chip size: %u\r\n", ESP.getFlashChipSize());
+	#endif
+	#if ESP8266
+	Serial.printf("Flash chip size: %u\r\n", ESP.getFlashChipRealSize());
+	#endif
+	Serial.printf("Scketch size: %u\r\n", 		ESP.getSketchSize());
+	Serial.printf("Free flash space: %u\r\n", 	ESP.getFreeSketchSpace());
+
+	Serial.printf("wifi ssid: %s \n", WiFi.SSID().c_str());
+	Serial.printf("IP Address: %s \n", WiFi.localIP().toString().c_str());
+	#if defined(ESP32)
+    Serial.printf("WifiHostName  %s \n\r", 	WiFi.getHostname());
+    #elif defined(ESP8266)
+	Serial.printf("WifiHostName  %s \n\r", 	WiFi.hostname().c_str());
+    #endif
+	
+	Serial.printf("Gateway: %s\r\n", WiFi.gatewayIP().toString().c_str());
+	Serial.printf("DNS: %s\r\n", WiFi.dnsIP().toString().c_str());
+	Serial.printf("local DNS hostname  http://%s.local \n\r", getHostName().c_str());
+	Serial.printf("or you can connect directly  http://%s \n\r", WiFi.localIP().toString().c_str());
+	
+	
+}
+
+// *.html vvv
+void AsyncFSWebServer::html_version_info(AsyncWebServerRequest *request) { // answer for "get" request
+	//DEBUGLOG(__FUNCTION__);	DEBUGLOG("\r\n");
+	String values = "";
+	values += "devicename|"  	+ _sysConfig.deviceName  		+ "|div\n";
+	values += "deviceserial|" 	+ _sysConfig.deviceSerial 		+ "|div\n";
+	values += "devicetype|" 	+ _sysConfig.deviceType 		+ "|div\n";
+	values += "versionapp|" 	+ String(FIRMWARE_VERSION) + "|div\n";
+	values += "versionweb|" 	+ String(VERSION_WEB) + "|div\n";
+	
+	values += "gitbranch|" ;values += GIT_BRANCH ;values += "|div\n";
+	values += "gitcommit|" ;values += GIT_COMMIT ;values += "|div\n";
+	values += "buildenv|" ;values += BUILD_ENV ;values += "|div\n";
+	values += "versiondatetime|" ;values += BUILD_TIME ;values += "|div\n";
+	
+	request->send(200, "text/plain", values);
+}
+// *.html ^^^
+
+
+const String AsyncFSWebServer::getHostName() { return _sysConfig.deviceName+"_"+_sysConfig.deviceSerial; }
+
+bool AsyncFSWebServer::load_config_Sys() {
+	JsonDocument jsonDoc;
+	if (ModClassJson.load_jsonDoc(CONFIG_FILE_SYS, jsonDoc) == false){	return false;	}
+	_sysConfig.deviceName 			= jsonDoc["deviceName"].as<const char *>();
+	_sysConfig.deviceSerial 		= jsonDoc["deviceSerial"].as<const char *>();
+	_sysConfig.deviceType 			= jsonDoc["deviceType"].as<const char *>();
+	return true;
+}
+
+void AsyncFSWebServer::defaultConfigSys() {
+	// DEFAULT CONFIG SYSTEM
+	#ifdef ESP32
+	_sysConfig.deviceName 		= "esp32";    
+	_sysConfig.deviceSerial 	=   (String)ESP.getChipModel() ;
+	#endif
+	#if defined(ESP8266)
+	_sysConfig.deviceName 		= "esp8266";
+	_sysConfig.deviceSerial 	=   (String)ESP.getChipId() ;
+	#endif
+
+	_sysConfig.deviceType 		= DEVMODULE_GPIO;
+}
+
+bool AsyncFSWebServer::save_configSys() {
+	DEBUGLOG("Save config SYSTEM\r\n");
+	JsonDocument jsonDoc;
+	jsonDoc["deviceName"] 	= _sysConfig.deviceName;
+	jsonDoc["deviceSerial"] = _sysConfig.deviceSerial;
+	jsonDoc["deviceType"] 	= _sysConfig.deviceType;
+	return ModClassJson.save_jsonDoc(jsonDoc, CONFIG_FILE_SYS);
+}
+

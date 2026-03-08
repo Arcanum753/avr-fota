@@ -270,7 +270,7 @@ bool UDPBROADCAST_CLASS::save_configUDP() {
 bool UDPBROADCAST_CLASS::load_config_UDP() {
     DEBUGUDP("%s\n\r", __PRETTY_FUNCTION__);
     JsonDocument jsonDoc;
-    if (!ModClassJson.load_jsonDoc(CONFIG_FILE_UDP, jsonDoc)) { return false; }
+    if (ModClassJson.load_jsonDoc(CONFIG_FILE_UDP, jsonDoc) == false) { return false; }
     
     _udpConfig.udpPortTx    = jsonDoc["udpPortTx"].as<int>();
     _udpConfig.udpPortRx    = jsonDoc["udpPortRx"].as<int>();
@@ -286,3 +286,4 @@ bool UDPBROADCAST_CLASS::load_config_UDP() {
     
     return true;
 }
+

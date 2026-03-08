@@ -71,13 +71,13 @@ void printGitInfo() {
     #if defined(ESP8266)
     Serial.println("*** ESP8266 FIRMWARE INFORMATION ***");
 	#endif
-    Serial.println(" Chip firmware ver: " + String(FIRMWARE_VERSION));
+    Serial.println("Envoirement: " + String(BUILD_ENV));
+    Serial.println("Chip firmware ver: " + String(FIRMWARE_VERSION));
+    Serial.println("Build Date and time: " + String(BUILD_TIME));
     
     Serial.println("Git Branch: " + String(GIT_BRANCH));
     Serial.println("Git Commit: " + String(GIT_COMMIT));
-    Serial.println("Build Date and time: " + String(BUILD_TIME));
 
-    Serial.println("Envoirement: " + String(BUILD_ENV));
     
     #if defined(ESP32)
     Serial.println(" ESP32 WebPages version: "+ String(VERSION_WEB));

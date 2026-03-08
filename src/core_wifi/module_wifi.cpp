@@ -75,7 +75,7 @@ void WIFIMOD_CLASS::s_secondTick(void* arg) {
 	_fs = fs;
 	if (!_fs) { _fs->begin();  }// If SPIFFS is not started
 	connectionTimout = 0;
-	String hostName = ESPHTTPServer._sysConfig.deviceName + "_" + ESPHTTPServer._sysConfig.deviceSerial;
+	String hostName = ESPHTTPServer.getHostName();
 	WiFi.hostname(hostName.c_str());
 	if (AP_ENABLE_BUTTON >= 0) {
 		// Set AP mode if AP button was pressed
@@ -114,13 +114,10 @@ void WIFIMOD_CLASS::s_secondTick(void* arg) {
 
 bool WIFIMOD_CLASS::load_configWifi(int _in) {
 	if (_in < 0){ return false; }
-	
 	char filename[40];
 	sprintf(filename, "/%s%d.json", WIFI_CONFIG_FILE_NAME, _in);
 	JsonDocument jsonDoc;
-	if (!ModClassJson.load_jsonDoc(filename, jsonDoc)){
-		return false;
-	}
+	if (ModClassJson.load_jsonDoc(filename, jsonDoc) == false){ return false; }
 
 	_wifiConfig.ssid = jsonDoc["ssid"].as<const char *>();
 	if (_in == 0)  sprintf(_strWifi0, "%s", _wifiConfig.ssid.c_str());
@@ -229,7 +226,7 @@ void WIFIMOD_CLASS::configureWifiAP() {
 #if defined(MODULE_UDP)
 		udpBroadcast.udpStop();	// always stop!
 #endif
-	String APname = ESPHTTPServer._sysConfig.deviceName + "_" + ESPHTTPServer._sysConfig.deviceSerial;
+	String APname = ESPHTTPServer.getHostName();
 	if (WiFi.status() == WL_CONNECTED) { WiFi.disconnect();	}
 	WiFi.mode(WIFI_AP);
 	wifiStatus = FS_STAT_APMODE;
@@ -486,14 +483,8 @@ void WIFIMOD_CLASS::send_network_configuration_html(AsyncWebServerRequest *reque
 	{
 		//String temp = "";
 		bool oldDHCP = _wifiConfig.dhcp; // Save status to avoid general.html cleares it
-		_wifiConfig.dhcp = false;
 		for (uint8_t i = 0; i < request->args(); i++) {
 			DEBUGLOGWIFI("Arg %d: %s\r\n", i, request->arg(i).c_str());
-			if (request->argName(i) == "devicename") {
-				ESPHTTPServer._sysConfig.deviceName = urldecode(request->arg(i));
-				_wifiConfig.dhcp = oldDHCP;
-				continue;
-			}
 			if (request->argName(i) == "ssid") 		{ _wifiConfig.ssid = urldecode(request->arg(i));	continue; }
 			if (request->argName(i) == "password")	{ _wifiConfig.password = urldecode(request->arg(i)); continue; }
 			if (request->argName(i) == "ip_0")  { if (checkRange(request->arg(i))) 	_wifiConfig.ip[0] = request->arg(i).toInt(); continue; }

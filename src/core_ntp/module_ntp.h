@@ -17,7 +17,7 @@
 #endif
 
 
-#define CONFIG_FILE_NTP             "/config_ntp.json"
+#define CONFIG_FILE_NTP "/config_ntp.json"
 
 
 #define NTPSERVER_DFLT0 "pool.ntp.org";

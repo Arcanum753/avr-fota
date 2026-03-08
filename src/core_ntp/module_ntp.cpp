@@ -92,9 +92,7 @@ void NTPMOD_CLASS::ntpSwitchReserv (){
 
 bool NTPMOD_CLASS::load_config_NTP() {
 	JsonDocument jsonDoc;
-	if (!ModClassJson.load_jsonDoc(CONFIG_FILE_NTP, jsonDoc))	{
-		return false;
-	}
+	if (ModClassJson.load_jsonDoc(CONFIG_FILE_NTP, jsonDoc) == false) { return false; }
 	_ntpConfig.ntpServerName0 		= jsonDoc["ntp0"].as<const char *>();
 	_ntpConfig.ntpServerName1 		= jsonDoc["ntp1"].as<const char *>();
 	_ntpConfig.ntpServerName2 		= jsonDoc["ntp2"].as<const char *>();
