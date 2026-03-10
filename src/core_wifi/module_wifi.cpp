@@ -7,9 +7,10 @@
 #endif
 
 #include <DNSServer.h>
-
 #include <ArduinoJson.h>
+
 #include "FSWebServerLib.h"
+#include "main.h"
 #include "common.h"
 #include "debug.h"
 

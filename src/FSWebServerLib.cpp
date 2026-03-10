@@ -8,16 +8,14 @@
 #if defined(ESP32)
 #include <SPIFFS.h>
 #include <esp32-hal-gpio.h>
+#include <ESPmDNS.h>
+#include "core_ota32/module_ota32.h"
 #endif
 
 #if defined(ESP8266)
 #include <FS.h>
-#endif
-
-#if defined(ESP32)
-#include <ESPmDNS.h>
-#elif defined(ESP8266)
 #include <ESP8266mDNS.h>
+#include "core_ota8266/module_ota8266.h"
 #endif
 
 #if defined(PROGTYPE_ISP)
@@ -37,18 +35,15 @@
 #include "module_udp/module_udp.h"
 #endif
 
-#include "core_ntp/module_ntp.h"
 
 #include "debug.h"
 
+#include "core_ntp/module_ntp.h"
 #include "core_editor/module_editor.h"
-#include "core_ota/module_ota.h"
 #include "core_json/module_json.h"
 #include "core_wifi/module_wifi.h"
 
 #include "common_gpio.h"
-
-
 
 #include "common.h"
 
@@ -57,11 +52,12 @@ AsyncFSWebServer ESPHTTPServer(80);
 
 
 AsyncFSWebServer::AsyncFSWebServer(uint16_t port) : AsyncWebServer(port) {}
-
+// esp8266/esp32 flash file system
 #if defined(ESP32)
     void AsyncFSWebServer::begin(fs::SPIFFSFS* fs)
-#elif defined(ESP8266)
-    void AsyncFSWebServer::begin(FS* fs)                         // esp8266/esp32 flash file system
+#endif
+#if defined(ESP8266)
+    void AsyncFSWebServer::begin(FS* fs)                         
 #endif
 {
 	_fs = fs;
@@ -77,7 +73,7 @@ AsyncFSWebServer::AsyncFSWebServer(uint16_t port) : AsyncWebServer(port) {}
 		modWifiClass._apConfig.APenable = !digitalRead(AP_ENABLE_BUTTON); // Read AP button. If button is pressed activate AP
 		DEBUGLOG("AP Enable = %d\n", modWifiClass._apConfig.APenable);
 	}
-	if (CONNECTION_LED >= 0) {		espLedOff();	}	// Turn LED off
+
     if (!_fs) { _fs->begin();  }// If SPIFFS is not started
 
 	ModClassJson.setFs(&SPIFFS); // !!!MUST!!! be set as first as possible!
@@ -88,23 +84,29 @@ AsyncFSWebServer::AsyncFSWebServer(uint16_t port) : AsyncWebServer(port) {}
 
 	modWifiClass.begin(&SPIFFS); // wifi load cfg and set callback hooks
 	
-	
 	serialShowAbout();
-	
 	AsyncWebServer::begin();
 	serverInit(); // Configure and start Web server
+
 	modWifiClass.webInit();	//WIFI INIT start here
 	
 	modNtpClass.begin();
 	modNtpClass.webInit();
 	
 	String mdnsName =  getHostName();
-	MDNS.begin(mdnsName.c_str()); // I've not got this to work. Need some investigation.
+	MDNS.begin(mdnsName.c_str()); // I've not got this to work. Need some investigation. // TODO
 	MDNS.addService("http", "tcp", 80);
 	
+#if defined(ESP8266)
+	// modOta8266.setFs(&SPIFFS);
+    modOta8266.begin(getHostName(), _httpAuth.wwwPassword);
+    modOta8266.webInit();
+#endif
+#if defined(ESP32)
 	modOtaClass.setFs(&SPIFFS);
-	modOtaClass.begin(getHostName(), _httpAuth.wwwPassword );  //ConfigureOTA(_httpAuth.wwwPassword.c_str());
+	modOtaClass.begin(getHostName(), _httpAuth.wwwPassword ); 
 	modOtaClass.webInit();
+#endif
 	
 	ModClassEdit.setFs(&SPIFFS);
 	ModClassEdit.webInit();
@@ -150,23 +152,32 @@ bool AsyncFSWebServer::loadHTTPAuth() {
 
 // working with pages vvv
 void AsyncFSWebServer::html_send_chipinfo(AsyncWebServerRequest *request) {
-	DEBUGLOG(__FUNCTION__);	DEBUGLOG("\r\n");
-	String values = "";
-	
-	#ifdef ESP32
-	values += "x_chipid|" 	+ (String)ESP.getChipModel() + "|div\n";
-	#elif defined(ESP8266)
-	values += "x_chipid|" + (String)ESP.getChipId() + "|div\n";
-	#endif
-
-	values += "x_mhz|" + (String)ESP.getCpuFreqMHz() + "|div\n";
-	values += "x_sdk|" + (String)ESP.getSdkVersion() + "|div\n";
-	values += "x_reason|" + getResetReason() + "|div\n";
-
-	request->send(200, "text/plain", values);
-	//delete &values;
-	values = "";
-
+    DEBUGLOG(__FUNCTION__); DEBUGLOG("\r\n");
+    
+#if defined(ESP8266)
+    // Максимально простая версия для ESP8266 - минимум операций
+    char buffer[256];
+    snprintf(buffer, sizeof(buffer),
+        "x_chipid|%08X|div\n"
+        "x_mhz|%d|div\n"
+        "x_sdk|%s|div\n"
+        "x_reason|%s|div\n",
+        ESP.getChipId(),
+        ESP.getCpuFreqMHz(),
+        ESP.getSdkVersion(),
+        getResetReason().c_str()  // .c_str() вместо создания новой String
+    );
+    request->send(200, "text/plain", buffer);
+    
+#else
+    // Для ESP32 оставляем как было
+    String values = "";
+    values += "x_chipid|" + (String)ESP.getChipModel() + "|div\n";
+    values += "x_mhz|" + (String)ESP.getCpuFreqMHz() + "|div\n";
+    values += "x_sdk|" + (String)ESP.getSdkVersion() + "|div\n";
+    values += "x_reason|" + getResetReason() + "|div\n";
+    request->send(200, "text/plain", values);
+#endif
 }
 
 void AsyncFSWebServer::restart_esp() {

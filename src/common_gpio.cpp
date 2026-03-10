@@ -13,13 +13,13 @@
 
 
 #if defined(ESP8266)
-void espLedOn (){   digitalWrite(CONNECTION_LED, LOW); }
-void espLedOff (){  digitalWrite(CONNECTION_LED, HIGH); }
+void espLedOn (){	if (CONNECTION_LED >= 0) {digitalWrite(CONNECTION_LED, LOW);} }
+void espLedOff (){	if (CONNECTION_LED >= 0) {digitalWrite(CONNECTION_LED, HIGH);} }
 #endif
 
 #if defined(ESP32)
-void espLedOn (){  digitalWrite(CONNECTION_LED, HIGH); }
-void espLedOff (){ digitalWrite(CONNECTION_LED, LOW); }
+void espLedOn (){  if (CONNECTION_LED >= 0)	{digitalWrite(CONNECTION_LED, HIGH);} }
+void espLedOff (){ if (CONNECTION_LED >= 0)	{digitalWrite(CONNECTION_LED, LOW);} }
 #endif
 
 
@@ -32,9 +32,11 @@ uint8_t oldState = 0;
 
 void flashLEDinit(){
 	if (CONNECTION_LED >= 0) {	pinMode(CONNECTION_LED, OUTPUT);	}
+	if (CONNECTION_LED >= 0) {	espLedOff();	}	// Turn LED off
 }
 
 void flashLED(uint8_t _oldPin, uint16_t times, uint32_t _delayMS) {
+	if (_oldPin < 0) {return;}
 	if (isBlinking == 1) {return;}
 
 	oldPin = _oldPin;

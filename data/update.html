@@ -2,8 +2,8 @@
 <html>
 <head>
 	<title>ESP Firmware &amp FS OTA</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta http-equiv="Content-type" content="text/html; charset=utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta http-equiv="Content-type" content="text/html; charset=utf-8">
 	<link rel="stylesheet" href="style.css">
 	<script src="FSBrowserNG.js"></script>
 </head>
@@ -12,7 +12,7 @@
     <h2 class="title" style="background: #7D8EE2; padding: 8px;"> ESP chip firmware &amp filesystem self update page</h2>
     <hr>
     
-    <!-- Контейнер для отображения прогресса (только серверный) -->
+    <!-- Контейнер для отображения прогресса -->
     <div id="progressContainer" style="text-align: center; margin: 10px 0; padding: 10px; background-color: #f0f0f0; border-radius: 5px; display: none;">
         <div id="progressText">Upload progress: 0%</div>
         <div style="width: 100%; background-color: #ddd; border-radius: 3px; margin-top: 5px;">
@@ -20,34 +20,35 @@
         </div>
     </div>
     
-    <form id="uploadForm" enctype='multipart/form-data'>
-        <table align = "center"> 
-            <tr><td> <input id="fileName" type='file' name='update' onchange="summd5()" > </td> </tr>
-            <tr><td id="md5row" >
+    <form id="uploadForm" enctype='multipart/form-data' action="/update" method="POST">
+        <table align="center"> 
+            <tr><td> <input id="fileName" type='file' name='update' onchange="summd5()"> </td> </tr>
+            <tr><td id="md5row">
                     Calculated file MD5 hash: <span id="clientHash">Select a file</span><br>
                     Size: <span id="fileSize"></span> Bytes <br>
                     Filename: <span id="fileNameLoaded"></span>
                 </td>
-
-                <tr><td id="VersionDiff" >
+            </tr>
+            <tr><td id="VersionDiff">
                      <span id="updStatus"> </span><br>
                      <span id="updSizeFree"> </span><br>
                      <span id="updSizeMax"> </span><br>
                      <span id="updFileType"> </span><br>
-
                      <span id="updVerDiffName"> </span><br>
                      <span id="updVerDiffMaj"> </span><br>
                      <span id="updVerDiffCore"> </span><br>
                      <span id="updVerDiffMod"> </span><br>
                      <span id="updVerDiffBuild"> </span><br>
                 </td>
-            <tr><td> 
-                <input id="updateButton" type='button' value='Update ESP chip firmware.' disabled onclick="uploadFile()">
-                <label>
-                    <input type="checkbox" id="ignoreCheck" onchange="updateButtonState()">Ignore validation and force upload </label>
-            </td> </tr>
             </tr>
-            
+            <tr><td> 
+                <input id="updateButton" type='submit' value='Update ESP chip firmware.' disabled>
+                <br>
+                <label>
+                    <input type="checkbox" id="ignoreCheck" onchange="updateButtonState()">
+                    Ignore validation and force upload
+                </label>
+            </td></tr>
         </table>
     </form>
 
@@ -56,31 +57,28 @@
     <script src="GetJson.js" defer></script>
     <script src="microajax.js" defer></script>
     <script src="spark-md5.js" defer></script>
-    <script> 
-        // Переменные для хранения таймера и состояния
+    
+    <script>
         let progressTimer = null;
         let isUploading = false;
-
-        window.onload = function () {
-      	  	setTimeout(() => {
-        			ApplyCVT("/system/infovalues");
-                    ApplyCVT("/system/version");
-      		}, 250);
-        };
-
-        var blobSlice = File.prototype.slice || File.prototype.mozSlice || File.prototype.webkitSlice,
-                  input = document.getElementById('fileName'),
-                  running = false,
-                  ua = navigator.userAgent.toLowerCase();
-
-        // Сохраняем последние результаты проверки
         let lastCheckResult = {
             canUpdate: false,
             fileType: "UNSUPPORTED",
             buttonText: ""
         };
 
-        // Функция для остановки таймера
+        window.onload = function () {
+            setTimeout(() => {
+                ApplyCVT("/system/infovalues");
+                ApplyCVT("/system/version");
+            }, 250);
+        };
+
+        var blobSlice = File.prototype.slice || File.prototype.mozSlice || File.prototype.webkitSlice,
+            input = document.getElementById('fileName'),
+            running = false,
+            ua = navigator.userAgent.toLowerCase();
+
         function stopProgressPolling() {
             if (progressTimer) {
                 clearInterval(progressTimer);
@@ -89,10 +87,8 @@
             isUploading = false;
         }
 
-        // Функция для скрытия прогресс-бара
         function hideProgressBar() {
             document.getElementById('progressContainer').style.display = 'none';
-            // Сбрасываем прогресс-бар для следующей загрузки
             updateProgressDisplay(0);
         }
 
@@ -100,7 +96,6 @@
             document.getElementById('progressContainer').style.display = 'block';
             isUploading = true;
             
-            // Останавливаем предыдущий таймер если был
             if (progressTimer) {
                 clearInterval(progressTimer);
                 progressTimer = null;
@@ -122,12 +117,9 @@
                             if (fields[0] === "percent") {
                                 const percent = parseInt(fields[1]);
                                 updateProgressDisplay(percent);
-                                
                                 if (percent >= 100) {
                                     setTimeout(() => {
-                                        if (isUploading) {
-                                            // Таймер остановится после получения ответа в uploadFile
-                                        }
+                                        isUploading = false;
                                     }, 2000);
                                 }
                                 break;
@@ -185,7 +177,6 @@
                     md5hash = SparkMD5.hashBinary(e.target.result);
                     console.info('Finished loading!');
                     console.info('Computed hash: ' + md5hash);
-                    console.info('Total time: ' + (new Date().getTime() - time) + 'ms');
                     
                     document.getElementById('md5row').hidden = false;
                     document.getElementById('clientHash').innerHTML = md5hash;
@@ -305,12 +296,10 @@
                 if (nameMatch != "MATCHED") {
                     canUpdate = false;
                     buttonText = "WRONG DEVICE!";
-                } else  
-                if (fileType == "UNSUPPORTED") {
+                } else if (fileType == "UNSUPPORTED") {
                     canUpdate = false;
                     buttonText = "UNSUPPORTED FILE!";
-                } else
-                if (status != "OK") {
+                } else if (status != "OK") {
                     canUpdate = false;
                     buttonText = "INSUFFICIENT SPACE!";
                 } else {
@@ -351,7 +340,10 @@
             return "0 (same)";
         }
 
-        function uploadFile() {
+        // Перехватываем отправку формы для прогресса
+        document.getElementById('uploadForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
             const fileInput = document.getElementById('fileName');
             const file = fileInput.files[0];
             
@@ -362,21 +354,24 @@
             
             startProgressPolling();
             
-            const formData = new FormData();
-            formData.append('update', file);
+            const formData = new FormData(this);
             
             const xhr = new XMLHttpRequest();
             
-            xhr.open('POST', '/update', true);
+            xhr.upload.addEventListener('progress', function(e) {
+                if (e.lengthComputable) {
+                    const percentComplete = Math.round((e.loaded / e.total) * 100);
+                    updateProgressDisplay(percentComplete);
+                }
+            });
+            
+            xhr.open('POST', this.action, true);
             
             xhr.onload = function() {
-                // Останавливаем таймер сразу после получения ответа
                 stopProgressPolling();
                 
                 if (xhr.status === 200) {
                     console.log('Upload successful');
-                    
-                    // Обновляем прогресс-бар на 100% перед скрытием
                     updateProgressDisplay(100);
                     
                     if (xhr.responseText.includes('refresh') || xhr.responseText.includes('Restarting')) {
@@ -385,7 +380,6 @@
                         }, 3000);
                     } else {
                         alert('Update successful! Device will restart.');
-                        // Если не будет редиректа, скрываем прогресс-бар через 2 секунды
                         setTimeout(() => {
                             hideProgressBar();
                         }, 2000);
@@ -404,17 +398,9 @@
                 hideProgressBar();
             };
             
-            xhr.ontimeout = function() {
-                console.error('Upload timeout');
-                alert('Upload timeout');
-                stopProgressPolling();
-                hideProgressBar();
-            };
-            
             xhr.send(formData);
-        }
+        });
 
     </script>
-   
 </body>
 </html>

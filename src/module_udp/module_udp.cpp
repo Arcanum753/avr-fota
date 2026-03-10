@@ -1,7 +1,7 @@
 #include <Arduino.h>
 #include <ArduinoJson.h>
 #include "version.h"
-
+#include "main.h"
 #ifdef ESP32
 #include <ESPmDNS.h>
 #include <AsyncUDP.h>
@@ -42,7 +42,7 @@ void UDPBROADCAST_CLASS::begin(uint16_t _port) {
     if (_isStarted){    return;    }
     
     _portRx = _port;
-    SetTask(udpBroadcastTimer);
+    // SetTask(udpBroadcastTimer);
     
     if (_udp.listen(_portRx)) {
         DEBUGUDP("UDP Listening on IP: %s and port %u\n\r",  WiFi.localIP().toString().c_str(), _portRx);

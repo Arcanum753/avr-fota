@@ -2,11 +2,13 @@
 #if defined(ESP32)
 #include <SPIFFS.h>
 #include "esp_task_wdt.h"
-#elif defined(ESP8266)
+#include "core_ota32/module_ota32.h"
+#endif
+#if defined(ESP8266)
 #include <FS.h>
+#include "core_ota8266/module_ota8266.h"
 #endif
 #include "version.h"
-#include <ESPAsyncWebServer.h>
 #include <Ticker.h>
 
 #include "main.h"
@@ -15,53 +17,52 @@
 
 #include "core_terminal/ErriezSerialTerminal.h"
 #include "core_terminal/module_terminal.h"
-#include "core_ota/module_ota.h"
-
 
 #include "version.h"
 #include "common_gpio.h"
 
 // pin used for entering setup mode
-
+bool fsMounted = false;
 Ticker _secondEERtos;
 
 void setup() {
   
     Serial.begin(115200);
     InitRTOS(); // init eertos
-	SPIFFS.begin(); 
+    fsMounted = SPIFFS.begin();
+    if (fsMounted == false) { Serial.println("\n\r\nSPIFFS Mount Failed\n\r\n\r"); }
     printGitInfo();
 	// WiFi is started inside library
     ESPHTTPServer.begin(&SPIFFS);
-    
     TerminalInit();
     flashLEDinit(); 
-    flashLED(CONNECTION_LED, 50, 250);
+    flashLED(CONNECTION_LED, 25, 150);
     // flashLEDTaskOn();
 	_secondEERtos.attach_ms(1, &TimerService); // init eertos time manager and start.
 }
 
 void loop() {
-    #if defined(ESP32)
+#if defined(ESP32)
     esp_task_wdt_reset();
-    #endif
-    #if defined(ESP8266)
+#endif
+#if defined(ESP8266)
     ESP.wdtFeed(); 
-    #endif
+#endif
     TaskManager();
     loop_user();
     TerminalLoop();
+#if defined(ESP8266)
+    modOta8266.loopHandler();
+#endif
+#if defined(ESP32)
     modOtaClass.loopHandler();
+#endif
+
 }
 
 void loop_user(){
 
 }
-
-
-
-
-
 
 void printGitInfo() {
     Serial.println("\n");
@@ -89,7 +90,4 @@ void printGitInfo() {
 }
 
 
-// #define BUILD_ENV "esp32-swd"
-
-
-// #define ACTIVE_MODULE "module_prog_swd"
+bool isFsMounted() { return fsMounted;  }

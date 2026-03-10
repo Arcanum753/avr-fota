@@ -1,6 +1,7 @@
 
 #include "FSWebServerLib.h"
 #include "module_editor.h"
+#include "main.h"
 
 MODULE_CLASS_EDITOR ModClassEdit(false);
 

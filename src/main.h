@@ -15,12 +15,7 @@
 #define HIDE_SECRET
 // #define HIDE_CONFIG
 
-// #define PROGTYPE_ISP
-// #define DEBUG_ISP
 #define DEBUG_SHOWHEXBUF 0 // ISP
-
-//#define PROGTYPE_SWD
-// #define DEBUG_SWD
 
 
 
@@ -29,3 +24,4 @@
 void printGitInfo() ;
 
 void loop_user();
+bool isFsMounted() ;
