@@ -32,6 +32,7 @@
 #include <ESP8266WiFi.h>
 #include <ESPAsyncTCP.h>
 #include <FS.h>
+
 #else
 #error Platform not supported
 #endif
@@ -62,6 +63,7 @@ typedef enum {
   HTTP_ANY     = 0b01111111,
 } WebRequestMethod;
 #endif
+
 
 //if this value is returned when asked for data, packet will not be sent and you will be asked for data again
 #define RESPONSE_TRY_AGAIN 0xFFFFFFFF

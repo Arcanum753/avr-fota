@@ -9,13 +9,11 @@
 #include <SPIFFS.h>
 #include <esp32-hal-gpio.h>
 #include <ESPmDNS.h>
-#include "core_ota32/module_ota32.h"
 #endif
 
 #if defined(ESP8266)
 #include <FS.h>
 #include <ESP8266mDNS.h>
-#include "core_ota8266/module_ota8266.h"
 #endif
 
 #if defined(PROGTYPE_ISP)
@@ -38,6 +36,7 @@
 
 #include "debug.h"
 
+#include "core_ota/module_ota.h"
 #include "core_ntp/module_ntp.h"
 #include "core_editor/module_editor.h"
 #include "core_json/module_json.h"
@@ -97,16 +96,9 @@ AsyncFSWebServer::AsyncFSWebServer(uint16_t port) : AsyncWebServer(port) {}
 	MDNS.begin(mdnsName.c_str()); // I've not got this to work. Need some investigation. // TODO
 	MDNS.addService("http", "tcp", 80);
 	
-#if defined(ESP8266)
-	// modOta8266.setFs(&SPIFFS);
-    modOta8266.begin(getHostName(), _httpAuth.wwwPassword);
-    modOta8266.webInit();
-#endif
-#if defined(ESP32)
 	modOtaClass.setFs(&SPIFFS);
 	modOtaClass.begin(getHostName(), _httpAuth.wwwPassword ); 
 	modOtaClass.webInit();
-#endif
 	
 	ModClassEdit.setFs(&SPIFFS);
 	ModClassEdit.webInit();

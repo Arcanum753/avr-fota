@@ -17,7 +17,9 @@
 
 #define DEBUG_SHOWHEXBUF 0 // ISP
 
-
+#ifndef  CONNECTION_LED
+#define CONNECTION_LED -1
+#endif
 
 //#define RELEASE  // Comment to enable debug output
 

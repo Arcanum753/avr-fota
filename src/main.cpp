@@ -2,11 +2,9 @@
 #if defined(ESP32)
 #include <SPIFFS.h>
 #include "esp_task_wdt.h"
-#include "core_ota32/module_ota32.h"
 #endif
 #if defined(ESP8266)
 #include <FS.h>
-#include "core_ota8266/module_ota8266.h"
 #endif
 #include "version.h"
 #include <Ticker.h>
@@ -15,6 +13,7 @@
 #include "FSWebServerLib.h"
 #include "eertos.h"
 
+#include "core_ota/module_ota.h"
 #include "core_terminal/ErriezSerialTerminal.h"
 #include "core_terminal/module_terminal.h"
 
@@ -37,7 +36,6 @@ void setup() {
     TerminalInit();
     flashLEDinit(); 
     flashLED(CONNECTION_LED, 25, 150);
-    // flashLEDTaskOn();
 	_secondEERtos.attach_ms(1, &TimerService); // init eertos time manager and start.
 }
 
@@ -51,12 +49,7 @@ void loop() {
     TaskManager();
     loop_user();
     TerminalLoop();
-#if defined(ESP8266)
-    modOta8266.loopHandler();
-#endif
-#if defined(ESP32)
     modOtaClass.loopHandler();
-#endif
 
 }
 
