@@ -1,11 +1,10 @@
 #include <ArduinoJson.h>
 #include "FSWebServerLib.h"
-// #include "debug.h"
 
 #include "main.h"
-#include "core_json/module_json.h"
-#include "core_wifi/module_wifi.h"
-#include "core_ntp/module_ntp.h"
+#include "core_json/core_json.h"
+#include "core_wifi/core_wifi.h"
+#include "core_ntp.h"
 
 #if defined(MODULE_UDP)
 #include "module_udp/module_udp.h"
@@ -13,14 +12,14 @@
 
 
 #include "common.h"
-NTPMOD_CLASS modNtpClass(false);
+CORE_CLASS_NTP modNtpClass(false);
 
 
-NTPMOD_CLASS :: NTPMOD_CLASS (bool _in) { dumb = _in; }
+CORE_CLASS_NTP :: CORE_CLASS_NTP (bool _in) { dumb = _in; }
 
 
 // init
-void NTPMOD_CLASS::begin (){
+void CORE_CLASS_NTP::begin (){
 
 	DEBUGNTP(__PRETTY_FUNCTION__);	DEBUGNTP("\r\n");
 	_ntpServerCount = 0;
@@ -34,7 +33,7 @@ void NTPMOD_CLASS::begin (){
 
 
 // on WiFi connect
-void NTPMOD_CLASS::ntpOnConnected (){
+void CORE_CLASS_NTP::ntpOnConnected (){
 	DEBUGNTP(__PRETTY_FUNCTION__);	DEBUGNTP("\r\n");
 	if (updateTimeFromNTP == true) { // Enable NTP sync
         NTP.setInterval ( _ntpConfig.updateNTPTimeEvery * MINUTES);
@@ -46,13 +45,13 @@ void NTPMOD_CLASS::ntpOnConnected (){
 
 
 
-void NTPMOD_CLASS::ntpOnDisconected () {
+void CORE_CLASS_NTP::ntpOnDisconected () {
 	DEBUGNTP(__PRETTY_FUNCTION__);	DEBUGNTP("\r\n");
 	NTP.stop(); 
 }
 
 
-void NTPMOD_CLASS::ntpOnSyncHandler(NTPSyncEvent_t event)	{
+void CORE_CLASS_NTP::ntpOnSyncHandler(NTPSyncEvent_t event)	{
 	int _ntpevent = static_cast<int>(event);
 
     if ( _ntpevent == timeSyncd) 		{ 
@@ -75,7 +74,7 @@ void NTPMOD_CLASS::ntpOnSyncHandler(NTPSyncEvent_t event)	{
 	}
 }
 
-void NTPMOD_CLASS::ntpSwitchReserv (){
+void CORE_CLASS_NTP::ntpSwitchReserv (){
 
 	if  (_ntpServerCount == 0)	{_ntpServerNow = _ntpConfig.ntpServerName0;}
 	if  (_ntpServerCount == 1)	{_ntpServerNow = _ntpConfig.ntpServerName1;}
@@ -87,7 +86,7 @@ void NTPMOD_CLASS::ntpSwitchReserv (){
 
 
 
-bool NTPMOD_CLASS::load_config_NTP() {
+bool CORE_CLASS_NTP::load_config_NTP() {
 	JsonDocument jsonDoc;
 	if (ModClassJson.load_jsonDoc(CONFIG_FILE_NTP, jsonDoc) == false) { return false; }
 	_ntpConfig.ntpServerName0 		= jsonDoc["ntp0"].as<const char *>();
@@ -103,7 +102,7 @@ bool NTPMOD_CLASS::load_config_NTP() {
 	return true;
 }
 
-bool NTPMOD_CLASS::save_configNTP() {
+bool CORE_CLASS_NTP::save_configNTP() {
 	DEBUGNTP("Save config NTP \r\n");
 	JsonDocument jsonDoc;
 	jsonDoc["ntp0"] 		= _ntpConfig.ntpServerName0;
@@ -115,7 +114,7 @@ bool NTPMOD_CLASS::save_configNTP() {
 	return ModClassJson.save_jsonDoc(jsonDoc, CONFIG_FILE_NTP);
 }
 
-void NTPMOD_CLASS::defaultConfigNTP() {
+void CORE_CLASS_NTP::defaultConfigNTP() {
 	// DEFAULT CONFIG NTP
 	_ntpConfig.ntpServerName0 = NTPSERVER_DFLT0;
 	_ntpConfig.ntpServerName1 = NTPSERVER_DFLT1;
@@ -126,7 +125,7 @@ void NTPMOD_CLASS::defaultConfigNTP() {
 	
 }
 
-void NTPMOD_CLASS::webInit ()	{
+void CORE_CLASS_NTP::webInit ()	{
 	DEBUGNTP(__PRETTY_FUNCTION__);	DEBUGNTP("\r\n");
 	
 	ESPHTTPServer.on("/ntp/info", HTTP_GET, [this](AsyncWebServerRequest *request) {
@@ -144,7 +143,7 @@ void NTPMOD_CLASS::webInit ()	{
 }
 
 
-void NTPMOD_CLASS::send_NTP_info_html(AsyncWebServerRequest *request) {
+void CORE_CLASS_NTP::send_NTP_info_html(AsyncWebServerRequest *request) {
 	DEBUGNTP(__FUNCTION__);	DEBUGNTP("\r\n");
 	String values = "";
 
@@ -160,7 +159,7 @@ void NTPMOD_CLASS::send_NTP_info_html(AsyncWebServerRequest *request) {
 
 
 // ntp.html vvv
-void NTPMOD_CLASS::html2ntp_configuration(AsyncWebServerRequest *request) {
+void CORE_CLASS_NTP::html2ntp_configuration(AsyncWebServerRequest *request) {
 	DEBUGNTP(__PRETTY_FUNCTION__);	DEBUGNTP("\r\n");
 	if (request->args() > 0)  {// Save Settings
 		_ntpConfig.daylight = false;
@@ -200,7 +199,7 @@ void NTPMOD_CLASS::html2ntp_configuration(AsyncWebServerRequest *request) {
 }
 
 
-void NTPMOD_CLASS::send_NTP_configuration_values_html(AsyncWebServerRequest *request) {
+void CORE_CLASS_NTP::send_NTP_configuration_values_html(AsyncWebServerRequest *request) {
 	DEBUGNTP(__FUNCTION__);	DEBUGNTP("\r\n");
 	String values = "";
 	values += "ntpserver0|" 	+ (String)_ntpConfig.ntpServerName0 			+ "|input\n";
@@ -221,7 +220,7 @@ void NTPMOD_CLASS::send_NTP_configuration_values_html(AsyncWebServerRequest *req
 // ntp.html ^^^
 
 
-void NTPMOD_CLASS::sendTimeData() {
+void CORE_CLASS_NTP::sendTimeData() {
 	// DEBUGNTP(__PRETTY_FUNCTION__);	DEBUGNTP("\r\n");
 	DEBUGNTP("sendTimeData %s\r\n", NTP.getTimeDateString().c_str());
 }

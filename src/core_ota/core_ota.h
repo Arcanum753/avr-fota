@@ -45,9 +45,9 @@ struct fileCompareResult {
 };
 
 
-class  MODULE_OTA_CLASS    {
+class  CORE_OTA_CLASS    {
 public:
-    MODULE_OTA_CLASS (bool _in);
+    CORE_OTA_CLASS (bool _in);
 
 #if ESP32
     fs::SPIFFSFS*               _fs;
@@ -75,9 +75,10 @@ public:
     void html_fileuploadProgress(AsyncWebServerRequest *request);
     
     void updateFileExecute (AsyncWebServerRequest *request) ;
-
-
-
+    
+    String getVersionStr();
+    String getGeneratedTime();
+    String getCommitDateStr();
 
 protected: 
     uint16_t fileUpadedpercent = 0;
@@ -98,7 +99,7 @@ private:
 
 };
 
-extern MODULE_OTA_CLASS modOtaClass;
+extern CORE_OTA_CLASS modOtaClass;
 
 
 

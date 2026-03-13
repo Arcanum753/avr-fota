@@ -2,6 +2,7 @@
 #define _MODULE_EDITOR_h
 #include "main.h"
 
+
 #ifdef DEBUG_EDITOR
 #define DEBUGEDIT(...) Serial.printf(__VA_ARGS__)
 #else
@@ -17,9 +18,9 @@
 
 
 
-class  MODULE_CLASS_EDITOR    {
+class  CORE_CLASS_EDITOR    {
 public:    
-    MODULE_CLASS_EDITOR (bool _in);
+    CORE_CLASS_EDITOR (bool _in);
 #if ESP32
     void setFs(fs::SPIFFSFS* fs);
 #elif defined(ESP8266)
@@ -30,6 +31,10 @@ public:
     void handleFileList(AsyncWebServerRequest *request);
     void handleFileCreate(AsyncWebServerRequest *request);
     void handleFileDelete(AsyncWebServerRequest *request);
+    String getVersionStr();
+    String getGeneratedTime();
+    String getCommitDateStr();
+    
 
 protected: 
 #if ESP32
@@ -44,7 +49,7 @@ public:
     void handleFileUpload(AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final);
 };
 
-extern MODULE_CLASS_EDITOR ModClassEdit;
+extern CORE_CLASS_EDITOR ModClassEdit;
 
 
 

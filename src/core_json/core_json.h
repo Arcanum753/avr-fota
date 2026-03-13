@@ -17,10 +17,13 @@
 #endif
 
 
-class  MODULE_CLASS_JSON    {
+class  CORE_CLASS_JSON    {
     
 public:    
-    MODULE_CLASS_JSON (bool _in);
+    CORE_CLASS_JSON (bool _in);
+    String getVersionStr();
+    String getGeneratedTime();
+    String getCommitDateStr();
 protected: 
     #if ESP32
     fs::SPIFFSFS*               _fs;
@@ -45,9 +48,7 @@ protected:
 
 };
 
-extern MODULE_CLASS_JSON ModClassJson;
-
-
+extern CORE_CLASS_JSON ModClassJson;
 
 
 #endif // _MODULE_JSON_h

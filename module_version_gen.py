@@ -24,6 +24,9 @@ VERSION_STORAGE_FILE = ".module_versions"  # файл для хранения в
 # ========== ФОРМАТ ВЫВОДА ==========
 SHOW_INFO = True                          # показывать информацию в консоль
 
+# ========== ФОРМАТЫ ==========
+DATE_FORMAT = "%Y.%m.%d %H:%M"            # формат даты: yyyy.mm.dd hh.mm
+
 # ============================================================
 # ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
 # ============================================================
@@ -58,21 +61,35 @@ def get_folder_hash(project_dir, folder_path):
     
     return None
 
-def get_commit_date(project_dir, folder_path):
+def get_commit_date(project_dir, folder_path, str_format=False):
     """
     Возвращает дату последнего коммита для указанной папки.
-    Формат: YYYY-MM-DD HH:MM
+    Если str_format=True, возвращает в формате yyyy.mm.dd hh.mm
+    Иначе возвращает в формате YYYY-MM-DD HH:MM для парсинга
     """
     try:
-        result = subprocess.run(
-            ["git", "log", "-1", "--format=%Y-%m-%d %H:%M", folder_path],
-            cwd=str(project_dir),
-            capture_output=True,
-            text=True,
-            check=False
-        )
-        if result.returncode == 0 and result.stdout.strip():
-            return result.stdout.strip()
+        if str_format:
+            # Запрашиваем сразу в нужном формате
+            result = subprocess.run(
+                ["git", "log", "-1", f"--format={DATE_FORMAT}", folder_path],
+                cwd=str(project_dir),
+                capture_output=True,
+                text=True,
+                check=False
+            )
+            if result.returncode == 0 and result.stdout.strip():
+                return result.stdout.strip()
+        else:
+            # Стандартный формат для парсинга
+            result = subprocess.run(
+                ["git", "log", "-1", "--format=%Y-%m-%d %H:%M", folder_path],
+                cwd=str(project_dir),
+                capture_output=True,
+                text=True,
+                check=False
+            )
+            if result.returncode == 0 and result.stdout.strip():
+                return result.stdout.strip()
     except Exception as e:
         debug_print(f"Git date error for {folder_path}: {e}")
     
@@ -112,13 +129,13 @@ def write_module_versions(project_dir, versions):
     except Exception as e:
         debug_print(f"Error writing version file: {e}")
 
-def generate_module_header(module_name, version, commit_date, env_name):
+def generate_module_header(module_name, version, commit_date, commit_date_str, env_name):
     """
     Генерирует содержимое заголовочного файла для модуля.
     """
     now = datetime.datetime.now()
     
-    # Разбираем дату для отдельных компонентов
+    # Разбираем дату для отдельных компонентов (из стандартного формата)
     if commit_date:
         try:
             dt = datetime.datetime.strptime(commit_date, "%Y-%m-%d %H:%M")
@@ -139,6 +156,7 @@ def generate_module_header(module_name, version, commit_date, env_name):
         commit_day = 1
         commit_hour = 0
         commit_minute = 0
+        commit_date_str = "1970.01.01 00.00"
     
     # Имя файла: module_name_version.h (например, core_ntp_version.h)
     guard_name = f"{module_name.upper().replace('-', '_').replace('.', '_')}_VERSION_H"
@@ -154,24 +172,35 @@ def generate_module_header(module_name, version, commit_date, env_name):
 // ВЕРСИЯ МОДУЛЯ {module_name}
 // ============================================================
 
+// Числовая версия (для сравнений)
 #define {module_name.upper()}_VERSION {version}
+
+// Строковая версия
+#define {module_name.upper()}_VERSION_STR "{version}"
 
 // ============================================================
 // ДАТА ПОСЛЕДНЕГО ИЗМЕНЕНИЯ
 // ============================================================
 
-#define {module_name.upper()}_COMMIT_DATE "{commit_date if commit_date else '1970-01-01 00:00'}"
+// Дата в формате yyyy.mm.dd hh.mm (как строка)
+#define {module_name.upper()}_COMMIT_DATE_STR "{commit_date_str}"
+
+// Компоненты даты (для числовых операций)
 #define {module_name.upper()}_COMMIT_YEAR {commit_year}
 #define {module_name.upper()}_COMMIT_MONTH {commit_month}
 #define {module_name.upper()}_COMMIT_DAY {commit_day}
 #define {module_name.upper()}_COMMIT_HOUR {commit_hour}
 #define {module_name.upper()}_COMMIT_MINUTE {commit_minute}
 
+// Полная дата в формате YYYY-MM-DD HH:MM (для отладки)
+#define {module_name.upper()}_COMMIT_DATE "{commit_date if commit_date else '1970-01-01 00:00'}"
+
 // ============================================================
 // ИНФОРМАЦИЯ О ГЕНЕРАЦИИ
 // ============================================================
 
 #define {module_name.upper()}_GENERATED_TIME "{now.strftime('%Y-%m-%d %H:%M')}"
+#define {module_name.upper()}_GENERATED_TIMESTAMP "{now.strftime('%Y%m%d_%H%M%S')}"
 
 #endif // {guard_name}
 '''
@@ -275,14 +304,19 @@ def generate_module_versions():
         
         current_versions[module_name] = new_version
         
-        # Получаем дату последнего коммита
-        commit_date = get_commit_date(project_dir, f"src/{module_name}")
+        # Получаем дату последнего коммита в двух форматах
+        commit_date = get_commit_date(project_dir, f"src/{module_name}", str_format=False)  # для парсинга
+        commit_date_str = get_commit_date(project_dir, f"src/{module_name}", str_format=True)  # для строки
+        
+        if not commit_date_str:
+            commit_date_str = "1970.01.01 00.00"
         
         # Генерируем содержимое файла
         content = generate_module_header(
             module_name,
             new_version,
             commit_date,
+            commit_date_str,
             env_name
         )
         
@@ -290,8 +324,8 @@ def generate_module_versions():
         try:
             version_file.write_text(content, encoding='utf-8')
             info_print(f"  Generated: {version_file.relative_to(project_dir)}")
-            info_print(f"    Version: {new_version}")
-            info_print(f"    Last commit: {commit_date if commit_date else 'unknown'}")
+            info_print(f"    Version: {new_version} (str: \"{new_version}\")")
+            info_print(f"    Last commit: {commit_date_str}")
             generated_count += 1
         except Exception as e:
             info_print(f"  ERROR writing file: {e}")

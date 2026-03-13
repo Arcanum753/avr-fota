@@ -13,10 +13,11 @@
 
 #include <WiFiClient.h>
 #include <core_ntp/NtpClientLib.h>
-#include "core_json/module_json.h"
+#include "core_json/core_json.h"
 #include "module_udp/module_udp.h"
 #include "eertos.h"
 #include "common.h"
+#include "module_udp_version.h"
 
 // Единственный глобальный объект - сам класс
 UDPBROADCAST_CLASS udpBroadcast(UDP_PORT);
@@ -297,3 +298,14 @@ bool UDPBROADCAST_CLASS::load_config_UDP() {
     return true;
 }
 
+String UDPBROADCAST_CLASS::getVersionStr(){
+    return String(MODULE_UDP_VERSION);
+}
+
+String UDPBROADCAST_CLASS::getGeneratedTime(){
+    return String(MODULE_UDP_GENERATED_TIME);
+}
+
+String UDPBROADCAST_CLASS::getCommitDateStr(){
+    return String(MODULE_UDP_COMMIT_DATE_STR);
+}

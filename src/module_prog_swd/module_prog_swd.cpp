@@ -21,11 +21,12 @@
 
 
 
-#include "core_json/module_json.h"
+#include "core_json/core_json.h"
 
 #include "prog_swd.h"
 #include "module_prog_swd.h"
 #include "common.h"
+#include "module_prog_swd_version.h"
 
 Class_ProgSwd progSwd(0);
 Class_ProgSwd::Class_ProgSwd(uint8_t in): _in(in){ }
@@ -339,3 +340,14 @@ void Class_ProgSwd::web_FileUpload2Chip(AsyncWebServerRequest *request) {
 
 
 
+String Class_ProgSwd::getVersionStr(){
+    return String(MODULE_PROG_SWD_VERSION);
+}
+
+String Class_ProgSwd::getGeneratedTime(){
+    return String(MODULE_PROG_SWD_GENERATED_TIME);
+}
+
+String Class_ProgSwd::getCommitDateStr(){
+    return String(MODULE_PROG_SWD_COMMIT_DATE_STR);
+}

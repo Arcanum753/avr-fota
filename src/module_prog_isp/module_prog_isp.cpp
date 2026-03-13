@@ -14,12 +14,13 @@
 
 #include "FSWebServerLib.h"
 // #include "debug.h"
-#include "core_json/module_json.h"
+#include "core_json/core_json.h"
 #include "core_ntp/module_ntp.h"
 
 #include "prog_isp.h"
 #include "module_prog_isp.h"
 #include "common.h"
+#include "module_prog_isp_version.h"
 
 Class_ProgIsp progIsp(0);
 Class_ProgIsp::Class_ProgIsp(uint8_t in): _in(in){ }
@@ -475,7 +476,17 @@ void  Class_ProgIsp::avrWebFusesWrite(AsyncWebServerRequest *request) {
 // avr.html ^^^
 
 
+String Class_ProgIsp::getVersionStr(){
+    return String(MODULE_PROG_ISP_VERSION);
+}
 
+String Class_ProgIsp::getGeneratedTime(){
+    return String(MODULE_PROG_ISP_GENERATED_TIME);
+}
+
+String Class_ProgIsp::getCommitDateStr(){
+    return String(MODULE_PROG_ISP_COMMIT_DATE_STR);
+}
 
 
 

@@ -40,9 +40,9 @@ typedef struct {
 } strNtpConfig;
 
 
-class  NTPMOD_CLASS    {
+class  CORE_CLASS_NTP    {
     public:
-    NTPMOD_CLASS (bool _in);
+    CORE_CLASS_NTP (bool _in);
 
     #if ESP32
     fs::SPIFFSFS*               _fs;
@@ -81,7 +81,7 @@ class  NTPMOD_CLASS    {
     bool  dumb = false;
 };
 
-extern NTPMOD_CLASS modNtpClass;
+extern CORE_CLASS_NTP modNtpClass;
 
 
 

@@ -13,14 +13,14 @@
 #include "FSWebServerLib.h"
 #include "ErriezSerialTerminal.h"
 
-#include "core_terminal/module_terminal.h"
+#include "core_terminal/core_terminal.h"
 
 #if defined(MODULE_UDP)
 #include "module_udp/module_udp.h"
 #endif
 
 
-#include "core_ntp/module_ntp.h"
+#include "core_ntp/core_ntp.h"
 
 #if defined(PROGTYPE_SWD)
 #include "module_prog_swd/swd.h"

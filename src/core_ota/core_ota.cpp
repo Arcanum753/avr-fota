@@ -9,37 +9,38 @@
 #include <ArduinoJson.h>
 #include <ArduinoOTA.h>
 #include "FSWebServerLib.h"
-#include "module_ota.h"
 #include "common.h"
+#include "core_ota.h"
+#include "core_ota_version.h"
 
-MODULE_OTA_CLASS modOtaClass(false);
+CORE_OTA_CLASS modOtaClass(false);
 
-MODULE_OTA_CLASS :: MODULE_OTA_CLASS (bool _in) {
+CORE_OTA_CLASS :: CORE_OTA_CLASS (bool _in) {
 	 dumb = _in;
  }
  
 #if ESP32
-    void MODULE_OTA_CLASS::setFs(fs::SPIFFSFS* fs)
+    void CORE_OTA_CLASS::setFs(fs::SPIFFSFS* fs)
 #elif defined(ESP8266)
-    void MODULE_OTA_CLASS::setFs(FS* fs)	// esp8266/esp32 flash file system
+    void CORE_OTA_CLASS::setFs(FS* fs)	// esp8266/esp32 flash file system
 #endif
 {	_fs = fs;	}
 
 
-void MODULE_OTA_CLASS::begin(String _hostname, String _password){
+void CORE_OTA_CLASS::begin(String _hostname, String _password){
 	DEBUGOTA(__FUNCTION__);	DEBUGOTA("\r\n");
 	prepareSizesForUpdate();
 	ConfigureOTA(_hostname, _password);
  }
 
-void MODULE_OTA_CLASS::prepareSizesForUpdate (){
+void CORE_OTA_CLASS::prepareSizesForUpdate (){
 	DEBUGOTA(__FUNCTION__);	DEBUGOTA("\r\n");
 	maxSketchSpace   = (ESP.getSketchSize() - 0x1000) & 0xFFFFF000;
 	freeSketchSpace  = ESP.getFreeSketchSpace();
 }
 
 
-bool  MODULE_OTA_CLASS::ConfigureOTA( String _hostname, String _password) {
+bool  CORE_OTA_CLASS::ConfigureOTA( String _hostname, String _password) {
 	DEBUGOTA(__FUNCTION__);	DEBUGOTA("\r\n");
 	
 	// No authentication by default
@@ -87,12 +88,12 @@ bool  MODULE_OTA_CLASS::ConfigureOTA( String _hostname, String _password) {
 }
 
 
- void MODULE_OTA_CLASS::loopHandler(){
+ void CORE_OTA_CLASS::loopHandler(){
 	 ArduinoOTA.handle();
  }
 
 
- void MODULE_OTA_CLASS::webInit() {
+ void CORE_OTA_CLASS::webInit() {
 	DEBUGOTA(__FUNCTION__);	DEBUGOTA("\r\n");
 	//update.html vvv
 		ESPHTTPServer.on("/update/setmd5", [this](AsyncWebServerRequest *request) {
@@ -129,7 +130,7 @@ bool  MODULE_OTA_CLASS::ConfigureOTA( String _hostname, String _password) {
 
  }
 
-void MODULE_OTA_CLASS::html_fileuploadProgress(AsyncWebServerRequest *request) {
+void CORE_OTA_CLASS::html_fileuploadProgress(AsyncWebServerRequest *request) {
 	DEBUGOTA(__FUNCTION__);	DEBUGOTA("\r\n");
 	String values = "";
     values += "percent|"    + (String)fileUpadedpercent + "|div\n";
@@ -137,7 +138,7 @@ void MODULE_OTA_CLASS::html_fileuploadProgress(AsyncWebServerRequest *request) {
 }
 
 
-void MODULE_OTA_CLASS::html_md5_set(AsyncWebServerRequest *request) {
+void CORE_OTA_CLASS::html_md5_set(AsyncWebServerRequest *request) {
 	DEBUGOTA(__FUNCTION__);	DEBUGOTA("\r\n");
 	_browserFileMD5 = "";
 	
@@ -166,7 +167,7 @@ void MODULE_OTA_CLASS::html_md5_set(AsyncWebServerRequest *request) {
 
 }
 
-void MODULE_OTA_CLASS::html_filename_check(AsyncWebServerRequest *request) {
+void CORE_OTA_CLASS::html_filename_check(AsyncWebServerRequest *request) {
     DEBUGOTA(__FUNCTION__); DEBUGOTA("\r\n");
     String values = "";
     String updateOKstr = "";
@@ -243,7 +244,7 @@ void MODULE_OTA_CLASS::html_filename_check(AsyncWebServerRequest *request) {
 
 
 
-void MODULE_OTA_CLASS::updateFileExecute (AsyncWebServerRequest *request) {
+void CORE_OTA_CLASS::updateFileExecute (AsyncWebServerRequest *request) {
 	DEBUGOTA(__FUNCTION__);	DEBUGOTA("\r\n");
 	AsyncWebServerResponse *response = request->beginResponse(200, "text/html", 
 		(Update.hasError()) ? "FAIL" : "<META http-equiv=\"refresh\" content=\"15;URL=/update\">Update correct. Restarting..."
@@ -256,7 +257,7 @@ void MODULE_OTA_CLASS::updateFileExecute (AsyncWebServerRequest *request) {
 
 }
 
-int8_t MODULE_OTA_CLASS::fileNameCheck(String filename, fileCompareResult* result) {
+int8_t CORE_OTA_CLASS::fileNameCheck(String filename, fileCompareResult* result) {
     DEBUGOTA(__FUNCTION__); DEBUGOTA("\r\n");
     int8_t _ret = -1;
     
@@ -412,7 +413,7 @@ int8_t MODULE_OTA_CLASS::fileNameCheck(String filename, fileCompareResult* resul
     return _ret;
 }
 
-bool MODULE_OTA_CLASS::isValidFilename(const String& filename) {
+bool CORE_OTA_CLASS::isValidFilename(const String& filename) {
     if (filename.length() == 0 || filename.length() > 100) return false;
     
     for (int i = 0; i < filename.length(); i++) {
@@ -430,7 +431,7 @@ bool MODULE_OTA_CLASS::isValidFilename(const String& filename) {
 
 
 
-void MODULE_OTA_CLASS::html_uploadUpdateFile(AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final) {
+void CORE_OTA_CLASS::html_uploadUpdateFile(AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final) {
     String values = "";
     static long totalSize = 0;
     static bool errorOccurred = false;
@@ -620,7 +621,17 @@ void MODULE_OTA_CLASS::html_uploadUpdateFile(AsyncWebServerRequest *request, Str
 
 
 
+String CORE_OTA_CLASS::getVersionStr(){
+    return String(CORE_OTA_VERSION);
+}
 
+String CORE_OTA_CLASS::getGeneratedTime(){
+    return String(CORE_OTA_GENERATED_TIME);
+}
+
+String CORE_OTA_CLASS::getCommitDateStr(){
+    return String(CORE_OTA_COMMIT_DATE_STR);
+}
 
 
 

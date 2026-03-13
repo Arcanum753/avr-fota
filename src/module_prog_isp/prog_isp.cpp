@@ -8,7 +8,7 @@
 
 #include "FSWebServerLib.h"
 
-#include "core_json/module_json.h"
+#include "core_json/core_json.h"
 
 #include "module_prog_isp.h"
 #include "prog_isp.h"

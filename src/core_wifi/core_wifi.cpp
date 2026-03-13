@@ -14,8 +14,8 @@
 #include "common.h"
 #include "debug.h"
 
-#include "core_json/module_json.h"
-#include "core_wifi/module_wifi.h"
+#include "core_json/core_json.h"
+#include "core_wifi/core_wifi.h"
 
 
 #if defined(MODULE_UDP)
@@ -23,19 +23,20 @@
 #endif
 
 
-#include "core_ntp/module_ntp.h"
+#include "core_ntp/core_ntp.h"
 
 #include "common_gpio.h"
+#include "core_wifi_version.h"
 
-WIFIMOD_CLASS 	modWifiClass(false);
+CORE_CLASS_WIFI 	modWifiClass(false);
 DNSServer 		dnsServer;
 
-WIFIMOD_CLASS :: WIFIMOD_CLASS (bool _in) {
+CORE_CLASS_WIFI :: CORE_CLASS_WIFI (bool _in) {
 	 dumb = _in;
  }
 
-void WIFIMOD_CLASS::s_secondTick(void* arg) {
-	WIFIMOD_CLASS* self = reinterpret_cast<WIFIMOD_CLASS*>(arg);
+void CORE_CLASS_WIFI::s_secondTick(void* arg) {
+	CORE_CLASS_WIFI* self = reinterpret_cast<CORE_CLASS_WIFI*>(arg);
 
 	//DNS captive
 	if (self->wifiStatus == FS_STAT_APMODE) {	dnsServer.processNextRequest();	}
@@ -68,9 +69,9 @@ void WIFIMOD_CLASS::s_secondTick(void* arg) {
 }
 
 #if defined(ESP32)
-    void WIFIMOD_CLASS::begin(fs::SPIFFSFS* fs)
+    void CORE_CLASS_WIFI::begin(fs::SPIFFSFS* fs)
 #elif defined(ESP8266)
-    void WIFIMOD_CLASS::begin(FS* fs)                         // esp8266/esp32 flash file system
+    void CORE_CLASS_WIFI::begin(FS* fs)                         // esp8266/esp32 flash file system
 #endif
 {
 	_fs = fs;
@@ -86,7 +87,7 @@ void WIFIMOD_CLASS::s_secondTick(void* arg) {
 	}
 	// Set WiFi config
 	else {	configureWifi(); 	}
-	_secondTk.attach(1.0f, &WIFIMOD_CLASS::s_secondTick, static_cast<void*>(this)); // Task to run periodic things every second
+	_secondTk.attach(1.0f, &CORE_CLASS_WIFI::s_secondTick, static_cast<void*>(this)); // Task to run periodic things every second
 #if (USE_RESERV_WIFI > 0)
 	if (!load_configWifi(3)) { defaultConfigWifi(3); _apConfig.APenable = true; 	}
 	if (!load_configWifi(2)) { defaultConfigWifi(2); _apConfig.APenable = true; 	}
@@ -113,7 +114,7 @@ void WIFIMOD_CLASS::s_secondTick(void* arg) {
 }
 
 
-bool WIFIMOD_CLASS::load_configWifi(int _in) {
+bool CORE_CLASS_WIFI::load_configWifi(int _in) {
 	if (_in < 0){ return false; }
 	char filename[40];
 	sprintf(filename, "/%s%d.json", WIFI_CONFIG_FILE_NAME, _in);
@@ -138,7 +139,7 @@ bool WIFIMOD_CLASS::load_configWifi(int _in) {
 
 
 // TODO переделать !
-bool WIFIMOD_CLASS::save_configWifi(int _in) {
+bool CORE_CLASS_WIFI::save_configWifi(int _in) {
 	//flag_config = false;
 	DEBUGLOGWIFI("Save config\r\n");
 	JsonDocument jsonDoc;
@@ -200,7 +201,7 @@ bool WIFIMOD_CLASS::save_configWifi(int _in) {
 
 
 
-void WIFIMOD_CLASS::defaultConfigWifi(int _in) {
+void CORE_CLASS_WIFI::defaultConfigWifi(int _in) {
 	// DEFAULT CONFIG
 	_wifiConfig.ssid 		= "YOUR_DEFAULT_WIFI_SSID";
 	_wifiConfig.password 	= "YOUR_DEFAULT_WIFI_PASSWD";
@@ -215,13 +216,13 @@ void WIFIMOD_CLASS::defaultConfigWifi(int _in) {
 }
 
 
-void WIFIMOD_CLASS::startDNSCaptive() {
+void CORE_CLASS_WIFI::startDNSCaptive() {
     // Перехватываем все DNS запросы и направляем на IP точки доступа
     dnsServer.start(53, "*", WiFi.softAPIP());
     DEBUGLOGWIFI("DNS captive portal started on port 53\n");
 }
 
-void WIFIMOD_CLASS::configureWifiAP() {
+void CORE_CLASS_WIFI::configureWifiAP() {
 	DEBUGLOGWIFI(__PRETTY_FUNCTION__);	DEBUGLOGWIFI("\r\n");
 	modNtpClass.ntpOnDisconected();
 #if defined(MODULE_UDP)
@@ -245,7 +246,7 @@ void WIFIMOD_CLASS::configureWifiAP() {
 	connectionTimout = 0;
 }
 
-int WIFIMOD_CLASS::scanWifi() {
+int CORE_CLASS_WIFI::scanWifi() {
 	int _scanNum = -1;
 
 	int nets = WiFi.scanComplete();
@@ -266,7 +267,7 @@ int WIFIMOD_CLASS::scanWifi() {
 }
 
 
-void WIFIMOD_CLASS::configureWifi() { // set esp8266 as wifi client
+void CORE_CLASS_WIFI::configureWifi() { // set esp8266 as wifi client
 	if (wifiStatus == FS_STAT_APMODE) {return;}
 	DEBUGLOGWIFI(__PRETTY_FUNCTION__);	DEBUGLOGWIFI("\r\n");
 	//disconnect required here
@@ -290,7 +291,7 @@ void WIFIMOD_CLASS::configureWifi() { // set esp8266 as wifi client
 
 
 #if defined(ESP32)
-void WIFIMOD_CLASS::onWiFiConnected()	{
+void CORE_CLASS_WIFI::onWiFiConnected()	{
 #elif ESP8266
 void WIFIMOD_CLASS::onWiFiConnected(WiFiEventStationModeConnected data) {
 #endif
@@ -305,7 +306,7 @@ void WIFIMOD_CLASS::onWiFiConnected(WiFiEventStationModeConnected data) {
 // Do functions when we get IP.
 //means we get nor,al connection 	
 #if defined(ESP32)
-void WIFIMOD_CLASS::onWiFiConnectedGotIP() {
+void CORE_CLASS_WIFI::onWiFiConnectedGotIP() {
 #elif defined(ESP8266)
 void WIFIMOD_CLASS::onWiFiConnectedGotIP(WiFiEventStationModeGotIP data) {
 #endif
@@ -336,7 +337,7 @@ void WIFIMOD_CLASS::onWiFiConnectedGotIP(WiFiEventStationModeGotIP data) {
 }
 
 #if defined(ESP32)
-void WIFIMOD_CLASS::onWiFiDisconnected() {
+void CORE_CLASS_WIFI::onWiFiDisconnected() {
 #elif defined(ESP8266)
 void WIFIMOD_CLASS::onWiFiDisconnected(WiFiEventStationModeDisconnected data) {
 #endif
@@ -365,7 +366,7 @@ DEBUGLOGWIFI(" case STA_DISCONNECTED \r\n");
 
 }
 
-void WIFIMOD_CLASS::wifiSsidSetPSWDwrong(String _str) {
+void CORE_CLASS_WIFI::wifiSsidSetPSWDwrong(String _str) {
 	DEBUGLOGWIFI("wifi ssid wrong password: %s \n", _str.c_str());
 	if (strcmp( _strWifi3,  _str.c_str()) == 0)	{	memset (_strWifi3, 0, sizeof(_strWifi3)); }
 	if (strcmp( _strWifi2,  _str.c_str()) == 0)	{	memset (_strWifi2, 0, sizeof(_strWifi2)); }
@@ -374,7 +375,7 @@ void WIFIMOD_CLASS::wifiSsidSetPSWDwrong(String _str) {
 }
  
 // wifi.html vvv
-void WIFIMOD_CLASS::send_network_configuration_values_html(AsyncWebServerRequest *request, int _index) {
+void CORE_CLASS_WIFI::send_network_configuration_values_html(AsyncWebServerRequest *request, int _index) {
 	DEBUGLOGWIFI(__PRETTY_FUNCTION__);	DEBUGLOGWIFI("\r\n");
 	load_configWifi(_index);
 	String values = "";
@@ -405,7 +406,7 @@ void WIFIMOD_CLASS::send_network_configuration_values_html(AsyncWebServerRequest
 
 
 
-void WIFIMOD_CLASS::send_info_values_html(AsyncWebServerRequest *request) {
+void CORE_CLASS_WIFI::send_info_values_html(AsyncWebServerRequest *request) {
 	DEBUGLOGWIFI(__FUNCTION__);	DEBUGLOGWIFI("\r\n");
 	String state = "N/A";
 	String Networks = "";
@@ -435,7 +436,7 @@ void WIFIMOD_CLASS::send_info_values_html(AsyncWebServerRequest *request) {
 	Networks = "";
 }
 
-String WIFIMOD_CLASS::getMacAddress() {
+String CORE_CLASS_WIFI::getMacAddress() {
 	uint8_t mac[6];
 	char macStr[18] = { 0 };
 	WiFi.macAddress(mac);
@@ -446,7 +447,7 @@ String WIFIMOD_CLASS::getMacAddress() {
 
 
 
-void WIFIMOD_CLASS::send_scanwifi(AsyncWebServerRequest *request) {
+void CORE_CLASS_WIFI::send_scanwifi(AsyncWebServerRequest *request) {
 	// DEBUGLOGWIFI(__FUNCTION__);	DEBUGLOGWIFI("\r\n");
 	String json = "[";
 	int n = WiFi.scanComplete();
@@ -476,7 +477,7 @@ void WIFIMOD_CLASS::send_scanwifi(AsyncWebServerRequest *request) {
 	json = "";
 }
 
-void WIFIMOD_CLASS::send_network_configuration_html(AsyncWebServerRequest *request) {
+void CORE_CLASS_WIFI::send_network_configuration_html(AsyncWebServerRequest *request) {
 	// DEBUGLOGWIFI(__FUNCTION__);	DEBUGLOGWIFI("\r\n");
 	int _saveIn = 0;
 	if (request->args() > 0)  // Save Settings
@@ -531,7 +532,7 @@ void WIFIMOD_CLASS::send_network_configuration_html(AsyncWebServerRequest *reque
 
 
 //wifi.html vvv
-void WIFIMOD_CLASS::webInit ()	{
+void CORE_CLASS_WIFI::webInit ()	{
 
 	ESPHTTPServer.on("/wifi.html", [this](AsyncWebServerRequest *request) {
 		if (!ESPHTTPServer.checkAuth(request)) {	return request->requestAuthentication(); };
@@ -613,4 +614,17 @@ void WIFIMOD_CLASS::webInit ()	{
 
 }
 //wifi.html ^^^
+
+
+String CORE_CLASS_WIFI::getVersionStr(){
+    return String(CORE_WIFI_VERSION);
+}
+
+String CORE_CLASS_WIFI::getGeneratedTime(){
+    return String(CORE_WIFI_GENERATED_TIME);
+}
+
+String CORE_CLASS_WIFI::getCommitDateStr(){
+    return String(CORE_WIFI_COMMIT_DATE_STR);
+}
 

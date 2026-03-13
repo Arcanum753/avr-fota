@@ -26,6 +26,9 @@ public:
 #endif
     void begin();
     void webInit();
+    String getVersionStr();
+    String getGeneratedTime();
+    String getCommitDateStr();
     
 protected: 
 bool  dumb = false;

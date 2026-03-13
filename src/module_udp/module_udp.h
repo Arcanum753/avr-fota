@@ -70,6 +70,9 @@ class UDPBROADCAST_CLASS {
         uint8_t isStart();
         
         strUdpConfig _udpConfig; // UDP configuration
+        String getVersionStr();
+        String getGeneratedTime();
+        String getCommitDateStr();
 
     private:
         AsyncUDP _udp;

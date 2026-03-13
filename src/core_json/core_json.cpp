@@ -4,25 +4,24 @@
 #include <ArduinoJson.h>
 
 
-
 #include "FSWebServerLib.h"
 #include "debug.h"
-#include "module_json.h"
+#include "core_json.h"
+#include "core_json_version.h"
+CORE_CLASS_JSON ModClassJson(false);
 
-MODULE_CLASS_JSON ModClassJson(false);
-
-MODULE_CLASS_JSON :: MODULE_CLASS_JSON (bool _in) {
+CORE_CLASS_JSON :: CORE_CLASS_JSON (bool _in) {
 	dumb = _in;
 }
 
 #if defined(ESP32)
-    void MODULE_CLASS_JSON::setFs(fs::SPIFFSFS* fs)
+    void CORE_CLASS_JSON::setFs(fs::SPIFFSFS* fs)
 #elif defined(ESP8266)
-    void MODULE_CLASS_JSON::setFs(FS* fs)	// esp8266/esp32 flash file system
+    void CORE_CLASS_JSON::setFs(FS* fs)	// esp8266/esp32 flash file system
 #endif
 {	_fs = fs;	}
 
-bool MODULE_CLASS_JSON::load_jsonDoc(const String& file, JsonDocument& jsonDoc){
+bool CORE_CLASS_JSON::load_jsonDoc(const String& file, JsonDocument& jsonDoc){
 	if (!_fs) { _fs->begin();  }// If SPIFFS is not started
 	File configFile = _fs->open(file, "r");
 
@@ -51,7 +50,7 @@ bool MODULE_CLASS_JSON::load_jsonDoc(const String& file, JsonDocument& jsonDoc){
 }
 
 
-bool MODULE_CLASS_JSON::save_jsonDoc(const JsonDocument& jsonDoc,	const String& file) {
+bool CORE_CLASS_JSON::save_jsonDoc(const JsonDocument& jsonDoc,	const String& file) {
 	if (!_fs) { _fs->begin();  }// If SPIFFS is not started
 	File configFile  = _fs->open(file, "w");
 	if (configFile == false) {
@@ -68,4 +67,17 @@ bool MODULE_CLASS_JSON::save_jsonDoc(const JsonDocument& jsonDoc,	const String& 
 	configFile.flush();
 	configFile.close();
 	return true;
+}
+
+
+String CORE_CLASS_JSON::getVersionStr(){
+    return String(CORE_JSON_VERSION);
+}
+
+String CORE_CLASS_JSON::getGeneratedTime(){
+    return String(CORE_JSON_GENERATED_TIME);
+}
+
+String CORE_CLASS_JSON::getCommitDateStr(){
+    return String(CORE_JSON_COMMIT_DATE_STR);
 }

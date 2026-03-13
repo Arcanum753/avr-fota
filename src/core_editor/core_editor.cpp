@@ -1,28 +1,29 @@
 
 #include "FSWebServerLib.h"
-#include "module_editor.h"
+#include "core_editor.h"
 #include "main.h"
+#include "core_editor_version.h"
 
-MODULE_CLASS_EDITOR ModClassEdit(false);
+CORE_CLASS_EDITOR ModClassEdit(false);
 
-MODULE_CLASS_EDITOR :: MODULE_CLASS_EDITOR (bool _in) {
+CORE_CLASS_EDITOR :: CORE_CLASS_EDITOR (bool _in) {
 	dumb = _in;
 }
 
 #if defined(ESP32)
-void MODULE_CLASS_EDITOR::setFs(fs::SPIFFSFS* fs) //esp32 flash file system
+void CORE_CLASS_EDITOR::setFs(fs::SPIFFSFS* fs) //esp32 flash file system
 #elif defined(ESP8266)
-void MODULE_CLASS_EDITOR::setFs(FS* fs)	// esp8266 flash file system
+void CORE_CLASS_EDITOR::setFs(FS* fs)	// esp8266 flash file system
 #endif
 {	_fs = fs;	}
 
 
-void  MODULE_CLASS_EDITOR::begin(){
+void  CORE_CLASS_EDITOR::begin(){
 	DEBUGEDIT(__FUNCTION__);	DEBUGEDIT("\r\n");
 }
 
 
-void  MODULE_CLASS_EDITOR::webInit(){
+void  CORE_CLASS_EDITOR::webInit(){
     DEBUGEDIT(__FUNCTION__);	DEBUGEDIT("\r\n");
 //edit.html vvv
 
@@ -61,7 +62,7 @@ void  MODULE_CLASS_EDITOR::webInit(){
 
 }
 
-void MODULE_CLASS_EDITOR::handleFileUpload(AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final) {
+void CORE_CLASS_EDITOR::handleFileUpload(AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final) {
 	static File fsUploadFile;
 	static size_t fileSize = 0;
 
@@ -90,7 +91,7 @@ void MODULE_CLASS_EDITOR::handleFileUpload(AsyncWebServerRequest *request, Strin
 }
 
 
-void MODULE_CLASS_EDITOR::handleFileList(AsyncWebServerRequest *request) {
+void CORE_CLASS_EDITOR::handleFileList(AsyncWebServerRequest *request) {
 	if (!request->hasArg("dir")) { request->send(500, "text/plain", "BAD ARGS"); return; }
 	String path = request->arg("dir");
 	DEBUGEDIT("handleFileList: %s\r\n", path.c_str());
@@ -135,7 +136,7 @@ void MODULE_CLASS_EDITOR::handleFileList(AsyncWebServerRequest *request) {
 
 
 
-void MODULE_CLASS_EDITOR::handleFileCreate(AsyncWebServerRequest *request) {
+void CORE_CLASS_EDITOR::handleFileCreate(AsyncWebServerRequest *request) {
 	if (request->args() == 0)		{	return request->send(500, "text/plain", "BAD ARGS");}
 	String path = request->arg(0U);
 	DEBUGEDIT("handleFileCreate: %s\r\n", path.c_str());
@@ -151,7 +152,7 @@ void MODULE_CLASS_EDITOR::handleFileCreate(AsyncWebServerRequest *request) {
 
 // удаление файла
 
-void MODULE_CLASS_EDITOR::handleFileDelete(AsyncWebServerRequest *request) {
+void CORE_CLASS_EDITOR::handleFileDelete(AsyncWebServerRequest *request) {
 	if (request->args() == 0) 	{	return request->send(500, "text/plain", "BAD ARGS");	}
 	String path = request->arg(0U);
 	DEBUGEDIT("handleFileDelete: %s\r\n", path.c_str());
@@ -161,3 +162,14 @@ void MODULE_CLASS_EDITOR::handleFileDelete(AsyncWebServerRequest *request) {
 	request->send(200, "text/plain", "");
 }
 
+String CORE_CLASS_EDITOR::getVersionStr(){
+    return String(CORE_EDITOR_VERSION);
+}
+
+String CORE_CLASS_EDITOR::getGeneratedTime(){
+    return String(CORE_EDITOR_GENERATED_TIME);
+}
+
+String CORE_CLASS_EDITOR::getCommitDateStr(){
+    return String(CORE_EDITOR_COMMIT_DATE_STR);
+}

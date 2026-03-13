@@ -74,9 +74,9 @@ typedef enum {
 
 
 
-class  WIFIMOD_CLASS    {
+class  CORE_CLASS_WIFI    {
     public:
-    WIFIMOD_CLASS (bool _in);
+    CORE_CLASS_WIFI (bool _in);
     #if ESP32
     fs::SPIFFSFS*               _fs;
     #elif defined(ESP8266)
@@ -135,12 +135,15 @@ class  WIFIMOD_CLASS    {
 	void onWiFiDisconnected     (WiFiEventStationModeDisconnected   data);
 	void onWiFiConnectedGotIP   (WiFiEventStationModeGotIP          data);
     #endif
-    protected: 
+    String getVersionStr();
+    String getGeneratedTime();
+    String getCommitDateStr();
+protected: 
     bool  dumb = false;
 };
 
 
-extern WIFIMOD_CLASS modWifiClass; 
+extern CORE_CLASS_WIFI modWifiClass; 
 
 
 

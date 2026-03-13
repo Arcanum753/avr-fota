@@ -36,11 +36,11 @@
 
 #include "debug.h"
 
-#include "core_ota/module_ota.h"
-#include "core_ntp/module_ntp.h"
-#include "core_editor/module_editor.h"
-#include "core_json/module_json.h"
-#include "core_wifi/module_wifi.h"
+#include "core_ota/core_ota.h"
+#include "core_ntp/core_ntp.h"
+#include "core_editor/core_editor.h"
+#include "core_json/core_json.h"
+#include "core_wifi/core_wifi.h"
 
 #include "common_gpio.h"
 

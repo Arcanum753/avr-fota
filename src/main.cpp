@@ -13,9 +13,9 @@
 #include "FSWebServerLib.h"
 #include "eertos.h"
 
-#include "core_ota/module_ota.h"
+#include "core_ota/core_ota.h"
 #include "core_terminal/ErriezSerialTerminal.h"
-#include "core_terminal/module_terminal.h"
+#include "core_terminal/core_terminal.h"
 
 #include "version.h"
 #include "common_gpio.h"
