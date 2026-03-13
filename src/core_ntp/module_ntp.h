@@ -69,7 +69,7 @@ class  NTPMOD_CLASS    {
     
     void send_NTP_info_html(AsyncWebServerRequest *request) ;
     void send_NTP_configuration_values_html(AsyncWebServerRequest *request);
-    void send_NTP_configuration_html(AsyncWebServerRequest *request);
+    void html2ntp_configuration(AsyncWebServerRequest *request);
     void sendTimeData();
     
     

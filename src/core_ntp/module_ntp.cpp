@@ -139,7 +139,7 @@ void NTPMOD_CLASS::webInit ()	{
 
 	ESPHTTPServer.on("/ntp.html", HTTP_POST, [this](AsyncWebServerRequest *request) {
 		if (!ESPHTTPServer.checkAuth(request)) {		return request->requestAuthentication(); }
-		send_NTP_configuration_html(request);
+		html2ntp_configuration(request);
 	});
 }
 
@@ -160,7 +160,7 @@ void NTPMOD_CLASS::send_NTP_info_html(AsyncWebServerRequest *request) {
 
 
 // ntp.html vvv
-void NTPMOD_CLASS::send_NTP_configuration_html(AsyncWebServerRequest *request) {
+void NTPMOD_CLASS::html2ntp_configuration(AsyncWebServerRequest *request) {
 	DEBUGNTP(__PRETTY_FUNCTION__);	DEBUGNTP("\r\n");
 	if (request->args() > 0)  {// Save Settings
 		_ntpConfig.daylight = false;
