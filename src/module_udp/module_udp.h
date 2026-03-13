@@ -31,14 +31,15 @@ Please Wait....Configuring.
 #define UDP_BROADCAST_TIME_DFLT     5
 #define UDP_BROADCAST_KEYWORD_DFLT  "Ave_Omnissiah"
 #define UDP_BROADCAST_POWERON       true
+#define UDP_BROADCAST_RESPONSE       true
 
 typedef struct {
+    String keyword;
     uint16_t udpPortTx;
     uint16_t udpPortRx;
     uint16_t udpTimeOut;
     bool  udpPowerOn;
     bool  udpResponse;
-    String keyword;
 } strUdpConfig;
 
 void udpBroadcastSimple(void);
@@ -52,7 +53,7 @@ class UDPBROADCAST_CLASS {
         UDPBROADCAST_CLASS(uint16_t portListen);
         
         void webInit(void);
-        void begin(uint16_t _port);
+        void begin();
         void udpStop();
         void udpBroadcastSend(uint16_t _port, String _str);
         void udpBroadcastTest(AsyncWebServerRequest *request);

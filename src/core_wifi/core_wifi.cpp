@@ -316,23 +316,16 @@ void WIFIMOD_CLASS::onWiFiConnectedGotIP(WiFiEventStationModeGotIP data) {
 	DEBUGLOGWIFI("Gateway:    %s\r\n", WiFi.gatewayIP().toString().c_str());
 	DEBUGLOGWIFI("DNS:        %s\r\n", WiFi.dnsIP().toString().c_str());
 	wifiDisconnectedSince = 0;
-	
-	
-
 	connectionTimout = 0;
-	
 	wifiStatus = FS_STAT_CONNECTED;
-
 #if defined(MODULE_UDP)
 //udp start to listen
-	udpBroadcast.begin(udpBroadcast.getUpdPortRx());
+	udpBroadcast.begin();
 	udpBroadcast.webInit();
 	//udp broadcast - we are online!
     if (udpBroadcast.udpPowerOnGet() == true ) {  udpBroadcastSimple(); }
 #endif
-
 	modNtpClass.ntpOnConnected();
-
 
 }
 

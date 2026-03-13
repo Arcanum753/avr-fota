@@ -39,20 +39,20 @@ bool UDPBROADCAST_CLASS::udpPowerOnGet()       { return _udpConfig.udpPowerOn; }
 bool UDPBROADCAST_CLASS::udpResponseGet()       { return _udpConfig.udpResponse; }
 uint8_t UDPBROADCAST_CLASS::isStart()          { return _isStarted; }
 
-void UDPBROADCAST_CLASS::begin(uint16_t _port) {
+void UDPBROADCAST_CLASS::begin() {
     defaultConfigUDP();
     if ( load_config_UDP() == false) {save_configUDP();}
     DEBUGUDP("%s\r\n", __FUNCTION__);
     if (_isStarted){    return;    }
     
-    _portRx = _port;
-    SetTask(udpBroadcastTimer);
+    _portRx = _udpConfig.udpPortRx;
     
-    if (_udp.listen(_portRx)) {
+    if (_udp.listen(_portRx) == true) {
         DEBUGUDP("UDP Listening on IP: %s and port %u\n\r",  WiFi.localIP().toString().c_str(), _portRx);
         _isStarted = true;
         _udp.onPacket(processUdpListenPacket);
     }
+    SetTimerTask(udpBroadcastTimer, SEC * MINUTES * udpBroadcast.getudpTimeOut());
 }
 
 // ========== STOP ==========
@@ -65,7 +65,7 @@ void UDPBROADCAST_CLASS::udpStop() {
 // ========== SEND BROADCAST ==========
 void UDPBROADCAST_CLASS::udpBroadcastSend(uint16_t _port, String _strin) {
     DEBUGUDP("%s\r\n", __FUNCTION__);
-    if (!_isStarted) {  return; }
+    if (_isStarted == false) {  return; }
     if (_strin.length() == 0 || _strin.length() >= UDP_DATA_MESSAGE_LEN) {  return; }
     if (_port == getUpdPortRx()) { return; }
     
@@ -260,6 +260,7 @@ void UDPBROADCAST_CLASS::defaultConfigUDP() {
     _udpConfig.udpTimeOut = UDP_BROADCAST_TIME_DFLT;
     _udpConfig.keyword = UDP_BROADCAST_KEYWORD_DFLT;
     _udpConfig.udpPowerOn = UDP_BROADCAST_POWERON;
+    _udpConfig.udpResponse = UDP_BROADCAST_RESPONSE;
 }
 
 // ========== SAVE CONFIG ==========
