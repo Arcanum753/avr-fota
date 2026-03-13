@@ -167,17 +167,14 @@ void NTPMOD_CLASS::html2ntp_configuration(AsyncWebServerRequest *request) {
 		for (uint8_t i = 0; i < request->args(); i++) {
 			if (request->argName(i) == "ntpserver0") {
 				_ntpConfig.ntpServerName0 = urldecode(request->arg(i));
-				DEBUGNTP("ntpServerName0: %s\r\n", _ntpConfig.ntpServerName0);
 				continue;
 			}
 			if (request->argName(i) == "ntpserver1") {
 				_ntpConfig.ntpServerName1 = urldecode(request->arg(i));
-				DEBUGNTP("ntpServerName1: %s\r\n", _ntpConfig.ntpServerName1);
 				continue;
 			}
 			if (request->argName(i) == "ntpserver2") {
 				_ntpConfig.ntpServerName2 = urldecode(request->arg(i));
-				DEBUGNTP("ntpServerName2: %s\r\n", _ntpConfig.ntpServerName2);
 				continue;
 			}
 			if (request->argName(i) == "update") {
@@ -192,7 +189,6 @@ void NTPMOD_CLASS::html2ntp_configuration(AsyncWebServerRequest *request) {
 			}
 			if (request->argName(i) == "dst") {
 				_ntpConfig.daylight = true;
-				DEBUGNTP("Daylight Saving: %d\r\n", _ntpConfig.daylight);
 				continue;
 			}
 		}

@@ -37,6 +37,7 @@ typedef struct {
     uint16_t udpPortRx;
     uint16_t udpTimeOut;
     bool  udpPowerOn;
+    bool  udpResponse;
     String keyword;
 } strUdpConfig;
 
@@ -63,7 +64,8 @@ class UDPBROADCAST_CLASS {
         uint16_t getUpdPortRx();
         uint16_t getudpTimeOut();
         String getudpKeyword();
-        bool getudpPowerOn();
+        bool udpPowerOnGet();
+        bool udpResponseGet();
         String udpJsonGet();
         uint8_t isStart();
         

@@ -1,6 +1,6 @@
 // Auto-generated version file for module: module_prog_isp
-// Generated: 2026-03-05 17:25
-// Environment: TestSolo
+// Generated: 2026-03-13 17:18
+// Environment: TestSolo32
 
 #ifndef MODULE_PROG_ISP_VERSION_H
 #define MODULE_PROG_ISP_VERSION_H
@@ -9,13 +9,13 @@
 // ВЕРСИЯ МОДУЛЯ module_prog_isp
 // ============================================================
 
-#define MODULE_PROG_ISP_VERSION 7
+#define MODULE_PROG_ISP_VERSION 9
 
 // ============================================================
 // ДАТА ПОСЛЕДНЕГО ИЗМЕНЕНИЯ
 // ============================================================
 
-#define MODULE_PROG_ISP_COMMIT_DATE "%Y->- (HEAD -> fix-modules) 38815bb3d5db62910f2c2c7d6de3227cba3b89a2:%M"
+#define MODULE_PROG_ISP_COMMIT_DATE "%Y->- 7bcd05dce2d3ce6a63d858574616ac4feef49117:%M"
 #define MODULE_PROG_ISP_COMMIT_YEAR 1970
 #define MODULE_PROG_ISP_COMMIT_MONTH 1
 #define MODULE_PROG_ISP_COMMIT_DAY 1
@@ -26,6 +26,6 @@
 // ИНФОРМАЦИЯ О ГЕНЕРАЦИИ
 // ============================================================
 
-#define MODULE_PROG_ISP_GENERATED_TIME "2026-03-05 17:25"
+#define MODULE_PROG_ISP_GENERATED_TIME "2026-03-13 17:18"
 
 #endif // MODULE_PROG_ISP_VERSION_H

@@ -327,7 +327,7 @@ void WIFIMOD_CLASS::onWiFiConnectedGotIP(WiFiEventStationModeGotIP data) {
 	udpBroadcast.begin(udpBroadcast.getUpdPortRx());
 	udpBroadcast.webInit();
 	//udp broadcast - we are online!
-    if (udpBroadcast.getudpPowerOn() == true ) {  udpBroadcastSimple(); }
+    if (udpBroadcast.udpPowerOnGet() == true ) {  udpBroadcastSimple(); }
 #endif
 
 	modNtpClass.ntpOnConnected();

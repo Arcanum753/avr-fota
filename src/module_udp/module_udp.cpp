@@ -34,7 +34,8 @@ uint16_t UDPBROADCAST_CLASS::getUpdPortTx()    { return _udpConfig.udpPortTx; }
 uint16_t UDPBROADCAST_CLASS::getUpdPortRx()    { return _udpConfig.udpPortRx; }
 uint16_t UDPBROADCAST_CLASS::getudpTimeOut()   { return _udpConfig.udpTimeOut; }
 String UDPBROADCAST_CLASS::getudpKeyword()     { return _udpConfig.keyword; }
-bool UDPBROADCAST_CLASS::getudpPowerOn()       { return _udpConfig.udpPowerOn; }
+bool UDPBROADCAST_CLASS::udpPowerOnGet()       { return _udpConfig.udpPowerOn; }
+bool UDPBROADCAST_CLASS::udpResponseGet()       { return _udpConfig.udpResponse; }
 uint8_t UDPBROADCAST_CLASS::isStart()          { return _isStarted; }
 
 void UDPBROADCAST_CLASS::begin(uint16_t _port) {
@@ -103,9 +104,12 @@ void UDPBROADCAST_CLASS::udpBroadcastSend(uint16_t _port, String _strin) {
 
 void processUdpListenPacket(AsyncUDPPacket &packet) {
     DEBUGUDP("%s\r\n", __FUNCTION__);
-    if (packet.length() > UDP_DATA_LENGHT_MAX) { return; }
+    if (packet.length() > UDP_DATA_LENGHT_MAX) { return; } // если пакет длинный
     
-    if (!packet.isBroadcast()) { return; }
+    if (udpBroadcast.udpResponseGet() == false) { return; } // если мы не должны отвечать
+    
+    if (packet.isBroadcast() == false) { return; } // если пакет не бродкаст
+    
     udpBroadcast._responseIp = packet.remoteIP();
     
     // Get data
@@ -136,7 +140,6 @@ void udpResponseHandler(IPAddress ip) {
 
 // ========== SIMPLE BROADCAST (для вызова из других файлов) ==========
 void udpBroadcastSimple() {
-    DEBUGUDP("%s\n\r", __FUNCTION__);
     udpBroadcast.udpBroadcastSend(udpBroadcast.getUpdPortTx(), udpBroadcast.udpJsonGet());
 }
 
@@ -187,13 +190,15 @@ void UDPBROADCAST_CLASS::send_udp_configuration_values_html(AsyncWebServerReques
     values += "udptime|"     + String(_udpConfig.udpTimeOut) + "|input\n";
     values += "udpkeyword|"  + _udpConfig.keyword + "|input\n";
     values += "udppoweron|"  + String(_udpConfig.udpPowerOn ? "checked" : "") + "|chk\n";
+    values += "udpresponse|"  + String(_udpConfig.udpResponse ? "checked" : "") + "|chk\n";
     request->send(200, "text/plain", values);
 }
 
 // ========== GET CONFIG HTML ==========
 void UDPBROADCAST_CLASS::get_udp_configuration_html(AsyncWebServerRequest *request) {
     DEBUGUDP("%s\n\r", __PRETTY_FUNCTION__);
-    
+    _udpConfig.udpPowerOn  = false; 
+    _udpConfig.udpResponse = false;
     if (request->args() > 0) {
         for (uint8_t i = 0; i < request->args(); i++) {
             DEBUGUDP("Arg %d: %s %s\r\n", i, 
@@ -204,7 +209,8 @@ void UDPBROADCAST_CLASS::get_udp_configuration_html(AsyncWebServerRequest *reque
             if (request->argName(i) == "udpportrx") { _udpConfig.udpPortRx = request->arg(i).toInt(); }
             if (request->argName(i) == "udptime")   { _udpConfig.udpTimeOut = request->arg(i).toInt(); }
             if (request->argName(i) == "udpkeyword") { _udpConfig.keyword = urldecode(request->arg(i)); }
-            if (request->argName(i) == "udppoweron") { _udpConfig.udpPowerOn = true; }
+            if (request->argName(i) == "udppoweron")  { _udpConfig.udpPowerOn = true;  }
+            if (request->argName(i) == "udpresponse") { _udpConfig.udpResponse = true; }
         }
         
         request->send_P(200, "text/html", Page_GeneralUdp);
@@ -264,6 +270,7 @@ bool UDPBROADCAST_CLASS::save_configUDP() {
     jsonDoc["udpTimeOut"]   = _udpConfig.udpTimeOut;
     jsonDoc["udpkeyword"]   = _udpConfig.keyword;
     jsonDoc["udpPowerOn"]   = _udpConfig.udpPowerOn;
+    jsonDoc["udpResponse"]   = _udpConfig.udpResponse;
     return ModClassJson.save_jsonDoc(jsonDoc, CONFIG_FILE_UDP);
 }
 
@@ -278,12 +285,14 @@ bool UDPBROADCAST_CLASS::load_config_UDP() {
     _udpConfig.udpTimeOut   = jsonDoc["udpTimeOut"].as<int>();
     _udpConfig.keyword      = jsonDoc["udpkeyword"].as<const char*>();
     _udpConfig.udpPowerOn   = jsonDoc["udpPowerOn"].as<bool>();
+    _udpConfig.udpResponse   = jsonDoc["udpResponse"].as<bool>();
     
     DEBUGUDP("updPortTx: %d\n\r", _udpConfig.udpPortTx);
     DEBUGUDP("updPortRx: %d\n\r", _udpConfig.udpPortRx);
     DEBUGUDP("udpTimeOut: %d\n\r", _udpConfig.udpTimeOut);
     DEBUGUDP("keyword: %s\n\r", _udpConfig.keyword.c_str());
     DEBUGUDP("udpPowerOn: %d\n\r", _udpConfig.udpPowerOn);
+    DEBUGUDP("udpResponse: %d\n\r", _udpConfig.udpResponse);
     
     return true;
 }
