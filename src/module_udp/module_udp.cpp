@@ -38,6 +38,8 @@ bool UDPBROADCAST_CLASS::getudpPowerOn()       { return _udpConfig.udpPowerOn; }
 uint8_t UDPBROADCAST_CLASS::isStart()          { return _isStarted; }
 
 void UDPBROADCAST_CLASS::begin(uint16_t _port) {
+    defaultConfigUDP();
+    if ( load_config_UDP() == false) {save_configUDP();}
     DEBUGUDP("%s\r\n", __FUNCTION__);
     if (_isStarted){    return;    }
     
@@ -141,9 +143,9 @@ void udpBroadcastSimple() {
 // ========== TIMER (для вызова из других файлов) ==========
 void udpBroadcastTimer() {
     uint16_t timeout = udpBroadcast.getudpTimeOut();
-    if (!udpBroadcast.isStart()){ return;}
+    if (udpBroadcast.isStart() == false){   return; }
     if (timeout > 60){ timeout = 60;}
-    if (timeout == 0) {return;}
+    if (timeout == 0) { return;  }
     
     DEBUGUDP("Udp timeout %d min. ", timeout);
     SetTimerTask(udpBroadcastTimer, SEC * MINUTES * timeout);
@@ -158,8 +160,7 @@ void UDPBROADCAST_CLASS::udpBroadcastTest(AsyncWebServerRequest *request) {
 
 // ========== WEB INIT ==========
 void UDPBROADCAST_CLASS::webInit(void) {
-    defaultConfigUDP();
-    if (!load_config_UDP()) {save_configUDP();}
+
     
     ESPHTTPServer.on(HTML_FILE_UDP, HTTP_POST, [this](AsyncWebServerRequest *request) {
         if (!ESPHTTPServer.checkAuth(request)) {return request->requestAuthentication(); }
