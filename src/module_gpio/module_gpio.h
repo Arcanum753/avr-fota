@@ -26,9 +26,11 @@ public:
 #endif
     void begin();
     void webInit();
+private:
     String getVersionStr();
     String getGeneratedTime();
     String getCommitDateStr();
+    void  html_ver_get(AsyncWebServerRequest *request);
     
 protected: 
 bool  dumb = false;

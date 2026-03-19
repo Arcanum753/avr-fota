@@ -21,6 +21,13 @@ CORE_CLASS_JSON :: CORE_CLASS_JSON (bool _in) {
 #endif
 {	_fs = fs;	}
 
+void CORE_CLASS_JSON::webInit(void) {
+    ESPHTTPServer.on("/json/ver", [this](AsyncWebServerRequest *request) {
+        html_ver_get(request);
+    });
+
+}
+
 bool CORE_CLASS_JSON::load_jsonDoc(const String& file, JsonDocument& jsonDoc){
 	if (!_fs) { _fs->begin();  }// If SPIFFS is not started
 	File configFile = _fs->open(file, "r");
@@ -80,4 +87,13 @@ String CORE_CLASS_JSON::getGeneratedTime(){
 
 String CORE_CLASS_JSON::getCommitDateStr(){
     return String(CORE_JSON_COMMIT_DATE_STR);
+}
+
+void CORE_CLASS_JSON::html_ver_get(AsyncWebServerRequest *request) {
+    DEBUGJSON("%s\n\r", __FUNCTION__);
+    String values = "";
+    values += "jsnversion|"     + getVersionStr()    + "|dev\n";
+    values += "jsngentime|"     + getGeneratedTime() + "|dev\n";
+    values += "jsngendate|"     + getCommitDateStr() + "|dev\n";
+    request->send(200, "text/plain", values);
 }

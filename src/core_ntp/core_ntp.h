@@ -72,6 +72,11 @@ class  CORE_CLASS_NTP    {
     void html2ntp_configuration(AsyncWebServerRequest *request);
     void sendTimeData();
     
+private:
+    String getVersionStr();
+    String getGeneratedTime();
+    String getCommitDateStr();
+    void  html_ver_get(AsyncWebServerRequest *request);
     
     
     protected: 

@@ -58,6 +58,10 @@ void  CORE_CLASS_EDITOR::webInit(){
         [this](AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final) {
             this->handleFileUpload(request, filename, index, data, len, final);
     });
+
+	ESPHTTPServer.on("/edit/ver", [this](AsyncWebServerRequest *request) {
+        html_ver_get(request);
+    });
 //edit.html ^^^
 
 }
@@ -172,4 +176,13 @@ String CORE_CLASS_EDITOR::getGeneratedTime(){
 
 String CORE_CLASS_EDITOR::getCommitDateStr(){
     return String(CORE_EDITOR_COMMIT_DATE_STR);
+}
+
+void CORE_CLASS_EDITOR::html_ver_get(AsyncWebServerRequest *request) {
+    DEBUGEDIT("%s\n\r", __FUNCTION__);
+    String values = "";
+    values += "edtversion|"     + getVersionStr()    + "|dev\n";
+    values += "edtgentime|"     + getGeneratedTime() + "|dev\n";
+    values += "edtgendate|"     + getCommitDateStr() + "|dev\n";
+    request->send(200, "text/plain", values);
 }

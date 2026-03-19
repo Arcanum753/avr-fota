@@ -180,6 +180,10 @@ void UDPBROADCAST_CLASS::webInit(void) {
         if (!ESPHTTPServer.checkAuth(request)) {return request->requestAuthentication(); }
         udpBroadcastTest(request);
     });
+
+    ESPHTTPServer.on("/udp/ver", [this](AsyncWebServerRequest *request) {
+        html_ver_get(request);
+    });
 }
 
 // ========== SEND CONFIG HTML ==========
@@ -309,4 +313,13 @@ String UDPBROADCAST_CLASS::getGeneratedTime(){
 
 String UDPBROADCAST_CLASS::getCommitDateStr(){
     return String(MODULE_UDP_COMMIT_DATE_STR);
+}
+
+void UDPBROADCAST_CLASS::html_ver_get(AsyncWebServerRequest *request) {
+    DEBUGUDP("%s\n\r", __FUNCTION__);
+    String values = "";
+    values += "udpversion|"     + getVersionStr()    + "|dev\n";
+    values += "udpgentime|"     + getGeneratedTime() + "|dev\n";
+    values += "udpgendate|"     + getCommitDateStr() + "|dev\n";
+    request->send(200, "text/plain", values);
 }

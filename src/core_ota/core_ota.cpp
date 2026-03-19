@@ -95,38 +95,41 @@ bool  CORE_OTA_CLASS::ConfigureOTA( String _hostname, String _password) {
 
  void CORE_OTA_CLASS::webInit() {
 	DEBUGOTA(__FUNCTION__);	DEBUGOTA("\r\n");
-	//update.html vvv
-		ESPHTTPServer.on("/update/setmd5", [this](AsyncWebServerRequest *request) {
-			if (!ESPHTTPServer.checkAuth(request)) {	return request->requestAuthentication(); };
-			html_md5_set(request);
-		});
 
-		ESPHTTPServer.on("/update/firmwarefilecheck", [this](AsyncWebServerRequest *request) {
-			 if (!ESPHTTPServer.checkAuth(request)) {	return request->requestAuthentication(); };
-			 html_filename_check(request);
-		});
+    ESPHTTPServer.on("/update/setmd5", [this](AsyncWebServerRequest *request) {
+        if (!ESPHTTPServer.checkAuth(request)) {	return request->requestAuthentication(); };
+        html_md5_set(request);
+    });
 
-		ESPHTTPServer.on("/update/progress", [this](AsyncWebServerRequest *request) {
-			 if (!ESPHTTPServer.checkAuth(request)) {	return request->requestAuthentication(); };
-			 html_fileuploadProgress(request);
-		});
+    ESPHTTPServer.on("/update/firmwarefilecheck", [this](AsyncWebServerRequest *request) {
+            if (!ESPHTTPServer.checkAuth(request)) {	return request->requestAuthentication(); };
+            html_filename_check(request);
+    });
+
+    ESPHTTPServer.on("/update/progress", [this](AsyncWebServerRequest *request) {
+            if (!ESPHTTPServer.checkAuth(request)) {	return request->requestAuthentication(); };
+            html_fileuploadProgress(request);
+    });
 
 
 
-		ESPHTTPServer.on("/update", HTTP_GET, [this](AsyncWebServerRequest *request) {
-			if (!ESPHTTPServer.checkAuth(request)) {	return request->requestAuthentication(); };
-			if (!ESPHTTPServer.handleFileRead("/update.html", request)) { request->send(404, "text/plain", "FileNotFound");	}
-		});
+    ESPHTTPServer.on("/update", HTTP_GET, [this](AsyncWebServerRequest *request) {
+        if (!ESPHTTPServer.checkAuth(request)) {	return request->requestAuthentication(); };
+        if (!ESPHTTPServer.handleFileRead("/update.html", request)) { request->send(404, "text/plain", "FileNotFound");	}
+    });
 
-		ESPHTTPServer.on("/update", HTTP_POST, [this](AsyncWebServerRequest *request) {
-			//what do when we finish
-			 if (!ESPHTTPServer.checkAuth(request)) {	return request->requestAuthentication(); };
-			 updateFileExecute (request);
-		}, [this](AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final) {
-			// uploading
-			 html_uploadUpdateFile(request, filename, index, data, len, final);
-		});
-	//update.html ^^^
+    ESPHTTPServer.on("/update", HTTP_POST, [this](AsyncWebServerRequest *request) {
+        //what do when we finish
+            if (!ESPHTTPServer.checkAuth(request)) {	return request->requestAuthentication(); };
+            updateFileExecute (request);
+    }, [this](AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final) {
+        // uploading
+            html_uploadUpdateFile(request, filename, index, data, len, final);
+    });
+
+    ESPHTTPServer.on("/update/ver", [this](AsyncWebServerRequest *request) {
+        html_ver_get(request);
+    });
 
  }
 
@@ -635,7 +638,14 @@ String CORE_OTA_CLASS::getCommitDateStr(){
 
 
 
-
+void CORE_OTA_CLASS::html_ver_get(AsyncWebServerRequest *request) {
+    DEBUGOTA("%s\n\r", __FUNCTION__);
+    String values = "";
+    values += "otaversion|"     + getVersionStr()    + "|dev\n";
+    values += "otagentime|"     + getGeneratedTime() + "|dev\n";
+    values += "otagendate|"     + getCommitDateStr() + "|dev\n";
+    request->send(200, "text/plain", values);
+}
 
 
 

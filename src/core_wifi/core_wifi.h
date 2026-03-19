@@ -135,9 +135,11 @@ class  CORE_CLASS_WIFI    {
 	void onWiFiDisconnected     (WiFiEventStationModeDisconnected   data);
 	void onWiFiConnectedGotIP   (WiFiEventStationModeGotIP          data);
     #endif
+private:
     String getVersionStr();
     String getGeneratedTime();
     String getCommitDateStr();
+    void  html_ver_get(AsyncWebServerRequest *request);
 protected: 
     bool  dumb = false;
 };

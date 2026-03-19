@@ -28,25 +28,25 @@ public:
 #endif
     void begin();
     void webInit();
+
+    void handleFileUpload(AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final);
+private:    
     void handleFileList(AsyncWebServerRequest *request);
     void handleFileCreate(AsyncWebServerRequest *request);
     void handleFileDelete(AsyncWebServerRequest *request);
     String getVersionStr();
     String getGeneratedTime();
     String getCommitDateStr();
+    void  html_ver_get(AsyncWebServerRequest *request);
     
-
 protected: 
+bool  dumb = false;
 #if ESP32
     fs::SPIFFSFS*               _fs;
 #elif defined(ESP8266)
     FS*                         _fs;                        // esp8266/esp32 flash file system
 #endif
-
-bool  dumb = false;
-
-public:    
-    void handleFileUpload(AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final);
+    
 };
 
 extern CORE_CLASS_EDITOR ModClassEdit;

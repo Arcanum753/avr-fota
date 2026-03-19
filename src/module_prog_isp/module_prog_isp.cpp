@@ -489,7 +489,14 @@ String Class_ProgIsp::getCommitDateStr(){
 }
 
 
-
+void Class_ProgIsp::html_ver_get(AsyncWebServerRequest *request) {
+    DEBUGLOGISP("%s\n\r", __FUNCTION__);
+    String values = "";
+    values += "ispversion|"     + getVersionStr()    + "|dev\n";
+    values += "ispgentime|"     + getGeneratedTime() + "|dev\n";
+    values += "ispgendate|"     + getCommitDateStr() + "|dev\n";
+    request->send(200, "text/plain", values);
+}
 
 
 

@@ -12,6 +12,7 @@
 
 
 #include "common.h"
+#include "core_ntp_version.h"
 CORE_CLASS_NTP modNtpClass(false);
 
 
@@ -140,6 +141,9 @@ void CORE_CLASS_NTP::webInit ()	{
 		if (!ESPHTTPServer.checkAuth(request)) {		return request->requestAuthentication(); }
 		html2ntp_configuration(request);
 	});
+	ESPHTTPServer.on("/ntp/ver", [this](AsyncWebServerRequest *request) {
+        html_ver_get(request);
+    });
 }
 
 
@@ -225,7 +229,25 @@ void CORE_CLASS_NTP::sendTimeData() {
 	DEBUGNTP("sendTimeData %s\r\n", NTP.getTimeDateString().c_str());
 }
 
+String CORE_CLASS_NTP::getVersionStr(){
+    return String(CORE_NTP_VERSION);
+}
 
+String CORE_CLASS_NTP::getGeneratedTime(){
+    return String(CORE_NTP_GENERATED_TIME);
+}
 
+String CORE_CLASS_NTP::getCommitDateStr(){
+    return String(CORE_NTP_COMMIT_DATE_STR);
+}
+
+void CORE_CLASS_NTP::html_ver_get(AsyncWebServerRequest *request) {
+    DEBUGNTP("%s\n\r", __FUNCTION__);
+    String values = "";
+    values += "ntpversion|"     + getVersionStr()    + "|dev\n";
+    values += "ntpgentime|"     + getGeneratedTime() + "|dev\n";
+    values += "ntpgendate|"     + getCommitDateStr() + "|dev\n";
+    request->send(200, "text/plain", values);
+}
 
 

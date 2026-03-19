@@ -76,10 +76,12 @@ public:
     
     void updateFileExecute (AsyncWebServerRequest *request) ;
     
+private:
     String getVersionStr();
     String getGeneratedTime();
     String getCommitDateStr();
-
+    void  html_ver_get(AsyncWebServerRequest *request);
+    
 protected: 
     uint16_t fileUpadedpercent = 0;
     bool  dumb = false;

@@ -6,7 +6,9 @@
 
 #ifdef ESP32
 #include <AsyncUDP.h>
-#else
+#endif
+
+#ifdef ESP8266
 #include <ESPAsyncUDP.h>
 #endif
 
@@ -49,54 +51,57 @@ void processUdpListenPacket(AsyncUDPPacket &packet);
 void udpResponseHandler(IPAddress ip);
 
 class UDPBROADCAST_CLASS {
-    public:
-        UDPBROADCAST_CLASS(uint16_t portListen);
-        
-        void webInit(void);
-        void begin();
-        void udpStop();
-        void udpBroadcastSend(uint16_t _port, String _str);
-        void udpBroadcastTest(AsyncWebServerRequest *request);
-        
-        void send_udp_configuration_values_html(AsyncWebServerRequest *request);
-        void get_udp_configuration_html(AsyncWebServerRequest *request);
-        
-        uint16_t getUpdPortTx();
-        uint16_t getUpdPortRx();
-        uint16_t getudpTimeOut();
-        String getudpKeyword();
-        bool udpPowerOnGet();
-        bool udpResponseGet();
-        String udpJsonGet();
-        uint8_t isStart();
-        
-        strUdpConfig _udpConfig; // UDP configuration
-        String getVersionStr();
-        String getGeneratedTime();
-        String getCommitDateStr();
+public:
+    UDPBROADCAST_CLASS(uint16_t portListen);
+    
+    void webInit(void);
+    void begin();
+    void udpStop();
+    void udpBroadcastSend(uint16_t _port, String _str);
+    void udpBroadcastTest(AsyncWebServerRequest *request);
+    
+    void send_udp_configuration_values_html(AsyncWebServerRequest *request);
+    void get_udp_configuration_html(AsyncWebServerRequest *request);
+    
+    uint16_t getUpdPortTx();
+    uint16_t getUpdPortRx();
+    uint16_t getudpTimeOut();
+    String getudpKeyword();
+    bool udpPowerOnGet();
+    bool udpResponseGet();
+    String udpJsonGet();
+    uint8_t isStart();
+    
+    strUdpConfig _udpConfig; // UDP configuration
+   
 
-    private:
-        AsyncUDP _udp;
-        IPAddress _responseIp;
-        
-        bool load_config_UDP();
-        bool save_configUDP();
-        void defaultConfigUDP();
-        
-        char _sendBuffer[UDP_DATA_MESSAGE_LEN];
-        
-        bool _isSending;
-        unsigned long _lastSendTime;
-        static const unsigned long SEND_TIMEOUT = 500; // 500ms
-        
-        uint8_t _isStarted;
-        uint16_t _portRx;
-        uint16_t _portTx;
-        
-        friend void udpBroadcastTimer();
-        friend void processUdpListenPacket(AsyncUDPPacket &packet);
-        friend void udpResponseHandler(IPAddress ip);
-        friend void udpBroadcastSimple(void);
+private:
+    AsyncUDP _udp;
+    IPAddress _responseIp;
+    
+    bool load_config_UDP();
+    bool save_configUDP();
+    void defaultConfigUDP();
+private:
+    String getVersionStr();
+    String getGeneratedTime();
+    String getCommitDateStr();
+    void  html_ver_get(AsyncWebServerRequest *request);
+    
+    char _sendBuffer[UDP_DATA_MESSAGE_LEN];
+    
+    bool _isSending;
+    unsigned long _lastSendTime;
+    static const unsigned long SEND_TIMEOUT = 500; // 500ms
+    
+    uint8_t _isStarted;
+    uint16_t _portRx;
+    uint16_t _portTx;
+    
+    friend void udpBroadcastTimer();
+    friend void processUdpListenPacket(AsyncUDPPacket &packet);
+    friend void udpResponseHandler(IPAddress ip);
+    friend void udpBroadcastSimple(void);
 };
 
 extern UDPBROADCAST_CLASS udpBroadcast;

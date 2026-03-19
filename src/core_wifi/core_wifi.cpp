@@ -592,7 +592,6 @@ void CORE_CLASS_WIFI::webInit ()	{
 	});
 
 	//captive
-	// Добавьте в инициализацию веб-сервера (где registerCallbacks или аналогично)
 	ESPHTTPServer.on("/generate_204", HTTP_GET, [](AsyncWebServerRequest *request) {
 		request->redirect("http://" + WiFi.softAPIP().toString());
 	});
@@ -604,6 +603,10 @@ void CORE_CLASS_WIFI::webInit ()	{
 	ESPHTTPServer.on("/ncsi.txt", HTTP_GET, [](AsyncWebServerRequest *request) {
 		request->send(200, "text/plain", "Microsoft NCSI");
 	});
+
+	ESPHTTPServer.on("/wifi/ver", [this](AsyncWebServerRequest *request) {
+		html_ver_get(request);
+    });
 
 }
 //wifi.html ^^^
@@ -621,3 +624,11 @@ String CORE_CLASS_WIFI::getCommitDateStr(){
     return String(CORE_WIFI_COMMIT_DATE_STR);
 }
 
+void CORE_CLASS_WIFI::html_ver_get(AsyncWebServerRequest *request) {
+    DEBUGUDP("%s\n\r", __FUNCTION__);
+    String values = "";
+    values += "wifiversion|"     + getVersionStr()    + "|dev\n";
+    values += "wifigentime|"     + getGeneratedTime() + "|dev\n";
+    values += "wifigendate|"     + getCommitDateStr() + "|dev\n";
+    request->send(200, "text/plain", values);
+}

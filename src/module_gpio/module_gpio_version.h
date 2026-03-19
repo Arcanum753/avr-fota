@@ -1,5 +1,5 @@
 // Auto-generated version file for module: module_gpio
-// Generated: 2026-03-13 22:52
+// Generated: 2026-03-19 13:15
 // Environment: TestSolo32
 
 #ifndef MODULE_GPIO_VERSION_H
@@ -10,17 +10,17 @@
 // ============================================================
 
 // Числовая версия (для сравнений)
-#define MODULE_GPIO_VERSION 5
+#define MODULE_GPIO_VERSION 6
 
 // Строковая версия
-#define MODULE_GPIO_VERSION_STR "5"
+#define MODULE_GPIO_VERSION_STR "6"
 
 // ============================================================
 // ДАТА ПОСЛЕДНЕГО ИЗМЕНЕНИЯ
 // ============================================================
 
 // Дата в формате yyyy.mm.dd hh.mm (как строка)
-#define MODULE_GPIO_COMMIT_DATE_STR "%Y.>. (HEAD -> fix-sys-wifi, origin/fix-sys-wifi) 1bac8b3a873344a5d94f2ea0181cfa956fd8f6b8:%M"
+#define MODULE_GPIO_COMMIT_DATE_STR "%Y.>. baf0e242197b16899185975e8a8004699d2e46ba:%M"
 
 // Компоненты даты (для числовых операций)
 #define MODULE_GPIO_COMMIT_YEAR 1970
@@ -30,13 +30,13 @@
 #define MODULE_GPIO_COMMIT_MINUTE 0
 
 // Полная дата в формате YYYY-MM-DD HH:MM (для отладки)
-#define MODULE_GPIO_COMMIT_DATE "%Y->- (HEAD -> fix-sys-wifi, origin/fix-sys-wifi) 1bac8b3a873344a5d94f2ea0181cfa956fd8f6b8:%M"
+#define MODULE_GPIO_COMMIT_DATE "%Y->- baf0e242197b16899185975e8a8004699d2e46ba:%M"
 
 // ============================================================
 // ИНФОРМАЦИЯ О ГЕНЕРАЦИИ
 // ============================================================
 
-#define MODULE_GPIO_GENERATED_TIME "2026-03-13 22:52"
-#define MODULE_GPIO_GENERATED_TIMESTAMP "20260313_225208"
+#define MODULE_GPIO_GENERATED_TIME "2026-03-19 13:15"
+#define MODULE_GPIO_GENERATED_TIMESTAMP "20260319_131557"
 
 #endif // MODULE_GPIO_VERSION_H
