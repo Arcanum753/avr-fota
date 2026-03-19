@@ -69,8 +69,9 @@ void CORE_CLASS_WIFI::s_secondTick(void* arg) {
 }
 
 #if defined(ESP32)
-    void CORE_CLASS_WIFI::begin(fs::SPIFFSFS* fs)
-#elif defined(ESP8266)
+void CORE_CLASS_WIFI::begin(fs::SPIFFSFS* fs)
+#endif
+#if defined(ESP8266)
     void CORE_CLASS_WIFI::begin(FS* fs)                         // esp8266/esp32 flash file system
 #endif
 {
@@ -88,13 +89,12 @@ void CORE_CLASS_WIFI::s_secondTick(void* arg) {
 	// Set WiFi config
 	else {	configureWifi(); 	}
 	_secondTk.attach(1.0f, &CORE_CLASS_WIFI::s_secondTick, static_cast<void*>(this)); // Task to run periodic things every second
-#if (USE_RESERV_WIFI > 0)
+
+	// Try to load configuration from file system// Load defaults if any error
 	if (!load_configWifi(3)) { defaultConfigWifi(3); _apConfig.APenable = true; 	}
 	if (!load_configWifi(2)) { defaultConfigWifi(2); _apConfig.APenable = true; 	}
 	if (!load_configWifi(1)) { defaultConfigWifi(1); _apConfig.APenable = true; 	}
-#endif
-// Try to load configuration from file system// Load defaults if any error
-	if (!load_configWifi(0)) { defaultConfigWifi(0); _apConfig.APenable = true;		}
+	if (!load_configWifi(0)) { defaultConfigWifi(0); _apConfig.APenable = true;		} 
 	DEBUGLOGWIFI("_strWifis[0] %s\r\n", _strWifi0);
 	DEBUGLOGWIFI("_strWifis[1] %s\r\n", _strWifi1);
 	DEBUGLOGWIFI("_strWifis[2] %s\r\n", _strWifi2);
@@ -105,7 +105,8 @@ void CORE_CLASS_WIFI::s_secondTick(void* arg) {
 	onStationModeConnectedHandler 		= WiFi.onEvent([this](WiFiEvent_t event, WiFiEventInfo_t info)	{	this->onWiFiConnected();		},	WiFiEvent_t::ARDUINO_EVENT_WIFI_STA_CONNECTED);
 	onStationModeDisconnectedHandler 	= WiFi.onEvent([this](WiFiEvent_t event, WiFiEventInfo_t info)	{	this->onWiFiDisconnected();		},	WiFiEvent_t::ARDUINO_EVENT_WIFI_STA_DISCONNECTED);
 	onStationModeGotIPHandler 			= WiFi.onEvent([this](WiFiEvent_t event, WiFiEventInfo_t info)	{	this->onWiFiConnectedGotIP();	}, 	WiFiEvent_t::ARDUINO_EVENT_WIFI_STA_GOT_IP);
-	#elif defined(ESP8266)
+#endif
+#if defined(ESP8266)
 	onStationModeConnectedHandler 		= WiFi.onStationModeConnected([this](WiFiEventStationModeConnected data) 		{	this->onWiFiConnected(data);		});
 	onStationModeDisconnectedHandler 	= WiFi.onStationModeDisconnected([this](WiFiEventStationModeDisconnected data) 	{	this->onWiFiDisconnected(data);		});
 	onStationModeGotIPHandler 			= WiFi.onStationModeGotIP([this](WiFiEventStationModeGotIP data) 				{	this->onWiFiConnectedGotIP(data);	});
@@ -138,7 +139,6 @@ bool CORE_CLASS_WIFI::load_configWifi(int _in) {
 }
 
 
-// TODO переделать !
 bool CORE_CLASS_WIFI::save_configWifi(int _in) {
 	//flag_config = false;
 	DEBUGLOGWIFI("Save config\r\n");
@@ -177,22 +177,16 @@ bool CORE_CLASS_WIFI::save_configWifi(int _in) {
 	File configFile ;
 
 	if (_in == 0) {		 configFile = _fs->open(WIFI_CONFIG_FILE0, "w");	}
-#if (USE_RESERV_WIFI > 0)
 	if (_in == 1) {		 configFile = _fs->open(WIFI_CONFIG_FILE1, "w");	}
 	if (_in == 2) {		 configFile = _fs->open(WIFI_CONFIG_FILE2, "w");	}
 	if (_in == 3) {		 configFile = _fs->open(WIFI_CONFIG_FILE3, "w");	}
-#endif
+
 	if (!configFile) {
 		DEBUGLOGWIFI("Failed to open config file for writing\r\n");
 		configFile.close();
 		return false;
 	}
 
-#ifndef RELEASE
-	String temp;
-	serializeJsonPretty(jsonDoc, temp);
-	Serial.println(temp.c_str());
-#endif
 	serializeJson(jsonDoc, configFile);
 	configFile.flush();
 	configFile.close();
@@ -367,37 +361,6 @@ void CORE_CLASS_WIFI::wifiSsidSetPSWDwrong(String _str) {
 	if (strcmp( _strWifi0,  _str.c_str()) == 0)	{	memset (_strWifi0, 0, sizeof(_strWifi0)); }
 }
  
-// wifi.html vvv
-void CORE_CLASS_WIFI::send_network_configuration_values_html(AsyncWebServerRequest *request, int _index) {
-	DEBUGLOGWIFI(__PRETTY_FUNCTION__);	DEBUGLOGWIFI("\r\n");
-	load_configWifi(_index);
-	String values = "";
-	values += "ssid|" + (String)_wifiConfig.ssid + "|input\n";
-	values += "password|" + (String)_wifiConfig.password + "|input\n";
-	values += "ip_0|" + (String)_wifiConfig.ip[0] + "|input\n";
-	values += "ip_1|" + (String)_wifiConfig.ip[1] + "|input\n";
-	values += "ip_2|" + (String)_wifiConfig.ip[2] + "|input\n";
-	values += "ip_3|" + (String)_wifiConfig.ip[3] + "|input\n";
-	values += "nm_0|" + (String)_wifiConfig.netmask[0] + "|input\n";
-	values += "nm_1|" + (String)_wifiConfig.netmask[1] + "|input\n";
-	values += "nm_2|" + (String)_wifiConfig.netmask[2] + "|input\n";
-	values += "nm_3|" + (String)_wifiConfig.netmask[3] + "|input\n";
-	values += "gw_0|" + (String)_wifiConfig.gateway[0] + "|input\n";
-	values += "gw_1|" + (String)_wifiConfig.gateway[1] + "|input\n";
-	values += "gw_2|" + (String)_wifiConfig.gateway[2] + "|input\n";
-	values += "gw_3|" + (String)_wifiConfig.gateway[3] + "|input\n";
-	values += "dns_0|" + (String)_wifiConfig.dns[0] + "|input\n";
-	values += "dns_1|" + (String)_wifiConfig.dns[1] + "|input\n";
-	values += "dns_2|" + (String)_wifiConfig.dns[2] + "|input\n";
-	values += "dns_3|" + (String)_wifiConfig.dns[3] + "|input\n";
-	values += "dhcp|" + (String) (_wifiConfig.dhcp ? "checked" : "") + "|chk\n";
-	request->send(200, "text/plain", values);
-	values = "";
-
-
-}
-
-
 
 void CORE_CLASS_WIFI::send_info_values_html(AsyncWebServerRequest *request) {
 	DEBUGLOGWIFI(__FUNCTION__);	DEBUGLOGWIFI("\r\n");
@@ -441,34 +404,43 @@ String CORE_CLASS_WIFI::getMacAddress() {
 
 
 void CORE_CLASS_WIFI::send_scanwifi(AsyncWebServerRequest *request) {
-	// DEBUGLOGWIFI(__FUNCTION__);	DEBUGLOGWIFI("\r\n");
-	String json = "[";
-	int n = WiFi.scanComplete();
-	if (n == WIFI_SCAN_FAILED) {	WiFi.scanNetworks(true);	}
-	else if (n) {
-		for (int i = 0; i < n; ++i) {
-			if (i) json += ",";
-			json += "{";
-			json += "\"rssi\":" 	+ String(WiFi.RSSI(i));
-			json += ",\"ssid\":\"" 	+ WiFi.SSID(i) 			+ "\"";
-			json += ",\"bssid\":\"" + WiFi.BSSIDstr(i) 		+ "\"";
-			json += ",\"channel\":" + String(WiFi.channel(i));
-			json += ",\"secure\":" 	+ String(WiFi.encryptionType(i));
-			#ifdef ESP8266
-			json += ",\"hidden\":" + String(WiFi.isHidden(i) ? "true" : "false");
-			#endif
-			#ifdef ESP32
-			//TODO
-			#endif
-			json += "}";
-		}
-		WiFi.scanDelete();
-		if (WiFi.scanComplete() == WIFI_SCAN_FAILED) {	WiFi.scanNetworks(true);	}
-	}
-	json += "]";
-	request->send(200, "text/json", json);
-	json = "";
+    String json = buildNetworksJson();
+    request->send(200, "text/json", json);
 }
+
+String CORE_CLASS_WIFI::buildNetworksJson() {
+    String json = "[";
+    int n = WiFi.scanComplete();
+    
+    if (n == WIFI_SCAN_FAILED) {
+        WiFi.scanNetworks(true);
+    }
+    else if (n) {
+        for (int i = 0; i < n; ++i) {
+            if (i) json += ",";
+            json += "{";
+            json += "\"rssi\":" + String(WiFi.RSSI(i));
+            json += ",\"ssid\":\"" + WiFi.SSID(i) + "\"";
+            json += ",\"bssid\":\"" + WiFi.BSSIDstr(i) + "\"";
+            json += ",\"channel\":" + String(WiFi.channel(i));
+            json += ",\"secure\":" + String(WiFi.encryptionType(i));
+#ifdef ESP8266
+            json += ",\"hidden\":" + String(WiFi.isHidden(i) ? "true" : "false");
+#endif
+#ifdef ESP32
+            // TODO: Add hidden network support for ESP32 if needed
+#endif
+            json += "}";
+        }
+        WiFi.scanDelete();
+        if (WiFi.scanComplete() == WIFI_SCAN_FAILED) {
+            WiFi.scanNetworks(true);
+        }
+    }
+    json += "]";
+    return json;
+}
+
 
 void CORE_CLASS_WIFI::send_network_configuration_html(AsyncWebServerRequest *request) {
 	// DEBUGLOGWIFI(__FUNCTION__);	DEBUGLOGWIFI("\r\n");
@@ -501,19 +473,12 @@ void CORE_CLASS_WIFI::send_network_configuration_html(AsyncWebServerRequest *req
 			if (request->argName(i) == "wificonf")  { if (checkRange(request->arg(i))) 	_saveIn = request->arg(i).toInt(); continue; }
 		}
 		request->send_P(200, "text/html", Page_ConfigRefresh);
-		if (_saveIn == 0) {save_configWifi(0);}
 
-#if (USE_RESERV_WIFI > 0)
+		if (_saveIn == 0) {save_configWifi(0);}
 		if (_saveIn == 1) {save_configWifi(1);}
 		if (_saveIn == 2) {save_configWifi(2);}
 		if (_saveIn == 3) {save_configWifi(3);}
-#endif
-#if (NO_RST > 0)
-		//yield();
-		delay(1000);
-		_fs->end();
-		ESPHTTPServer.restart_esp();
-#endif
+
 	}
 	else {
 		DEBUGLOGWIFI(request->url().c_str());
@@ -524,93 +489,175 @@ void CORE_CLASS_WIFI::send_network_configuration_html(AsyncWebServerRequest *req
 // wifi.html ^^^
 
 
-//wifi.html vvv
-void CORE_CLASS_WIFI::webInit ()	{
-
-	ESPHTTPServer.on("/wifi.html", [this](AsyncWebServerRequest *request) {
-		if (!ESPHTTPServer.checkAuth(request)) {	return request->requestAuthentication(); };
-		this->send_network_configuration_html(request);
-	});
-
-	ESPHTTPServer.on("/wifi/info", [this](AsyncWebServerRequest *request) {
-		if (!ESPHTTPServer.checkAuth(request)) {	return request->requestAuthentication(); };
-		this->send_info_values_html(request);
-	});
-
-
-	ESPHTTPServer.on("/wifi/values/0", [this](AsyncWebServerRequest *request) {
-		if (!ESPHTTPServer.checkAuth(request)) {	return request->requestAuthentication(); };
-		this->send_network_configuration_values_html(request, 0);
-	});
-	ESPHTTPServer.on("/wifi/values/1", [this](AsyncWebServerRequest *request) {
-		if (!ESPHTTPServer.checkAuth(request)) {	return request->requestAuthentication(); };
-
-		this->send_network_configuration_values_html(request, 1);
-	});
-	ESPHTTPServer.on("/wifi/values/2", [this](AsyncWebServerRequest *request) {
-		if (!ESPHTTPServer.checkAuth(request)) {	return request->requestAuthentication(); };
-
-		this->send_network_configuration_values_html(request, 2);
-	});
-	ESPHTTPServer.on("/wifi/values/3", [this](AsyncWebServerRequest *request) {
-		if (!ESPHTTPServer.checkAuth(request)) {	return request->requestAuthentication(); };
-		this->send_network_configuration_values_html(request, 3);
-	});
-
-	ESPHTTPServer.on("/scan", HTTP_GET, [](AsyncWebServerRequest *request) {
-		if (!ESPHTTPServer.checkAuth(request)) {	return request->requestAuthentication(); };
-		String json = "[";
-		int n = WiFi.scanComplete();
-		if (n == WIFI_SCAN_FAILED) {
-			WiFi.scanNetworks(true);
-		}
-		else if (n) {
-			for (int i = 0; i < n; ++i) {
-				if (i) json += ",";
-				json += "{";
-				json += "\"rssi\":" + String(WiFi.RSSI(i));
-				json += ",\"ssid\":\"" + WiFi.SSID(i) + "\"";
-				json += ",\"bssid\":\"" + WiFi.BSSIDstr(i) + "\"";
-				json += ",\"channel\":" + String(WiFi.channel(i));
-				json += ",\"secure\":" + String(WiFi.encryptionType(i));
-				#ifdef ESP8266
-				json += ",\"hidden\":" + String(WiFi.isHidden(i) ? "true" : "false");
-				#endif
-				#ifdef ESP32
-				//TODO
-				#endif
-				json += "}";
-			}
-			WiFi.scanDelete();
-			if (WiFi.scanComplete() == WIFI_SCAN_FAILED) {
-				WiFi.scanNetworks(true);
-			}
-		}
-		json += "]";
-		request->send(200, "text/json", json);
-		json = "";
-	});
-
-	//captive
-	ESPHTTPServer.on("/generate_204", HTTP_GET, [](AsyncWebServerRequest *request) {
-		request->redirect("http://" + WiFi.softAPIP().toString());
-	});
-
-	ESPHTTPServer.on("/hotspot-detect.html", HTTP_GET, [](AsyncWebServerRequest *request) {
-		request->redirect("http://" + WiFi.softAPIP().toString());
-	});
-
-	ESPHTTPServer.on("/ncsi.txt", HTTP_GET, [](AsyncWebServerRequest *request) {
-		request->send(200, "text/plain", "Microsoft NCSI");
-	});
-
-	ESPHTTPServer.on("/wifi/ver", [this](AsyncWebServerRequest *request) {
-		html_ver_get(request);
+void CORE_CLASS_WIFI::webInit () {
+    ESPHTTPServer.on("/wifi.html", [this](AsyncWebServerRequest *request) {
+        if (!ESPHTTPServer.checkAuth(request)) { return request->requestAuthentication(); };
+        this->send_network_configuration_html(request);
     });
 
-}
-//wifi.html ^^^
+    ESPHTTPServer.on("/wifi/info", [this](AsyncWebServerRequest *request) {
+        if (!ESPHTTPServer.checkAuth(request)) { return request->requestAuthentication(); };
+        this->send_info_values_html(request);
+    });
 
+    // JSON-эндпоинты для слотов
+    for (int i = 0; i < 4; i++) {
+        String path = "/api/wifi/slot/" + String(i);
+        
+        // GET - получение данных слота в JSON
+        ESPHTTPServer.on(path.c_str(), HTTP_GET, [this, i](AsyncWebServerRequest *request) {
+            if (!ESPHTTPServer.checkAuth(request)) {
+                return request->requestAuthentication();
+            }
+            this->send_slot_json(request, i);
+        });
+        
+        // POST - сохранение данных слота (вызывает handle_slot_post)
+        ESPHTTPServer.on(path.c_str(), HTTP_POST, 
+            [this, i](AsyncWebServerRequest *request) {
+                this->handle_slot_post(request, i);
+            }, 
+            NULL, 
+            [this](AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total) {
+                this->handle_slot_upload(request, data, len, index, total);
+            }
+        );
+    }
+
+    ESPHTTPServer.on("/scan", HTTP_GET, [this](AsyncWebServerRequest *request) {
+        if (!ESPHTTPServer.checkAuth(request)) {
+            return request->requestAuthentication();
+        }
+        this->send_scanwifi(request);
+    });
+
+    //captive
+    ESPHTTPServer.on("/generate_204", HTTP_GET, [](AsyncWebServerRequest *request) {
+        request->redirect("http://" + WiFi.softAPIP().toString());
+    });
+
+    ESPHTTPServer.on("/hotspot-detect.html", HTTP_GET, [](AsyncWebServerRequest *request) {
+        request->redirect("http://" + WiFi.softAPIP().toString());
+    });
+
+    ESPHTTPServer.on("/ncsi.txt", HTTP_GET, [](AsyncWebServerRequest *request) {
+        request->send(200, "text/plain", "Microsoft NCSI");
+    });
+
+    ESPHTTPServer.on("/wifi/ver", [this](AsyncWebServerRequest *request) {
+        html_ver_get(request);
+    });
+}
+
+void CORE_CLASS_WIFI::send_slot_json(AsyncWebServerRequest *request, int slot) {
+    DEBUGLOGWIFI("Sending slot %d data as JSON\n", slot);
+    load_configWifi(slot);
+    
+    JsonDocument jsonDoc;
+    jsonDoc["ssid"] = _wifiConfig.ssid;
+    jsonDoc["password"] = _wifiConfig.password;
+    jsonDoc["dhcp"] = _wifiConfig.dhcp;
+    
+    JsonArray ip = jsonDoc["ip"].to<JsonArray>();
+    ip.add(_wifiConfig.ip[0]);
+    ip.add(_wifiConfig.ip[1]);
+    ip.add(_wifiConfig.ip[2]);
+    ip.add(_wifiConfig.ip[3]);
+    
+    JsonArray netmask = jsonDoc["netmask"].to<JsonArray>();
+    netmask.add(_wifiConfig.netmask[0]);
+    netmask.add(_wifiConfig.netmask[1]);
+    netmask.add(_wifiConfig.netmask[2]);
+    netmask.add(_wifiConfig.netmask[3]);
+    
+    JsonArray gateway = jsonDoc["gateway"].to<JsonArray>();
+    gateway.add(_wifiConfig.gateway[0]);
+    gateway.add(_wifiConfig.gateway[1]);
+    gateway.add(_wifiConfig.gateway[2]);
+    gateway.add(_wifiConfig.gateway[3]);
+    
+    JsonArray dns = jsonDoc["dns"].to<JsonArray>();
+    dns.add(_wifiConfig.dns[0]);
+    dns.add(_wifiConfig.dns[1]);
+    dns.add(_wifiConfig.dns[2]);
+    dns.add(_wifiConfig.dns[3]);
+    
+    String response;
+    serializeJson(jsonDoc, response);
+    request->send(200, "application/json", response);
+}
+
+void CORE_CLASS_WIFI::handle_slot_post(AsyncWebServerRequest *request, int slot) {
+    if (!ESPHTTPServer.checkAuth(request)) {
+        return request->requestAuthentication();
+    }
+    
+    if (request->_tempObject != NULL) {
+        String body = String((char*)request->_tempObject);
+        DEBUGLOGWIFI("Received body for slot %d: %s\n", slot, body.c_str());
+        
+        JsonDocument jsonDoc;
+        DeserializationError error = deserializeJson(jsonDoc, body);
+        
+        if (error) {
+            DEBUGLOGWIFI("JSON parse error: %s\n", error.c_str());
+            request->send(400, "application/json", "{\"success\":false,\"error\":\"JSON parse error\"}");
+            return;
+        }
+        
+        this->load_configWifi(slot);
+        
+        if (jsonDoc.containsKey("ssid")) this->_wifiConfig.ssid = jsonDoc["ssid"].as<String>();
+        if (jsonDoc.containsKey("password")) this->_wifiConfig.password = jsonDoc["password"].as<String>();
+        if (jsonDoc.containsKey("dhcp")) this->_wifiConfig.dhcp = jsonDoc["dhcp"].as<bool>();
+        
+        if (jsonDoc["ip"].is<JsonArray>()) {
+            JsonArray ip = jsonDoc["ip"].as<JsonArray>();
+            this->_wifiConfig.ip = IPAddress(ip[0], ip[1], ip[2], ip[3]);
+        }
+        
+        if (jsonDoc["netmask"].is<JsonArray>()) {
+            JsonArray nm = jsonDoc["netmask"].as<JsonArray>();
+            this->_wifiConfig.netmask = IPAddress(nm[0], nm[1], nm[2], nm[3]);
+        }
+        
+        if (jsonDoc["gateway"].is<JsonArray>()) {
+            JsonArray gw = jsonDoc["gateway"].as<JsonArray>();
+            this->_wifiConfig.gateway = IPAddress(gw[0], gw[1], gw[2], gw[3]);
+        }
+        
+        if (jsonDoc["dns"].is<JsonArray>()) {
+            JsonArray dns = jsonDoc["dns"].as<JsonArray>();
+            this->_wifiConfig.dns = IPAddress(dns[0], dns[1], dns[2], dns[3]);
+        }
+        
+        if (this->save_configWifi(slot)) {
+            request->send(200, "application/json", "{\"success\":true}");
+            DEBUGLOGWIFI("Saved slot %d ok.\n", slot);
+        } else {
+            request->send(500, "application/json", "{\"success\":false,\"error\":\"Save failed\"}");
+            DEBUGLOGWIFI("Saved slot %d failed.\n", slot);
+        }
+    } else {
+        DEBUGLOGWIFI("No body data for slot %d\n", slot);
+        request->send(400, "application/json", "{\"success\":false,\"error\":\"No data\"}");
+    }
+}
+
+// Обработчик для загрузки тела запроса (добавьте эту функцию)
+void CORE_CLASS_WIFI::handle_slot_upload(AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total) {
+    if (!request->_tempObject) {
+        char *buff = (char*)malloc(total + 1);
+        request->_tempObject = buff;
+    }
+    
+    char *buff = (char*)request->_tempObject;
+    memcpy(buff + index, data, len);
+    
+    if (index + len == total) {
+        buff[total] = '\0';
+    }
+}
 
 String CORE_CLASS_WIFI::getVersionStr(){
     return String(CORE_WIFI_VERSION);
@@ -632,3 +679,4 @@ void CORE_CLASS_WIFI::html_ver_get(AsyncWebServerRequest *request) {
     values += "wifigendate|"     + getCommitDateStr() + "|dev\n";
     request->send(200, "text/plain", values);
 }
+

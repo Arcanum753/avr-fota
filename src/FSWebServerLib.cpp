@@ -358,7 +358,7 @@ String getContentType(String filename, AsyncWebServerRequest *request) {
 
 void AsyncFSWebServer::serverInit() {
 //system.html vvv	
-	on("/system/restart", [this](AsyncWebServerRequest *request) {
+	on("/system/restart", HTTP_POST, [this](AsyncWebServerRequest *request) {
 		if (!this->checkAuth(request)) {	return request->requestAuthentication(); };
 		DBG_OUTPUT_PORT.println(request->url());
 		request->send_P(200, "text/html", Page_IndexRefresh);

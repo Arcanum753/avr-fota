@@ -287,3 +287,43 @@ iframe {
 markup {
     display: none;
 }
+
+/* WiFi slot selection styles */
+.config-slot {
+    border: 2px solid transparent;
+    transition: all 0.3s ease;
+    padding: 5px;
+    border-radius: 5px;
+    cursor: pointer;
+}
+.config-slot.selected {
+    border-color: #7D8EE2;
+    background-color: rgba(125, 142, 226, 0.1);
+    box-shadow: 0 0 10px rgba(125, 142, 226, 0.5);
+}
+.slot-indicator {
+    font-size: 12px;
+    color: #666;
+    margin-bottom: 5px;
+    font-weight: bold;
+}
+.selected .slot-indicator {
+    color: #7D8EE2;
+}
+.config-slot:hover {
+    border-color: #ccc;
+    background-color: rgba(200, 200, 200, 0.1);
+}
+.config-slot.selected:hover {
+    border-color: #7D8EE2;
+}
+.config-slot input,
+.config-slot button,
+.config-slot a {
+    cursor: text;
+}
+.config-slot input[type="submit"],
+.config-slot input[type="checkbox"],
+.config-slot a {
+    cursor: pointer;
+}
