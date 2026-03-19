@@ -44,7 +44,8 @@
 typedef struct {
     String deviceName;
     String deviceSerial;
-    String deviceType;
+    int16_t wifiScanTime;
+    uint16_t wifiAPLifeTime;
 } strSysConfig;
 
 
@@ -119,15 +120,17 @@ private:
 public:
     bool checkAuth(AsyncWebServerRequest *request);
     bool handleFileRead(String path, AsyncWebServerRequest *request);
+    uint16_t configSys_ApTimeGet()   ;
+    int16_t  configSys_ScanTimeGet() ;
 
     
 private:
     void html_version_info(AsyncWebServerRequest *request);
-    void send_device_values_html(AsyncWebServerRequest *request);
+    void html_system_Load(AsyncWebServerRequest *request);
     void send_project_configuration_values_html(AsyncWebServerRequest *request);
 
     void html_send_chipinfo(AsyncWebServerRequest *request);
-    void get_system_configuration_html(AsyncWebServerRequest *request);
+    void html_system_Save(AsyncWebServerRequest *request);
     void get_project_configuration_html(AsyncWebServerRequest *request);
     void send_wwwauth_configuration_values_html(AsyncWebServerRequest *request);
     void set_wwwauth_configuration(AsyncWebServerRequest *request);

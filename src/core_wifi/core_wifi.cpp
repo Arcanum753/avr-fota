@@ -2,7 +2,8 @@
 #if defined(ESP32)
 #include <SPIFFS.h>
 #include <esp32-hal-gpio.h>
-#elif defined(ESP8266)
+#endif
+#if defined(ESP8266)
 #include <FS.h>
 #endif
 
@@ -25,8 +26,10 @@
 
 #include "core_ntp/core_ntp.h"
 
-#include "common_gpio.h"
+#include "core_led/core_led.h"
 #include "core_wifi_version.h"
+
+
 
 CORE_CLASS_WIFI 	modWifiClass(false);
 DNSServer 		dnsServer;
@@ -43,29 +46,29 @@ void CORE_CLASS_WIFI::s_secondTick(void* arg) {
 	// if (ESPHTTPServer._evs.count() > 0) 	{	modNtpClass.sendTimeData();	 }
 
 //Check connection timeout if enabled
-#if (AP_ENABLE_TIMEOUT > 0)
-	if (self->wifiStatus == FS_STAT_CONNECTING) 	{
-		if (++self->connectionTimout >= AP_ENABLE_TIMEOUT){
-			DEBUGLOGWIFI("Connection Timeout. Switching to AP Mode.\r\n");
+if (self->scanTime > 0) {
+		if (self->wifiStatus == FS_STAT_CONNECTING) 	{
+			if (++self->connectionTimout >= self->scanTime){
+				DEBUGLOGWIFI("Connection Timeout. Switching to AP Mode.\r\n");
+				self->WifiScan = WF_SCAN_NO_NEED;
+				self->configureWifiAP();
+			}
+		}
+		if (self->wifiStatus == FS_STAT_WRONGPASSWORDS) {
+			DEBUGLOGWIFI("All passwords wrong. Switching to AP Mode.\r\n");
 			self->WifiScan = WF_SCAN_NO_NEED;
 			self->configureWifiAP();
 		}
+		
+		if (self->WifiScan == WF_STAT_SCANED)	{
+			self->configureWifi();
+			self->WifiScan = WF_SCAN_NO_NEED;
+		}
+		
+		if (self->WifiScan != WF_SCAN_NO_NEED) { self->load_configWifi(self->scanWifi()); }
+		if (self->wifiStatus == FS_STAT_CONNECTED && (CONNECTION_LED >= 0) ) { flashLEDOnConnected(); }
 	}
-	if (self->wifiStatus == FS_STAT_WRONGPASSWORDS) {
-		DEBUGLOGWIFI("All passwords wrong. Switching to AP Mode.\r\n");
-		self->WifiScan = WF_SCAN_NO_NEED;
-		self->configureWifiAP();
-	}
-	
-	if (self->WifiScan == WF_STAT_SCANED)	{
-		self->configureWifi();
-		self->WifiScan = WF_SCAN_NO_NEED;
-	}
-	
-	if (self->WifiScan != WF_SCAN_NO_NEED) { self->load_configWifi(self->scanWifi()); }
-	if (self->wifiStatus == FS_STAT_CONNECTED && (CONNECTION_LED >= 0) ) { flashLEDOnConnected(); }
-	
-#endif //AP_ENABLE_TIMEOUT
+
 }
 
 #if defined(ESP32)
@@ -78,13 +81,15 @@ void CORE_CLASS_WIFI::begin(fs::SPIFFSFS* fs)
 	_fs = fs;
 	if (!_fs) { _fs->begin();  }// If SPIFFS is not started
 	connectionTimout = 0;
+	scanTime = ESPHTTPServer.configSys_ScanTimeGet();
+	scanTime *= MINUTES;
 	String hostName = ESPHTTPServer.getHostName();
 	WiFi.hostname(hostName.c_str());
 	if (AP_ENABLE_BUTTON >= 0) {
 		// Set AP mode if AP button was pressed
 		if (_apConfig.APenable) {	configureWifiAP();	}
-// Set WiFi config
-	else {	configureWifi();	}
+		// Set WiFi config
+		else {	configureWifi();	}
 	}
 	// Set WiFi config
 	else {	configureWifi(); 	}
@@ -110,7 +115,7 @@ void CORE_CLASS_WIFI::begin(fs::SPIFFSFS* fs)
 	onStationModeConnectedHandler 		= WiFi.onStationModeConnected([this](WiFiEventStationModeConnected data) 		{	this->onWiFiConnected(data);		});
 	onStationModeDisconnectedHandler 	= WiFi.onStationModeDisconnected([this](WiFiEventStationModeDisconnected data) 	{	this->onWiFiDisconnected(data);		});
 	onStationModeGotIPHandler 			= WiFi.onStationModeGotIP([this](WiFiEventStationModeGotIP data) 				{	this->onWiFiConnectedGotIP(data);	});
-	#endif
+#endif
 
 }
 
@@ -256,7 +261,7 @@ int CORE_CLASS_WIFI::scanWifi() {
 	}
 	if (_scanNum >= 0) {	WifiScan = WF_STAT_SCANED;	}
 
-	DEBUGLOGWIFI("timeout: %d _scanNum = %d nets = %d \r\n", (AP_ENABLE_TIMEOUT - connectionTimout), _scanNum, nets);
+	DEBUGLOGWIFI("timeout: %d _scanNum = %d nets = %d \r\n", (scanTime - connectionTimout), _scanNum, nets);
 	return _scanNum;
 }
 
@@ -277,19 +282,19 @@ void CORE_CLASS_WIFI::configureWifi() { // set esp8266 as wifi client
 	}
 	wifiStatus = FS_STAT_CONNECTING;
 //Only use wait waitForConnectResult if the timeout is not enabled to not mess with the timeout
-#if (AP_ENABLE_TIMEOUT <= 0)
-	WiFi.waitForConnectResult();
-#endif //AP_ENABLE_TIMEOUT
+	if (scanTime <= 0) { WiFi.waitForConnectResult(); }
+
 }
 
 
 
 #if defined(ESP32)
-void CORE_CLASS_WIFI::onWiFiConnected()	{
-#elif ESP8266
-void WIFIMOD_CLASS::onWiFiConnected(WiFiEventStationModeConnected data) {
+void CORE_CLASS_WIFI::onWiFiConnected()	
 #endif
-
+#if defined(ESP8266)
+void CORE_CLASS_WIFI::onWiFiConnected(WiFiEventStationModeConnected data) 
+#endif
+{
 	DEBUGLOGWIFI("WiFi Connected: Waiting for DHCP\n\r");
 	if (CONNECTION_LED >= 0) {espLedOn(); 	}	// Turn LED on
 	wifiDisconnectedSince = 0;
@@ -301,8 +306,9 @@ void WIFIMOD_CLASS::onWiFiConnected(WiFiEventStationModeConnected data) {
 //means we get nor,al connection 	
 #if defined(ESP32)
 void CORE_CLASS_WIFI::onWiFiConnectedGotIP() {
-#elif defined(ESP8266)
-void WIFIMOD_CLASS::onWiFiConnectedGotIP(WiFiEventStationModeGotIP data) {
+#endif
+#if defined(ESP8266)
+void CORE_CLASS_WIFI::onWiFiConnectedGotIP(WiFiEventStationModeGotIP data) {
 #endif
 	if (CONNECTION_LED >= 0) { espLedOn(); 	} // Turn LED on
 
@@ -325,8 +331,9 @@ void WIFIMOD_CLASS::onWiFiConnectedGotIP(WiFiEventStationModeGotIP data) {
 
 #if defined(ESP32)
 void CORE_CLASS_WIFI::onWiFiDisconnected() {
-#elif defined(ESP8266)
-void WIFIMOD_CLASS::onWiFiDisconnected(WiFiEventStationModeDisconnected data) {
+#endif
+#if defined(ESP8266)
+void CORE_CLASS_WIFI::onWiFiDisconnected(WiFiEventStationModeDisconnected data) {
 #endif
 
 
@@ -586,9 +593,13 @@ void CORE_CLASS_WIFI::send_slot_json(AsyncWebServerRequest *request, int slot) {
     serializeJson(jsonDoc, response);
     request->send(200, "application/json", response);
 }
-
 void CORE_CLASS_WIFI::handle_slot_post(AsyncWebServerRequest *request, int slot) {
     if (!ESPHTTPServer.checkAuth(request)) {
+        // Освобождаем память перед возвратом
+        if (request->_tempObject) {
+            free(request->_tempObject);
+            request->_tempObject = NULL;
+        }
         return request->requestAuthentication();
     }
     
@@ -602,6 +613,10 @@ void CORE_CLASS_WIFI::handle_slot_post(AsyncWebServerRequest *request, int slot)
         if (error) {
             DEBUGLOGWIFI("JSON parse error: %s\n", error.c_str());
             request->send(400, "application/json", "{\"success\":false,\"error\":\"JSON parse error\"}");
+            
+            // Освобождаем память
+            free(request->_tempObject);
+            request->_tempObject = NULL;
             return;
         }
         
@@ -631,7 +646,13 @@ void CORE_CLASS_WIFI::handle_slot_post(AsyncWebServerRequest *request, int slot)
             this->_wifiConfig.dns = IPAddress(dns[0], dns[1], dns[2], dns[3]);
         }
         
-        if (this->save_configWifi(slot)) {
+        bool saveResult = this->save_configWifi(slot);
+        
+        // Освобождаем память после использования
+        free(request->_tempObject);
+        request->_tempObject = NULL;
+        
+        if (saveResult) {
             request->send(200, "application/json", "{\"success\":true}");
             DEBUGLOGWIFI("Saved slot %d ok.\n", slot);
         } else {
@@ -643,7 +664,6 @@ void CORE_CLASS_WIFI::handle_slot_post(AsyncWebServerRequest *request, int slot)
         request->send(400, "application/json", "{\"success\":false,\"error\":\"No data\"}");
     }
 }
-
 // Обработчик для загрузки тела запроса (добавьте эту функцию)
 void CORE_CLASS_WIFI::handle_slot_upload(AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total) {
     if (!request->_tempObject) {
@@ -654,9 +674,7 @@ void CORE_CLASS_WIFI::handle_slot_upload(AsyncWebServerRequest *request, uint8_t
     char *buff = (char*)request->_tempObject;
     memcpy(buff + index, data, len);
     
-    if (index + len == total) {
-        buff[total] = '\0';
-    }
+    if (index + len == total) { buff[total] = '\0'; }
 }
 
 String CORE_CLASS_WIFI::getVersionStr(){

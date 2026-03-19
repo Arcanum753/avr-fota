@@ -18,7 +18,7 @@
 #include "core_terminal/core_terminal.h"
 
 #include "version.h"
-#include "common_gpio.h"
+#include "core_led/core_led.h"
 
 // pin used for entering setup mode
 bool fsMounted = false;

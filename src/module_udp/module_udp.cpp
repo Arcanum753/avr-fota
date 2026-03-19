@@ -234,7 +234,7 @@ String UDPBROADCAST_CLASS::udpJsonGet() {
     
     jsonDoc["deviceName"]   = ESPHTTPServer._sysConfig.deviceName;
     jsonDoc["deviceSerial"] = ESPHTTPServer._sysConfig.deviceSerial;
-    jsonDoc["deviceType"]   = ESPHTTPServer._sysConfig.deviceType;
+    
     jsonDoc["ip"]           = WiFi.localIP().toString();
     jsonDoc["mac"]          = WiFi.macAddress();
     jsonDoc["udpPortTx"]    = _udpConfig.udpPortTx;

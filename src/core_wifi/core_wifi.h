@@ -143,6 +143,7 @@ private:
     void handle_slot_post(AsyncWebServerRequest *request, int slot);
     void handle_slot_upload(AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total);
 protected: 
+    volatile int16_t scanTime = 1;
     bool  dumb = false;
 };
 
