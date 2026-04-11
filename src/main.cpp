@@ -34,8 +34,9 @@ void setup() {
 	// WiFi is started inside library
     ESPHTTPServer.begin(&SPIFFS);
     TerminalInit();
-    flashLEDinit(); 
-    flashLED(CONNECTION_LED, 25, 150);
+    ledInit(); 
+    // flashLED(CONNECTION_LED, 25, 150);
+    ledMacroTimerTask();
 	_secondEERtos.attach_ms(1, &TimerService); // init eertos time manager and start.
 }
 

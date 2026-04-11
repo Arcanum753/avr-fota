@@ -38,7 +38,7 @@ struct fileCompareResult {
     int8_t  nameMatch;      // -1 - не проверялось, 0 - не совпадает, 1 - совпадает
     int8_t  majorDiff;      // разница в мажорной версии
     int16_t minorDiff;      // разница в минорной версии (инкремент при коммитах)
-    int32_t dateDiff;       // разница в дате (YYYYMMDDHHMM как число)
+    int64_t  dateDiff;       // разница в дате (YYYYMMDDHHMM как число)
     int32_t buildDiff;      // разница в номере сборки
     UpdateTypeFile fileType; // тип файла
     uint8_t isDebug;        // 1 - если есть номер билда в имени, 0 - если нет

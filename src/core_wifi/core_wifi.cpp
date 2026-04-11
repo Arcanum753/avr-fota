@@ -43,30 +43,37 @@ void CORE_CLASS_WIFI::s_secondTick(void* arg) {
 
 	//DNS captive
 	if (self->wifiStatus == FS_STAT_APMODE) {	dnsServer.processNextRequest();	}
-	// if (ESPHTTPServer._evs.count() > 0) 	{	modNtpClass.sendTimeData();	 }
+	
 
 //Check connection timeout if enabled
-if (self->scanTime > 0) {
+	if (self->scanTime > 0) {
 		if (self->wifiStatus == FS_STAT_CONNECTING) 	{
 			if (++self->connectionTimout >= self->scanTime){
 				DEBUGLOGWIFI("Connection Timeout. Switching to AP Mode.\r\n");
 				self->WifiScan = WF_SCAN_NO_NEED;
 				self->configureWifiAP();
+				
+				ledMacrosWifiAP();
 			}
 		}
 		if (self->wifiStatus == FS_STAT_WRONGPASSWORDS) {
 			DEBUGLOGWIFI("All passwords wrong. Switching to AP Mode.\r\n");
 			self->WifiScan = WF_SCAN_NO_NEED;
 			self->configureWifiAP();
+			ledMacrosWifiError();
 		}
 		
 		if (self->WifiScan == WF_STAT_SCANED)	{
 			self->configureWifi();
 			self->WifiScan = WF_SCAN_NO_NEED;
+			ledMacrosWifiConnecting();
 		}
 		
-		if (self->WifiScan != WF_SCAN_NO_NEED) { self->load_configWifi(self->scanWifi()); }
-		if (self->wifiStatus == FS_STAT_CONNECTED && (CONNECTION_LED >= 0) ) { flashLEDOnConnected(); }
+		if (self->WifiScan != WF_SCAN_NO_NEED) {
+			self->load_configWifi(self->scanWifi()); 
+			ledMacrosWifiScan();
+		}
+		if (self->wifiStatus == FS_STAT_CONNECTED && (CONNECTION_LED >= 0) ) {  flashLEDOnConnected(); }
 	}
 
 }
@@ -240,7 +247,7 @@ void CORE_CLASS_WIFI::configureWifiAP() {
 		DEBUGLOGWIFI("AP Pass disabled \r\n");
 	}
 	startDNSCaptive();
-	if (CONNECTION_LED >= 0) {	flashLED(CONNECTION_LED, 5, 250);	}
+	// if (CONNECTION_LED >= 0) {	flashLED(CONNECTION_LED, 5, 250);	}
 	DEBUGLOGWIFI("AP Mode enabled. SSID: %s IP: %s\r\n", WiFi.softAPSSID().c_str(), WiFi.softAPIP().toString().c_str());
 	connectionTimout = 0;
 }
@@ -271,7 +278,7 @@ void CORE_CLASS_WIFI::configureWifi() { // set esp8266 as wifi client
 	DEBUGLOGWIFI(__PRETTY_FUNCTION__);	DEBUGLOGWIFI("\r\n");
 	//disconnect required here
 	//improves reconnect reliability
-	if (WiFi.isConnected()) {		WiFi.disconnect(); 	}
+	if (WiFi.isConnected()) {	WiFi.disconnect(); 	}
 	//encourge clean recovery after disconnect species5618, 08-March-2018
 	WiFi.mode(WIFI_STA);
 	if (WifiScan == WF_STAT_SCANED){
@@ -350,9 +357,10 @@ DEBUGLOGWIFI(" case STA_DISCONNECTED \r\n");
 		WifiScan = WF_SCAN_NO_NEED;
 		wifiSsidSetPSWDwrong(_wifiConfig.ssid);		
 		WiFi.disconnect();		// anyway need it to avoid wifi logic errors
+		ledMacrosWifiDisconnect()	;
 	}
 
-	if (CONNECTION_LED >= 0) {	espLedOff();	}// Turn LED off
+	// if (CONNECTION_LED >= 0) {	espLedOff();	}// Turn LED off
 	if (wifiDisconnectedSince == 0) { wifiDisconnectedSince = millis(); }
 	DEBUGLOGWIFI("Disconnected for %d seconds \r\n", (int)((millis() - wifiDisconnectedSince) / 1000));
 	wifiStatus = FS_STAT_CONNECTING;

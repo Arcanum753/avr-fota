@@ -22,6 +22,7 @@ void termSwdFlash();
 void udpp ();
 void udpc ();
 void udps ();
+void BlinkCmd();
 
 void avr() ;
 

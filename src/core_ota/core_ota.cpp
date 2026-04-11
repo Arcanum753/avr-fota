@@ -260,34 +260,32 @@ void CORE_OTA_CLASS::updateFileExecute (AsyncWebServerRequest *request) {
 
 }
 
+
 int8_t CORE_OTA_CLASS::fileNameCheck(String filename, fileCompareResult* result) {
     DEBUGOTA(__FUNCTION__); DEBUGOTA("\r\n");
     int8_t _ret = -1;
     
-    // Инициализируем результат значениями по умолчанию
     result->nameMatch = -1;
     result->majorDiff = 0;
     result->minorDiff = 0;
     result->dateDiff = 0;
     result->buildDiff = 0;
-    result->isDebug = 0;  // по умолчанию не debug
+    result->isDebug = 0;
     result->fileType = FILE_TYPE_UNSUPPORTED;
     
     if (filename.length() == 0) { 
         return _ret;  
     }
 
-    // Очищаем имя файла от непечатных символов
     String cleanFilename = "";
     for (int i = 0; i < filename.length(); i++) {
         char c = filename.charAt(i);
-        if (c >= 32 && c <= 126) { // только печатные ASCII
+        if (c >= 32 && c <= 126) {
             cleanFilename += c;
         }
     }
     filename = cleanFilename;
 
-    // Определяем тип файла
     if (filename.endsWith(".bin")) {
         if (filename.indexOf("_fs-") > 0) {
             result->fileType = FILE_TYPE_FILESYSTEM;
@@ -296,13 +294,11 @@ int8_t CORE_OTA_CLASS::fileNameCheck(String filename, fileCompareResult* result)
         }
     }
     
-    // Проверяем имя сборки
     if (filename.startsWith(BUILD_ENV) == false) {
         DEBUGOTA("\t Wrong device: expected %s, got %s\r\n", BUILD_ENV, filename.substring(0, strlen(BUILD_ENV)).c_str());
         return _ret;
     }
     
-    // Определяем разделитель в зависимости от типа файла
     String separator;
     if (result->fileType == FILE_TYPE_FILESYSTEM) {    
         separator = String(BUILD_ENV) + "_fs-"; 
@@ -313,19 +309,15 @@ int8_t CORE_OTA_CLASS::fileNameCheck(String filename, fileCompareResult* result)
         return _ret;
     }
     
-    // Проверяем наличие разделителя
     if (!filename.startsWith(separator)) {
         DEBUGOTA("\t Wrong separator\r\n");
         return _ret;
     }
     
-    // Имя совпало
     result->nameMatch = 1;
     
-    // Извлекаем часть с версией
     String versionPart = filename.substring(separator.length());
     
-    // Отрезаем .bin в конце
     int binPos = versionPart.lastIndexOf(".bin");
     if (binPos <= 0) {
         DEBUGOTA("\t No .bin extension\r\n");
@@ -334,19 +326,16 @@ int8_t CORE_OTA_CLASS::fileNameCheck(String filename, fileCompareResult* result)
     
     String versionStr = versionPart.substring(0, binPos);
     
-    // Проверяем, есть ли в версии номер билда (4 компонента)
     int dotCount = 0;
     for (int i = 0; i < versionStr.length(); i++) {
         if (versionStr.charAt(i) == '.') dotCount++;
     }
     
-    // Если есть 3 точки, значит 4 компонента (есть номер билда)
     result->isDebug = (dotCount >= 3) ? 1 : 0;
     
     DEBUGOTA("\t Version string: %s, dots=%d, isDebug=%d\r\n", 
              versionStr.c_str(), dotCount, result->isDebug);
     
-    // Разбираем версию из строки (формат MAJOR.MINOR.DATE.BUILD)
     int firstDot = versionStr.indexOf('.');
     int secondDot = versionStr.indexOf('.', firstDot + 1);
     int thirdDot = versionStr.indexOf('.', secondDot + 1);
@@ -356,54 +345,47 @@ int8_t CORE_OTA_CLASS::fileNameCheck(String filename, fileCompareResult* result)
         return _ret;
     }
     
-    // Извлекаем компоненты
     String majorStr = versionStr.substring(0, firstDot);
     String minorStr = versionStr.substring(firstDot + 1, secondDot);
-    String dateStr = versionStr.substring(secondDot + 1, (thirdDot > 0) ? thirdDot : versionStr.length());
-    String buildStr = (thirdDot > 0) ? versionStr.substring(thirdDot + 1) : "";
-
-    DEBUGOTA("\t Parsed: major=%s, minor=%s, date=%s, build=%s\r\n", 
-             majorStr.c_str(), minorStr.c_str(), dateStr.c_str(), buildStr.c_str());
     
-    // Преобразуем в числа
     int32_t fileMajor = majorStr.toInt();
     int32_t fileMinor = minorStr.toInt();
-    int32_t fileDate  = dateStr.toInt();
-    int32_t fileBuild = buildStr.toInt();
+    int64_t fileDate = 0;
+    int32_t fileBuild = 0;
     
-    // Получаем текущие значения из version.h
+    if (thirdDot > 0) {
+        String dateStr = versionStr.substring(secondDot + 1, thirdDot);
+        String buildStr = versionStr.substring(thirdDot + 1);
+        
+        dateStr.replace("_", "");
+        fileDate = atoll(dateStr.c_str());
+        fileBuild = buildStr.toInt();
+    } else {
+        String lastPart = versionStr.substring(secondDot + 1);
+        lastPart.replace("_", "");
+        fileDate = atoll(lastPart.c_str());
+        fileBuild = 0;
+    }
+
+    DEBUGOTA("\t Parsed: major=%d, minor=%d, date=%lld, build=%d\r\n", 
+             fileMajor, fileMinor, fileDate, fileBuild);
+    
     int32_t currentMajor = VERSION_MAJOR;
     int32_t currentMinor = VERSION_MINOR;
+    int64_t currentDate = VERSION_DATE;
     int32_t currentBuild = VERSION_BUILD;
     
-    // Получаем текущую дату в том же формате (YYYYMMDDHHMM)
-    time_t now = time(nullptr);
-    struct tm *timeinfo = localtime(&now);
-    char currentDateStr[13];
-    sprintf(currentDateStr, "%04d%02d%02d%02d%02d", 
-            timeinfo->tm_year + 1900,
-            timeinfo->tm_mon + 1,
-            timeinfo->tm_mday,
-            timeinfo->tm_hour,
-            timeinfo->tm_min);
-    int32_t currentDate = atol(currentDateStr);
-    
-    DEBUGOTA("\t Current: major=%d, minor=%d, date=%d, build=%d\r\n", 
+    DEBUGOTA("\t Current: major=%d, minor=%d, date=%lld, build=%d\r\n", 
              currentMajor, currentMinor, currentDate, currentBuild);
     
-    // Вычисляем разницы
     result->majorDiff = fileMajor - currentMajor;
     result->minorDiff = fileMinor - currentMinor;
     result->dateDiff = fileDate - currentDate;
     result->buildDiff = (result->isDebug) ? (fileBuild - currentBuild) : 0;
     
-    DEBUGOTA("\t Diffs: major=%d, minor=%d, date=%d, build=%d\r\n", 
+    DEBUGOTA("\t Diffs: major=%d, minor=%d, date=%lld, build=%d\r\n", 
              result->majorDiff, result->minorDiff, result->dateDiff, result->buildDiff);
     
-    // Проверяем, можно ли обновляться
-    // MAJOR и MINOR не должны быть меньше текущих (нельзя откатываться)
-    // DATE может быть любой (файл мог быть собран раньше)
-    // BUILD может быть любым (инкремент при каждой сборке)
     bool canUpdate = (result->majorDiff >= 0) && (result->minorDiff >= 0);
     
     if (canUpdate) {
