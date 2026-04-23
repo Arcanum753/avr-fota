@@ -42,7 +42,7 @@ TRACK_MINOR_CHANGES = True      # отслеживать изменения в �
 ENABLE_DOUBLE_RUN_PROTECTION = True  # предотвращает множественный запуск при одной сборке
 
 # ========== ФОРМАТ ДАТЫ ==========
-DATE_FORMAT = "%Y%m%d%H%M"  # формат: yyyyMMddHHmm, например: 202503011430
+DATE_FORMAT = "%Y%m%d_%H%M"  # формат: yyyyMMddHHmm, например: 202503011430
 
 # ========== ФОРМАТ ВЫВОДА ==========
 SHOW_BUILD_INFO = True           # показывать информацию о сборке в консоль
@@ -511,7 +511,8 @@ def generate_version_header():
 
 #define VERSION_MAJOR {root_counters['major']}
 #define VERSION_MINOR {root_counters['minor']}
-#define VERSION_DATE {date_str}
+#define VERSION_DATE {date_str.replace('_', '')}
+#define VERSION_DATE_STR "{date_str}"
 #define VERSION_BUILD {build_counter}
 
 // ============================================================

@@ -21,11 +21,12 @@
 
 
 
-#include "core_json/module_json.h"
+#include "core_json/core_json.h"
 
 #include "prog_swd.h"
 #include "module_prog_swd.h"
 #include "common.h"
+#include "module_prog_swd_version.h"
 
 Class_ProgSwd progSwd(0);
 Class_ProgSwd::Class_ProgSwd(uint8_t in): _in(in){ }
@@ -82,6 +83,12 @@ void  Class_ProgSwd::web_Init()	{
 		if (!ESPHTTPServer.checkAuth(request)) {	return request->requestAuthentication(); };
 		web_FileUpload2Chip(request);
 	});
+
+	ESPHTTPServer.on("/prog/ver", [this](AsyncWebServerRequest *request) {
+        html_ver_get(request);
+    });
+
+
 //stm32.html ^^^
 
 }
@@ -113,7 +120,7 @@ void Class_ProgSwd::cfg_SetDefault() {
 bool Class_ProgSwd::cfg_FileLoad() {
 	DEBUGLOGSWD(__PRETTY_FUNCTION__); DEBUGLOGSWD("\r\n");
 	JsonDocument jsonDoc;
-	if (!ModClassJson.load_jsonDoc(CONFIG_PROG_JSON, jsonDoc)){	return false;	}
+	if (ModClassJson.load_jsonDoc(CONFIG_PROG_JSON, jsonDoc) == false ){	return false;	}
 	// CfgFile_ProgSwd.programmer_type	= jsonDoc["type"].as<const char *>();
     CfgFile_ProgSwd.project_name		= jsonDoc["project"].as<const char *>();
     CfgFile_ProgSwd.chip_size			= jsonDoc["chipsize"].as<uint32_t>();
@@ -121,7 +128,7 @@ bool Class_ProgSwd::cfg_FileLoad() {
 }
 
 bool Class_ProgSwd::cfg_FileSave(){
-	DEBUGLOG("Save config PROJ\r\n");
+	DEBUGLOGSWD("Save config PROJ\r\n");
 	JsonDocument jsonDoc;
 	// jsonDoc["type"]			= CfgFile_ProgSwd.programmer_type;
     jsonDoc["project"]		= CfgFile_ProgSwd.project_name;
@@ -258,7 +265,7 @@ void Class_ProgSwd::web_GetDiskInfoExe (AsyncWebServerRequest *request) {
 void Class_ProgSwd::web_FileDelete(AsyncWebServerRequest *request) {
 	if (request->args() == 0) 	{	return request->send(500, "text/plain", "BAD ARGS");	}
 	String path = request->arg(0U);
-	DEBUGLOG("handleFileDelete: %s\r\n", path.c_str());
+	DEBUGLOGSWD("handleFileDelete: %s\r\n", path.c_str());
 	if (path == "/")		{	return request->send(500, "text/plain", "BAD PATH");	}
 	if (!path.startsWith("/")) {path = "/" + path;}
 	if (!_fs->exists(path)) {	return request->send(404, "text/plain", "FileNotFound");	}
@@ -268,21 +275,21 @@ void Class_ProgSwd::web_FileDelete(AsyncWebServerRequest *request) {
 
 // загрузчик файла из фронтенда
 int Class_ProgSwd::web_FileUpload2FS( String filename, size_t index, uint8_t *data, size_t len, bool final) {
-	DEBUGLOG(__PRETTY_FUNCTION__);	DEBUGLOG("\r\n");
+	DEBUGLOGSWD(__PRETTY_FUNCTION__);	DEBUGLOGSWD("\r\n");
 	int  _ret= 0;
 	_hexFileUploadStatus = "";
 	static File fsUploadFile;
 	static size_t fileSize = 0;
 	// Start
 	if (!index) {
-		DEBUGLOG("Name: %s\r\n", filename.c_str());
+		DEBUGLOGSWD("Name: %s\r\n", filename.c_str());
 		if (!filename.startsWith("/")) {filename = "/" + filename;}
 		fsUploadFile = _fs->open(filename, "w");
-		DEBUGLOG("First upload part.\r\n");
+		DEBUGLOGSWD("First upload part.\r\n");
 	}
 	// Continue
 	if (fsUploadFile) {
-		DEBUGLOG("Continue upload part. Size = %u\r\n", len);
+		DEBUGLOGSWD("Continue upload part. Size = %u\r\n", len);
 		if (fsUploadFile.write(data, len) != len) {
 			_hexFileUploadStatus  += "uploadstatus|error|div\n";
 			_hexFileUploadStatus  += "file|"	  + _hexfileCheck		+"|div\n";
@@ -294,7 +301,7 @@ int Class_ProgSwd::web_FileUpload2FS( String filename, size_t index, uint8_t *da
 	if (final) {
 		if (fsUploadFile) {	fsUploadFile.close();	}
 		_ret = fileSize;
-		DEBUGLOG("HexFileUpload final Size: %u\n", fileSize);
+		DEBUGLOGSWD("HexFileUpload final Size: %u\n", fileSize);
 		_hexfileCheck = filename;
 		_hexFileUploadStatus  += "status|ok|div\n";
 		_hexFileUploadStatus  += "file|"	  + _hexfileCheck		+"|div\n";
@@ -306,7 +313,7 @@ int Class_ProgSwd::web_FileUpload2FS( String filename, size_t index, uint8_t *da
 
 
 void Class_ProgSwd::web_FileUpload2FS_Status(AsyncWebServerRequest *request) {
-	DEBUGLOG(__FUNCTION__);	DEBUGLOG("\r\n");
+	DEBUGLOGSWD(__FUNCTION__);	DEBUGLOGSWD("\r\n");
 	request->send(200, "text/plain", _hexFileUploadStatus);
 }
 
@@ -314,14 +321,14 @@ void Class_ProgSwd::web_FileUpload2Chip(AsyncWebServerRequest *request) {
 	if (request->args() == 0) 	{	return request->send(500, "text/plain", "BAD ARGS");	}
 	String path = "";
 	for (uint8_t i = 0; i < request->args(); i++) {
-		DEBUGLOG("Arg %d: %s\r\n", i, request->arg(i).c_str());
+		DEBUGLOGSWD("Arg %d: %s\r\n", i, request->arg(i).c_str());
 		if (request->argName(i) == "path") 	{ path = urldecode(request->arg(i));	continue; }
 	}
 	if (path == "/")				{	return request->send(500, "text/plain", "BAD PATH");	}
 	if (!path.startsWith("/")) 		{path = "/" + path;}
 	if (!_fs->exists(path)) 		{	return request->send(404, "text/plain", "FileNotFound");	}
 
-	DEBUGLOG("\t upload status: %s\r\n", path.c_str());
+	DEBUGLOGSWD("\t upload status: %s\r\n", path.c_str());
 	request->send(200, "text/plain", "");
 
 	String ntpStr = "";
@@ -339,3 +346,23 @@ void Class_ProgSwd::web_FileUpload2Chip(AsyncWebServerRequest *request) {
 
 
 
+String Class_ProgSwd::getVersionStr(){
+    return String(MODULE_PROG_SWD_VERSION);
+}
+
+String Class_ProgSwd::getGeneratedTime(){
+    return String(MODULE_PROG_SWD_GENERATED_TIME);
+}
+
+String Class_ProgSwd::getCommitDateStr(){
+    return String(MODULE_PROG_SWD_COMMIT_DATE_STR);
+}
+
+void UDPBROADCAST_CLASS::html_ver_get(AsyncWebServerRequest *request) {
+    DEBUGLOGSWD("%s\n\r", __FUNCTION__);
+    String values = "";
+    values += "swdversion|"     + getVersionStr()    + "|dev\n";
+    values += "swdgentime|"     + getGeneratedTime() + "|dev\n";
+    values += "swdgendate|"     + getCommitDateStr() + "|dev\n";
+    request->send(200, "text/plain", values);
+}

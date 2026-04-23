@@ -18,6 +18,7 @@
             <tr><td align="left">Udp key word</td>   <td><input type="text" id="udpkeyword"    name="udpkeyword" value=""></td></tr>
             <tr><td align="left">Udp broadcast every ... minute (0 is off)</td>    <td><input type="number" id="udptime" name="udptime"  min="0" max="60" value=""  onkeyup=setMinMax();></td></tr>
             <tr><td align="left">Udp broadcast on WiFi connect:</td> <td> <input type="checkbox" id="udppoweron" name="udppoweron"></td>  </tr>
+            <tr><td align="left">Udp response on UDP broadcast witn keyword:</td> <td> <input type="checkbox" id="udpresponse" name="udpresponse"></td>  </tr>
             <tr><td colspan="2" align="center"> <input type="submit" value="Save"></td></tr>
         </table>
     </form>
@@ -40,6 +41,7 @@
 			setTimeout(() => {
 				ApplyCVT("/system/version");
                 ApplyCVT("/udp/info");
+                ApplyCVT("/udp/ver");
 			}, 100);
 			
 		};

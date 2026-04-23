@@ -17,7 +17,7 @@
 #endif
 
 
-#define CONFIG_FILE_NTP             "/config_ntp.json"
+#define CONFIG_FILE_NTP "/config_ntp.json"
 
 
 #define NTPSERVER_DFLT0 "pool.ntp.org";
@@ -40,9 +40,9 @@ typedef struct {
 } strNtpConfig;
 
 
-class  NTPMOD_CLASS    {
+class  CORE_CLASS_NTP    {
     public:
-    NTPMOD_CLASS (bool _in);
+    CORE_CLASS_NTP (bool _in);
 
     #if ESP32
     fs::SPIFFSFS*               _fs;
@@ -69,9 +69,14 @@ class  NTPMOD_CLASS    {
     
     void send_NTP_info_html(AsyncWebServerRequest *request) ;
     void send_NTP_configuration_values_html(AsyncWebServerRequest *request);
-    void send_NTP_configuration_html(AsyncWebServerRequest *request);
+    void html2ntp_configuration(AsyncWebServerRequest *request);
     void sendTimeData();
     
+private:
+    String getVersionStr();
+    String getGeneratedTime();
+    String getCommitDateStr();
+    void  html_ver_get(AsyncWebServerRequest *request);
     
     
     protected: 
@@ -81,7 +86,7 @@ class  NTPMOD_CLASS    {
     bool  dumb = false;
 };
 
-extern NTPMOD_CLASS modNtpClass;
+extern CORE_CLASS_NTP modNtpClass;
 
 
 

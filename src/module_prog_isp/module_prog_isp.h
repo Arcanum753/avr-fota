@@ -112,6 +112,11 @@ public:
     // programming
     void    web_FileUpload2FS_Status(AsyncWebServerRequest *request);
     void    web_FileUpload2Chip(AsyncWebServerRequest *request) ;
+private:
+    String getVersionStr();
+    String getGeneratedTime();
+    String getCommitDateStr();
+    void  html_ver_get(AsyncWebServerRequest *request);
 protected:
     uint8_t _in;
     //fs + hex file

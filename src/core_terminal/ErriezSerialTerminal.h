@@ -39,7 +39,7 @@
 /*!
  * \brief Size of the serial receive buffer in bytes (Maximum length of one command plus arguments)
  */
-#define ST_RX_BUFFER_SIZE       32
+#define ST_RX_BUFFER_SIZE       64
 
 /*!
  * \brief Number of command characters

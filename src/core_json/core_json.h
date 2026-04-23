@@ -8,6 +8,7 @@
 #define DEBUGJSON(...)
 #endif
 
+#include "FSWebServerLib.h"
 
 
 #if defined(ESP32)
@@ -17,10 +18,16 @@
 #endif
 
 
-class  MODULE_CLASS_JSON    {
+class  CORE_CLASS_JSON    {
     
 public:    
-    MODULE_CLASS_JSON (bool _in);
+    CORE_CLASS_JSON (bool _in);
+    void webInit(void);
+private:
+    String getVersionStr();
+    String getGeneratedTime();
+    String getCommitDateStr();
+    void  html_ver_get(AsyncWebServerRequest *request);
 protected: 
     #if ESP32
     fs::SPIFFSFS*               _fs;
@@ -45,9 +52,7 @@ protected:
 
 };
 
-extern MODULE_CLASS_JSON ModClassJson;
-
-
+extern CORE_CLASS_JSON ModClassJson;
 
 
 #endif // _MODULE_JSON_h

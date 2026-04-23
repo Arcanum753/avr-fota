@@ -13,24 +13,17 @@
 #include "FSWebServerLib.h"
 #include "ErriezSerialTerminal.h"
 
-#include "core_terminal/module_terminal.h"
+#include "core_terminal/core_terminal.h"
+#include "core_ntp/core_ntp.h"
+#include "core_led/core_led.h"
 
 #if defined(MODULE_UDP)
 #include "module_udp/module_udp.h"
 #endif
 
-
-#include "core_ntp/module_ntp.h"
-
 #if defined(PROGTYPE_SWD)
 #include "module_prog_swd/swd.h"
 #endif
-
-
-
-
-
-
 
 
 // Newline character '\r' or '\n'
@@ -51,6 +44,7 @@ void TerminalInit(){
     term.addCommand("udpp",    udpp ); 
     term.addCommand("udpc",    udpc ); 
     term.addCommand("udps",    udps ); 
+    term.addCommand("led", BlinkCmd);
 
 // dead monks
 // all about dbg of AVR
@@ -74,7 +68,7 @@ void TerminalEcho (void)    {   term.EchoOnOff();  }
 // Terminals shows actual net info
 void InfoShow() {    
     printGitInfo();
-    ESPHTTPServer.serialShowInfo();  
+    ESPHTTPServer.serialShowAbout();  
 }
 // show list of files at SPIFS
 void DirsShow() {
@@ -172,6 +166,7 @@ void avr() {
 // }
 
 void udpp (){
+#if defined(MODULE_UDP)
     String arg1;
     arg1 = term.getNext();
     if (arg1 == NULL) {
@@ -183,29 +178,42 @@ void udpp (){
         Serial.println("Please set port 10000 < port <= 65536");
         return;
     }
-#if defined(MODULE_UDP)
-	
     String str = udpBroadcast.udpJsonGet();
     udpBroadcast. udpBroadcastSend(port, str);
 #endif
 }
 
 void udpc ()    {
-
 #if defined(MODULE_UDP)
   udpBroadcastSimple();
 #endif
-
-
 }
-
-
 void udps ()    {
 #if defined(MODULE_UDP)
-udpBroadcast.udpBroadcastSend(udpBroadcast.getUpdPortTx(), "test");
+    udpBroadcast.udpBroadcastSend(udpBroadcast.getUpdPortTx(), "test");
 #endif
-
-
-    
 }
 
+void BlinkCmd(){
+
+    String arg1;
+    arg1 = term.getNext();
+
+    if (arg1 == NULL) {
+        Serial.println("Please set times to blink. ");
+        return;
+    }
+    int16_t times = arg1.toInt();
+
+    String arg2;
+    arg2 = term.getNext();
+    if (arg2 == NULL) {
+        Serial.println("Please set blink mask. ");
+        return;
+    }
+    if (arg2.length() > LEDSTRINGLIMIT){
+        Serial.println("Blink mask is more than 200 slots. ");
+        return;
+    }
+    LedMacroSet(  arg2, times);
+}

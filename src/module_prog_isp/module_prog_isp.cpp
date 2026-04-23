@@ -14,12 +14,13 @@
 
 #include "FSWebServerLib.h"
 // #include "debug.h"
-#include "core_json/module_json.h"
+#include "core_json/core_json.h"
 #include "core_ntp/module_ntp.h"
 
 #include "prog_isp.h"
 #include "module_prog_isp.h"
 #include "common.h"
+#include "module_prog_isp_version.h"
 
 Class_ProgIsp progIsp(0);
 Class_ProgIsp::Class_ProgIsp(uint8_t in): _in(in){ }
@@ -139,7 +140,7 @@ bool Class_ProgIsp::cfg_FileLoad() {
 	DEBUGLOGISP(__PRETTY_FUNCTION__); DEBUGLOGISP("\r\n");
 
 	JsonDocument jsonDoc;
-	if (!ModClassJson.load_jsonDoc(CONFIG_PROG_JSON, jsonDoc)){	return false;	}
+	if (ModClassJson.load_jsonDoc(CONFIG_PROG_JSON, jsonDoc) == false){	return false;	}
 	// CfgFile_progIsp.programmer_type	= jsonDoc["type"].as<const char *>();
     CfgFile_progIsp.project_name		= jsonDoc["project"].as<const char *>();
     CfgFile_progIsp.chip_size			= jsonDoc["chipsize"].as<uint32_t>();
@@ -475,10 +476,27 @@ void  Class_ProgIsp::avrWebFusesWrite(AsyncWebServerRequest *request) {
 // avr.html ^^^
 
 
+String Class_ProgIsp::getVersionStr(){
+    return String(MODULE_PROG_ISP_VERSION);
+}
+
+String Class_ProgIsp::getGeneratedTime(){
+    return String(MODULE_PROG_ISP_GENERATED_TIME);
+}
+
+String Class_ProgIsp::getCommitDateStr(){
+    return String(MODULE_PROG_ISP_COMMIT_DATE_STR);
+}
 
 
-
-
+void Class_ProgIsp::html_ver_get(AsyncWebServerRequest *request) {
+    DEBUGLOGISP("%s\n\r", __FUNCTION__);
+    String values = "";
+    values += "ispversion|"     + getVersionStr()    + "|dev\n";
+    values += "ispgentime|"     + getGeneratedTime() + "|dev\n";
+    values += "ispgendate|"     + getCommitDateStr() + "|dev\n";
+    request->send(200, "text/plain", values);
+}
 
 
 

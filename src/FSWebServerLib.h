@@ -9,15 +9,15 @@
 
 #include <WiFiClient.h>
 #include <TimeLib.h>
-#include <ESPAsyncWebServer.h>
 
+#include <ESPAsyncWebServer.h>
 #if defined(ESP32)
 #include <SPIFFS.h>
-#elif defined(ESP8266)
-#include <FS.h>
 #endif
 
-
+#if defined(ESP8266)
+#include <FS.h>
+#endif
 
 #include <Ticker.h>
 
@@ -27,10 +27,9 @@
 
 #define FILENAME_LENGHT    64
 
-
-
 #define CONFIG_FILE_SYS             "/config_sys.json"
 #define SECRET_FILE                 "/secret.json"
+
 
 #define JSON_CALLBACK_SIGNATURE std::function<void(AsyncWebServerRequest *request)> jsoncallback
 #define REST_CALLBACK_SIGNATURE std::function<void(AsyncWebServerRequest *request)> restcallback
@@ -39,22 +38,15 @@
 
 #define AVRSERVERSTR_UPLOADBEGIN "upload begin\n"
 
-
-
 #define HTML_INDEX  "index.html"
 
 
 typedef struct {
     String deviceName;
     String deviceSerial;
-    String deviceType;
+    int16_t wifiScanTime;
+    uint16_t wifiAPLifeTime;
 } strSysConfig;
-
-
-typedef struct {
-    String icao;
-} strMetarConfig;
-
 
 
 typedef struct {
@@ -92,22 +84,14 @@ public:
     void begin(FS* fs) ;                        // esp8266/esp32 flash file system
 #endif
 	const String getHostName();
-
-
-
-
-    //Clear the configuration data (not the user config!) and optional reset the device
-    //Clear the user configuration data (not the Wifi config!) and optional reset the device
-    void serialShowInfo();
-
+    void serialShowAbout();
+    String getResetReason() ;
     strSysConfig    _sysConfig; // SYS configuration
-
 
 private:
 	JSON_CALLBACK_SIGNATURE;
 	REST_CALLBACK_SIGNATURE;
 	POST_CALLBACK_SIGNATURE;
-
 public:
 	strHTTPAuth         _httpAuth;
 
@@ -117,46 +101,36 @@ protected:
 #elif defined(ESP8266)
     FS*                         _fs;                        // esp8266/esp32 flash file system
 #endif
-   
-    
-    
     public:
     AsyncEventSource _evs = AsyncEventSource("/events");
-    
-  
-    
-private:
-
+   private:
     // gpio
     void  gpioGetArgs(AsyncWebServerRequest *request);
-
 public:
-
     //sys
     bool load_config_Sys();
     bool save_configSys();
     void defaultConfigSys();
-
 private:
-
     // bool load_generic_config()
     bool loadHTTPAuth();
     bool saveHTTPAuth();
-    
     void serverInit();
 
 public:
     bool checkAuth(AsyncWebServerRequest *request);
     bool handleFileRead(String path, AsyncWebServerRequest *request);
+    uint16_t configSys_ApTimeGet()   ;
+    int16_t  configSys_ScanTimeGet() ;
 
     
 private:
     void html_version_info(AsyncWebServerRequest *request);
-    void send_device_values_html(AsyncWebServerRequest *request);
+    void html_system_Load(AsyncWebServerRequest *request);
     void send_project_configuration_values_html(AsyncWebServerRequest *request);
 
     void html_send_chipinfo(AsyncWebServerRequest *request);
-    void get_system_configuration_html(AsyncWebServerRequest *request);
+    void html_system_Save(AsyncWebServerRequest *request);
     void get_project_configuration_html(AsyncWebServerRequest *request);
     void send_wwwauth_configuration_values_html(AsyncWebServerRequest *request);
     void set_wwwauth_configuration(AsyncWebServerRequest *request);

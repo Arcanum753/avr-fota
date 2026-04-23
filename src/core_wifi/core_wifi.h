@@ -21,20 +21,16 @@ Please Wait....Configuring Wifi.
 #define WIFI_CONFIG_FILE_NAME       "config_wifi"
 
 
-#define USE_RESERV_WIFI 1
 // #define WIFI_CONFIGS    4 // TODO 
-#define AP_ENABLE_BUTTON -1//5 // Button pin to enable AP during startup for configuration. -1 to disable
 
 #define AP_ENABLE_TIMEOUT 60 // (Seconds, max 255) If the device can not connect to WiFi it will switch to AP mode after this time. -1 to disable
 
 
 
 #define WIFI_CONFIG_FILE0           "/config_wifi0.json"
-#if (USE_RESERV_WIFI > 0)
 #define WIFI_CONFIG_FILE1           "/config_wifi1.json"
 #define WIFI_CONFIG_FILE2           "/config_wifi2.json"
 #define WIFI_CONFIG_FILE3           "/config_wifi3.json"
-#endif
 
 
 
@@ -75,9 +71,9 @@ typedef enum {
 
 
 
-class  WIFIMOD_CLASS    {
+class  CORE_CLASS_WIFI    {
     public:
-    WIFIMOD_CLASS (bool _in);
+    CORE_CLASS_WIFI (bool _in);
     #if ESP32
     fs::SPIFFSFS*               _fs;
     #elif defined(ESP8266)
@@ -127,6 +123,7 @@ class  WIFIMOD_CLASS    {
     void send_info_values_html(AsyncWebServerRequest *request);
     void send_network_configuration_html(AsyncWebServerRequest *request);
     void send_scanwifi(AsyncWebServerRequest *request) ;
+    String buildNetworksJson() ;
     #if ESP32
     void onWiFiConnected        ();
 	void onWiFiDisconnected     ();
@@ -136,12 +133,22 @@ class  WIFIMOD_CLASS    {
 	void onWiFiDisconnected     (WiFiEventStationModeDisconnected   data);
 	void onWiFiConnectedGotIP   (WiFiEventStationModeGotIP          data);
     #endif
-    protected: 
+private:
+    String getVersionStr();
+    String getGeneratedTime();
+    String getCommitDateStr();
+    void  html_ver_get(AsyncWebServerRequest *request);
+    void send_slot_json(AsyncWebServerRequest *request, int slot);
+    void save_slot_json(AsyncWebServerRequest *request, int slot);
+    void handle_slot_post(AsyncWebServerRequest *request, int slot);
+    void handle_slot_upload(AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total);
+protected: 
+    volatile int16_t scanTime = 1;
     bool  dumb = false;
 };
 
 
-extern WIFIMOD_CLASS modWifiClass; 
+extern CORE_CLASS_WIFI modWifiClass; 
 
 
 

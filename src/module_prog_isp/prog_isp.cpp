@@ -8,7 +8,7 @@
 
 #include "FSWebServerLib.h"
 
-#include "core_json/module_json.h"
+#include "core_json/core_json.h"
 
 #include "module_prog_isp.h"
 #include "prog_isp.h"
@@ -623,7 +623,7 @@ bool ESP8266_AVRISP::cfgFileLoad() {
     DEBUGLOGISP(__PRETTY_FUNCTION__);   DEBUGLOGISP("\r\n");
 
     JsonDocument jsonDoc;
-    if (!ModClassJson.load_jsonDoc(CONFIG_AVRPROG_JSON, jsonDoc)){	return false;	}
+    if (ModClassJson.load_jsonDoc(CONFIG_AVRPROG_JSON, jsonDoc) == false){	return false;	}
 
     _AVRISP_CfgFile.hex_filename           = jsonDoc["hex_filename"]     .as<const char *>();
     _AVRISP_CfgFile.hex_version            = jsonDoc["hex_vesion"]       .as<const char *>();

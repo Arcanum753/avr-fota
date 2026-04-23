@@ -10,6 +10,12 @@
 #define DEBUGOTA(...)
 #endif
 
+#ifdef DEBUG_OTALOAD
+#define DEBUGLOAD(...) Serial.printf(__VA_ARGS__)
+#else
+#define DEBUGLOAD(...)
+#endif
+
 
 #define OTA_STR_FILENAME_FIRMWARE           "firmware.bin"
 #define OTA_STR_FILENAME_FILESYSTEM         "spiffs.bin"
@@ -19,10 +25,6 @@
 #define OTA_STR_NAMEMATCH                   "MATCHED"
 #define OTA_STR_NAMEDIFF                    "UNMATCHED"
 
-
-// #define FILE_TYPE_UNKNOWN -1
-// #define FILE_TYPE_FIRMWARE 0
-// #define FILE_TYPE_FILESYSTEM 1
 
 enum UpdateTypeFile {
        FILE_TYPE_UNSUPPORTED = -1
@@ -36,16 +38,16 @@ struct fileCompareResult {
     int8_t  nameMatch;      // -1 - не проверялось, 0 - не совпадает, 1 - совпадает
     int8_t  majorDiff;      // разница в мажорной версии
     int16_t minorDiff;      // разница в минорной версии (инкремент при коммитах)
-    int32_t dateDiff;       // разница в дате (YYYYMMDDHHMM как число)
+    int64_t  dateDiff;       // разница в дате (YYYYMMDDHHMM как число)
     int32_t buildDiff;      // разница в номере сборки
     UpdateTypeFile fileType; // тип файла
     uint8_t isDebug;        // 1 - если есть номер билда в имени, 0 - если нет
 };
 
 
-class  MODULE_OTA_CLASS    {
+class  CORE_OTA_CLASS    {
 public:
-    MODULE_OTA_CLASS (bool _in);
+    CORE_OTA_CLASS (bool _in);
 
 #if ESP32
     fs::SPIFFSFS*               _fs;
@@ -73,10 +75,13 @@ public:
     void html_fileuploadProgress(AsyncWebServerRequest *request);
     
     void updateFileExecute (AsyncWebServerRequest *request) ;
-
-
-
-
+    
+private:
+    String getVersionStr();
+    String getGeneratedTime();
+    String getCommitDateStr();
+    void  html_ver_get(AsyncWebServerRequest *request);
+    
 protected: 
     uint16_t fileUpadedpercent = 0;
     bool  dumb = false;
@@ -96,7 +101,7 @@ private:
 
 };
 
-extern MODULE_OTA_CLASS modOtaClass;
+extern CORE_OTA_CLASS modOtaClass;
 
 
 

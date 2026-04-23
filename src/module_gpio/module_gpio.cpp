@@ -2,6 +2,7 @@
 #include "FSWebServerLib.h"
 #include "module_gpio.h"
 #include "common.h"
+#include "module_gpio_version.h"
 
 MODULE_CLASS_GPIO ModClassGpio(false);
 
@@ -80,3 +81,24 @@ void  MODULE_CLASS_GPIO::gpioGetArgs(AsyncWebServerRequest *request) {
 // gpio.html ^^^
 
 
+String MODULE_CLASS_GPIO::getVersionStr(){
+    return String(MODULE_GPIO_VERSION);
+}
+
+String MODULE_CLASS_GPIO::getGeneratedTime(){
+    return String(MODULE_GPIO_GENERATED_TIME);
+}
+
+String MODULE_CLASS_GPIO::getCommitDateStr(){
+    return String(MODULE_GPIO_COMMIT_DATE_STR);
+}
+
+
+void MODULE_CLASS_GPIO::html_ver_get(AsyncWebServerRequest *request) {
+    DEBUGGPIO("%s\n\r", __FUNCTION__);
+    String values = "";
+    values += "gpioversion|"     + getVersionStr()    + "|dev\n";
+    values += "gpiogentime|"     + getGeneratedTime() + "|dev\n";
+    values += "gpiogendate|"     + getCommitDateStr() + "|dev\n";
+    request->send(200, "text/plain", values);
+}

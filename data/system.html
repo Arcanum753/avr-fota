@@ -14,15 +14,23 @@
         <table border="0" cellspacing="0" cellpadding="3" align="center">
             <tr><td align="left">Name of device</td>       <td><input type="text" id="name"   name="name" value=""></td></tr>
             <tr><td align="left">Device serial number</td> <td><input type="text" id="serial" name="serial" value=""></td></tr>
+        </table>
+        <table align="center">
+            <tr> <td align="left">Scan Wifi for </td>    
+                <td><input type="number" id="scantime" name="scantime" min="0" max="10" value="1" onkeyup="setMinMax(this);"> minute (0 is off).</td>
+            </tr>
+            <tr> <td align="left">WiFi Access point lifetime </td>    
+                <td><input type="number" id="aptime" name="aptime" min="0" max="10" value="5" onkeyup="setMinMax(this);"> minute (0 is off).</td>
+            </tr>
             <tr><td colspan="2" align="center"> <input type="submit" value="Save"></td></tr>
         </table>
     </form>
-    <hr>
+<hr>
     <form>
-    <table border="0" cellspacing="0" cellpadding="3" style="width:350px" align="center">
-        <tr><td colspan="2" align="center"><input type="button" value="Restart" onclick='javascript:restartESP()'></td></tr>
-    </table>
-</form>
+        <table border="0" cellspacing="0" cellpadding="3" style="width:350px" align="center">
+            <tr><td colspan="2" align="center"><input type="button" value="Reset chip" onclick='javascript:restartESP()'></td></tr>
+        </table>
+    </form>
 <hr>
     <form id="wwwAuthForm" onsubmit=" return checkAuth( this ) " method="get">
         <input type="hidden" id="authconf" name="authconf" value="">
@@ -64,6 +72,7 @@
                 password_row.display = 'none';
             }
         }
+        
         function checkAuth(frm)
         {
             if (document.getElementById("wwwauth").checked)
@@ -89,7 +98,75 @@
         function GetState() {
             setValues("/system/wwwauth");
         }
-
+        
+        // УНИВЕРСАЛЬНАЯ ФУНКЦИЯ - работает только с вызвавшим её input
+        function setMinMax(inputElement) {
+            // Проверяем, что элемент существует
+            if (inputElement && inputElement.value != "") {
+                let val = parseInt(inputElement.value);
+                let min = parseInt(inputElement.min);
+                let max = parseInt(inputElement.max);
+                
+                // Проверяем, что min и max - числа
+                if (!isNaN(min) && val < min) {
+                    inputElement.value = min;
+                }
+                if (!isNaN(max) && val > max) {
+                    inputElement.value = max;
+                }
+            }
+        };
+        
+        // ОБРАТНАЯ СВЯЗЬ ПРИ СОХРАНЕНИИ
+        document.querySelector('form').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const formData = new FormData(this);
+            const statusDiv = document.createElement('div');
+            statusDiv.id = 'saveStatus';
+            statusDiv.style.textAlign = 'center';
+            statusDiv.style.marginTop = '10px';
+            statusDiv.style.padding = '5px';
+            statusDiv.style.borderRadius = '3px';
+            
+            const oldStatus = document.getElementById('saveStatus');
+            if (oldStatus) oldStatus.remove();
+            
+            this.appendChild(statusDiv);
+            statusDiv.innerHTML = '⏳ Сохранение...';
+            statusDiv.style.backgroundColor = '#fff3cd';
+            statusDiv.style.color = '#856404';
+            
+            fetch('/system.html?' + new URLSearchParams(formData), {
+                method: 'GET'
+            })
+            .then(response => {
+                if (response.ok) {
+                    statusDiv.innerHTML = ' Настройки сохранены!';
+                    statusDiv.style.backgroundColor = '#d4edda';
+                    statusDiv.style.color = '#155724';
+                    
+                    // Обновляем данные с сервера через 1 секунду
+                    setTimeout(() => {
+                        ApplyCVT("/system/devconf");
+                        // Убираем сообщение через 3 секунды
+                        setTimeout(() => {
+                            statusDiv.style.opacity = '0';
+                            setTimeout(() => statusDiv.remove(), 500);
+                        }, 3000);
+                    }, 1000);
+                } else {
+                    statusDiv.innerHTML = ' Ошибка сохранения';
+                    statusDiv.style.backgroundColor = '#f8d7da';
+                    statusDiv.style.color = '#721c24';
+                }
+            })
+            .catch(error => {
+                statusDiv.innerHTML = ' Ошибка соединения';
+                statusDiv.style.backgroundColor = '#f8d7da';
+                statusDiv.style.color = '#721c24';
+            });
+        });
        
     </script>
 </body>

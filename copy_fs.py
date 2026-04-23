@@ -1,3 +1,4 @@
+# copy_fs.py
 import shutil
 import re
 from pathlib import Path
@@ -55,6 +56,20 @@ def get_firmware_version(project_dir):
     debug_print(f"Warning: FIRMWARE_VERSION not found in {VERSION_HEADER}")
     return None
 
+def format_version_for_filename(version):
+    """
+    Преобразует версию вида "0.15.20260403_1610.595" в "0.15.20260403_1610.595"
+    (оставляет точки между компонентами, подчёркивание только внутри даты)
+    """
+    parts = version.split('.')
+    if len(parts) == 4:
+        # parts[0] - major
+        # parts[1] - minor
+        # parts[2] - date (с подчёркиванием)
+        # parts[3] - build
+        return f"{parts[0]}.{parts[1]}.{parts[2]}.{parts[3]}"
+    return version
+
 # ============================================================
 # ОСНОВНАЯ ФУНКЦИЯ
 # ============================================================
@@ -80,8 +95,9 @@ def copy_fs_image(source, target, env):
     version = get_firmware_version(project_dir)
     
     if version:
-        # Формируем имя с версией: esp32-swd_fs-0.022.10.5451.bin
-        base_name = f"{env_name}{FS_FILE_SUFFIX}-{version}.bin"
+        # Формируем имя с версией
+        version_for_filename = format_version_for_filename(version)
+        base_name = f"{env_name}{FS_FILE_SUFFIX}-{version_for_filename}.bin"
     else:
         # Если версии нет, используем только имя среды
         base_name = f"{env_name}{FS_FILE_SUFFIX}.bin"

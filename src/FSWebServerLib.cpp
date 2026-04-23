@@ -8,15 +8,11 @@
 #if defined(ESP32)
 #include <SPIFFS.h>
 #include <esp32-hal-gpio.h>
+#include <ESPmDNS.h>
 #endif
 
 #if defined(ESP8266)
 #include <FS.h>
-#endif
-
-#if defined(ESP32)
-#include <ESPmDNS.h>
-#elif defined(ESP8266)
 #include <ESP8266mDNS.h>
 #endif
 
@@ -37,34 +33,30 @@
 #include "module_udp/module_udp.h"
 #endif
 
-#include "core_ntp/module_ntp.h"
 
 #include "debug.h"
 
-#include "core_editor/module_editor.h"
-#include "core_ota/module_ota.h"
-#include "core_json/module_json.h"
-#include "core_wifi/module_wifi.h"
+#include "core_ota/core_ota.h"
+#include "core_ntp/core_ntp.h"
+#include "core_editor/core_editor.h"
+#include "core_json/core_json.h"
+#include "core_wifi/core_wifi.h"
 
-#include "common_gpio.h"
-
-
+#include "core_led/core_led.h"
 
 #include "common.h"
 
 AsyncFSWebServer ESPHTTPServer(80);
 
-String _Version_App 		= FIRMWARE_VERSION;
-String _Version_Web 		= VERSION_WEB;
-String _Version_BuildDate 	= BUILD_TIME;
+
 
 AsyncFSWebServer::AsyncFSWebServer(uint16_t port) : AsyncWebServer(port) {}
-
-
+// esp8266/esp32 flash file system
 #if defined(ESP32)
     void AsyncFSWebServer::begin(fs::SPIFFSFS* fs)
-#elif defined(ESP8266)
-    void AsyncFSWebServer::begin(FS* fs)                         // esp8266/esp32 flash file system
+#endif
+#if defined(ESP8266)
+    void AsyncFSWebServer::begin(FS* fs)                         
 #endif
 {
 	_fs = fs;
@@ -76,70 +68,36 @@ AsyncFSWebServer::AsyncFSWebServer(uint16_t port) : AsyncWebServer(port) {}
 
 	// If this pin is HIGH during startup ESP will run in AP_ONLY mode. Backdoor to change WiFi settings when configured WiFi is not available.
 	if (AP_ENABLE_BUTTON >= 0) {	pinMode(AP_ENABLE_BUTTON, INPUT_PULLUP); 	}
-
 	if (AP_ENABLE_BUTTON >= 0) {
 		modWifiClass._apConfig.APenable = !digitalRead(AP_ENABLE_BUTTON); // Read AP button. If button is pressed activate AP
 		DEBUGLOG("AP Enable = %d\n", modWifiClass._apConfig.APenable);
 	}
 
-	if (CONNECTION_LED >= 0) {		espLedOff();	}	// Turn LED off
     if (!_fs) { _fs->begin();  }// If SPIFFS is not started
-#ifndef RELEASE
-	{ // List files
-#if defined(ESP32)
-		File dir = _fs->open("/");
-
-#elif defined(ESP8266)
-		Dir dir = _fs->openDir("/");
-		while (dir.next()) {
-			String fileName = dir.fileName();
-			size_t fileSize = dir.fileSize();
-			DEBUGLOG("FS File: %s, size: %s\n", fileName.c_str(), formatBytes(fileSize).c_str());
-		}
-		DEBUGLOG("\n");
-#endif
-	}
-#endif // RELEASE
 
 	ModClassJson.setFs(&SPIFFS); // !!!MUST!!! be set as first as possible!
 
 	loadHTTPAuth();
-	if (!load_config_Sys()) { defaultConfigSys();  	}
+	defaultConfigSys();
+	if (load_config_Sys() == false) {  save_configSys(); 	}
 
 	modWifiClass.begin(&SPIFFS); // wifi load cfg and set callback hooks
 	
-	//WIFI INIT start here
-	String hostName = _sysConfig.deviceName + "_" + _sysConfig.deviceSerial;
-	
-	DEBUGLOG("Open http://");
-	DEBUGLOG(hostName.c_str());
-	DEBUGLOG(".local to see the device web page.\r\n");
-	DEBUGLOG("Device serial number:");	DEBUGLOG(_sysConfig.deviceSerial.c_str());	DEBUGLOG("\n\r");
-	#if defined(ESP32)
-	DEBUGLOG("Flash chip size: %u\r\n", ESP.getFlashChipSize());
-	#endif
-	#if ESP8266
-	DEBUGLOG("Flash chip size: %u\r\n", ESP.getFlashChipRealSize());
-	#endif
-	DEBUGLOG("Scketch size: %u\r\n", 		ESP.getSketchSize());
-	DEBUGLOG("Free flash space: %u\r\n", 	ESP.getFreeSketchSpace());
-	
-	
+	serialShowAbout();
 	AsyncWebServer::begin();
 	serverInit(); // Configure and start Web server
-	modWifiClass.webInit();
+
+	modWifiClass.webInit();	//WIFI INIT start here
 	
 	modNtpClass.begin();
 	modNtpClass.webInit();
-
 	
-	
-	String mdnsName = hostName;
-	MDNS.begin(mdnsName.c_str()); // I've not got this to work. Need some investigation.
+	String mdnsName =  getHostName();
+	MDNS.begin(mdnsName.c_str()); // I've not got this to work. Need some investigation. // TODO
 	MDNS.addService("http", "tcp", 80);
 	
 	modOtaClass.setFs(&SPIFFS);
-	modOtaClass.begin(hostName, _httpAuth.wwwPassword );  //ConfigureOTA(_httpAuth.wwwPassword.c_str());
+	modOtaClass.begin(getHostName(), _httpAuth.wwwPassword ); 
 	modOtaClass.webInit();
 	
 	ModClassEdit.setFs(&SPIFFS);
@@ -161,48 +119,16 @@ AsyncFSWebServer::AsyncFSWebServer(uint16_t port) : AsyncWebServer(port) {}
 		progIsp.begin();
 		progIsp.web_Init();
 	#endif
-
-	// ledInit();
 }
-
-
-//duplicate config stuff for user level config items
-
-bool AsyncFSWebServer::load_config_Sys() {
-	JsonDocument jsonDoc;
-	if (!ModClassJson.load_jsonDoc(CONFIG_FILE_SYS, jsonDoc)){	return false;	}
-	_sysConfig.deviceName 			= jsonDoc["deviceName"].as<const char *>();
-	_sysConfig.deviceSerial 		= jsonDoc["deviceSerial"].as<const char *>();
-	_sysConfig.deviceType 			= jsonDoc["deviceType"].as<const char *>();
-	return true;
-}
-
-void AsyncFSWebServer::defaultConfigSys() {
-	// DEFAULT CONFIG SYSTEM
-	_sysConfig.deviceName 		= "esp_server";
-	_sysConfig.deviceSerial 	= SERIAL_NUMBER;
-	_sysConfig.deviceType 		= DEVMODULE_GPIO;
-	save_configSys();
-}
-
-bool AsyncFSWebServer::save_configSys() {
-	DEBUGLOG("Save config SYSTEM\r\n");
-	JsonDocument jsonDoc;
-	jsonDoc["deviceName"] 	= _sysConfig.deviceName;
-	jsonDoc["deviceSerial"] = _sysConfig.deviceSerial;
-	jsonDoc["deviceType"] 	= _sysConfig.deviceType;
-	return ModClassJson.save_jsonDoc(jsonDoc, CONFIG_FILE_SYS);
-}
-
 
 bool AsyncFSWebServer::loadHTTPAuth() {
 	DEBUGLOG(__PRETTY_FUNCTION__);	DEBUGLOG("\r\n");
 	JsonDocument jsonDoc;
-	if (!ModClassJson.load_jsonDoc(SECRET_FILE, jsonDoc)){
+	if (ModClassJson.load_jsonDoc(SECRET_FILE, jsonDoc) == false){
 		_httpAuth.auth = false;
 		_httpAuth.wwwUsername = "";
 		_httpAuth.wwwPassword = "";
-		DEBUGLOG("Huh");
+		DEBUGLOG("Huh\n\r");
 		return false;
 	}
 	_httpAuth.auth = jsonDoc["auth"];
@@ -218,21 +144,32 @@ bool AsyncFSWebServer::loadHTTPAuth() {
 
 // working with pages vvv
 void AsyncFSWebServer::html_send_chipinfo(AsyncWebServerRequest *request) {
-	DEBUGLOG(__FUNCTION__);	DEBUGLOG("\r\n");
-	String values = "";
-	
-	#ifdef ESP32
-	values += "x_chipid|" 	+ (String)ESP.getChipModel() + "|div\n";
-	#elif defined(ESP8266)
-	values += "x_chipid|" + (String)ESP.getChipId() + "|div\n";
-	#endif
-	values += "x_sdk|" + (String)ESP.getSdkVersion() + "|div\n";
-	values += "x_mhz|" + (String)ESP.getCpuFreqMHz() + "|div\n";
-
-	request->send(200, "text/plain", values);
-	//delete &values;
-	values = "";
-
+    DEBUGLOG(__FUNCTION__); DEBUGLOG("\r\n");
+    
+#if defined(ESP8266)
+    // Максимально простая версия для ESP8266 - минимум операций
+    char buffer[256];
+    snprintf(buffer, sizeof(buffer),
+        "x_chipid|%08X|div\n"
+        "x_mhz|%d|div\n"
+        "x_sdk|%s|div\n"
+        "x_reason|%s|div\n",
+        ESP.getChipId(),
+        ESP.getCpuFreqMHz(),
+        ESP.getSdkVersion(),
+        getResetReason().c_str()  // .c_str() вместо создания новой String
+    );
+    request->send(200, "text/plain", buffer);
+    
+#else
+    // Для ESP32 оставляем как было
+    String values = "";
+    values += "x_chipid|" + (String)ESP.getChipModel() + "|div\n";
+    values += "x_mhz|" + (String)ESP.getCpuFreqMHz() + "|div\n";
+    values += "x_sdk|" + (String)ESP.getSdkVersion() + "|div\n";
+    values += "x_reason|" + getResetReason() + "|div\n";
+    request->send(200, "text/plain", values);
+#endif
 }
 
 void AsyncFSWebServer::restart_esp() {
@@ -323,7 +260,7 @@ bool AsyncFSWebServer::saveHTTPAuth() {
 bool AsyncFSWebServer:: handleFileRead(String path, AsyncWebServerRequest *request) {
 	DEBUGEDIT("handleFileRead: %s\r\n", path.c_str());
 	// CANNOT RUN DELAY() INSIDE CALLBACK
-	if (CONNECTION_LED >= 0) {	flashLED(CONNECTION_LED, 1, 30); 	}	// Show activity on LED
+	// if (CONNECTION_LED >= 0) {	flashLED(CONNECTION_LED, 1, 30); 	}	// Show activity on LED 
 	if (path.endsWith("/")) {	path += HTML_INDEX;	}
 	String contentType = getContentType(path, request);
 	String pathWithGz = path + ".gz";
@@ -342,28 +279,6 @@ bool AsyncFSWebServer:: handleFileRead(String path, AsyncWebServerRequest *reque
 		DEBUGEDIT("Cannot find %s\n", path.c_str());
 	return false;
 }
-
-// *.html vvv
-void AsyncFSWebServer::html_version_info(AsyncWebServerRequest *request) { // answer for "get" request
-	//DEBUGLOG(__FUNCTION__);	DEBUGLOG("\r\n");
-	String values = "";
-	values += "devicename|"  	+ _sysConfig.deviceName  		+ "|div\n";
-	values += "deviceserial|" 	+ _sysConfig.deviceSerial 		+ "|div\n";
-	values += "devicetype|" 	+ _sysConfig.deviceType 		+ "|div\n";
-	values += "versionapp|" 	+ _Version_App + "|div\n";
-	values += "versionweb|" 	+ _Version_Web + "|div\n";
-	
-	//values += "versiondatetime|" + _Version_BuildDate + " " + _Version_BuildTime + "|div\n";
-
-	values += "gitbranch|" ;values += GIT_BRANCH ;values += "|div\n";
-	values += "gitcommit|" ;values += GIT_COMMIT ;values += "|div\n";
-	values += "buildenv|" ;values += BUILD_ENV ;values += "|div\n";
-	values += "versiondatetime|" ;values += BUILD_TIME ;values += "|div\n";
-	
-
-	request->send(200, "text/plain", values);
-}
-// *.html ^^^
 
 
 // project.html vvv
@@ -397,28 +312,44 @@ void AsyncFSWebServer::get_project_configuration_html(AsyncWebServerRequest *req
 // project.html ^^^
 
 // system.html vvv
-void AsyncFSWebServer::send_device_values_html(AsyncWebServerRequest *request) { // answer for "get" request
+void AsyncFSWebServer::html_system_Load(AsyncWebServerRequest *request) { // answer for "get" request
 	//DEBUGLOG(__FUNCTION__);	DEBUGLOG("\r\n");
 	String values = "";
 	values += "name|"		+ _sysConfig.deviceName		+ "|input\n";
 	values += "serial|" 	+ _sysConfig.deviceSerial 	+ "|input\n";
-	values += "progtype|"	+ _sysConfig.deviceType		+ "|input\n";
+	values += "scantime|" 	+ String(_sysConfig.wifiScanTime )	+ "|input\n";
+	values += "aptime|" 	+ String(_sysConfig.wifiAPLifeTime) 	+ "|input\n";
 	request->send(200, "text/plain", values);
 }
-void AsyncFSWebServer::get_system_configuration_html(AsyncWebServerRequest *request) {
+
+
+void AsyncFSWebServer::html_system_Save(AsyncWebServerRequest *request) {
 	DEBUGLOG(__FUNCTION__);	DEBUGLOG("\r\n");
 	if (request->args() > 0) { // Save Settings
 		for (uint8_t i = 0; i < request->args(); i++) {
 			DEBUGLOG("Arg %d: %s %s\r\n", i, request->argName(i).c_str() ,request->arg(i).c_str() );
 			if (request->argName(i) == "name") 		{ _sysConfig.deviceName 	= urldecode(request->arg(i));	continue; }
 			if (request->argName(i) == "serial") 	{ _sysConfig.deviceSerial 	= urldecode(request->arg(i));	continue; }
-			if (request->argName(i) == "progtype") 	{ _sysConfig.deviceType 	= urldecode(request->arg(i));	continue; }
+
+			if (request->argName(i) == "scantime") { 
+				int val = request->arg(i).toInt();
+				// Проверка min/max
+				if (val < -1) val = -1;
+				if (val > 4) val = 4;
+				_sysConfig.wifiScanTime = val; 
+			}
+            if (request->argName(i) == "aptime") { 
+				int val = request->arg(i).toInt();
+				// Проверка min/max
+				if (val < 0) val = 0;
+				if (val > 10) val = 10;
+				_sysConfig.wifiAPLifeTime = val; 
+			}
 		}
 		request->send_P(200, "text/html", Page_GeneralSys);
 		save_configSys();
 	}
 	else {	handleFileRead(request->url(), request);	}
-	
 }
 // system.html ^^^
 
@@ -427,8 +358,8 @@ String getContentType(String filename, AsyncWebServerRequest *request) {
 	else if (filename.endsWith(".htm"))  	{return "text/html";}
 	else if (filename.endsWith(".html")) 	{return "text/html";}
 	else if (filename.endsWith(".css")) 	{return "text/css";}
-	else if (filename.endsWith(".js"))   	{return "application/javascript";}
 	else if (filename.endsWith(".json")) 	{return "application/json";}
+	else if (filename.endsWith(".js"))   	{return "application/javascript";}
 	else if (filename.endsWith(".png")) 	{return "image/png";}
 	else if (filename.endsWith(".gif")) 	{return "image/gif";}
 	else if (filename.endsWith(".jpg")) 	{return "image/jpeg";}
@@ -443,7 +374,7 @@ String getContentType(String filename, AsyncWebServerRequest *request) {
 
 void AsyncFSWebServer::serverInit() {
 //system.html vvv	
-	on("/system/restart", [this](AsyncWebServerRequest *request) {
+	on("/system/restart", HTTP_POST, [this](AsyncWebServerRequest *request) {
 		if (!this->checkAuth(request)) {	return request->requestAuthentication(); };
 		DBG_OUTPUT_PORT.println(request->url());
 		request->send_P(200, "text/html", Page_IndexRefresh);
@@ -464,16 +395,16 @@ void AsyncFSWebServer::serverInit() {
 	});	
 	on("/system.html", [this](AsyncWebServerRequest *request) {
 		if (!this->checkAuth(request)) {	return request->requestAuthentication(); };
-		this->get_system_configuration_html(request);
+		this->html_system_Save(request);
 	});	
-	// FIXME
+	
 	on("/system/savewwwauth", [this](AsyncWebServerRequest *request) {
 		if (!this->checkAuth(request)) {	return request->requestAuthentication(); };
 		this->set_wwwauth_configuration(request);
 	});	
 	on("/system/devconf", HTTP_GET, [this](AsyncWebServerRequest *request) {
 		if (!this->checkAuth(request)) {	return request->requestAuthentication(); };
-		this->send_device_values_html(request);
+		this->html_system_Load(request);
 	});	
 
 //system.html ^^^
@@ -551,26 +482,137 @@ bool AsyncFSWebServer::checkAuth(AsyncWebServerRequest *request) {
 
 }
 
-const String AsyncFSWebServer::getHostName() {
-	return _sysConfig.deviceName+"_"+_sysConfig.deviceSerial;
+
+
+
+
+String AsyncFSWebServer:: getResetReason() {
+    String reason = "Unknown";
+    
+    #if defined(ESP32)
+        esp_reset_reason_t r = esp_reset_reason();
+        switch(r) {
+            case ESP_RST_POWERON:    {reason = "Power on"; break;}
+            case ESP_RST_SW:         {reason = "Software reset"; break;}
+            case ESP_RST_PANIC:      {reason = "Exception/Panic"; break;}
+            case ESP_RST_TASK_WDT:   {reason = "Task watchdog"; break;}
+            case ESP_RST_WDT:        {reason = "Hardware watchdog"; break;}
+            case ESP_RST_BROWNOUT:   {reason = "Brownout"; break;}
+            default: {break;}
+        }
+		#elif defined(ESP8266)
+        rst_info *resetInfo = ESP.getResetInfoPtr();
+        switch(resetInfo->reason) {
+			case REASON_DEFAULT_RST:      { reason = "Power on"; break;}
+            case REASON_WDT_RST:          { reason = "Watchdog"; break;}
+            case REASON_EXCEPTION_RST:    { reason = "Exception"; break;}
+            case REASON_SOFT_WDT_RST:     { reason = "Software watchdog"; break;}
+            case REASON_SOFT_RESTART:     { reason = "Software restart"; break;}
+            case REASON_DEEP_SLEEP_AWAKE: { reason = "Deep sleep wake"; break;}
+            case REASON_EXT_SYS_RST:      { reason = "External reset"; break;}
+			default: {break;}
+        }
+    #endif
+    
+    return reason;
 }
 
-void AsyncFSWebServer::serialShowInfo() {
-	Serial.printf("wifi ssid: %s \n", WiFi.SSID().c_str());
-	Serial.printf("GotIP Address: %s \n", WiFi.localIP().toString().c_str());
 
+
+
+
+
+
+void AsyncFSWebServer::serialShowAbout() {
+	Serial.printf("\n\r\t\t**About** \n\r ");
+	Serial.printf("Project env: %s\n\r ", BUILD_ENV);	
+	Serial.printf("git branch: %s\n\r ", GIT_BRANCH);	
+	Serial.printf("ver date: %s\n\r ", BUILD_TIME);	
+	Serial.printf("ver build: %s\n\r ", String (VERSION_BUILD));	
+	
+	Serial.printf("Device serial number: %s\n\r ", _sysConfig.deviceSerial.c_str());	
+	#if defined(ESP32)
+	Serial.printf("Flash chip size: %u\r\n", ESP.getFlashChipSize());
+	#endif
+	#if ESP8266
+	Serial.printf("Flash chip size: %u\r\n", ESP.getFlashChipRealSize());
+	#endif
+	Serial.printf("Scketch size: %u\r\n", 		ESP.getSketchSize());
+	Serial.printf("Free flash space: %u\r\n", 	ESP.getFreeSketchSpace());
+
+	Serial.printf("wifi ssid: %s \n", WiFi.SSID().c_str());
+	Serial.printf("IP Address: %s \n", WiFi.localIP().toString().c_str());
 	#if defined(ESP32)
     Serial.printf("WifiHostName  %s \n\r", 	WiFi.getHostname());
     #elif defined(ESP8266)
 	Serial.printf("WifiHostName  %s \n\r", 	WiFi.hostname().c_str());
     #endif
-
+	
 	Serial.printf("Gateway: %s\r\n", WiFi.gatewayIP().toString().c_str());
 	Serial.printf("DNS: %s\r\n", WiFi.dnsIP().toString().c_str());
-
-	String hostname = _sysConfig.deviceName+"_"+_sysConfig.deviceSerial;
-	Serial.printf("local DNS hostname  http://%s.local \n\r", hostname.c_str());
+	Serial.printf("local DNS hostname  http://%s.local \n\r", getHostName().c_str());
 	Serial.printf("or you can connect directly  http://%s \n\r", WiFi.localIP().toString().c_str());
+	
+	
 }
 
+// *.html vvv
+void AsyncFSWebServer::html_version_info(AsyncWebServerRequest *request) { // answer for "get" request
+	//DEBUGLOG(__FUNCTION__);	DEBUGLOG("\r\n");
+	String values = "";
+	values += "devicename|"  	+ _sysConfig.deviceName  		+ "|div\n";
+	values += "deviceserial|" 	+ _sysConfig.deviceSerial 		+ "|div\n";
+	values += "versionapp|" 	+ String(FIRMWARE_VERSION) + "|div\n";
+	values += "versionweb|" 	+ String(VERSION_WEB) + "|div\n";
+	
+	values += "gitbranch|" ;values += GIT_BRANCH ;values += "|div\n";
+	values += "gitcommit|" ;values += GIT_COMMIT ;values += "|div\n";
+	values += "buildenv|" ;values += BUILD_ENV ;values += "|div\n";
+	values += "versiondatetime|" ;values += BUILD_TIME ;values += "|div\n";
+	
+	request->send(200, "text/plain", values);
+}
+// *.html ^^^
 
+
+const String AsyncFSWebServer::getHostName() { return _sysConfig.deviceName+"_"+_sysConfig.deviceSerial; }
+
+bool AsyncFSWebServer::load_config_Sys() {
+	JsonDocument jsonDoc;
+	if (ModClassJson.load_jsonDoc(CONFIG_FILE_SYS, jsonDoc) == false){	return false;	}
+	_sysConfig.deviceName 			= jsonDoc["deviceName"].as<const char *>();
+	_sysConfig.deviceSerial 		= jsonDoc["deviceSerial"].as<const char *>();
+
+	_sysConfig.wifiScanTime 		= jsonDoc["wifiScanTime"].as<int>();
+	_sysConfig.wifiAPLifeTime 		= jsonDoc["wifiAPLifeTime"].as<int>();
+
+	return true;
+}
+
+void AsyncFSWebServer::defaultConfigSys() {
+	// DEFAULT CONFIG SYSTEM
+	_sysConfig.wifiScanTime 	= 1;
+	_sysConfig.wifiAPLifeTime	= 10;
+	#ifdef ESP32
+	_sysConfig.deviceName 		= "esp32";    
+	_sysConfig.deviceSerial 	=   (String)ESP.getChipModel() ;
+	#endif
+	#if defined(ESP8266)
+	_sysConfig.deviceName 		= "esp8266";
+	_sysConfig.deviceSerial 	=   (String)ESP.getChipId() ;
+	#endif
+
+}
+
+bool AsyncFSWebServer::save_configSys() {
+	DEBUGLOG("Save config SYSTEM\r\n");
+	JsonDocument jsonDoc;
+	jsonDoc["deviceName"] 		= _sysConfig.deviceName;
+	jsonDoc["deviceSerial"] 	= _sysConfig.deviceSerial;
+	jsonDoc["wifiScanTime"]		= _sysConfig.wifiScanTime;
+	jsonDoc["wifiAPLifeTime"] 	= _sysConfig.wifiAPLifeTime;
+	return ModClassJson.save_jsonDoc(jsonDoc, CONFIG_FILE_SYS);
+}
+
+uint16_t AsyncFSWebServer::configSys_ApTimeGet() {	return _sysConfig.wifiAPLifeTime;}
+int16_t AsyncFSWebServer::configSys_ScanTimeGet() {	return _sysConfig.wifiScanTime;}

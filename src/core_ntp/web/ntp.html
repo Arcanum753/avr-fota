@@ -10,12 +10,12 @@
 <body>
     <markup>./page_head.html</markup>
     <h2 class="title" style="background: #7D8EE2">  <span id="devicename"></span>NTP Configuration</h2>
-    <form action="" method="get">
+    <form action="" method="post">
         <table border="0" cellspacing="0" cellpadding="3" align="center">
             <tr> <td align="right">NTP Server0:</td> <td> <input type="text" id="ntpserver0" name="ntpserver0" maxlength="172" value=""></td> </tr>
             <tr> <td align="right">NTP Server1:</td> <td> <input type="text" id="ntpserver1" name="ntpserver1" maxlength="172" value=""></td> </tr>
             <tr> <td align="right">NTP Server2:</td> <td> <input type="text" id="ntpserver2" name="ntpserver2" maxlength="172" value=""></td> </tr>
-			<tr> <td align="right">Update every </td>    <td><input type="number" id="update" name="update"  min="0" max="720" value=""  onkeyup=setMinMax();>minute (0 is off)</td></tr>
+			<tr> <td align="right">Update every </td>    <td><input type="number" id="update" name="update"  min="0" max="720" value=""  onkeyup=setMinMax();> minute (0 is off).</td></tr>
 			<tr> <td align="right">Timezone</td>  <td>
                     <select id="tz" name="tz">
 						<option value="-120">(GMT-12:00)</option>
@@ -72,16 +72,20 @@
 			
 		};
 		function setMinMax() {
-            const el = document.getElementById("udptime");
-            if (el.value != "") {
-                if (parseInt(el.value) < parseInt(el.min)) {
-                    el.value = el.min;
-                }
-                if (parseInt(el.value) > parseInt(el.max)) {
-                    el.value = el.max;
-                }
-            }
-        };
+			const el = document.getElementById("update");
+			if (el && el.value != "") {
+				let val = parseInt(el.value);
+				let min = parseInt(el.min);
+				let max = parseInt(el.max);
+				
+				if (val < min) {
+					el.value = min;
+				}
+				if (val > max) {
+					el.value = max;
+				}
+			}
+		};
 		</script>
 </body>
 
