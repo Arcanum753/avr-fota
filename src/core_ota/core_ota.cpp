@@ -179,7 +179,7 @@ void CORE_OTA_CLASS::cacheFsVersionInfo() {
         return;
     }
     
-    File jsonFile = _fs->open("/version_fs.json", "r");
+    File jsonFile = _fs->open(FS_VERSION_JSON_PATH, "r");
     if (!jsonFile) {
         DEBUGOTA("cacheFsVersionInfo: version_fs.json not found\n");
         _fsVersionCached = true;  // Mark as cached (with empty values)

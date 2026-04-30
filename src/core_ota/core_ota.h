@@ -32,6 +32,8 @@
 #define FS_VERSION_COMPARE_MISSING          "NO_JSON"
 #define FS_VERSION_COMPARE_ERROR            "ERROR"
 
+#define FS_VERSION_JSON_PATH "/_version_fs.json"
+
 enum UpdateTypeFile {
        FILE_TYPE_UNSUPPORTED = -1
     ,  FILE_TYPE_FIRMWARE = 0

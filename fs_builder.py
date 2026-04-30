@@ -38,7 +38,7 @@ FS_BUILD_RETRY_COUNT = 1                 # количество попыток �
 FS_BUILD_RETRY_DELAY_SEC = 2             # задержка между попытками (секунды)
 
 # ------------------- Настройки JSON файла версии -------------------
-VERSION_FILE_NAME = "version_fs.json"    # имя JSON файла с версией ФС
+VERSION_FILE_NAME = "_version_fs.json"    # имя JSON файла с версией ФС
 GENERATE_FS_VERSION_JSON = True          # генерировать JSON файл с версией ФС
 INCLUDE_BUILD_INFO_IN_JSON = True        # включать информацию о сборке в JSON
 FS_VERSION_SCHEMA_VERSION = "1.0.0"      # версия схемы JSON

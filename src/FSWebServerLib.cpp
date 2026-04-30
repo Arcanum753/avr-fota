@@ -33,6 +33,12 @@
 #include "module_udp/module_udp.h"
 #endif
 
+#if (MODULE_OTACLIENT == 1)
+#include "module_otaclient/module_otaclient.h"
+#endif
+
+
+
 
 #include "debug.h"
 
@@ -107,18 +113,23 @@ AsyncFSWebServer::AsyncFSWebServer(uint16_t port) : AsyncWebServer(port) {}
 	ModClassGpio.setFs(&SPIFFS);
 	ModClassGpio.webInit();
 #endif
+
+#if (MODULE_OTACLIENT == 1)
+	otaClient.begin();
+	otaClient.webInit();
+#endif
 	
-	#ifdef PROGTYPE_SWD
-		progSwd.setFs(&SPIFFS);
-		progSwd.begin();
-		progSwd.web_Init();
-	#endif
-	
-	#ifdef PROGTYPE_ISP
-		progIsp.setFs(&SPIFFS);
-		progIsp.begin();
-		progIsp.web_Init();
-	#endif
+#ifdef PROGTYPE_SWD
+	progSwd.setFs(&SPIFFS);
+	progSwd.begin();
+	progSwd.web_Init();
+#endif
+
+#ifdef PROGTYPE_ISP
+	progIsp.setFs(&SPIFFS);
+	progIsp.begin();
+	progIsp.web_Init();
+#endif
 }
 
 bool AsyncFSWebServer::loadHTTPAuth() {

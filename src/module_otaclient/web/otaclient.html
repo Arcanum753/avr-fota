@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>OTA Client Settings</title>
+    <meta http-equiv="Content-type" content="text/html; charset=utf-8">
+	<link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+    <markup>./page_head.html</markup>
+    <h2 class="title" style="background: #7D8EE2"> <span id="devicename"></span> OTA Client Configuration</h2>
+    
+    <form action="" method="post">
+        <table border="0" cellspacing="0" cellpadding="3" align="center">
+            <tr><td align="left">OTA Client check every ... minute (0 is off)</td>    <td><input type="number" id="otaclienttime" name="otaclienttime"  min="0" max="60" value=""  onkeyup=setMinMax();></td></tr>
+            <tr><td align="left">OTA Client update on WiFi connect:</td> <td> <input type="checkbox" id="otaclientpoweron" name="otaclientpoweron"></td>  </tr>
+            <tr><td align="left">OTA Client response enabled:</td> <td> <input type="checkbox" id="otaclientresponse" name="otaclientresponse"></td>  </tr>
+            <tr><td colspan="2" align="center"> <input type="submit" value="Save"></td></tr>
+        </table>
+    </form>
+
+    <form id="upload" onsubmit="event.preventDefault(); otaClientTest()" enctype="multipart/form-data" autocomplete="off">
+        <table align="center">
+            <tr> <td align="center"> <span title="Test OTA Client check.">
+                    <input id="broadcastTest" type='submit' value='Test OTA Client' >
+                </span> </td></tr>
+
+        </table>
+    </form>
+
+	<markup>./page_bottom.html</markup>
+	<script src="GetJson.js" defer></script>
+	<script src="GetMarkup.js" defer></script>
+    <script src="microajax.js" defer></script>
+	<script>
+		window.onload = function() {
+			setTimeout(() => {
+				ApplyCVT("/system/version");
+                ApplyCVT("/otaclient/info");
+                ApplyCVT("/otaclient/ver");
+			}, 100);
+			
+		};
+
+		function otaClientTest(){
+            const xhr = new XMLHttpRequest();
+            xhr.open('POST', '/otaclient/test');
+            xhr.send();
+            console.log("otaClientTest();");
+        }
+		function setMinMax() {
+            const el = document.getElementById("otaclienttime");
+            if (el.value != "") {
+                if (parseInt(el.value) < parseInt(el.min)) {
+                    el.value = el.min;
+                }
+                if (parseInt(el.value) > parseInt(el.max)) {
+                    el.value = el.max;
+                }
+            }
+        };
+		</script>
+</body>
+
+</html>
