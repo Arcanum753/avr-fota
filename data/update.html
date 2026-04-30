@@ -1,11 +1,11 @@
 <!DOCTYPE html>
 <html>
 <head>
-	<title>ESP Firmware &amp FS OTA</title>
+    <title>ESP Firmware &amp FS OTA</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta http-equiv="Content-type" content="text/html; charset=utf-8">
-	<link rel="stylesheet" href="style.css">
-	<script src="FSBrowserNG.js"></script>
+    <link rel="stylesheet" href="style.css">
+    <script src="FSBrowserNG.js"></script>
 </head>
 <body>
     <markup>./page_head.html</markup>
@@ -21,12 +21,12 @@
     
     <form id="uploadForm" enctype='multipart/form-data'>
         <table align = "center"> 
-            <tr><tr> <input id="fileName" type='file' name='update' onchange="summd5()" > </td> </tr>
+            <tr><th> <input id="fileName" type='file' name='update' onchange="summd5()" style="display: block; margin: 20px auto; padding: 10px; font-size: 16px; width: auto; min-width: 300px;"> </th> </tr>
             <tr><td id="md5row" >
                     Calculated file MD5 hash: <span id="clientHash">Select a file</span><br>
                     Size: <span id="fileSize"></span> Bytes <br>
                     Filename: <span id="fileNameLoaded"></span>
-                 </td>
+                  </td>
             </tr>
             <tr><td id="VersionDiff" >
                      <span id="updStatus"> </span><br>
@@ -39,13 +39,15 @@
                      <span id="updVerDiffDate"> </span><br>
                      <span id="updVerDiffBuild"> </span><br>
                      <span id="updIsDebug"> </span><br>
-                 </td>
+                     <span id="updFsCompare"> </span><br>
+                     <span id="updFsCurrent"> </span><br>
+                  </td>
             </tr>
             <tr><td> 
                 <input id="updateButton" type='button' value='Update ESP chip firmware.' disabled onclick="uploadFile()">
                 <label>
                     <input type="checkbox" id="ignoreCheck" onchange="updateButtonState()">Ignore validation and force upload </label>
-             </td> </tr>
+              </td> </tr>
         </table>
     </form>
 
@@ -59,10 +61,10 @@
         let isUploading = false;
 
         window.onload = function () {
-      	    setTimeout(() => {
-        			ApplyCVT("/system/infovalues");
+            setTimeout(() => {
+                    ApplyCVT("/system/infovalues");
                     ApplyCVT("/system/version");
-      		}, 250);
+            }, 250);
         };
 
         var blobSlice = File.prototype.slice || File.prototype.mozSlice || File.prototype.webkitSlice,
@@ -213,6 +215,16 @@
             return "0 (same)";
         }
 
+        function formatFsCompare(value) {
+            switch(value) {
+                case "SAME": return "✓ Same version (OK)";
+                case "NEWER": return "↑ Newer than current (OK)";
+                case "OLDER": return "↓ Older than current (WARNING)";
+                case "NO_JSON": return "⚠ No version_fs.json, comparing with firmware";
+                default: return "Unknown: " + value;
+            }
+        }
+
         function summd5() {
             input = document.getElementById("fileName");
             if (running) { return; }
@@ -286,6 +298,8 @@
             const updVerDiffDate = document.getElementById('updVerDiffDate');
             const updVerDiffBuild = document.getElementById('updVerDiffBuild');
             const updIsDebug = document.getElementById('updIsDebug');
+            const updFsCompare = document.getElementById('updFsCompare');
+            const updFsCurrent = document.getElementById('updFsCurrent');
             
             const xhr = new XMLHttpRequest();
             xhr.open('get', "/update/firmwarefilecheck");
@@ -298,6 +312,7 @@
                 let nameMatch = "NO";
                 let majorDiff = 0, minorDiff = 0, dateDiff = 0, buildDiff = 0, isDebug = 0;
                 let status = "", sizeFree = "", sizeMax = "";
+                let fsCompare = "", fsCurrentMajor = 0, fsCurrentMinor = 0, fsCurrentDate = 0, fsCurrentBuild = 0;
                 
                 for (let fields of fieldsRows) {
                     const key = fields[0];
@@ -344,6 +359,23 @@
                             isDebug = parseInt(value);
                             updIsDebug.innerHTML = "Debug build: " + (isDebug ? "Yes" : "No");
                             break;
+                        case "updFsCompare":
+                            fsCompare = value;
+                            updFsCompare.innerHTML = "FS vs Current: " + formatFsCompare(value);
+                            break;
+                        case "updFsCurrentMajor":
+                            fsCurrentMajor = parseInt(value);
+                            break;
+                        case "updFsCurrentMinor":
+                            fsCurrentMinor = parseInt(value);
+                            break;
+                        case "updFsCurrentDate":
+                            fsCurrentDate = parseInt(value);
+                            break;
+                        case "updFsCurrentBuild":
+                            fsCurrentBuild = parseInt(value);
+                            updFsCurrent.innerHTML = "Current FS/FW: " + fsCurrentMajor + "." + fsCurrentMinor + "." + fsCurrentDate + "." + fsCurrentBuild;
+                            break;
                     }
                 }
                 
@@ -367,7 +399,13 @@
                         canUpdate = false;
                         buttonText = "MINOR IS OLDER!";
                     } else {
-                        buttonText = "Update " + fileType;
+                        // For filesystem, also check if OLDER than current FS
+                        if (fileType == "FILESYSTEM" && fsCompare == "OLDER") {
+                            canUpdate = false;
+                            buttonText = "FS IS OLDER!";
+                        } else {
+                            buttonText = "Update " + fileType;
+                        }
                     }
                 }
                 

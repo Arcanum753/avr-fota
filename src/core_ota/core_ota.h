@@ -25,6 +25,12 @@
 #define OTA_STR_NAMEMATCH                   "MATCHED"
 #define OTA_STR_NAMEDIFF                    "UNMATCHED"
 
+// FS version comparison results
+#define FS_VERSION_COMPARE_SAME             "SAME"
+#define FS_VERSION_COMPARE_NEWER            "NEWER"
+#define FS_VERSION_COMPARE_OLDER            "OLDER"
+#define FS_VERSION_COMPARE_MISSING          "NO_JSON"
+#define FS_VERSION_COMPARE_ERROR            "ERROR"
 
 enum UpdateTypeFile {
        FILE_TYPE_UNSUPPORTED = -1
@@ -33,15 +39,21 @@ enum UpdateTypeFile {
   };
 
 
-// Структура для результатов сравнения (новый формат MAJOR.MINOR.DATE.BUILD)
+// Structure for file comparison results (MAJOR.MINOR.DATE.BUILD format)
 struct fileCompareResult {
-    int8_t  nameMatch;      // -1 - не проверялось, 0 - не совпадает, 1 - совпадает
-    int8_t  majorDiff;      // разница в мажорной версии
-    int16_t minorDiff;      // разница в минорной версии (инкремент при коммитах)
-    int64_t  dateDiff;       // разница в дате (YYYYMMDDHHMM как число)
-    int32_t buildDiff;      // разница в номере сборки
-    UpdateTypeFile fileType; // тип файла
-    uint8_t isDebug;        // 1 - если есть номер билда в имени, 0 - если нет
+    int8_t  nameMatch;      // -1 not checked, 0 not match, 1 match
+    int8_t  majorDiff;      // major version difference
+    int16_t minorDiff;      // minor version difference (increments on commits)
+    int64_t dateDiff;       // date difference (YYYYMMDDHHMM as number)
+    int32_t buildDiff;      // build number difference
+    UpdateTypeFile fileType; // file type
+    uint8_t isDebug;        // 1 if build number present in filename
+    // FS version comparison (for filesystem updates)
+    int8_t fsVersionCompare;   // compare result against existing FS or firmware
+    int64_t fsCurrentDate;     // current FS date (or firmware date)
+    int32_t fsCurrentBuild;    // current FS build (or firmware build)
+    int8_t fsCurrentMajor;     // current FS major version
+    int16_t fsCurrentMinor;    // current FS minor version
 };
 
 
@@ -58,7 +70,7 @@ public:
 #if ESP32
     void setFs(fs::SPIFFSFS* fs);
 #elif defined(ESP8266)
-    void setFs(FS* fs)  ;                       // esp8266/esp32 flash file system
+    void setFs(FS* fs);
 #endif
 
     void begin(String _hostname, String _password);
@@ -70,7 +82,9 @@ public:
     void html_filename_check(AsyncWebServerRequest *request);
     int8_t fileNameCheck (String filename, fileCompareResult* result) ;
     
-
+    // New: compare file version with current FS JSON or firmware
+    int8_t compareWithCurrentFsVersion(fileCompareResult* result, const String& filename);
+    
     void html_uploadUpdateFile(AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final);
     void html_fileuploadProgress(AsyncWebServerRequest *request);
     
@@ -97,13 +111,21 @@ private:
     void prepareSizesForUpdate();
     UpdateTypeFile  typeOTAfile;
     uint32_t freeSketchSpace   ;
+    
+    // Cached FS version info
+    bool _fsVersionCached = false;
+    int64_t _cachedFsDate = 0;
+    int32_t _cachedFsBuild = 0;
+    int8_t _cachedFsMajor = 0;
+    int16_t _cachedFsMinor = 0;
+    String _cachedFsVersionStr = "";
+    
+    void cacheFsVersionInfo();
+    bool parseVersionFromJson(const String& jsonStr, int64_t& date, int32_t& build, int8_t& major, int16_t& minor);
 
 
 };
 
 extern CORE_OTA_CLASS modOtaClass;
-
-
-
 
 #endif // _MODOTA_h

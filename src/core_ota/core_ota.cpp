@@ -22,7 +22,7 @@ CORE_OTA_CLASS :: CORE_OTA_CLASS (bool _in) {
 #if ESP32
     void CORE_OTA_CLASS::setFs(fs::SPIFFSFS* fs)
 #elif defined(ESP8266)
-    void CORE_OTA_CLASS::setFs(FS* fs)	// esp8266/esp32 flash file system
+    void CORE_OTA_CLASS::setFs(FS* fs)
 #endif
 {	_fs = fs;	}
 
@@ -43,7 +43,6 @@ void CORE_OTA_CLASS::prepareSizesForUpdate (){
 bool  CORE_OTA_CLASS::ConfigureOTA( String _hostname, String _password) {
 	DEBUGOTA(__FUNCTION__);	DEBUGOTA("\r\n");
 	
-	// No authentication by default
 	if (_hostname != "") {
 	ArduinoOTA.setHostname(_hostname.c_str());
 	DEBUGOTA("OTA password set %s\n", _password.c_str());
@@ -119,11 +118,9 @@ bool  CORE_OTA_CLASS::ConfigureOTA( String _hostname, String _password) {
     });
 
     ESPHTTPServer.on("/update", HTTP_POST, [this](AsyncWebServerRequest *request) {
-        //what do when we finish
             if (!ESPHTTPServer.checkAuth(request)) {	return request->requestAuthentication(); };
             updateFileExecute (request);
     }, [this](AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final) {
-        // uploading
             html_uploadUpdateFile(request, filename, index, data, len, final);
     });
 
@@ -146,7 +143,7 @@ void CORE_OTA_CLASS::html_md5_set(AsyncWebServerRequest *request) {
 	_browserFileMD5 = "";
 	
 	DEBUGOTA("Arg number: %d\r\n", request->args());
-	if (request->args() > 0)  {	// Read hash
+	if (request->args() > 0)  {
 		for (uint8_t i = 0; i < request->args(); i++) {
 			DEBUGOTA("Arg %s: %s\r\n", request->argName(i).c_str(), request->arg(i).c_str());
 			if (request->argName(i) == "md5") {
@@ -170,6 +167,174 @@ void CORE_OTA_CLASS::html_md5_set(AsyncWebServerRequest *request) {
 
 }
 
+// ============================================================
+// NEW: Cache FS version info from version_fs.json
+// ============================================================
+
+void CORE_OTA_CLASS::cacheFsVersionInfo() {
+    if (_fsVersionCached) return;
+    
+    if (!_fs) {
+        DEBUGOTA("cacheFsVersionInfo: No FS mounted\n");
+        return;
+    }
+    
+    File jsonFile = _fs->open("/version_fs.json", "r");
+    if (!jsonFile) {
+        DEBUGOTA("cacheFsVersionInfo: version_fs.json not found\n");
+        _fsVersionCached = true;  // Mark as cached (with empty values)
+        return;
+    }
+    
+    String jsonStr;
+    while (jsonFile.available()) {
+        jsonStr += (char)jsonFile.read();
+    }
+    jsonFile.close();
+    
+    DEBUGOTA("cacheFsVersionInfo: Read %d bytes\n", jsonStr.length());
+    
+    parseVersionFromJson(jsonStr, _cachedFsDate, _cachedFsBuild, _cachedFsMajor, _cachedFsMinor);
+    _fsVersionCached = true;
+}
+
+bool CORE_OTA_CLASS::parseVersionFromJson(const String& jsonStr, int64_t& date, int32_t& build, int8_t& major, int16_t& minor) {
+    DynamicJsonDocument doc(2048);
+    DeserializationError error = deserializeJson(doc, jsonStr);
+    
+    if (error) {
+        DEBUGOTA("parseVersionFromJson: JSON parse error: %s\n", error.c_str());
+        return false;
+    }
+    
+    JsonObject version = doc["filesystem"]["version"];
+    
+    if (version.isNull()) {
+        DEBUGOTA("parseVersionFromJson: No filesystem.version object\n");
+        return false;
+    }
+    
+    major = version["major"] | 0;
+    minor = version["minor"] | 0;
+    date = version["date"] | 0LL;
+    build = version["build"] | 0;
+    
+    _cachedFsVersionStr = version["full_string"] | "";
+    
+    DEBUGOTA("parseVersionFromJson: FS version %d.%d.%lld.%d (%s)\n", 
+             major, minor, date, build, _cachedFsVersionStr.c_str());
+    
+    return true;
+}
+
+// ============================================================
+// NEW: Compare file version with current FS JSON or firmware
+// ============================================================
+
+int8_t CORE_OTA_CLASS::compareWithCurrentFsVersion(fileCompareResult* result, const String& filename) {
+    // For firmware files, compare with firmware version
+    if (result->fileType == FILE_TYPE_FIRMWARE) {
+        result->fsCurrentMajor = VERSION_MAJOR;
+        result->fsCurrentMinor = VERSION_MINOR;
+        result->fsCurrentDate = VERSION_DATE;
+        result->fsCurrentBuild = VERSION_BUILD;
+        
+        // Compare versions
+        if (result->majorDiff > 0) {
+            result->fsVersionCompare = 1;  // NEWER
+        } else if (result->majorDiff < 0) {
+            result->fsVersionCompare = -1; // OLDER
+        } else if (result->minorDiff > 0) {
+            result->fsVersionCompare = 1;
+        } else if (result->minorDiff < 0) {
+            result->fsVersionCompare = -1;
+        } else if (result->dateDiff > 0) {
+            result->fsVersionCompare = 1;
+        } else if (result->dateDiff < 0) {
+            result->fsVersionCompare = -1;
+        } else if (result->buildDiff > 0) {
+            result->fsVersionCompare = 1;
+        } else if (result->buildDiff < 0) {
+            result->fsVersionCompare = -1;
+        } else {
+            result->fsVersionCompare = 0;  // SAME
+        }
+        
+        DEBUGOTA("compareWithCurrentFsVersion (Firmware): current %d.%d.%lld.%d, diff %d\n",
+                 VERSION_MAJOR, VERSION_MINOR, (long long)VERSION_DATE, VERSION_BUILD, result->fsVersionCompare);
+        
+        return result->fsVersionCompare;
+    }
+    
+    // For filesystem files, try to read version_fs.json from current FS
+    if (!_fsVersionCached) {
+        cacheFsVersionInfo();
+    }
+    
+    result->fsCurrentMajor = _cachedFsMajor;
+    result->fsCurrentMinor = _cachedFsMinor;
+    result->fsCurrentDate = _cachedFsDate;
+    result->fsCurrentBuild = _cachedFsBuild;
+    
+    // If no version_fs.json exists, compare with firmware version instead
+    if (_cachedFsDate == 0 && _cachedFsBuild == 0 && _cachedFsMajor == 0 && _cachedFsMinor == 0) {
+        DEBUGOTA("compareWithCurrentFsVersion: No version_fs.json, using firmware version\n");
+        
+        result->fsCurrentMajor = VERSION_MAJOR;
+        result->fsCurrentMinor = VERSION_MINOR;
+        result->fsCurrentDate = VERSION_DATE;
+        result->fsCurrentBuild = VERSION_BUILD;
+        result->fsVersionCompare = -2;  // NO_JSON - compare with firmware
+        
+        // Compare with firmware
+        if (result->majorDiff > 0) {
+            return 1;   // NEWER than firmware
+        } else if (result->majorDiff < 0) {
+            return -1;  // OLDER than firmware
+        } else if (result->minorDiff > 0) {
+            return 1;
+        } else if (result->minorDiff < 0) {
+            return -1;
+        } else if (result->dateDiff > 0) {
+            return 1;
+        } else if (result->dateDiff < 0) {
+            return -1;
+        } else if (result->buildDiff > 0) {
+            return 1;
+        } else if (result->buildDiff < 0) {
+            return -1;
+        }
+        return 0;  // SAME
+    }
+    
+    // Compare file version with current FS version
+    if (result->majorDiff > 0) {
+        result->fsVersionCompare = 1;
+    } else if (result->majorDiff < 0) {
+        result->fsVersionCompare = -1;
+    } else if (result->minorDiff > 0) {
+        result->fsVersionCompare = 1;
+    } else if (result->minorDiff < 0) {
+        result->fsVersionCompare = -1;
+    } else if (result->dateDiff > 0) {
+        result->fsVersionCompare = 1;
+    } else if (result->dateDiff < 0) {
+        result->fsVersionCompare = -1;
+    } else if (result->buildDiff > 0) {
+        result->fsVersionCompare = 1;
+    } else if (result->buildDiff < 0) {
+        result->fsVersionCompare = -1;
+    } else {
+        result->fsVersionCompare = 0;
+    }
+    
+    DEBUGOTA("compareWithCurrentFsVersion (FS): current %d.%d.%lld.%d, diff %d\n",
+             _cachedFsMajor, _cachedFsMinor, (long long)_cachedFsDate, _cachedFsBuild, result->fsVersionCompare);
+    
+    return result->fsVersionCompare;
+}
+
+
 void CORE_OTA_CLASS::html_filename_check(AsyncWebServerRequest *request) {
     DEBUGOTA(__FUNCTION__); DEBUGOTA("\r\n");
     String values = "";
@@ -177,10 +342,12 @@ void CORE_OTA_CLASS::html_filename_check(AsyncWebServerRequest *request) {
     String updateFiletype = "";
     String updateFileMatcheD = "";
     String updateIsDebug = "";
+    String fsVersionCompare = "";
     
     updateFiletype = OTA_STR_UNSUPPORTED;   
     updateFileMatcheD = OTA_STR_NAMEDIFF;   
     updateIsDebug = "0";
+    fsVersionCompare = FS_VERSION_COMPARE_MISSING;
 
     if (_updateFileName.length() == 0 || !isValidFilename(_updateFileName)) {
         updateOKstr = "ERROR" ;
@@ -192,20 +359,36 @@ void CORE_OTA_CLASS::html_filename_check(AsyncWebServerRequest *request) {
     fileCompareResult result;
     fileNameCheck(_updateFileName, &result);
     
-    // Определяем тип файла
+    // Determine file type
     if (result.fileType == FILE_TYPE_UNSUPPORTED)   { updateFiletype = OTA_STR_UNSUPPORTED; }
     if (result.fileType == FILE_TYPE_FIRMWARE)      { updateFiletype = OTA_STR_FIRMWARE; }
     if (result.fileType == FILE_TYPE_FILESYSTEM)    { updateFiletype = OTA_STR_FILESYSTEM; }
     
-    // Проверка имени
+    // Name match check
     if (result.nameMatch == 1) { updateFileMatcheD = OTA_STR_NAMEMATCH; }
     
-    // Флаг отладочной версии
+    // Debug flag
     updateIsDebug = String(result.isDebug);
     
     typeOTAfile = result.fileType;
     
-    // Проверка свободного места (только для прошивки)
+    // NEW: Compare with current FS version (or firmware)
+    compareWithCurrentFsVersion(&result, _updateFileName);
+    
+    // Format FS version comparison string for web
+    if (result.fsVersionCompare == 0) {
+        fsVersionCompare = FS_VERSION_COMPARE_SAME;
+    } else if (result.fsVersionCompare == 1) {
+        fsVersionCompare = FS_VERSION_COMPARE_NEWER;
+    } else if (result.fsVersionCompare == -1) {
+        fsVersionCompare = FS_VERSION_COMPARE_OLDER;
+    } else if (result.fsVersionCompare == -2) {
+        fsVersionCompare = FS_VERSION_COMPARE_MISSING;
+    } else {
+        fsVersionCompare = FS_VERSION_COMPARE_ERROR;
+    }
+    
+    // Check free space (only for firmware)
     bool updateOK = true;
     if (typeOTAfile == FILE_TYPE_FIRMWARE) {
         updateOK = maxSketchSpace < freeSketchSpace;
@@ -222,14 +405,18 @@ void CORE_OTA_CLASS::html_filename_check(AsyncWebServerRequest *request) {
     DEBUGOTA("\t MaxSketchSpace: %d\r\n", maxSketchSpace);
     DEBUGOTA("\t UpdateFiletype: %s\r\n", updateFiletype.c_str());
     DEBUGOTA("\t isDebug: %s\r\n", updateIsDebug.c_str());
-    DEBUGOTA("\t updVerDiffName: %s %d %d %d %d\r\n",
+    DEBUGOTA("\t FS Version Compare: %s\r\n", fsVersionCompare.c_str());
+    DEBUGOTA("\t FS Current: %d.%d.%lld.%d\r\n", 
+             result.fsCurrentMajor, result.fsCurrentMinor, 
+             (long long)result.fsCurrentDate, result.fsCurrentBuild);
+    DEBUGOTA("\t updVerDiffName: %s %d %d %lld %d\r\n",
              updateFileMatcheD.c_str(),
              result.majorDiff,
-             result.minorDiff,      // теперь minor вместо core
-             result.dateDiff,        // дата
+             result.minorDiff,
+             (long long)result.dateDiff,
              result.buildDiff);
 
-    // Формируем ответ
+    // Build response
     values += "updStatus|"         + updateOKstr           + "|div\n";
     values += "updFileType|"       + updateFiletype        + "|div\n";
     values += "updSizeFree|"       + String(freeSketchSpace) + "|div\n";
@@ -237,10 +424,17 @@ void CORE_OTA_CLASS::html_filename_check(AsyncWebServerRequest *request) {
     
     values += "updVerDiffName|"    + updateFileMatcheD     + "|div\n";
     values += "updVerDiffMaj|"     + String(result.majorDiff) + "|div\n";
-    values += "updVerDiffMinor|"   + String(result.minorDiff) + "|div\n";  // переименовано
-    values += "updVerDiffDate|"    + String(result.dateDiff)  + "|div\n";  // новый
+    values += "updVerDiffMinor|"   + String(result.minorDiff) + "|div\n";
+    values += "updVerDiffDate|"    + String(result.dateDiff)  + "|div\n";
     values += "updVerDiffBuild|"   + String(result.buildDiff) + "|div\n";
-    values += "updIsDebug|"        + updateIsDebug          + "|div\n";    // новый
+    values += "updIsDebug|"        + updateIsDebug          + "|div\n";
+    
+    // NEW: FS version compare fields
+    values += "updFsCompare|"      + fsVersionCompare       + "|div\n";
+    values += "updFsCurrentMajor|" + String(result.fsCurrentMajor) + "|div\n";
+    values += "updFsCurrentMinor|" + String(result.fsCurrentMinor) + "|div\n";
+    values += "updFsCurrentDate|"  + String(result.fsCurrentDate)  + "|div\n";
+    values += "updFsCurrentBuild|" + String(result.fsCurrentBuild) + "|div\n";
 
     request->send(200, "text/plain", values);
 }
@@ -255,7 +449,7 @@ void CORE_OTA_CLASS::updateFileExecute (AsyncWebServerRequest *request) {
 	response->addHeader("Connection", "close");
 	response->addHeader("Access-Control-Allow-Origin", "*");
 	request->send(response);
-	if (this->_fs) { this->_fs->end(); } //this->_fs->end();
+	if (this->_fs) { this->_fs->end(); }
 	ESPHTTPServer.restart_esp();
 
 }
@@ -272,6 +466,11 @@ int8_t CORE_OTA_CLASS::fileNameCheck(String filename, fileCompareResult* result)
     result->buildDiff = 0;
     result->isDebug = 0;
     result->fileType = FILE_TYPE_UNSUPPORTED;
+    result->fsVersionCompare = 0;
+    result->fsCurrentDate = 0;
+    result->fsCurrentBuild = 0;
+    result->fsCurrentMajor = 0;
+    result->fsCurrentMinor = 0;
     
     if (filename.length() == 0) { 
         return _ret;  
@@ -403,7 +602,6 @@ bool CORE_OTA_CLASS::isValidFilename(const String& filename) {
     
     for (int i = 0; i < filename.length(); i++) {
         char c = filename.charAt(i);
-        // Разрешаем только буквы, цифры, точки, дефисы, подчёркивания
         if (!((c >= 'a' && c <= 'z') || 
               (c >= 'A' && c <= 'Z') || 
               (c >= '0' && c <= '9') || 
@@ -425,7 +623,7 @@ void CORE_OTA_CLASS::html_uploadUpdateFile(AsyncWebServerRequest *request, Strin
     
     DEBUGLOAD("index=%u, len=%u, final=%d\r\n", index, len, final);
     
-    if (index == 0) { // UPLOAD_FILE_START
+    if (index == 0) {
         DEBUGOTA("===== UPLOAD START =====\r\n");
         DEBUGOTA("File: %s\r\n", filename.c_str());
         
@@ -433,10 +631,8 @@ void CORE_OTA_CLASS::html_uploadUpdateFile(AsyncWebServerRequest *request, Strin
         responseSent = false;  
         totalSize = 0;
         
-        // Подготовка размеров
         prepareSizesForUpdate();
         
-        // Проверка типа файла
         if (typeOTAfile == FILE_TYPE_UNSUPPORTED) {
             values = "OTA Update error UNSUPPORTED file!";
             DEBUGOTA("%s\n", values.c_str());
@@ -445,7 +641,6 @@ void CORE_OTA_CLASS::html_uploadUpdateFile(AsyncWebServerRequest *request, Strin
             return;
         }
         
-        // Проверка имени файла
         if (!isValidFilename(filename)) {
             values = "Invalid filename";
             DEBUGOTA("%s: %s\n", values.c_str(), filename.c_str());
@@ -454,7 +649,6 @@ void CORE_OTA_CLASS::html_uploadUpdateFile(AsyncWebServerRequest *request, Strin
             return;
         }
 
-        // Проверка размера
         if (typeOTAfile == FILE_TYPE_FIRMWARE) {
             if (_updateFileSize > freeSketchSpace) {
                 values = "Firmware too large for available space!";
@@ -469,7 +663,6 @@ void CORE_OTA_CLASS::html_uploadUpdateFile(AsyncWebServerRequest *request, Strin
         DEBUGOTA("Free sketch space: %u\r\n", freeSketchSpace);
         DEBUGOTA("New sketch size: %u\r\n", _updateFileSize);
 
-        // Установка MD5
         if (_browserFileMD5 != NULL && _browserFileMD5 != "") {
             Update.setMD5(_browserFileMD5.c_str());
             DEBUGOTA("Hash from browser: %s\r\n", _browserFileMD5.c_str());
@@ -481,7 +674,6 @@ void CORE_OTA_CLASS::html_uploadUpdateFile(AsyncWebServerRequest *request, Strin
             return;
         }
         
-        // Выбор раздела для обновления
 #if defined(ESP32)
         if (typeOTAfile == FILE_TYPE_FILESYSTEM) { updatePartition = U_SPIFFS; }
 #elif defined(ESP8266)
@@ -491,20 +683,17 @@ void CORE_OTA_CLASS::html_uploadUpdateFile(AsyncWebServerRequest *request, Strin
         
         DEBUGOTA("Update partition: %d\r\n", updatePartition);
         
-        // Завершаем файловую систему перед обновлением
         if (_fs) { 
             DEBUGOTA("Ending filesystem...\n");
             _fs->end(); 
             delay(100);
         }
         
-        // ВАЖНО: для ESP8266 включаем асинхронный режим
 #if defined(ESP8266)
         DEBUGOTA("Enabling async mode for ESP8266\n");
         Update.runAsync(true);
 #endif
         
-        // Начинаем обновление
         if (Update.begin(_updateFileSize, updatePartition) == false) {
 #ifdef DEBUG_OTA
             Update.printError(DEBUGOTASER);
@@ -514,7 +703,6 @@ void CORE_OTA_CLASS::html_uploadUpdateFile(AsyncWebServerRequest *request, Strin
             request->send(500, "text/plain", values);
             errorOccurred = true;
             
-            // Восстанавливаем файловую систему при ошибке
             if (_fs) {
                 DEBUGOTA("Remounting filesystem after error...\n");
 #if defined(ESP32)
@@ -530,10 +718,8 @@ void CORE_OTA_CLASS::html_uploadUpdateFile(AsyncWebServerRequest *request, Strin
     if (errorOccurred)  { return; }
     if (responseSent)   { return; }
     
-    // Запись данных
     totalSize += len;
     
-    // Вычисление процента
     uint16_t percentLoaded = (totalSize * 100) / _updateFileSize;
     fileUpadedpercent = percentLoaded;
     if ((percentLoaded % 5) == 0 && (percentLoaded != percentLoadedPrev)) {
@@ -541,7 +727,6 @@ void CORE_OTA_CLASS::html_uploadUpdateFile(AsyncWebServerRequest *request, Strin
         DEBUGOTA("Uploaded: %ld bytes %u %%\r\n", totalSize, percentLoaded);
     }
 
-    // Запись во flash
     size_t written = Update.write(data, len);
     if (written != len) {
         values = "OTA Update error data load!";
@@ -556,7 +741,6 @@ void CORE_OTA_CLASS::html_uploadUpdateFile(AsyncWebServerRequest *request, Strin
         Update.end();
 #endif
         
-        // Восстанавливаем файловую систему при ошибке
         if (_fs) {
             DEBUGOTA("Remounting filesystem...\n");
 #if defined(ESP32)
@@ -568,7 +752,6 @@ void CORE_OTA_CLASS::html_uploadUpdateFile(AsyncWebServerRequest *request, Strin
         return;
     }
     
-    // Завершение загрузки
     if (final) {
         if (errorOccurred) {
             return;
@@ -591,7 +774,6 @@ void CORE_OTA_CLASS::html_uploadUpdateFile(AsyncWebServerRequest *request, Strin
 #ifdef DEBUG_OTA
             Update.printError(DEBUGOTASER);
 #endif
-            // При ошибке в конце тоже возвращаем ФС
             if (_fs) {
                 DEBUGOTA("Remounting filesystem after failure...\n");
 #if defined(ESP32)
@@ -628,8 +810,3 @@ void CORE_OTA_CLASS::html_ver_get(AsyncWebServerRequest *request) {
     values += "otagendate|"     + getCommitDateStr() + "|dev\n";
     request->send(200, "text/plain", values);
 }
-
-
-
-
-
