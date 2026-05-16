@@ -12,6 +12,7 @@
 typedef void (*TPTR)(void);
 extern void InitRTOS(void);
 extern void SetTask(TPTR TS);
+extern void SetTaskFromISR(TPTR TS);
 extern void SetTimerTask(TPTR TS, uint32_t NewTime);
 extern void DelTimerTask(TPTR TS);
 extern void TaskManager(void);

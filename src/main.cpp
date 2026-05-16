@@ -47,7 +47,17 @@ void loop() {
 #if defined(ESP8266)
     ESP.wdtFeed(); 
 #endif
+    // Сбрасываем watchdog перед выполнением задач EERTOS
+    // TaskManager может выполнять длительные операции (SPIFFS, WiFi)
     TaskManager();
+    
+    // Сбрасываем watchdog после TaskManager
+#if defined(ESP32)
+    esp_task_wdt_reset();
+#elif defined(ESP8266)
+    ESP.wdtFeed(); 
+#endif
+    
     loop_user();
     TerminalLoop();
     modOtaClass.loopHandler();

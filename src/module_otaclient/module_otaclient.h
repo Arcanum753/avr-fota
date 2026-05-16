@@ -20,12 +20,12 @@ Please Wait....Configuring.
 
 #define OTACLIENT_TIME_DFLT     5
 #define OTACLIENT_POWERON       true
-#define OTACLIENT_RESPONSE       true
+#define OTACLIENT_SERVER_ADDR   "192.168.88.171"
 
 typedef struct {
     uint16_t timeOut;
     bool  powerOn;
-    bool  response;
+    String serverAddress;
 } strOtaClientConfig;
 
 void otaclientTimer(void);
@@ -43,7 +43,7 @@ public:
     
     uint16_t getTimeOut();
     bool powerOnGet();
-    bool responseGet();
+    String serverAddressGet();
     String jsonGet();
     uint8_t isStart();
     

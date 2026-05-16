@@ -278,6 +278,8 @@ bool AsyncFSWebServer:: handleFileRead(String path, AsyncWebServerRequest *reque
 	if (_fs->exists(pathWithGz) || _fs->exists(path)) {
 		if (_fs->exists(pathWithGz)) { path += ".gz"; }
 		DEBUGEDIT("Content type: %s\r\n", contentType.c_str());
+		// Сбрасываем watchdog перед длительной операцией с файловой системой
+		yield();
 		AsyncWebServerResponse *response = request->beginResponse(*_fs, path, contentType);
 		if (path.endsWith(".gz")) {response->addHeader("Content-Encoding", "gzip");}
 		//File file = SPIFFS.open(path, "r");
@@ -437,11 +439,15 @@ void AsyncFSWebServer::serverInit() {
 	onNotFound([this](AsyncWebServerRequest *request) {
 		DEBUGLOGFH("Not found: %s\r\n", request->url().c_str());
 		if (!this->checkAuth(request)) {	return request->requestAuthentication(); };
-		AsyncWebServerResponse *response = request->beginResponse(200);
-		response->addHeader("Connection", "close");
-		response->addHeader("Access-Control-Allow-Origin", "*");
-		if (!this->handleFileRead(request->url(), request)) {	request->send(404, "text/plain", "FileNotFound");	} //TODO 404.html
-		delete response; // Free up memory!
+		// Не создаём response заранее — handleFileRead сам отправит ответ
+		// или мы отправим 404. AsyncWebServer сам управляет памятью response после send().
+		if (!this->handleFileRead(request->url(), request)) {
+			AsyncWebServerResponse *response = request->beginResponse(404, "text/plain", "FileNotFound");
+			response->addHeader("Connection", "close");
+			response->addHeader("Access-Control-Allow-Origin", "*");
+			request->send(response);
+			// НЕ удаляем response — AsyncWebServer сам освободит память после отправки
+		}
 	});
 
 	_evs.onConnect([](AsyncEventSourceClient* client) {

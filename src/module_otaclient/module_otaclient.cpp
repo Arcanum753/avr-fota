@@ -20,7 +20,7 @@ MODULE_CLASS_OTACLIENT::MODULE_CLASS_OTACLIENT() {
 
 uint16_t MODULE_CLASS_OTACLIENT::getTimeOut()   { return _config.timeOut; }
 bool MODULE_CLASS_OTACLIENT::powerOnGet()       { return _config.powerOn; }
-bool MODULE_CLASS_OTACLIENT::responseGet()       { return _config.response; }
+String MODULE_CLASS_OTACLIENT::serverAddressGet() { return _config.serverAddress; }
 uint8_t MODULE_CLASS_OTACLIENT::isStart()          { return _isStarted; }
 
 void MODULE_CLASS_OTACLIENT::begin() {
@@ -80,7 +80,7 @@ void MODULE_CLASS_OTACLIENT::send_configuration_values_html(AsyncWebServerReques
     String values = "";
     values += "otaclienttime|"     + String(_config.timeOut) + "|input\n";
     values += "otaclientpoweron|"  + String(_config.powerOn ? "checked" : "") + "|chk\n";
-    values += "otaclientresponse|"  + String(_config.response ? "checked" : "") + "|chk\n";
+    values += "otaclientaddr|"  + _config.serverAddress + "|input\n";
     request->send(200, "text/plain", values);
 }
 
@@ -88,7 +88,6 @@ void MODULE_CLASS_OTACLIENT::send_configuration_values_html(AsyncWebServerReques
 void MODULE_CLASS_OTACLIENT::get_configuration_html(AsyncWebServerRequest *request) {
     DEBUGOTACLIENT("%s\n\r", __PRETTY_FUNCTION__);
     _config.powerOn  = false; 
-    _config.response = false;
     if (request->args() > 0) {
         for (uint8_t i = 0; i < request->args(); i++) {
             DEBUGOTACLIENT("Arg %d: %s %s\r\n", i, 
@@ -97,7 +96,7 @@ void MODULE_CLASS_OTACLIENT::get_configuration_html(AsyncWebServerRequest *reque
             
             if (request->argName(i) == "otaclienttime")   { _config.timeOut = request->arg(i).toInt(); }
             if (request->argName(i) == "otaclientpoweron")  { _config.powerOn = true;  }
-            if (request->argName(i) == "otaclientresponse") { _config.response = true; }
+            if (request->argName(i) == "otaclientaddr")  { _config.serverAddress = urldecode(request->arg(i)); }
         }
         
         request->send_P(200, "text/html", Page_GeneralOtaClient);
@@ -139,7 +138,7 @@ String MODULE_CLASS_OTACLIENT::jsonGet() {
 void MODULE_CLASS_OTACLIENT::defaultConfig() {
     _config.timeOut = OTACLIENT_TIME_DFLT;
     _config.powerOn = OTACLIENT_POWERON;
-    _config.response = OTACLIENT_RESPONSE;
+    _config.serverAddress = OTACLIENT_SERVER_ADDR;
 }
 
 // ========== SAVE CONFIG ==========
@@ -148,7 +147,7 @@ bool MODULE_CLASS_OTACLIENT::save_config() {
     JsonDocument jsonDoc;
     jsonDoc["timeOut"]   = _config.timeOut;
     jsonDoc["powerOn"]   = _config.powerOn;
-    jsonDoc["response"]   = _config.response;
+    jsonDoc["serverAddress"]   = _config.serverAddress;
     return ModClassJson.save_jsonDoc(jsonDoc, CONFIG_FILE_OTACLIENT);
 }
 
@@ -160,11 +159,11 @@ bool MODULE_CLASS_OTACLIENT::load_config() {
     
     _config.timeOut   = jsonDoc["timeOut"].as<int>();
     _config.powerOn   = jsonDoc["powerOn"].as<bool>();
-    _config.response   = jsonDoc["response"].as<bool>();
+    _config.serverAddress = jsonDoc["serverAddress"].as<const char *>();
     
     DEBUGOTACLIENT("timeOut: %d\n\r", _config.timeOut);
     DEBUGOTACLIENT("powerOn: %d\n\r", _config.powerOn);
-    DEBUGOTACLIENT("response: %d\n\r", _config.response);
+    DEBUGOTACLIENT("serverAddress: %s\n\r", _config.serverAddress.c_str());
     
     return true;
 }
