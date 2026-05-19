@@ -1,0 +1,454 @@
+body {
+    margin: 4px auto;
+    width: 960px;
+    color: black;
+    background: #fff;
+    font-size: 14px;
+    font-family: "Lucida Grande", Tahoma, sans-serif;
+}
+
+img,
+table {
+    border: 0;
+}
+
+.top {
+    color: #888;
+    background: url(logo.gif) no-repeat 0 0;
+    padding: 3px 0 0 45px;
+    margin: 0 0 10px 0;
+}
+
+.top img {
+    vertical-align: middle;
+}
+
+h2.error {
+    color: red;
+}
+
+h2.ok {
+    color: green;
+}
+
+h2.title {
+    text-align: center;
+}
+
+.menu {
+    border-top: #fab548 5px solid;
+    background: #f1f1ed url(esp.gif) no-repeat 10px 10px;
+    padding: 5px 5px 5px 120px;
+    margin: 0 0 10px 0;
+    min-height: 120px;
+    border-radius: 5px;
+}
+
+.menu div {
+    width: 220px;
+    float: left;
+    margin-right: 10px;
+}
+
+.menu a,
+.menu a:link {
+    display: block;
+    font-weight: bold;
+    text-decoration: none;
+    color: #1486ba;
+    padding: 0 5px 1px 10px;
+    font-size: 13px;
+    border-radius: 5px;
+    margin: 0 0 1px 0;
+    border-bottom: #d6d9da 1px solid;
+}
+
+.menu a:visited {
+    color: #777;
+}
+
+.menu a.active {
+    color: #777;
+    background: #d6d9da;
+}
+
+.menu a:hover {
+    color: #842;
+    background: #d6d9da;
+}
+
+table {
+    min-width: 300px;
+}
+
+table .align-right {
+    text-align: right;
+}
+
+table.form select {
+    width: 140px;
+}
+
+table.form {
+    width: 100%;
+}
+
+table.form td {
+    font-size: 13px;
+    padding: 0;
+}
+
+table.form .label {
+    width: 45%;
+    font-weight: bold;
+    text-align: right;
+    padding-right: 10px;
+}
+
+table.form .left {
+    width: 45%;
+    font-weight: bold;
+    text-align: left;
+    padding-left: 10px;
+}
+
+table.scan {
+    border-collapse: separate;
+    border-spacing: 0;
+    border: #aaa 2px solid;
+    text-align: center;
+    font-size: 14px;
+    width: 100%;
+    margin: 0 0 10px 0;
+    background: #fff;
+    border-radius: 5px;
+}
+
+table.scan th {
+    color: #247;
+    border: #aaa 1px solid;
+    font-size: 15px;
+    padding: 2px 2px;
+    background: #fec;
+}
+
+table.scan td {
+    border: #aaa 1px solid;
+    padding: 2px 2px;
+}
+
+table.scan td.s:hover {
+    background: #eef;
+}
+
+table.scan a:link {
+    display: block;
+    font-weight: bold;
+    text-decoration: none;
+    color: #444;
+    border-radius: 5px;
+}
+
+table.scan a:visited {
+    color: #444;
+}
+
+table.scan a.active,
+table.scan a:hover {
+    color: #21e;
+    background: #d6d9da;
+}
+
+table.mdbtab {
+    border-collapse: separate;
+    border-spacing: 0;
+    border: #aaa 2px solid;
+    text-align: center;
+    font-size: 12px;
+    width: 100%;
+    margin: 0 0 10px 0;
+    background: #fff;
+    border-radius: 5px;
+}
+
+table.mdbtab th {
+    color: #247;
+    border: #aaa 1px solid;
+    font-size: 12px;
+    padding: 2px 2px;
+    background: #fec;
+}
+
+table.mdbtab td {
+    border: #aaa 1px solid;
+    padding: 2px 2px;
+}
+
+table.mdbtab td.s:hover {
+    background: #eef;
+}
+
+table.mdbtab a:link {
+    display: block;
+    font-weight: bold;
+    text-decoration: none;
+    color: #444;
+    border-radius: 5px;
+}
+
+table.mdbtab a:visited {
+    color: #444;
+}
+
+table.mdbtab a.active,
+table.mdbtab a:hover {
+    color: #21e;
+    background: #d6d9da;
+}
+
+.content {
+    background: #f1f1ed;
+    border-radius: 5px;
+    border-top: #1486ba 5px solid;
+    padding: 10px;
+    margin: 0 0 10px 0;
+}
+
+.footer {
+    border-top: #75be45 5px solid;
+    background: #d6d9da;
+    border-radius: 5px;
+    padding: 10px;
+    font-size: 12px;
+    margin: 0 0 5px 0;
+}
+
+.copyright {
+    font-size: 11px;
+    padding: 0 0 0 10px;
+    text-align: right;
+}
+
+.button:visited,
+.button {
+    cursor: pointer;
+    display: inline-block;
+    font-weight: bold;
+    text-align: center;
+    text-decoration: none;
+    white-space: nowrap;
+    border-radius: 5px;
+    background-image: linear-gradient(rgba(255, 255, 255, .1), rgba(255, 255, 255, .05) 49%, rgba(0, 0, 0, .05) 51%, rgba(0, 0, 0, .1));
+    background-color: #f0f0eb;
+    color: #312c2a;
+    border: 1px solid #aaa;
+    border-color: rgba(0, 0, 0, 0.3);
+    border-bottom-color: #777;
+    border-bottom-color: rgba(0, 0, 0, 0.5);
+    box-shadow: inset 0 0.08em 0 rgba(255, 255, 255, 0.7), inset 0 0 0.08em rgba(255, 255, 255, 0.5);
+    text-shadow: 0 1px 0 rgba(255, 255, 255, 0.8);
+    padding: 3px 15px;
+}
+
+.button:focus,
+.button:hover {
+    background-color: #ffffff;
+    background-image: linear-gradient(rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0.2) 49%, rgba(0, 0, 0, 0.05) 51%, rgba(0, 0, 0, 0.15));
+}
+
+#timer {
+    color: red;
+}
+
+.center {
+    text-align: center;
+}
+
+hr {
+    border: 0;
+    height: 1px;
+    background: #333;
+    background-image: -webkit-linear-gradient(left, #ccc, #333, #ccc);
+    background-image: -moz-linear-gradient(left, #ccc, #333, #ccc);
+    background-image: -ms-linear-gradient(left, #ccc, #333, #ccc);
+    background-image: -o-linear-gradient(left, #ccc, #333, #ccc);
+}
+
+select,
+input,
+iframe {
+    border-collapse: separate;
+    border-spacing: 0;
+    background: #fff;
+    border-radius: 5px;
+}
+
+/* Message box styles */
+.message-box {
+    padding: 10px;
+    margin: 0 0 10px 0;
+    border-radius: 5px;
+    font-weight: bold;
+    text-align: center;
+}
+.message-error {
+    background: #f8d7da;
+    border: 1px solid #f5c6cb;
+    color: #721c24;
+}
+.message-success {
+    background: #d4edda;
+    border: 1px solid #c3e6cb;
+    color: #155724;
+}
+
+/* Dir editor styles */
+.dir-item {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px;
+    margin-bottom: 4px;
+    background: #f1f1ed;
+    border-radius: 5px;
+    border: 1px solid #d6d9da;
+}
+.dir-item input {
+    flex: 1;
+    padding: 4px 8px;
+    border: 1px solid #aaa;
+    border-radius: 5px;
+    font-family: monospace;
+    font-size: 13px;
+}
+.dir-item .button-remove {
+    cursor: pointer;
+    font-weight: bold;
+    padding: 4px 10px;
+    border-radius: 5px;
+    background-color: #f8d7da;
+    color: #721c24;
+    border: 1px solid #f5c6cb;
+    font-size: 13px;
+}
+.dir-item .button-remove:hover {
+    background-color: #f5c6cb;
+}
+
+/* Dir editor buttons area */
+.dir-actions {
+    margin: 8px 0;
+    text-align: center;
+}
+.dir-actions .button {
+    margin: 0 4px;
+}
+
+/* Dir message */
+#dirs-message {
+    margin-top: 6px;
+    font-size: 13px;
+    text-align: center;
+}
+
+/* Upload form */
+.upload-form {
+    text-align: center;
+    margin: 10px 0;
+}
+.upload-form input[type="file"] {
+    display: block;
+    margin: 10px auto;
+    padding: 8px;
+    font-size: 14px;
+    border: 1px solid #aaa;
+    border-radius: 5px;
+    background: #fff;
+    min-width: 300px;
+}
+.upload-form .button {
+    margin-top: 8px;
+}
+
+/* Status cards */
+.status-grid {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    margin: 10px 0;
+    flex-wrap: wrap;
+}
+.status-card {
+    background: #f1f1ed;
+    border: 1px solid #d6d9da;
+    border-radius: 5px;
+    padding: 10px 20px;
+    text-align: center;
+    min-width: 150px;
+}
+.status-card .label {
+    font-size: 12px;
+    color: #666;
+    font-weight: bold;
+}
+.status-card .value {
+    font-size: 22px;
+    font-weight: bold;
+    color: #247;
+    margin-top: 4px;
+}
+
+/* API endpoints block */
+.api-endpoint {
+    font-family: monospace;
+    font-size: 13px;
+    margin: 6px 0;
+}
+.api-endpoint .method {
+    color: #1486ba;
+    font-weight: bold;
+}
+
+/* Delete button in table */
+.button-delete {
+    cursor: pointer;
+    font-weight: bold;
+    padding: 2px 10px;
+    border-radius: 5px;
+    background-color: #f8d7da;
+    color: #721c24;
+    border: 1px solid #f5c6cb;
+    font-size: 12px;
+    text-decoration: none;
+}
+.button-delete:hover {
+    background-color: #f5c6cb;
+}
+
+/* Type badge */
+.type-badge {
+    display: inline-block;
+    padding: 1px 8px;
+    font-size: 11px;
+    font-weight: bold;
+    border-radius: 5px;
+}
+.type-badge-firmware {
+    background: #cce5ff;
+    color: #004085;
+    border: 1px solid #b8daff;
+}
+.type-badge-filesystem {
+    background: #e8daef;
+    color: #6c3483;
+    border: 1px solid #d2b4de;
+}
+
+/* Truncate text */
+.truncate {
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    display: inline-block;
+}

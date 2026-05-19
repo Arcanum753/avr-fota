@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>OTA Firmware Server</title>
+    <meta http-equiv="Content-type" content="text/html; charset=utf-8">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <!-- Header as in page_head.html -->
+    <h3 class="top">OTA Server.<sup>&copy;</sup></h3>
+    <div class="menu">
+        <div>
+            <a href="/" class="active">Main</a>
+        </div>
+        <div>
+            <a href="/">OTA Firmware Server</a>
+        </div>
+    </div>
+
+    <!-- Messages -->
+    {% if message %}
+        <div class="message-box {% if 'Error' in message or 'Failed' in message %}message-error{% else %}message-success{% endif %}">
+            {{ message }}
+        </div>
+    {% endif %}
+
+    <!-- Server Status -->
+    <h2 class="title" style="background: #7D8EE2">Server Status</h2>
+    <div class="status-grid">
+        <div class="status-card">
+            <div class="label">Total Files</div>
+            <div class="value">{{ status.total_files }}</div>
+        </div>
+        <div class="status-card">
+            <div class="label">Total Size</div>
+            <div class="value">{{ status.total_size }}</div>
+        </div>
+        <div class="status-card">
+            <div class="label">Firmware Directories</div>
+            <div class="value">{{ firmware_dirs|length }}</div>
+        </div>
+    </div>
+
+    <!-- Firmware Directories Editor -->
+    <h2 class="title" style="background: #7D8EE2">Firmware Directories</h2>
+    <p style="text-align:center; font-size:13px; color:#666; margin-bottom:10px;">
+        Add or remove directories where the server looks for .bin files.
+    </p>
+    <div id="dirs-list">
+        {% for dir in firmware_dirs %}
+        <div class="dir-item">
+            <input type="text" value="{{ dir }}" class="dir-path" id="dir-path-{{ loop.index0 }}">
+            <button onclick="browseFolder({{ loop.index0 }}, this)" class="button" style="font-size:12px; padding:2px 10px;">Browse...</button>
+            <button onclick="removeDir(this)" class="button-remove">Remove</button>
+        </div>
+        {% endfor %}
+    </div>
+    <div class="dir-actions">
+        <button onclick="addDir()" class="button">+ Add Directory</button>
+        <button onclick="saveDirs()" class="button">Save Directories</button>
+    </div>
+    <div id="dirs-message"></div>
+
+    <!-- Upload Form -->
+    <h2 class="title" style="background: #7D8EE2">Upload New Firmware</h2>
+    <p style="text-align:center; font-size:13px; color:#666; margin-bottom:10px;">
+        Uploads to: <strong>{{ firmware_dirs[0] if firmware_dirs else './firmware' }}</strong>
+    </p>
+    <form method="POST" action="{{ url_for('upload_firmware') }}" enctype="multipart/form-data" class="upload-form">
+        <input type="file" name="file" id="file" required>
+        <button type="submit" class="button">Upload</button>
+    </form>
+
+    <!-- Files Table -->
+    <h2 class="title" style="background: #7D8EE2">Firmware Files</h2>
+    {% if status.files %}
+    <table class="scan">
+        <thead>
+            <tr>
+                <th>Filename</th>
+                <th>Type</th>
+                <th>Size</th>
+                <th>MD5</th>
+                <th>Source Dir</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for file in status.files %}
+            <tr>
+                <td style="font-family:monospace; font-size:13px;">{{ file.name }}</td>
+                <td>
+                    <span class="type-badge {% if file.type == 'firmware' %}type-badge-firmware{% else %}type-badge-filesystem{% endif %}">
+                        {{ file.type }}
+                    </span>
+                </td>
+                <td>{{ "{:,.0f}".format(file.size / 1024) }} KB</td>
+                <td style="font-family:monospace; font-size:11px; max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ file.md5 }}</td>
+                <td style="font-family:monospace; font-size:11px; max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ file.dir }}</td>
+                <td>
+                    <form method="POST" action="{{ url_for('delete_firmware', filename=file.name) }}" style="display:inline" onsubmit="return confirm('Delete {{ file.name }}?')">
+                        <button type="submit" class="button-delete">Delete</button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p style="text-align:center; color:#666; margin:10px 0;">No firmware files uploaded yet.</p>
+    {% endif %}
+
+    <!-- API Endpoints -->
+    <div class="content">
+        <h2 style="text-align:center; color:#247; margin-top:0;">Device API Endpoints</h2>
+        <div class="api-endpoint">
+            <span class="method">GET</span> <a href="{{ url_for('manifest') }}">/manifest.json</a> — Returns JSON with all firmware files
+        </div>
+        <div class="api-endpoint">
+            <span class="method">GET</span> /firmware/<filename> — Download specific firmware file
+        </div>
+        <div class="api-endpoint">
+            <span class="method">GET</span> <a href="{{ url_for('get_config') }}">/config</a> — Returns current server config as JSON
+        </div>
+        <div class="api-endpoint">
+            <span class="method">POST</span> /config/dirs — Update firmware directories list
+        </div>
+    </div>
+
+    <!-- Footer as in page_bottom.html -->
+    <footer>
+        <div class="footer">
+            OTA Firmware Server<br>
+            Hosting firmware binaries for OTA client devices.
+        </div>
+        <div class="copyright">(c) 2025 OTA Server</div>
+    </footer>
+
+    <script>
+    function browseFolder(index, btn) {
+        const input = document.getElementById('dir-path-' + index);
+        if (!input) return;
+
+        // Disable button while browsing
+        btn.disabled = true;
+        btn.textContent = 'Opening...';
+
+        fetch('/browse-folder', { method: 'POST' })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                input.value = data.path;
+            } else if (data.error && data.error !== 'No folder selected.') {
+                console.error('Browse error:', data.error);
+            }
+        })
+        .catch(err => {
+            console.error('Browse network error:', err);
+        })
+        .finally(() => {
+            btn.disabled = false;
+            btn.textContent = 'Browse...';
+        });
+    }
+
+    function addDir() {
+        const list = document.getElementById('dirs-list');
+        const idx = document.querySelectorAll('.dir-item').length;
+        const div = document.createElement('div');
+        div.className = 'dir-item';
+        div.innerHTML = `
+            <input type="text" value="./firmware" class="dir-path" id="dir-path-${idx}">
+            <button onclick="browseFolder(${idx}, this)" class="button" style="font-size:12px; padding:2px 10px;">Browse...</button>
+            <button onclick="removeDir(this)" class="button-remove">Remove</button>
+        `;
+        list.appendChild(div);
+    }
+
+    function removeDir(btn) {
+        const item = btn.closest('.dir-item');
+        if (document.querySelectorAll('.dir-item').length <= 1) {
+            document.getElementById('dirs-message').innerHTML = '<span style="color:red;">At least one directory is required.</span>';
+            return;
+        }
+        item.remove();
+        document.getElementById('dirs-message').innerHTML = '';
+    }
+
+    function saveDirs() {
+        const inputs = document.querySelectorAll('.dir-path');
+        const dirs = [];
+        inputs.forEach(inp => {
+            const val = inp.value.trim();
+            if (val) dirs.push(val);
+        });
+
+        if (dirs.length === 0) {
+            document.getElementById('dirs-message').innerHTML = '<span style="color:red;">At least one directory is required.</span>';
+            return;
+        }
+
+        fetch('/config/dirs', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ firmware_dirs: dirs })
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                document.getElementById('dirs-message').innerHTML = '<span style="color:green;">Directories saved! Reloading...</span>';
+                setTimeout(() => location.reload(), 1000);
+            } else {
+                document.getElementById('dirs-message').innerHTML = '<span style="color:red;">Error: ' + (data.error || 'Unknown') + '</span>';
+            }
+        })
+        .catch(err => {
+            document.getElementById('dirs-message').innerHTML = '<span style="color:red;">Network error: ' + err + '</span>';
+        });
+    }
+    </script>
+</body>
+</html>

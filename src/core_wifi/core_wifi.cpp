@@ -29,6 +29,10 @@
 #include "core_led/core_led.h"
 #include "core_wifi_version.h"
 
+#ifdef MODULE_OTACLIENT
+#include "module_otaclient/module_otaclient.h"
+#endif
+
 
 
 CORE_CLASS_WIFI 	modWifiClass(false);
@@ -333,6 +337,11 @@ void CORE_CLASS_WIFI::onWiFiConnectedGotIP(WiFiEventStationModeGotIP data) {
     if (udpBroadcast.udpPowerOnGet() == true ) {  udpBroadcastSimple(); }
 #endif
 	modNtpClass.ntpOnConnected();
+
+#ifdef MODULE_OTACLIENT
+	// Trigger OTA client check on WiFi connect (if powerOn enabled)
+	otaClient.onWiFiConnect();
+#endif
 
 }
 

@@ -443,15 +443,40 @@ void CORE_OTA_CLASS::html_filename_check(AsyncWebServerRequest *request) {
 
 void CORE_OTA_CLASS::updateFileExecute (AsyncWebServerRequest *request) {
 	DEBUGOTA(__FUNCTION__);	DEBUGOTA("\r\n");
-	AsyncWebServerResponse *response = request->beginResponse(200, "text/html", 
-		(Update.hasError()) ? "FAIL" : "<META http-equiv=\"refresh\" content=\"15;URL=/update\">Update correct. Restarting..."
-	);
+	
+	String message;
+	bool needReboot = true;
+	
+	if (!Update.hasError()) {
+#if defined(ESP32)
+		if (typeOTAfile == FILE_TYPE_FILESYSTEM) {
+			needReboot = false;
+			message = "FS updated successfully (no reboot needed)";
+			DEBUGOTA("FS update on ESP32: no reboot needed, remounting FS\n");
+			if (this->_fs) {
+				this->_fs->end();
+				delay(100);
+				this->_fs->begin(true);
+			}
+			_fsVersionCached = false;
+		}
+#endif
+	}
+	
+	if (needReboot) {
+		if (Update.hasError()) {
+			message = "FAIL";
+		} else {
+			message = "<META http-equiv=\"refresh\" content=\"15;URL=/update\">Update correct. Restarting...";
+		}
+		if (this->_fs) { this->_fs->end(); }
+		ESPHTTPServer.restart_esp();
+	}
+	
+	AsyncWebServerResponse *response = request->beginResponse(200, "text/html", message);
 	response->addHeader("Connection", "close");
 	response->addHeader("Access-Control-Allow-Origin", "*");
 	request->send(response);
-	if (this->_fs) { this->_fs->end(); }
-	ESPHTTPServer.restart_esp();
-
 }
 
 
@@ -762,8 +787,21 @@ void CORE_OTA_CLASS::html_uploadUpdateFile(AsyncWebServerRequest *request, Strin
         if (Update.end(true)) {
             updateHash = Update.md5String();
             DEBUGOTA("Upload finished. Calculated MD5: %s\r\n", updateHash.c_str());
+            
+#if defined(ESP32)
+            if (typeOTAfile == FILE_TYPE_FILESYSTEM) {
+                DEBUGOTA("FS update on ESP32: no reboot, remounting FS\n");
+                values = "FS updated successfully (no reboot needed)";
+                if (_fs) {
+                    _fs->begin(true);
+                }
+                _fsVersionCached = false;
+                request->send(200, "text/plain", values);
+                responseSent = true;
+                return;
+            }
+#endif
             DEBUGOTA("Update Success: %u\nRebooting...\r\n", request->contentLength());
-
             values = "Update successful! Device will restart in 3 seconds..."; 
             request->send(200, "text/plain", values);  
             responseSent = true;  

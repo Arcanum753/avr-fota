@@ -458,7 +458,23 @@
                     
                     updateProgressDisplay(100);
                     
-                    if (xhr.responseText.includes('refresh') || xhr.responseText.includes('Restarting')) {
+                    if (xhr.responseText.includes('no reboot')) {
+                        // FS update on ESP32: no reboot needed, refresh version info
+                        console.log('FS update: no reboot needed, refreshing version info');
+                        document.getElementById('progressText').innerHTML = 'FS updated successfully! Refreshing version info...';
+                        
+                        setTimeout(() => {
+                            hideProgressBar();
+                            // Refresh version info on the page
+                            ApplyCVT("/system/infovalues");
+                            ApplyCVT("/system/version");
+                            // Re-check the current file if still selected
+                            const fileInput = document.getElementById('fileName');
+                            if (fileInput.files.length > 0) {
+                                setTimeout(fileChechInfoGet, 500);
+                            }
+                        }, 2000);
+                    } else if (xhr.responseText.includes('refresh') || xhr.responseText.includes('Restarting')) {
                         setTimeout(() => {
                             window.location.href = '/index.html';
                         }, 3000);
