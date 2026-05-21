@@ -97,10 +97,10 @@ def copy_fs_image(source, target, env):
     if version:
         # Формируем имя с версией
         version_for_filename = format_version_for_filename(version)
-        base_name = f"{env_name}{FS_FILE_SUFFIX}-{version_for_filename}.bin"
+        base_name = f"{env_name}-FILESYS-{version_for_filename}.bin"
     else:
         # Если версии нет, используем только имя среды
-        base_name = f"{env_name}{FS_FILE_SUFFIX}.bin"
+        base_name = f"{env_name}-FILESYS.bin"
         debug_print("Using environment name only (no version)")
     
     # Копируем образ ФС в корневую папку

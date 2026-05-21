@@ -198,8 +198,8 @@ void CORE_OTA_CLASS::cacheFsVersionInfo() {
     _fsVersionCached = true;
 }
 
-bool CORE_OTA_CLASS::parseVersionFromJson(const String& jsonStr, int64_t& date, int32_t& build, int8_t& major, int16_t& minor) {
-    DynamicJsonDocument doc(2048);
+bool CORE_OTA_CLASS::parseVersionFromJson(const String& jsonStr, int64_t& date, int32_t& build, int32_t& major, int32_t& minor) {
+    DynamicJsonDocument doc(4096);
     DeserializationError error = deserializeJson(doc, jsonStr);
     
     if (error) {
@@ -308,21 +308,34 @@ int8_t CORE_OTA_CLASS::compareWithCurrentFsVersion(fileCompareResult* result, co
     }
     
     // Compare file version with current FS version
-    if (result->majorDiff > 0) {
+    // Восстанавливаем версию файла из result->*Diff (которые посчитаны относительно FW)
+    // fileVersion = diff + VERSION_*, т.к. result->dateDiff = fileDate - VERSION_DATE
+    int64_t fileDate = result->dateDiff + VERSION_DATE;
+    int32_t fileBuild = result->isDebug ? (result->buildDiff + VERSION_BUILD) : 0;
+    int32_t fileMajor = result->majorDiff + VERSION_MAJOR;
+    int32_t fileMinor = result->minorDiff + VERSION_MINOR;
+    
+    // Сравниваем версию файла с кэшированной версией FS
+    int32_t fsMajorDiff = fileMajor - _cachedFsMajor;
+    int32_t fsMinorDiff = fileMinor - _cachedFsMinor;
+    int64_t fsDateDiff = fileDate - _cachedFsDate;
+    int32_t fsBuildDiff = (result->isDebug) ? (fileBuild - _cachedFsBuild) : 0;
+    
+    if (fsMajorDiff > 0) {
         result->fsVersionCompare = 1;
-    } else if (result->majorDiff < 0) {
+    } else if (fsMajorDiff < 0) {
         result->fsVersionCompare = -1;
-    } else if (result->minorDiff > 0) {
+    } else if (fsMinorDiff > 0) {
         result->fsVersionCompare = 1;
-    } else if (result->minorDiff < 0) {
+    } else if (fsMinorDiff < 0) {
         result->fsVersionCompare = -1;
-    } else if (result->dateDiff > 0) {
+    } else if (fsDateDiff > 0) {
         result->fsVersionCompare = 1;
-    } else if (result->dateDiff < 0) {
+    } else if (fsDateDiff < 0) {
         result->fsVersionCompare = -1;
-    } else if (result->buildDiff > 0) {
+    } else if (fsBuildDiff > 0) {
         result->fsVersionCompare = 1;
-    } else if (result->buildDiff < 0) {
+    } else if (fsBuildDiff < 0) {
         result->fsVersionCompare = -1;
     } else {
         result->fsVersionCompare = 0;
@@ -450,14 +463,9 @@ void CORE_OTA_CLASS::updateFileExecute (AsyncWebServerRequest *request) {
 	if (!Update.hasError()) {
 #if defined(ESP32)
 		if (typeOTAfile == FILE_TYPE_FILESYSTEM) {
-			needReboot = false;
-			message = "FS updated successfully (no reboot needed)";
-			DEBUGOTA("FS update on ESP32: no reboot needed, remounting FS\n");
-			if (this->_fs) {
-				this->_fs->end();
-				delay(100);
-				this->_fs->begin(true);
-			}
+			needReboot = true;
+			message = "FS updated successfully. Restarting...";
+			DEBUGOTA("FS update on ESP32: reboot needed\n");
 			_fsVersionCached = false;
 		}
 #endif
@@ -511,9 +519,9 @@ int8_t CORE_OTA_CLASS::fileNameCheck(String filename, fileCompareResult* result)
     filename = cleanFilename;
 
     if (filename.endsWith(".bin")) {
-        if (filename.indexOf("_fs-") > 0) {
+        if (filename.indexOf("-FILESYS-") > 0) {
             result->fileType = FILE_TYPE_FILESYSTEM;
-        } else if (filename.indexOf("-") > 0) {
+        } else if (filename.indexOf("-FIRMWARE-") > 0) {
             result->fileType = FILE_TYPE_FIRMWARE;
         }
     }
@@ -524,11 +532,11 @@ int8_t CORE_OTA_CLASS::fileNameCheck(String filename, fileCompareResult* result)
     }
     
     String separator;
-    if (result->fileType == FILE_TYPE_FILESYSTEM) {    
-        separator = String(BUILD_ENV) + "_fs-"; 
-    } else if (result->fileType == FILE_TYPE_FIRMWARE) {    
-        separator = String(BUILD_ENV) + "-"; 
-    } else {    
+    if (result->fileType == FILE_TYPE_FILESYSTEM) {
+        separator = String(BUILD_ENV) + "-FILESYS-";
+    } else if (result->fileType == FILE_TYPE_FIRMWARE) {
+        separator = String(BUILD_ENV) + "-FIRMWARE-";
+    } else {
         DEBUGOTA("\t Unknown file type\r\n");
         return _ret;
     }
@@ -790,22 +798,15 @@ void CORE_OTA_CLASS::html_uploadUpdateFile(AsyncWebServerRequest *request, Strin
             
 #if defined(ESP32)
             if (typeOTAfile == FILE_TYPE_FILESYSTEM) {
-                DEBUGOTA("FS update on ESP32: no reboot, remounting FS\n");
-                values = "FS updated successfully (no reboot needed)";
-                if (_fs) {
-                    _fs->begin(true);
-                }
+                DEBUGOTA("FS update on ESP32: will reboot\n");
                 _fsVersionCached = false;
-                request->send(200, "text/plain", values);
-                responseSent = true;
-                return;
             }
 #endif
             DEBUGOTA("Update Success: %u\nRebooting...\r\n", request->contentLength());
-            values = "Update successful! Device will restart in 3 seconds..."; 
-            request->send(200, "text/plain", values);  
-            responseSent = true;  
-            delay(100); 
+            values = "Update successful! Device will restart in 3 seconds...";
+            request->send(200, "text/plain", values);
+            responseSent = true;
+            delay(100);
         } else {
             updateHash = Update.md5String();
             DEBUGOTA("Upload failed. Calculated MD5: %s\r\n", updateHash.c_str());
@@ -846,5 +847,19 @@ void CORE_OTA_CLASS::html_ver_get(AsyncWebServerRequest *request) {
     values += "otaversion|"     + getVersionStr()    + "|dev\n";
     values += "otagentime|"     + getGeneratedTime() + "|dev\n";
     values += "otagendate|"     + getCommitDateStr() + "|dev\n";
+    
+    // Current firmware version (from version.h macros)
+    values += "fwVersion|"      + String(VERSION_MAJOR) + "." + String(VERSION_MINOR) + "." + String(VERSION_DATE) + "." + String(VERSION_BUILD) + "|dev\n";
+    
+    // Current filesystem version (from cache or version_fs.json)
+    if (!_fsVersionCached) {
+        cacheFsVersionInfo();
+    }
+    if (_cachedFsVersionStr != "") {
+        values += "fsVersion|"  + _cachedFsVersionStr + "|dev\n";
+    } else {
+        values += "fsVersion|"  + String((int)_cachedFsMajor) + "." + String((int)_cachedFsMinor) + "." + String((long long)_cachedFsDate) + "." + String((long)_cachedFsBuild) + "|dev\n";
+    }
+    
     request->send(200, "text/plain", values);
 }

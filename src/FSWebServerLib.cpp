@@ -581,11 +581,11 @@ void AsyncFSWebServer::html_version_info(AsyncWebServerRequest *request) { // an
 	values += "deviceserial|" 	+ _sysConfig.deviceSerial 		+ "|div\n";
 	values += "versionapp|" 	+ String(FIRMWARE_VERSION) + "|div\n";
 	values += "versionweb|" 	+ String(VERSION_WEB) + "|div\n";
+	values += "versionfs|" 		+ getFsVersionStr() + "|div\n";
 	
 	values += "gitbranch|" ;values += GIT_BRANCH ;values += "|div\n";
 	values += "gitcommit|" ;values += GIT_COMMIT ;values += "|div\n";
 	values += "buildenv|" ;values += BUILD_ENV ;values += "|div\n";
-	values += "versiondatetime|" ;values += BUILD_TIME ;values += "|div\n";
 	
 	request->send(200, "text/plain", values);
 }
@@ -593,6 +593,42 @@ void AsyncFSWebServer::html_version_info(AsyncWebServerRequest *request) { // an
 
 
 const String AsyncFSWebServer::getHostName() { return _sysConfig.deviceName+"_"+_sysConfig.deviceSerial; }
+
+String AsyncFSWebServer::getFsVersionStr() {
+    if (_sysConfig.fsVersion != "") { return _sysConfig.fsVersion; }
+    
+    if (!_fs) {
+        DEBUGLOG("getFsVersionStr: FS not mounted\n");
+        return "";
+    }
+    
+    File jsonFile = _fs->open(FS_VERSION_JSON_PATH, "r");
+    if (!jsonFile) {
+        DEBUGLOG("getFsVersionStr: %s not found\n", FS_VERSION_JSON_PATH);
+        return "";
+    }
+    
+    String jsonStr;
+    while (jsonFile.available()) { jsonStr += (char)jsonFile.read(); }
+    jsonFile.close();
+    
+    JsonDocument jsonDoc;
+    DeserializationError error = deserializeJson(jsonDoc, jsonStr);
+    if (error) {
+        DEBUGLOG("getFsVersionStr: JSON parse error: %s\n", error.c_str());
+        return "";
+    }
+    
+    const char* fullString = jsonDoc["filesystem"]["version"]["full_string"];
+    if (fullString) {
+        _sysConfig.fsVersion = String(fullString);
+        DEBUGLOG("getFsVersionStr: FS version = %s\n", _sysConfig.fsVersion.c_str());
+        return _sysConfig.fsVersion;
+    }
+    
+    DEBUGLOG("getFsVersionStr: filesystem.version.full_string not found in JSON\n");
+    return "";
+}
 
 bool AsyncFSWebServer::load_config_Sys() {
 	JsonDocument jsonDoc;

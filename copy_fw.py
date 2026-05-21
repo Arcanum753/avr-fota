@@ -94,10 +94,10 @@ def copy_bin_file(source, target, env):
     if version:
         # Формируем имя с версией
         version_for_filename = format_version_for_filename(version)
-        base_name = f"{env_name}{FW_FILE_SUFFIX}-{version_for_filename}.bin"
+        base_name = f"{env_name}-FIRMWARE-{version_for_filename}.bin"
     else:
         # Если версии нет, используем только имя среды
-        base_name = f"{env_name}{FW_FILE_SUFFIX}.bin"
+        base_name = f"{env_name}-FIRMWARE.bin"
         debug_print("Using environment name only (no version)")
     
     # Копируем прошивку в корневую папку

@@ -54,8 +54,8 @@ struct fileCompareResult {
     int8_t fsVersionCompare;   // compare result against existing FS or firmware
     int64_t fsCurrentDate;     // current FS date (or firmware date)
     int32_t fsCurrentBuild;    // current FS build (or firmware build)
-    int8_t fsCurrentMajor;     // current FS major version
-    int16_t fsCurrentMinor;    // current FS minor version
+    int32_t fsCurrentMajor;    // current FS major version
+    int32_t fsCurrentMinor;    // current FS minor version
 };
 
 
@@ -86,6 +86,12 @@ public:
     
     // New: compare file version with current FS JSON or firmware
     int8_t compareWithCurrentFsVersion(fileCompareResult* result, const String& filename);
+    
+    // Public getters for cached FS version (for external modules)
+    int64_t getCachedFsDate() { return _cachedFsDate; }
+    int32_t getCachedFsBuild() { return _cachedFsBuild; }
+    int32_t getCachedFsMajor() { return _cachedFsMajor; }
+    int32_t getCachedFsMinor() { return _cachedFsMinor; }
     
     void html_uploadUpdateFile(AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final);
     void html_fileuploadProgress(AsyncWebServerRequest *request);
@@ -118,12 +124,12 @@ private:
     bool _fsVersionCached = false;
     int64_t _cachedFsDate = 0;
     int32_t _cachedFsBuild = 0;
-    int8_t _cachedFsMajor = 0;
-    int16_t _cachedFsMinor = 0;
+    int32_t _cachedFsMajor = 0;
+    int32_t _cachedFsMinor = 0;
     String _cachedFsVersionStr = "";
     
     void cacheFsVersionInfo();
-    bool parseVersionFromJson(const String& jsonStr, int64_t& date, int32_t& build, int8_t& major, int16_t& minor);
+    bool parseVersionFromJson(const String& jsonStr, int64_t& date, int32_t& build, int32_t& major, int32_t& minor);
 
 
 };

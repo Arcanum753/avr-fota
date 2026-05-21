@@ -40,7 +40,8 @@
                      <span id="updVerDiffBuild"> </span><br>
                      <span id="updIsDebug"> </span><br>
                      <span id="updFsCompare"> </span><br>
-                     <span id="updFsCurrent"> </span><br>
+                     <span id="updFsCurrentFS"> </span><br>
+                     <span id="updFsCurrentFW"> </span><br>
                   </td>
             </tr>
             <tr><td> 
@@ -65,6 +66,33 @@
                     ApplyCVT("/system/infovalues");
                     ApplyCVT("/system/version");
             }, 250);
+            
+            // Load current firmware and filesystem versions
+            setTimeout(() => {
+                const xhr = new XMLHttpRequest();
+                xhr.open('GET', '/update/ver', true);
+                xhr.onload = function() {
+                    if (xhr.status === 200) {
+                        const fieldsRows = ParseCVT(xhr.response);
+                        let fwVersion = "";
+                        let fsVersion = "";
+                        for (let fields of fieldsRows) {
+                            if (fields[0] === "fwVersion") {
+                                fwVersion = fields[1];
+                            } else if (fields[0] === "fsVersion") {
+                                fsVersion = fields[1];
+                            }
+                        }
+                        if (fwVersion) {
+                            document.getElementById('updFsCurrentFW').innerHTML = "Current Firmware: " + fwVersion;
+                        }
+                        if (fsVersion) {
+                            document.getElementById('updFsCurrentFS').innerHTML = "Current File System: " + fsVersion;
+                        }
+                    }
+                };
+                xhr.send();
+            }, 500);
         };
 
         var blobSlice = File.prototype.slice || File.prototype.mozSlice || File.prototype.webkitSlice,
@@ -299,7 +327,8 @@
             const updVerDiffBuild = document.getElementById('updVerDiffBuild');
             const updIsDebug = document.getElementById('updIsDebug');
             const updFsCompare = document.getElementById('updFsCompare');
-            const updFsCurrent = document.getElementById('updFsCurrent');
+            const updFsCurrentFS = document.getElementById('updFsCurrentFS');
+            const updFsCurrentFW = document.getElementById('updFsCurrentFW');
             
             const xhr = new XMLHttpRequest();
             xhr.open('get', "/update/firmwarefilecheck");
@@ -374,7 +403,7 @@
                             break;
                         case "updFsCurrentBuild":
                             fsCurrentBuild = parseInt(value);
-                            updFsCurrent.innerHTML = "Current FS/FW: " + fsCurrentMajor + "." + fsCurrentMinor + "." + fsCurrentDate + "." + fsCurrentBuild;
+                            // Versions are now shown from /update/ver on page load
                             break;
                     }
                 }

@@ -110,6 +110,11 @@ private:
     uint8_t _isStarted;
     bool _updateInProgress;
     uint8_t _updateRetries;
+    uint16_t _lastReportedPercent;  // For progress reporting (5% step)
+    bool _fsEnded;                  // Track if FS was ended for update
+    
+    // Static buffer for manifest entries (avoid stack allocation)
+    static ManifestEntry _manifestEntries[OTACLIENT_MAX_MANIFEST_ENTRIES];
     
     // Test/status fields
     uint8_t _testStatusCode;       // OTACLIENT_TEST_*
@@ -119,7 +124,9 @@ private:
     size_t _testUpdateSize;        // size of available update
     String _testUpdateMd5;         // MD5 of available update
     int _testUpdateFileType;       // FILE_TYPE_FIRMWARE or FILE_TYPE_FILESYSTEM
-    int8_t _testCompareResult;     // fsVersionCompare: 1=newer, 0=same, -1=older, -2=missing
+    int8_t _testCompareResult;     // combined fsVersionCompare: 1=newer, 0=same, -1=older, -2=missing
+    int8_t _testFwCompareResult;   // firmware-specific compare result
+    int8_t _testFsCompareResult;   // filesystem-specific compare result
     
     friend void otaclientTimer();
 };
