@@ -395,8 +395,9 @@ DEBUGLOGWIFI(" case STA_DISCONNECTED \r\n");
 	if (data.reason == WIFI_DISCONNECT_REASON_AUTH_FAIL ||
 		data.reason == WIFI_DISCONNECT_REASON_AUTH_EXPIRE ||
 		data.reason == WIFI_DISCONNECT_REASON_AUTH_LEAVE ||
-		data.reason == WIFI_DISCONNECT_REASON_AUTH_MAX) {
-#else
+		data.reason == WIFI_DISCONNECT_REASON_NO_AP_FOUND) {
+#endif
+#if defined(ESP32)
 	if(WiFi.status() != WL_CONNECTED && WiFi.status() != WL_NO_SSID_AVAIL) {
 #endif
 		wifiStatus = FS_STAT_WRONGPASSWORDS;
@@ -443,8 +444,6 @@ void CORE_CLASS_WIFI::send_info_values_html(AsyncWebServerRequest *request) {
 	if (WiFi.status() == 5) {	state = "CONNECTION LOST";}
 	if (WiFi.status() == 6) {	state = "DISCONNECTED";}
 
-	WiFi.scanNetworks(true);
-
 	String values = "";
 	values += "connectionstate|" + state + "|div\n";
 	
@@ -477,14 +476,32 @@ void CORE_CLASS_WIFI::send_scanwifi(AsyncWebServerRequest *request) {
     request->send(200, "text/json", json);
 }
 
+void CORE_CLASS_WIFI::send_scanwifi_trigger(AsyncWebServerRequest *request) {
+    DEBUGLOGWIFI(__FUNCTION__); DEBUGLOGWIFI("\r\n");
+    int scanStatus = WiFi.scanComplete();
+    String json = "{";
+    
+    if (scanStatus == WIFI_SCAN_RUNNING) {
+        json += "\"status\":\"already_running\"";
+        DEBUGLOGWIFI("Scan already running\n");
+    } else {
+        WiFi.scanNetworks(true);
+        json += "\"status\":\"started\"";
+        DEBUGLOGWIFI("Scan triggered\n");
+    }
+    
+    json += "}";
+    request->send(200, "application/json", json);
+}
+
 String CORE_CLASS_WIFI::buildNetworksJson() {
     String json = "[";
     int n = WiFi.scanComplete();
     
-    if (n == WIFI_SCAN_FAILED) {
-        WiFi.scanNetworks(true);
-    }
-    else if (n) {
+    // НЕ запускаем WiFi.scanNetworks() из HTTP-контекста!
+    // Сканирование запускается ТОЛЬКО через /wifi/scan эндпоинт
+    // Если сканирование не завершено или не запущено — возвращаем пустой массив
+    if (n > 0) {
         for (int i = 0; i < n; ++i) {
             if (i) json += ",";
             json += "{";
@@ -502,9 +519,6 @@ String CORE_CLASS_WIFI::buildNetworksJson() {
             json += "}";
         }
         WiFi.scanDelete();
-        if (WiFi.scanComplete() == WIFI_SCAN_FAILED) {
-            WiFi.scanNetworks(true);
-        }
     }
     json += "]";
     return json;
@@ -582,11 +596,11 @@ void CORE_CLASS_WIFI::webInit () {
         });
         
         // POST - сохранение данных слота (вызывает handle_slot_post)
-        ESPHTTPServer.on(path.c_str(), HTTP_POST, 
+        ESPHTTPServer.on(path.c_str(), HTTP_POST,
             [this, i](AsyncWebServerRequest *request) {
                 this->handle_slot_post(request, i);
-            }, 
-            NULL, 
+            },
+            NULL,
             [this](AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total) {
                 this->handle_slot_upload(request, data, len, index, total);
             }
@@ -598,6 +612,14 @@ void CORE_CLASS_WIFI::webInit () {
             return request->requestAuthentication();
         }
         this->send_scanwifi(request);
+    });
+
+    // Эндпоинт для запуска сканирования WiFi (только для страницы wifi.html)
+    ESPHTTPServer.on("/wifi/scan", HTTP_GET, [this](AsyncWebServerRequest *request) {
+        if (!ESPHTTPServer.checkAuth(request)) {
+            return request->requestAuthentication();
+        }
+        this->send_scanwifi_trigger(request);
     });
 
     //captive

@@ -271,18 +271,18 @@ bool AsyncFSWebServer::saveHTTPAuth() {
 bool AsyncFSWebServer:: handleFileRead(String path, AsyncWebServerRequest *request) {
 	DEBUGEDIT("handleFileRead: %s\r\n", path.c_str());
 	// CANNOT RUN DELAY() INSIDE CALLBACK
-	// if (CONNECTION_LED >= 0) {	flashLED(CONNECTION_LED, 1, 30); 	}	// Show activity on LED 
+	// if (CONNECTION_LED >= 0) {	flashLED(CONNECTION_LED, 1, 30); 	}	// Show activity on LED
 	if (path.endsWith("/")) {	path += HTML_INDEX;	}
 	String contentType = getContentType(path, request);
 	String pathWithGz = path + ".gz";
 	if (_fs->exists(pathWithGz) || _fs->exists(path)) {
 		if (_fs->exists(pathWithGz)) { path += ".gz"; }
 		DEBUGEDIT("Content type: %s\r\n", contentType.c_str());
-		// Сбрасываем watchdog перед длительной операцией с файловой системой
-		yield();
+		// Используем штатную асинхронную отправку файлов.
+		// Проблема рекурсивного yield() решена добавлением yield() в loop() main.cpp
+		ESP.wdtFeed();
 		AsyncWebServerResponse *response = request->beginResponse(*_fs, path, contentType);
 		if (path.endsWith(".gz")) {response->addHeader("Content-Encoding", "gzip");}
-		//File file = SPIFFS.open(path, "r");
 		DEBUGEDIT("File %s exist\r\n", path.c_str());
 		request->send(response);
 		DEBUGEDIT("File %s Sent\r\n", path.c_str());
@@ -438,6 +438,8 @@ void AsyncFSWebServer::serverInit() {
 	//use it to load content from SPIFFS
 	onNotFound([this](AsyncWebServerRequest *request) {
 		DEBUGLOGFH("Not found: %s\r\n", request->url().c_str());
+		// Логируем все запросы для отладки
+		DEBUGLOG("HTTP request: %s %s\r\n", request->methodToString(), request->url().c_str());
 		if (!this->checkAuth(request)) {	return request->requestAuthentication(); };
 		// Не создаём response заранее — handleFileRead сам отправит ответ
 		// или мы отправим 404. AsyncWebServer сам управляет памятью response после send().

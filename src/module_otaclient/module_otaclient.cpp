@@ -154,11 +154,6 @@ void MODULE_CLASS_OTACLIENT::loop() {
         ManifestEntry* fsEntry = NULL;
         
         for (int i = 0; i < entryCount; i++) {
-            if (!_manifestEntries[i].name.startsWith(BUILD_ENV)) {
-                DEBUGOTACLIENT("  Skipping %s (wrong device)\n", _manifestEntries[i].name.c_str());
-                continue;
-            }
-            
             if (_manifestEntries[i].type == "filesystem") {
                 fsEntry = &_manifestEntries[i];
                 DEBUGOTACLIENT("  Found FS file: %s\n", _manifestEntries[i].name.c_str());
@@ -478,7 +473,7 @@ bool MODULE_CLASS_OTACLIENT::fetchManifest(ManifestEntry* entries, int& count) {
     }
 #endif
     
-    String url = "http://" + _config.serverAddress + ":" + String(_config.serverPort) + _config.manifestPath;
+    String url = "http://" + _config.serverAddress + ":" + String(_config.serverPort) + _config.manifestPath + "?target=" + BUILD_ENV + "&ver=" + FIRMWARE_VERSION;
     DEBUGOTACLIENT("fetchManifest: %s\n", url.c_str());
     
 #if defined(ESP8266)
@@ -497,27 +492,33 @@ bool MODULE_CLASS_OTACLIENT::fetchManifest(ManifestEntry* entries, int& count) {
                  "Connection: close\r\n\r\n");
     
     // Читаем ответ с WDT feed
+    // Используем поблочное чтение вместо построчного, чтобы корректно
+    // обрабатывать chunked transfer encoding и длинные строки JSON
     unsigned long timeout = millis() + 5000;
     String payload = "";
     bool headersEnded = false;
     
     while (millis() < timeout) {
         if (client.available()) {
-            String line = client.readStringUntil('\n');
-            line.trim();
-            
             if (!headersEnded) {
+                String line = client.readStringUntil('\n');
+                line.trim();
                 if (line == "") {
                     headersEnded = true;
                 }
                 continue;
             }
             
-            payload += line;
-            if (payload.length() > 4096) {
-                DEBUGOTACLIENT("fetchManifest: payload too large\n");
-                client.stop();
-                return false;
+            // Поблочное чтение тела ответа
+            while (client.available()) {
+                int c = client.read();
+                if (c == -1) break;
+                payload += (char)c;
+                if (payload.length() > 2048) {  // Жёсткий лимит: 2048 байт
+                    DEBUGOTACLIENT("fetchManifest: payload too large\n");
+                    client.stop();
+                    return false;
+                }
             }
         } else {
             if (headersEnded && !client.connected()) {
@@ -557,6 +558,11 @@ bool MODULE_CLASS_OTACLIENT::fetchManifest(ManifestEntry* entries, int& count) {
     String payload = http.getString();
     http.end();
     
+    if (payload.length() > 2048) {  // Жёсткий лимит: 2048 байт для всех клиентов
+        DEBUGOTACLIENT("fetchManifest: payload too large (%d bytes)\n", payload.length());
+        return false;
+    }
+    
     DEBUGOTACLIENT("fetchManifest: received %d bytes\n", payload.length());
 #endif
     
@@ -565,6 +571,13 @@ bool MODULE_CLASS_OTACLIENT::fetchManifest(ManifestEntry* entries, int& count) {
     DeserializationError error = deserializeJson(doc, payload);
     if (error) {
         DEBUGOTACLIENT("fetchManifest: JSON parse error: %s\n", error.c_str());
+        return false;
+    }
+    
+    // Проверяем, есть ли файлы для нашего target на сервере
+    bool hasFiles = doc["has_files"].as<bool>() || false;
+    if (!hasFiles) {
+        DEBUGOTACLIENT("fetchManifest: no files for target %s on server\n", BUILD_ENV);
         return false;
     }
     
@@ -800,12 +813,6 @@ void MODULE_CLASS_OTACLIENT::checkForUpdates() {
     ManifestEntry* fsEntry = NULL;
     
     for (int i = 0; i < entryCount; i++) {
-        // Check if filename starts with our build environment
-        if (!_manifestEntries[i].name.startsWith(BUILD_ENV)) {
-            DEBUGOTACLIENT("  Skipping %s (wrong device)\n", _manifestEntries[i].name.c_str());
-            continue;
-        }
-        
         if (_manifestEntries[i].type == "filesystem") {
             fsEntry = &_manifestEntries[i];
             DEBUGOTACLIENT("  Found FS file: %s\n", _manifestEntries[i].name.c_str());

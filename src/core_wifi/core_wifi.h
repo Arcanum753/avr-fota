@@ -129,6 +129,7 @@ class  CORE_CLASS_WIFI    {
     void send_info_values_html(AsyncWebServerRequest *request);
     void send_network_configuration_html(AsyncWebServerRequest *request);
     void send_scanwifi(AsyncWebServerRequest *request) ;
+    void send_scanwifi_trigger(AsyncWebServerRequest *request);
     String buildNetworksJson() ;
     #if ESP32
     void onWiFiConnected        ();
