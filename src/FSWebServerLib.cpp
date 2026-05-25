@@ -438,8 +438,6 @@ void AsyncFSWebServer::serverInit() {
 	//use it to load content from SPIFFS
 	onNotFound([this](AsyncWebServerRequest *request) {
 		DEBUGLOGFH("Not found: %s\r\n", request->url().c_str());
-		// Логируем все запросы для отладки
-		DEBUGLOG("HTTP request: %s %s\r\n", request->methodToString(), request->url().c_str());
 		if (!this->checkAuth(request)) {	return request->requestAuthentication(); };
 		// Не создаём response заранее — handleFileRead сам отправит ответ
 		// или мы отправим 404. AsyncWebServer сам управляет памятью response после send().
