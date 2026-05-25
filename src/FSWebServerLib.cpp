@@ -545,7 +545,7 @@ void AsyncFSWebServer::serialShowAbout() {
 	Serial.printf("Project env: %s\n\r ", BUILD_ENV);	
 	Serial.printf("git branch: %s\n\r ", GIT_BRANCH);	
 	Serial.printf("ver date: %s\n\r ", BUILD_TIME);	
-	Serial.printf("ver build: %s\n\r ", String (VERSION_BUILD));	
+	Serial.printf("ver build: %s\n\r ", String(VERSION_BUILD).c_str());
 	
 	Serial.printf("Device serial number: %s\n\r ", _sysConfig.deviceSerial.c_str());	
 	#if defined(ESP32)

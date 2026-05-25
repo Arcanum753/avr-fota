@@ -413,7 +413,7 @@ void CORE_OTA_CLASS::html_filename_check(AsyncWebServerRequest *request) {
     }
 
     DEBUGOTA("\t _updateFileName: %s\r\n", _updateFileName.c_str());
-    DEBUGOTA("\t updStatus: %s\r\n", updateOKstr);
+    DEBUGOTA("\t updStatus: %s\r\n", updateOKstr.c_str());
     DEBUGOTA("\t FreeSketchSpace: %d\r\n", freeSketchSpace);
     DEBUGOTA("\t MaxSketchSpace: %d\r\n", maxSketchSpace);
     DEBUGOTA("\t UpdateFiletype: %s\r\n", updateFiletype.c_str());
@@ -510,7 +510,7 @@ int8_t CORE_OTA_CLASS::fileNameCheck(String filename, fileCompareResult* result)
     }
 
     String cleanFilename = "";
-    for (int i = 0; i < filename.length(); i++) {
+    for (size_t i = 0; i < filename.length(); i++) {
         char c = filename.charAt(i);
         if (c >= 32 && c <= 126) {
             cleanFilename += c;
@@ -559,7 +559,7 @@ int8_t CORE_OTA_CLASS::fileNameCheck(String filename, fileCompareResult* result)
     String versionStr = versionPart.substring(0, binPos);
     
     int dotCount = 0;
-    for (int i = 0; i < versionStr.length(); i++) {
+    for (size_t i = 0; i < versionStr.length(); i++) {
         if (versionStr.charAt(i) == '.') dotCount++;
     }
     
@@ -633,7 +633,7 @@ int8_t CORE_OTA_CLASS::fileNameCheck(String filename, fileCompareResult* result)
 bool CORE_OTA_CLASS::isValidFilename(const String& filename) {
     if (filename.length() == 0 || filename.length() > 100) return false;
     
-    for (int i = 0; i < filename.length(); i++) {
+    for (size_t i = 0; i < filename.length(); i++) {
         char c = filename.charAt(i);
         if (!((c >= 'a' && c <= 'z') || 
               (c >= 'A' && c <= 'Z') || 

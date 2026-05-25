@@ -472,7 +472,7 @@ void CORE_CLASS_WIFI::send_network_configuration_html(AsyncWebServerRequest *req
 	if (request->args() > 0)  // Save Settings
 	{
 		//String temp = "";
-		bool oldDHCP = _wifiConfig.dhcp; // Save status to avoid general.html cleares it
+		//bool oldDHCP = _wifiConfig.dhcp; // Save status to avoid general.html cleares it
 		for (uint8_t i = 0; i < request->args(); i++) {
 			DEBUGLOGWIFI("Arg %d: %s\r\n", i, request->arg(i).c_str());
 			if (request->argName(i) == "ssid") 		{ _wifiConfig.ssid = urldecode(request->arg(i));	continue; }

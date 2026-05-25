@@ -4,11 +4,12 @@
 #include "main.h"
 
 #include <WiFiClient.h>
-#include <Update.h>
 #if defined(ESP32)
+#include <Update.h>
 #include <HTTPClient.h>
 #elif defined(ESP8266)
 #include <ESP8266HTTPClient.h>
+#include <ArduinoOTA.h>
 #endif
 #include <core_ntp/NtpClientLib.h>
 #include "core_json/core_json.h"
@@ -85,7 +86,13 @@ void otaclientLoopTask() {
 void MODULE_CLASS_OTACLIENT::onWiFiConnect() {
     DEBUGOTACLIENT("%s: powerOn=%d\r\n", __FUNCTION__, _config.powerOn);
     if (_config.powerOn) {
+#if defined(ESP8266)
+        // ESP8266: отложить проверку обновлений на 5 секунд после WiFi connect,
+        // чтобы дать стеку WiFi стабилизироваться и избежать WDT reset
+        SetTimerTask(otaclientTimer, SEC * 5);
+#else
         checkForUpdates();
+#endif
     }
 }
 
@@ -462,12 +469,78 @@ bool MODULE_CLASS_OTACLIENT::fetchManifest(ManifestEntry* entries, int& count) {
         return false;
     }
     
+#if defined(ESP8266)
+    // ESP8266: используем прямой WiFiClient с ручным WDT feed
+    // чтобы избежать Soft WDT reset при длительных HTTP-запросах
+    if (ESP.getFreeHeap() < 10000) {
+        DEBUGOTACLIENT("fetchManifest: low memory (%d bytes), skipping\n", ESP.getFreeHeap());
+        return false;
+    }
+#endif
+    
     String url = "http://" + _config.serverAddress + ":" + String(_config.serverPort) + _config.manifestPath;
     DEBUGOTACLIENT("fetchManifest: %s\n", url.c_str());
     
+#if defined(ESP8266)
+    // Прямое подключение WiFiClient с ручным чтением и WDT feed
+    WiFiClient client;
+    client.setTimeout(5000);
+    
+    if (!client.connect(_config.serverAddress.c_str(), _config.serverPort)) {
+        DEBUGOTACLIENT("fetchManifest: connect failed\n");
+        return false;
+    }
+    
+    // Отправляем HTTP GET запрос вручную
+    client.print(String("GET ") + _config.manifestPath + " HTTP/1.1\r\n" +
+                 "Host: " + _config.serverAddress + ":" + String(_config.serverPort) + "\r\n" +
+                 "Connection: close\r\n\r\n");
+    
+    // Читаем ответ с WDT feed
+    unsigned long timeout = millis() + 5000;
+    String payload = "";
+    bool headersEnded = false;
+    
+    while (millis() < timeout) {
+        if (client.available()) {
+            String line = client.readStringUntil('\n');
+            line.trim();
+            
+            if (!headersEnded) {
+                if (line == "") {
+                    headersEnded = true;
+                }
+                continue;
+            }
+            
+            payload += line;
+            if (payload.length() > 4096) {
+                DEBUGOTACLIENT("fetchManifest: payload too large\n");
+                client.stop();
+                return false;
+            }
+        } else {
+            if (headersEnded && !client.connected()) {
+                break;
+            }
+            delay(1);
+            ESP.wdtFeed();
+        }
+    }
+    
+    client.stop();
+    
+    if (!headersEnded || payload.length() == 0) {
+        DEBUGOTACLIENT("fetchManifest: timeout or empty response\n");
+        return false;
+    }
+    
+    DEBUGOTACLIENT("fetchManifest: received %d bytes\n", payload.length());
+#else
+    // ESP32: используем HTTPClient (более производительный)
     WiFiClient client;
     HTTPClient http;
-    http.setTimeout(10000); // 10 second timeout
+    http.setTimeout(10000);
     
     if (!http.begin(client, url)) {
         DEBUGOTACLIENT("fetchManifest: http.begin failed\n");
@@ -485,6 +558,7 @@ bool MODULE_CLASS_OTACLIENT::fetchManifest(ManifestEntry* entries, int& count) {
     http.end();
     
     DEBUGOTACLIENT("fetchManifest: received %d bytes\n", payload.length());
+#endif
     
     // Parse JSON
     JsonDocument doc;
@@ -577,9 +651,18 @@ bool MODULE_CLASS_OTACLIENT::performUpdateFromStream(WiFiClient& stream, size_t 
         size_t toRead = (remaining < OTACLIENT_CHUNK_SIZE) ? remaining : OTACLIENT_CHUNK_SIZE;
         int bytesRead = stream.readBytes(buf, toRead);
         
+#if defined(ESP8266)
+        ESP.wdtFeed();
+#endif
+        
         if (bytesRead <= 0) {
             DEBUGOTACLIENT("Stream read error at %u/%u\n", totalWritten, size);
+#if defined(ESP32)
             Update.abort();
+#endif
+#if defined(ESP8266)
+            Update.end();
+#endif
             if (modOtaClass._fs) {
 #if defined(ESP32)
                 modOtaClass._fs->begin(true);
@@ -594,7 +677,12 @@ bool MODULE_CLASS_OTACLIENT::performUpdateFromStream(WiFiClient& stream, size_t 
         size_t written = Update.write(buf, bytesRead);
         if (written != (size_t)bytesRead) {
             DEBUGOTACLIENT("Update.write error: wrote %u of %u\n", written, bytesRead);
+#if defined(ESP32)
             Update.abort();
+#endif
+#if defined(ESP8266)
+            Update.end();
+#endif
             if (modOtaClass._fs) {
 #if defined(ESP32)
                 modOtaClass._fs->begin(true);

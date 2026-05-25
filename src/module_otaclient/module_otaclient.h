@@ -31,7 +31,11 @@ Please Wait....Configuring.
 #define OTACLIENT_MAX_RETRIES     3
 
 // Chunk size for streaming download
-#define OTACLIENT_CHUNK_SIZE      256
+#if defined(ESP8266)
+#define OTACLIENT_CHUNK_SIZE      512
+#else
+#define OTACLIENT_CHUNK_SIZE      1024
+#endif
 
 // Test result codes
 #define OTACLIENT_TEST_IDLE       0
