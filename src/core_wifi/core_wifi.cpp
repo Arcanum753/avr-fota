@@ -48,6 +48,18 @@ void CORE_CLASS_WIFI::s_secondTick(void* arg) {
 	//DNS captive
 	if (self->wifiStatus == FS_STAT_APMODE) {	dnsServer.processNextRequest();	}
 	
+	// Периодический сброс счётчиков неудачных попыток (каждые 60 секунд)
+	// чтобы дать шанс на повторное подключение к SSID, которые были временно заблокированы
+	if (self->connectionTimout % 60 == 0 && self->connectionTimout > 0) {
+		bool anyBlocked = false;
+		for (int i = 0; i < 4; i++) {
+			if (self->_wifiFailCount[i] >= MAX_WIFI_FAIL_COUNT) { anyBlocked = true; break; }
+		}
+		if (anyBlocked) {
+			DEBUGLOGWIFI("Periodic reset of wifi fail counters\n");
+			self->resetWifiFailCounters();
+		}
+	}
 
 //Check connection timeout if enabled
 	if (self->scanTime > 0) {
@@ -74,7 +86,7 @@ void CORE_CLASS_WIFI::s_secondTick(void* arg) {
 		}
 		
 		if (self->WifiScan != WF_SCAN_NO_NEED) {
-			self->load_configWifi(self->scanWifi()); 
+			self->load_configWifi(self->scanWifi());
 			ledMacrosWifiScan();
 		}
 		if (self->wifiStatus == FS_STAT_CONNECTED && (CONNECTION_LED >= 0) ) {  flashLEDOnConnected(); }
@@ -262,11 +274,25 @@ int CORE_CLASS_WIFI::scanWifi() {
 	int nets = WiFi.scanComplete();
 	if (nets == WIFI_SCAN_FAILED) {	WiFi.scanNetworks(true);	}
 	if (nets > 0) {
+		// Ищем SSID в порядке приоритета (сначала слот 3, потом 2, 1, 0)
+		// Пропускаем SSID, у которых превышен лимит неудачных попыток
 		for (int i = 0; i < nets; ++i) {
-			if (strcmp( _strWifi3,  WiFi.SSID(i).c_str()) == 0){ _scanNum = 3; }
-			if (strcmp( _strWifi2,  WiFi.SSID(i).c_str()) == 0){ _scanNum = 2; }
-			if (strcmp( _strWifi1,  WiFi.SSID(i).c_str()) == 0){ _scanNum = 1; }
-			if (strcmp( _strWifi0,  WiFi.SSID(i).c_str()) == 0){ _scanNum = 0; }
+			if (strcmp( _strWifi3,  WiFi.SSID(i).c_str()) == 0 && _wifiFailCount[3] < MAX_WIFI_FAIL_COUNT){ _scanNum = 3; }
+		}
+		if (_scanNum < 0) {
+			for (int i = 0; i < nets; ++i) {
+				if (strcmp( _strWifi2,  WiFi.SSID(i).c_str()) == 0 && _wifiFailCount[2] < MAX_WIFI_FAIL_COUNT){ _scanNum = 2; }
+			}
+		}
+		if (_scanNum < 0) {
+			for (int i = 0; i < nets; ++i) {
+				if (strcmp( _strWifi1,  WiFi.SSID(i).c_str()) == 0 && _wifiFailCount[1] < MAX_WIFI_FAIL_COUNT){ _scanNum = 1; }
+			}
+		}
+		if (_scanNum < 0) {
+			for (int i = 0; i < nets; ++i) {
+				if (strcmp( _strWifi0,  WiFi.SSID(i).c_str()) == 0 && _wifiFailCount[0] < MAX_WIFI_FAIL_COUNT){ _scanNum = 0; }
+			}
 		}
 		WiFi.scanDelete();
 	}
@@ -300,15 +326,17 @@ void CORE_CLASS_WIFI::configureWifi() { // set esp8266 as wifi client
 
 
 #if defined(ESP32)
-void CORE_CLASS_WIFI::onWiFiConnected()	
+void CORE_CLASS_WIFI::onWiFiConnected()
 #endif
 #if defined(ESP8266)
-void CORE_CLASS_WIFI::onWiFiConnected(WiFiEventStationModeConnected data) 
+void CORE_CLASS_WIFI::onWiFiConnected(WiFiEventStationModeConnected data)
 #endif
 {
 	DEBUGLOGWIFI("WiFi Connected: Waiting for DHCP\n\r");
 	if (CONNECTION_LED >= 0) {espLedOn(); 	}	// Turn LED on
 	wifiDisconnectedSince = 0;
+	// Сбрасываем счётчик неудачных попыток при успешном подключении
+	resetWifiFailCounters();
 
 }
 
@@ -361,10 +389,19 @@ void CORE_CLASS_WIFI::onWiFiDisconnected(WiFiEventStationModeDisconnected data) 
 	if (wifiStatus == FS_STAT_RESET) {return;}
 
 DEBUGLOGWIFI(" case STA_DISCONNECTED \r\n");
-	if(WiFi.status() != WL_CONNECTED && WiFi.status() != WL_NO_SSID_AVAIL)	  {
+#if defined(ESP8266)
+	// Используем точную причину отключения из события,
+	// чтобы не ловить ложные "wrong password" при временных сбоях
+	if (data.reason == WIFI_DISCONNECT_REASON_AUTH_FAIL ||
+		data.reason == WIFI_DISCONNECT_REASON_AUTH_EXPIRE ||
+		data.reason == WIFI_DISCONNECT_REASON_AUTH_LEAVE ||
+		data.reason == WIFI_DISCONNECT_REASON_AUTH_MAX) {
+#else
+	if(WiFi.status() != WL_CONNECTED && WiFi.status() != WL_NO_SSID_AVAIL) {
+#endif
 		wifiStatus = FS_STAT_WRONGPASSWORDS;
 		WifiScan = WF_SCAN_NO_NEED;
-		wifiSsidSetPSWDwrong(_wifiConfig.ssid);		
+		wifiSsidSetPSWDwrong(_wifiConfig.ssid);
 		WiFi.disconnect();		// anyway need it to avoid wifi logic errors
 		ledMacrosWifiDisconnect()	;
 	}
@@ -379,10 +416,18 @@ DEBUGLOGWIFI(" case STA_DISCONNECTED \r\n");
 
 void CORE_CLASS_WIFI::wifiSsidSetPSWDwrong(String _str) {
 	DEBUGLOGWIFI("wifi ssid wrong password: %s \n", _str.c_str());
-	if (strcmp( _strWifi3,  _str.c_str()) == 0)	{	memset (_strWifi3, 0, sizeof(_strWifi3)); }
-	if (strcmp( _strWifi2,  _str.c_str()) == 0)	{	memset (_strWifi2, 0, sizeof(_strWifi2)); }
-	if (strcmp( _strWifi1,  _str.c_str()) == 0)	{	memset (_strWifi1, 0, sizeof(_strWifi1)); }
-	if (strcmp( _strWifi0,  _str.c_str()) == 0)	{	memset (_strWifi0, 0, sizeof(_strWifi0)); }
+	// Вместо безвозвратного удаления SSID — инкрементируем счётчик неудач
+	if (strcmp( _strWifi3,  _str.c_str()) == 0)	{	_wifiFailCount[3]++; }
+	if (strcmp( _strWifi2,  _str.c_str()) == 0)	{	_wifiFailCount[2]++; }
+	if (strcmp( _strWifi1,  _str.c_str()) == 0)	{	_wifiFailCount[1]++; }
+	if (strcmp( _strWifi0,  _str.c_str()) == 0)	{	_wifiFailCount[0]++; }
+}
+
+void CORE_CLASS_WIFI::resetWifiFailCounters() {
+	DEBUGLOGWIFI("resetWifiFailCounters\n");
+	for (int i = 0; i < 4; i++) {
+		_wifiFailCount[i] = 0;
+	}
 }
  
 
