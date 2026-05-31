@@ -30,6 +30,8 @@
 #define CONFIG_FILE_SYS             "/config_sys.json"
 #define SECRET_FILE                 "/secret.json"
 
+#define FS_VERSION_JSON_PATH        "/_version_fs.json"
+
 
 #define JSON_CALLBACK_SIGNATURE std::function<void(AsyncWebServerRequest *request)> jsoncallback
 #define REST_CALLBACK_SIGNATURE std::function<void(AsyncWebServerRequest *request)> restcallback
@@ -44,6 +46,7 @@
 typedef struct {
     String deviceName;
     String deviceSerial;
+    String fsVersion;
     int16_t wifiScanTime;
     uint16_t wifiAPLifeTime;
 } strSysConfig;
@@ -84,9 +87,10 @@ public:
     void begin(FS* fs) ;                        // esp8266/esp32 flash file system
 #endif
 	const String getHostName();
-    void serialShowAbout();
-    String getResetReason() ;
-    strSysConfig    _sysConfig; // SYS configuration
+	   void serialShowAbout();
+	   String getResetReason() ;
+	   String getFsVersionStr();
+	   strSysConfig    _sysConfig; // SYS configuration
 
 private:
 	JSON_CALLBACK_SIGNATURE;

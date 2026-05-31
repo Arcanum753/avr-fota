@@ -45,9 +45,24 @@ void loop() {
     esp_task_wdt_reset();
 #endif
 #if defined(ESP8266)
-    ESP.wdtFeed(); 
+    // yield() обрабатывает AsyncTCP колбэки и сбрасывает watchdog
+    // БЕЗ yield() ESPAsyncWebServer не может корректно обрабатывать
+    // входящие HTTP-соединения, что приводит к Panic __yield
+    // при рекурсивном вызове yield() внутри beginResponse()
+    yield();
 #endif
+    // Сбрасываем watchdog перед выполнением задач EERTOS
+    // TaskManager может выполнять длительные операции (SPIFFS, WiFi)
     TaskManager();
+    
+    // Сбрасываем watchdog после TaskManager
+#if defined(ESP32)
+    esp_task_wdt_reset();
+#endif
+#if defined(ESP8266)
+    ESP.wdtFeed();
+#endif
+    
     loop_user();
     TerminalLoop();
     modOtaClass.loopHandler();

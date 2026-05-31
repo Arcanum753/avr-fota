@@ -25,6 +25,10 @@ Please Wait....Configuring Wifi.
 
 #define AP_ENABLE_TIMEOUT 60 // (Seconds, max 255) If the device can not connect to WiFi it will switch to AP mode after this time. -1 to disable
 
+// Максимальное количество неудачных попыток подключения к одному SSID
+// после которого SSID временно пропускается
+#define MAX_WIFI_FAIL_COUNT 3
+
 
 
 #define WIFI_CONFIG_FILE0           "/config_wifi0.json"
@@ -106,6 +110,7 @@ class  CORE_CLASS_WIFI    {
     enWifiScan WifiScan;
     uint8_t connectionTimout;
     bool _secondFlag;
+    uint8_t             _wifiFailCount[4] = {0, 0, 0, 0}; // Счётчики неудачных попыток для каждого SSID
     
     static void s_secondTick(void* arg);
     void webInit();
@@ -119,10 +124,12 @@ class  CORE_CLASS_WIFI    {
     void configureWifi();
     
     void wifiSsidSetPSWDwrong(String _str) ;
+    void resetWifiFailCounters(); // Сброс всех счётчиков неудачных попыток
     void send_network_configuration_values_html(AsyncWebServerRequest *request, int _index);
     void send_info_values_html(AsyncWebServerRequest *request);
     void send_network_configuration_html(AsyncWebServerRequest *request);
     void send_scanwifi(AsyncWebServerRequest *request) ;
+    void send_scanwifi_trigger(AsyncWebServerRequest *request);
     String buildNetworksJson() ;
     #if ESP32
     void onWiFiConnected        ();

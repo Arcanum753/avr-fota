@@ -33,6 +33,12 @@
 #include "module_udp/module_udp.h"
 #endif
 
+#if (MODULE_OTACLIENT == 1)
+#include "module_otaclient/module_otaclient.h"
+#endif
+
+
+
 
 #include "debug.h"
 
@@ -107,18 +113,23 @@ AsyncFSWebServer::AsyncFSWebServer(uint16_t port) : AsyncWebServer(port) {}
 	ModClassGpio.setFs(&SPIFFS);
 	ModClassGpio.webInit();
 #endif
+
+#if (MODULE_OTACLIENT == 1)
+	otaClient.begin();
+	otaClient.webInit();
+#endif
 	
-	#ifdef PROGTYPE_SWD
-		progSwd.setFs(&SPIFFS);
-		progSwd.begin();
-		progSwd.web_Init();
-	#endif
-	
-	#ifdef PROGTYPE_ISP
-		progIsp.setFs(&SPIFFS);
-		progIsp.begin();
-		progIsp.web_Init();
-	#endif
+#ifdef PROGTYPE_SWD
+	progSwd.setFs(&SPIFFS);
+	progSwd.begin();
+	progSwd.web_Init();
+#endif
+
+#ifdef PROGTYPE_ISP
+	progIsp.setFs(&SPIFFS);
+	progIsp.begin();
+	progIsp.web_Init();
+#endif
 }
 
 bool AsyncFSWebServer::loadHTTPAuth() {
@@ -260,16 +271,21 @@ bool AsyncFSWebServer::saveHTTPAuth() {
 bool AsyncFSWebServer:: handleFileRead(String path, AsyncWebServerRequest *request) {
 	DEBUGEDIT("handleFileRead: %s\r\n", path.c_str());
 	// CANNOT RUN DELAY() INSIDE CALLBACK
-	// if (CONNECTION_LED >= 0) {	flashLED(CONNECTION_LED, 1, 30); 	}	// Show activity on LED 
+	// if (CONNECTION_LED >= 0) {	flashLED(CONNECTION_LED, 1, 30); 	}	// Show activity on LED
 	if (path.endsWith("/")) {	path += HTML_INDEX;	}
 	String contentType = getContentType(path, request);
 	String pathWithGz = path + ".gz";
 	if (_fs->exists(pathWithGz) || _fs->exists(path)) {
 		if (_fs->exists(pathWithGz)) { path += ".gz"; }
 		DEBUGEDIT("Content type: %s\r\n", contentType.c_str());
+		// Используем штатную асинхронную отправку файлов.
+		// Проблема рекурсивного yield() решена добавлением yield() в loop() main.cpp
+
+#if defined(ESP8266)
+    	ESP.wdtFeed();
+#endif
 		AsyncWebServerResponse *response = request->beginResponse(*_fs, path, contentType);
 		if (path.endsWith(".gz")) {response->addHeader("Content-Encoding", "gzip");}
-		//File file = SPIFFS.open(path, "r");
 		DEBUGEDIT("File %s exist\r\n", path.c_str());
 		request->send(response);
 		DEBUGEDIT("File %s Sent\r\n", path.c_str());
@@ -426,11 +442,15 @@ void AsyncFSWebServer::serverInit() {
 	onNotFound([this](AsyncWebServerRequest *request) {
 		DEBUGLOGFH("Not found: %s\r\n", request->url().c_str());
 		if (!this->checkAuth(request)) {	return request->requestAuthentication(); };
-		AsyncWebServerResponse *response = request->beginResponse(200);
-		response->addHeader("Connection", "close");
-		response->addHeader("Access-Control-Allow-Origin", "*");
-		if (!this->handleFileRead(request->url(), request)) {	request->send(404, "text/plain", "FileNotFound");	} //TODO 404.html
-		delete response; // Free up memory!
+		// Не создаём response заранее — handleFileRead сам отправит ответ
+		// или мы отправим 404. AsyncWebServer сам управляет памятью response после send().
+		if (!this->handleFileRead(request->url(), request)) {
+			AsyncWebServerResponse *response = request->beginResponse(404, "text/plain", "FileNotFound");
+			response->addHeader("Connection", "close");
+			response->addHeader("Access-Control-Allow-Origin", "*");
+			request->send(response);
+			// НЕ удаляем response — AsyncWebServer сам освободит память после отправки
+		}
 	});
 
 	_evs.onConnect([](AsyncEventSourceClient* client) {
@@ -528,7 +548,7 @@ void AsyncFSWebServer::serialShowAbout() {
 	Serial.printf("Project env: %s\n\r ", BUILD_ENV);	
 	Serial.printf("git branch: %s\n\r ", GIT_BRANCH);	
 	Serial.printf("ver date: %s\n\r ", BUILD_TIME);	
-	Serial.printf("ver build: %s\n\r ", String (VERSION_BUILD));	
+	Serial.printf("ver build: %s\n\r ", String(VERSION_BUILD).c_str());
 	
 	Serial.printf("Device serial number: %s\n\r ", _sysConfig.deviceSerial.c_str());	
 	#if defined(ESP32)
@@ -564,11 +584,11 @@ void AsyncFSWebServer::html_version_info(AsyncWebServerRequest *request) { // an
 	values += "deviceserial|" 	+ _sysConfig.deviceSerial 		+ "|div\n";
 	values += "versionapp|" 	+ String(FIRMWARE_VERSION) + "|div\n";
 	values += "versionweb|" 	+ String(VERSION_WEB) + "|div\n";
+	values += "versionfs|" 		+ getFsVersionStr() + "|div\n";
 	
 	values += "gitbranch|" ;values += GIT_BRANCH ;values += "|div\n";
 	values += "gitcommit|" ;values += GIT_COMMIT ;values += "|div\n";
 	values += "buildenv|" ;values += BUILD_ENV ;values += "|div\n";
-	values += "versiondatetime|" ;values += BUILD_TIME ;values += "|div\n";
 	
 	request->send(200, "text/plain", values);
 }
@@ -576,6 +596,42 @@ void AsyncFSWebServer::html_version_info(AsyncWebServerRequest *request) { // an
 
 
 const String AsyncFSWebServer::getHostName() { return _sysConfig.deviceName+"_"+_sysConfig.deviceSerial; }
+
+String AsyncFSWebServer::getFsVersionStr() {
+    if (_sysConfig.fsVersion != "") { return _sysConfig.fsVersion; }
+    
+    if (!_fs) {
+        DEBUGLOG("getFsVersionStr: FS not mounted\n");
+        return "";
+    }
+    
+    File jsonFile = _fs->open(FS_VERSION_JSON_PATH, "r");
+    if (!jsonFile) {
+        DEBUGLOG("getFsVersionStr: %s not found\n", FS_VERSION_JSON_PATH);
+        return "";
+    }
+    
+    String jsonStr;
+    while (jsonFile.available()) { jsonStr += (char)jsonFile.read(); }
+    jsonFile.close();
+    
+    JsonDocument jsonDoc;
+    DeserializationError error = deserializeJson(jsonDoc, jsonStr);
+    if (error) {
+        DEBUGLOG("getFsVersionStr: JSON parse error: %s\n", error.c_str());
+        return "";
+    }
+    
+    const char* fullString = jsonDoc["filesystem"]["version"]["full_string"];
+    if (fullString) {
+        _sysConfig.fsVersion = String(fullString);
+        DEBUGLOG("getFsVersionStr: FS version = %s\n", _sysConfig.fsVersion.c_str());
+        return _sysConfig.fsVersion;
+    }
+    
+    DEBUGLOG("getFsVersionStr: filesystem.version.full_string not found in JSON\n");
+    return "";
+}
 
 bool AsyncFSWebServer::load_config_Sys() {
 	JsonDocument jsonDoc;

@@ -88,6 +88,25 @@ void SetTask(TPTR TS) {
 }
 
 /**
+ * @brief Put the task to the queue from ISR context.
+ * Uses ISR-safe critical section on ESP32.
+ * Quit silently in case of no free slot
+ *
+ * @param TS Pointer to the task function
+ */
+void SetTaskFromISR(TPTR TS) {
+    EERTOS_ENTER_CRITICAL_ISR();
+    for (uint32_t index = 0; index < TaskQueueSize; index++) {
+        if (TaskQueue[index] == Idle_task) {
+            TaskQueue[index] = TS;
+            EERTOS_EXIT_CRITICAL_ISR();
+            return;
+        }
+    }
+    EERTOS_EXIT_CRITICAL_ISR();
+}
+
+/**
  * @brief Set the Timer Task object
  * Checks Timers queue to find desired task function pointer
  * Updates timer if pointer exists
@@ -183,18 +202,18 @@ void IRAM_ATTR TimerService(void) {
 
         /* Decrease timer and push task to the queue on zero */
         if (--MainTimer[index].Time == 0) {
-            // В прерывании используем ISR-версию
+            // В прерывании используем ISR-версию критической секции
             EERTOS_ENTER_CRITICAL_ISR();
             
             TPTR taskToRun = MainTimer[index].GoToTask;
             MainTimer[index].GoToTask = Idle_task;
             
-            // SetTask сама возьмет критическую секцию, поэтому выходим из ISR-секции
+            // Выходим из ISR-критической секции
             EERTOS_EXIT_CRITICAL_ISR();
             
-            // SetTask использует обычную критическую секцию (не ISR версию)
-            // Это безопасно, потому что мы уже вышли из ISR-контекста
-            SetTask(taskToRun);
+            // Используем ISR-безопасную версию SetTask
+            // Это гарантирует корректную работу на ESP32 с spinlock
+            SetTaskFromISR(taskToRun);
         }
     }
 }

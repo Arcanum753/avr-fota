@@ -16,7 +16,7 @@
 
 
 
-#include "core_ntp/module_ntp.h"
+#include "core_ntp/core_ntp.h"
 
 
 
@@ -358,7 +358,7 @@ String Class_ProgSwd::getCommitDateStr(){
     return String(MODULE_PROG_SWD_COMMIT_DATE_STR);
 }
 
-void UDPBROADCAST_CLASS::html_ver_get(AsyncWebServerRequest *request) {
+void Class_ProgSwd::html_ver_get(AsyncWebServerRequest *request) {
     DEBUGLOGSWD("%s\n\r", __FUNCTION__);
     String values = "";
     values += "swdversion|"     + getVersionStr()    + "|dev\n";
