@@ -280,7 +280,10 @@ bool AsyncFSWebServer:: handleFileRead(String path, AsyncWebServerRequest *reque
 		DEBUGEDIT("Content type: %s\r\n", contentType.c_str());
 		// Используем штатную асинхронную отправку файлов.
 		// Проблема рекурсивного yield() решена добавлением yield() в loop() main.cpp
-		ESP.wdtFeed();
+
+#if defined(ESP8266)
+    	ESP.wdtFeed();
+#endif
 		AsyncWebServerResponse *response = request->beginResponse(*_fs, path, contentType);
 		if (path.endsWith(".gz")) {response->addHeader("Content-Encoding", "gzip");}
 		DEBUGEDIT("File %s exist\r\n", path.c_str());

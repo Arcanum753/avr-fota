@@ -58,7 +58,8 @@ void loop() {
     // Сбрасываем watchdog после TaskManager
 #if defined(ESP32)
     esp_task_wdt_reset();
-#elif defined(ESP8266)
+#endif
+#if defined(ESP8266)
     ESP.wdtFeed();
 #endif
     
