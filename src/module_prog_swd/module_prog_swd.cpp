@@ -3,11 +3,12 @@
 #include <Arduino.h>
 #include <ArduinoJson.h>
 
-#ifdef ESP32
+#if defined(ESP32)
 #include <esp_task_wdt.h>
 #include <esp32-hal-gpio.h>
 #include <SPIFFS.h>
-#elif defined(ESP8266)
+#endif
+#if defined(ESP8266)
 #include <FS.h>
 #endif
 
@@ -31,9 +32,10 @@
 Class_ProgSwd progSwd(0);
 Class_ProgSwd::Class_ProgSwd(uint8_t in): _in(in){ }
 
-#if ESP32
+#if defined(ESP32)
     void Class_ProgSwd::setFs(fs::SPIFFSFS* fs)
-#elif defined(ESP8266)
+#endif
+#if defined(ESP8266)
     void Class_ProgSwd::setFs(FS* fs)                         // esp8266/esp32 flash file system
 #endif
 {	_fs = fs;	}
@@ -43,6 +45,8 @@ bool Class_ProgSwd::begin (){
     cfg_SetDefault();
     if (cfg_FileLoad() == false) {	cfg_FileSave();	}
 	swdprog.stm32Fx_begin();
+	// прокидываем указатель на файловую систему в класс программатора
+	swdprog.setFs(_fs);
 	//TODO return init result
     return true;
 }
@@ -142,10 +146,11 @@ bool Class_ProgSwd::web_GetDiskInfoExe(String &_str)	{
 	String values 	= 	"";
 	size_t sizeAll	=	0;
 	size_t sizeUsed	=	0;
-	#if ESP32
+	#if defined(ESP32)
 	 sizeAll	=	_fs->totalBytes();
 	 sizeUsed	=	_fs->usedBytes();
-	#elif defined(ESP8266)
+	#endif
+	#if defined(ESP8266)
 	// FIXME
 	#endif
 
@@ -233,6 +238,12 @@ bool Class_ProgSwd::web_GetFilesListExe(String &_str)	{
 int  Class_ProgSwd::prog_Programm(String _path, String _fwTime)	{
 	DEBUGLOGSWD(__PRETTY_FUNCTION__);    DEBUGLOGSWD("\r\n");
 	DEBUGLOGSWD(" file %s time %s \r\n", _path.c_str(), _fwTime.c_str());
+
+	// проверка на инициализированность файловой системы
+	if (!_fs) { return ERR_CFG; }
+	// проверка наличия файла прошивки
+	if (!_fs->exists(_path)) { return ERR_NOFILE; }
+
 	int _res = ERR_OPENFILE;
 
 	_res  = swdprog.stm32_ChipProgrammMain(_path );
@@ -336,7 +347,19 @@ void Class_ProgSwd::web_FileUpload2Chip(AsyncWebServerRequest *request) {
 #if defined(MODULE_NTP)
 	ntpStr = NTP.getTimeDateString();
 #endif
+	// Переключаем ESP8266 в AP режим на время прошивки STM32,
+	// чтобы WiFi стек не разрушался при отключённом watchdog
+	#if defined(ESP8266)
+		WiFi.mode(WIFI_AP);
+	#endif
+
 	progSwd.prog_Programm(path, ntpStr );
+
+	// После прошивки переключаемся обратно в STA и переподключаемся к роутеру
+	#if defined(ESP8266)
+		WiFi.mode(WIFI_STA);
+		WiFi.reconnect();
+	#endif
 
 	//здесь уже выход из программирования
 }
