@@ -261,8 +261,9 @@
                 return;
             }
             
+            var file = input.files[0];
+
             var fileReader = new FileReader(),
-                file = input.files[0],
                 time;
             
             fileReader.onload = function (e) {

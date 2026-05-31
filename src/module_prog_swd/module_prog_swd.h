@@ -24,7 +24,13 @@
 #define JSON_STR_LEN			512
 #define JSON_FILESIZEMAX		1024
 
-
+// Maximum filename length for upload (30 chars + null terminator = 31 bytes).
+// SPIFFS on ESP8266/ESP32 has a 32-byte limit for filenames (including path separator '/' and null terminator).
+// We use 30 to leave room for the '/' prefix added by the server.
+// Максимальная длина имени файла для загрузки (30 символов + нуль-терминатор = 31 байт).
+// SPIFFS на ESP8266/ESP32 имеет ограничение 32 байта на имя файла (включая разделитель '/' и нуль-терминатор).
+// Используем 30, чтобы оставить место для префикса '/', добавляемого сервером.
+#define MAX_FILENAME_LEN		30
 
 
 // TODO навести тут порядок с кодами ошибок
@@ -49,6 +55,8 @@ typedef enum progerr_e  {
 typedef struct {
     String project_name;	//имя проекта.
     uint32_t chip_size;		// размер чипа.
+    String last_prog_file;	// имя последнего прошитого файла
+    String last_prog_date;	// дата последней прошивки
 } CfgFile_ProgSwd_t;
 
 
@@ -56,9 +64,10 @@ class Class_ProgSwd {
 public:
 	Class_ProgSwd( uint8_t in);
     bool begin ();
-#if ESP32
+#if defined(ESP32)
     void setFs(fs::SPIFFSFS* fs);
-#elif defined(ESP8266)
+#endif
+#if defined(ESP8266)
     void setFs(FS* fs)  ;                       // esp8266/esp32 flash file system
 #endif
 private:
@@ -68,7 +77,6 @@ private:
 public:
     String _hexfileProg;
     String _hexfileCheck;
-    String _hexFileUploadStatus;
 
     // cfg
     int			cfg_FileStructGet(CfgFile_ProgSwd_t &_inStruct);
@@ -88,20 +96,23 @@ public:
     void    web_FileDelete         (AsyncWebServerRequest *request) ;
     int     web_FileUpload2FS( String filename, size_t index, uint8_t *data, size_t len, bool final);
     // programming
-    void    web_FileUpload2FS_Status(AsyncWebServerRequest *request);
     void    web_FileUpload2Chip(AsyncWebServerRequest *request) ;
+    void    web_GetProgress(AsyncWebServerRequest *request);
 
+    uint16_t fileUpadedpercent = 0;
 private:
     String getVersionStr();
     String getGeneratedTime();
     String getCommitDateStr();
     void  html_ver_get(AsyncWebServerRequest *request);
 protected:
+    uint32_t _uploadFileSize = 0;
     uint8_t _in;
     //fs + hex file
-#if ESP32
+#if defined(ESP32)
     fs::SPIFFSFS*   _fs;
-#elif defined(ESP8266)
+#endif
+#if defined(ESP8266)
     FS* _fs;    // esp8266/esp32 flash file system
 #endif
 
@@ -111,4 +122,3 @@ extern Class_ProgSwd progSwd;
 
 
 #endif //_MODULEPROGSWD_h
-

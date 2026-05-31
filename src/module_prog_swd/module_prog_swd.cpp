@@ -20,8 +20,6 @@
 #include "core_ntp/core_ntp.h"
 
 
-
-
 #include "core_json/core_json.h"
 
 #include "prog_swd.h"
@@ -67,21 +65,18 @@ void  Class_ProgSwd::web_Init()	{
 		web_GetFilesList (request);
 	});
 
-	ESPHTTPServer.on("/prog/delete", HTTP_DELETE, [this](AsyncWebServerRequest *request) {
+	ESPHTTPServer.on("/prog/delete", HTTP_GET, [this](AsyncWebServerRequest *request) {
 		if (!ESPHTTPServer.checkAuth(request)) {	return request->requestAuthentication(); };
 		web_FileDelete(request);
 	});
 
 	ESPHTTPServer.on("/prog/uploadfile", HTTP_POST, [this](AsyncWebServerRequest *request) {
 		if (!ESPHTTPServer.checkAuth(request)) {	return request->requestAuthentication(); };
-		request->send(200, "text/plain", "uploadstatus|begin|div");
+		_uploadFileSize = request->contentLength();
+		fileUpadedpercent = 0;
+		request->send(200, "text/plain", "");
 	}, [this](AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final) {
 		web_FileUpload2FS( filename, index, data, len, final);
-	});
-
-	ESPHTTPServer.on("/prog/uploadstat", [this](AsyncWebServerRequest *request) {
-		if (!ESPHTTPServer.checkAuth(request)) {	return request->requestAuthentication(); };
-		web_FileUpload2FS_Status(request);
 	});
 	ESPHTTPServer.on("/prog/flash", [this](AsyncWebServerRequest *request) {
 		if (!ESPHTTPServer.checkAuth(request)) {	return request->requestAuthentication(); };
@@ -92,6 +87,23 @@ void  Class_ProgSwd::web_Init()	{
         html_ver_get(request);
     });
 
+	// Эндпоинт прогресса прошивки STM32 (для прогресс-бара на stm32.html)
+	ESPHTTPServer.on("/prog/progress", [this](AsyncWebServerRequest *request) {
+		if (!ESPHTTPServer.checkAuth(request)) {	return request->requestAuthentication(); };
+		web_GetProgress(request);
+	});
+
+	// Эндпоинт определения платформы (esp32 / esp8266) для выбора поведения прогресс-бара на stm32.html
+	ESPHTTPServer.on("/prog/platform", [this](AsyncWebServerRequest *request) {
+		if (!ESPHTTPServer.checkAuth(request)) {	return request->requestAuthentication(); };
+		String platform = "";
+#if defined(ESP32)
+		platform = "esp32";
+#elif defined(ESP8266)
+		platform = "esp8266";
+#endif
+		request->send(200, "text/plain", platform);
+	});
 
 //stm32.html ^^^
 
@@ -119,6 +131,8 @@ void Class_ProgSwd::cfg_SetDefault() {
 	// CfgFile_ProgSwd.programmer_type	= DEFAULT_PROG_TYPE;
     CfgFile_ProgSwd.project_name  	= DEFAULT_PROG_PROJNAME;
     CfgFile_ProgSwd.chip_size      	= DEFAULT_chipsize;
+    CfgFile_ProgSwd.last_prog_file  = "";
+    CfgFile_ProgSwd.last_prog_date  = "";
 }
 
 bool Class_ProgSwd::cfg_FileLoad() {
@@ -128,6 +142,8 @@ bool Class_ProgSwd::cfg_FileLoad() {
 	// CfgFile_ProgSwd.programmer_type	= jsonDoc["type"].as<const char *>();
     CfgFile_ProgSwd.project_name		= jsonDoc["project"].as<const char *>();
     CfgFile_ProgSwd.chip_size			= jsonDoc["chipsize"].as<uint32_t>();
+    CfgFile_ProgSwd.last_prog_file		= jsonDoc["last_prog_file"].as<const char *>();
+    CfgFile_ProgSwd.last_prog_date		= jsonDoc["last_prog_date"].as<const char *>();
 	return true;
 }
 
@@ -137,6 +153,8 @@ bool Class_ProgSwd::cfg_FileSave(){
 	// jsonDoc["type"]			= CfgFile_ProgSwd.programmer_type;
     jsonDoc["project"]		= CfgFile_ProgSwd.project_name;
     jsonDoc["chipsize"]     = CfgFile_ProgSwd.chip_size;
+    jsonDoc["last_prog_file"] = CfgFile_ProgSwd.last_prog_file;
+    jsonDoc["last_prog_date"] = CfgFile_ProgSwd.last_prog_date;
 	return ModClassJson.save_jsonDoc(jsonDoc, CONFIG_PROG_JSON);
 }
 
@@ -147,11 +165,17 @@ bool Class_ProgSwd::web_GetDiskInfoExe(String &_str)	{
 	size_t sizeAll	=	0;
 	size_t sizeUsed	=	0;
 	#if defined(ESP32)
-	 sizeAll	=	_fs->totalBytes();
-	 sizeUsed	=	_fs->usedBytes();
+	 if (_fs != nullptr) {
+		 sizeAll	=	_fs->totalBytes();
+		 sizeUsed	=	_fs->usedBytes();
+	 }
 	#endif
 	#if defined(ESP8266)
-	// FIXME
+		FSInfo fs_info;
+		if (_fs && _fs->info(fs_info)) {
+			sizeAll  = fs_info.totalBytes;
+			sizeUsed = fs_info.usedBytes;
+		}
 	#endif
 
 	size_t sizeFree = 0;
@@ -178,42 +202,20 @@ bool Class_ProgSwd::web_GetFilesListExe(String &_str)	{
 
 	String json = "[";
 #if defined(ESP8266)
-    if (!_fs) { _fs->begin();  }// If SPIFFS is not started
-    Dir files = _fs->openDir("/");
-    while (files.next()) {
-        fname = files.fileName().c_str() ;
-        pos = fname.find_last_of(FILE_TYPE_COMMA);
-        ftype = fname.substr(pos + 1);
-		if ((ftype == FILE_TYPE_HEX) || (ftype == FILE_TYPE_BINARY) || (ftype == FILE_TYPE_BIN)  ) {
-			size_t fsize = files.fileSize();
-            if (i) json += ",";
-			json += "{";
-			json +=  "\"filename\":\""; 	json += fname.c_str();		json += "\"";
-			json += ",\"filetype\":\""; 	json += ftype.c_str();		json += "\"";
-			json += ",\"filesizestr\":\"";	json += formatBytes(fsize); json += "\"";
-			json += ",\"filesizebyte\":\"";	json += (String)fsize;		json += "\"";
-			json += ",\"progchip\":\"";									json += "\"";
-			json += ",\"progactual\":\"";								json += "\"";
-			json += ",\"progdate\":\"";									json += "\"";
-			json += "}";
-			i++;
-        }
-    }
-#endif
-#if defined(ESP32)
-	if (!_fs) { _fs->begin();  }// If SPIFFS is not started
-    File root =  _fs->open("/");
-    File files = root.openNextFile();
-    while (files) {
-        fname = files.name() ;
-        pos = fname.find_last_of(FILE_TYPE_COMMA);
-        ftype = fname.substr(pos + 1);
-		if (
-			//	(ftype == FILE_TYPE_HEX) || //TODO HEX file viewing when we will
-			//di hexfile to swd
-			(ftype == FILE_TYPE_BINARY) || (ftype == FILE_TYPE_BIN))
-		{
-			size_t fsize = files.size();
+	if (_fs == nullptr) { _ret = false; }
+	else {
+		Dir files = _fs->openDir("/");
+		while (files.next()) {
+			fname = files.fileName().c_str() ;
+			pos = fname.find_last_of(FILE_TYPE_COMMA);
+			ftype = fname.substr(pos + 1);
+			if ((ftype == FILE_TYPE_HEX) || (ftype == FILE_TYPE_BINARY) || (ftype == FILE_TYPE_BIN)  ) {
+				size_t fsize = files.fileSize();
+			// Определяем дату прошивки: если имя файла совпадает с last_prog_file — подставляем дату
+			String progDate = "";
+			if (strcmp(fname.c_str(), CfgFile_ProgSwd.last_prog_file.c_str()) == 0) {
+				progDate = CfgFile_ProgSwd.last_prog_date;
+			}
 			if (i) json += ",";
 			json += "{";
 			json +=  "\"filename\":\""; 	json += fname.c_str();		json += "\"";
@@ -222,12 +224,50 @@ bool Class_ProgSwd::web_GetFilesListExe(String &_str)	{
 			json += ",\"filesizebyte\":\"";	json += (String)fsize;		json += "\"";
 			json += ",\"progchip\":\"";									json += "\"";
 			json += ",\"progactual\":\"";								json += "\"";
-			json += ",\"progdate\":\"";									json += "\"";
+			json += ",\"progdate\":\"";		json += progDate;			json += "\"";
 			json += "}";
 			i++;
+			}
 		}
-		files = root.openNextFile();
-    }
+	}
+#endif
+#if defined(ESP32)
+	if (_fs == nullptr) { _ret = false; }// Если ФС не инициализирована — выходим
+	else {
+		File root =  _fs->open("/");
+		if (root) {
+			File files = root.openNextFile();
+			while (files) {
+				fname = files.name() ;
+				pos = fname.find_last_of(FILE_TYPE_COMMA);
+				ftype = fname.substr(pos + 1);
+				if (
+					//	(ftype == FILE_TYPE_HEX) || //TODO HEX file viewing when we will
+					//di hexfile to swd
+					(ftype == FILE_TYPE_BINARY) || (ftype == FILE_TYPE_BIN))
+				{
+					size_t fsize = files.size();
+					// Определяем дату прошивки: если имя файла совпадает с last_prog_file — подставляем дату
+					String progDate = "";
+					if (strcmp(fname.c_str(), CfgFile_ProgSwd.last_prog_file.c_str()) == 0) {
+						progDate = CfgFile_ProgSwd.last_prog_date;
+					}
+					if (i) json += ",";
+					json += "{";
+					json +=  "\"filename\":\""; 	json += fname.c_str();		json += "\"";
+					json += ",\"filetype\":\""; 	json += ftype.c_str();		json += "\"";
+					json += ",\"filesizestr\":\"";	json += formatBytes(fsize); json += "\"";
+					json += ",\"filesizebyte\":\"";	json += (String)fsize;		json += "\"";
+					json += ",\"progchip\":\"";									json += "\"";
+					json += ",\"progactual\":\"";								json += "\"";
+					json += ",\"progdate\":\"";		json += progDate;			json += "\"";
+					json += "}";
+					i++;
+				}
+				files = root.openNextFile();
+			}
+		}
+	}
 #endif
 
 	json += "]";
@@ -247,6 +287,14 @@ int  Class_ProgSwd::prog_Programm(String _path, String _fwTime)	{
 	int _res = ERR_OPENFILE;
 
 	_res  = swdprog.stm32_ChipProgrammMain(_path );
+
+	// Если прошивка успешна — сохраняем имя файла и дату в конфиг
+	if (_res == 0) {
+		CfgFile_ProgSwd.last_prog_file = _path;
+		CfgFile_ProgSwd.last_prog_date = _fwTime;
+		cfg_FileSave();
+		DEBUGLOGSWD("Programming success, saved prog date: %s\r\n", _fwTime.c_str());
+	}
 
 	DEBUGLOGSWD("Programming end \r\n");
 	return _res;
@@ -274,12 +322,17 @@ void Class_ProgSwd::web_GetDiskInfoExe (AsyncWebServerRequest *request) {
 }
 
 void Class_ProgSwd::web_FileDelete(AsyncWebServerRequest *request) {
+	if (_fs == nullptr) 		{	return request->send(500, "text/plain", "FS not initialized");	}
 	if (request->args() == 0) 	{	return request->send(500, "text/plain", "BAD ARGS");	}
-	String path = request->arg(0U);
+	String path = "";
+	for (uint8_t i = 0; i < request->args(); i++) {
+		if (request->argName(i) == "path") 	{ path = urldecode(request->arg(i));	continue; }
+	}
+	if (path == "")				{	return request->send(500, "text/plain", "BAD PATH");	}
+	if (path == "/")			{	return request->send(500, "text/plain", "BAD PATH");	}
+	if (!path.startsWith("/")) 	{path = "/" + path;}
 	DEBUGLOGSWD("handleFileDelete: %s\r\n", path.c_str());
-	if (path == "/")		{	return request->send(500, "text/plain", "BAD PATH");	}
-	if (!path.startsWith("/")) {path = "/" + path;}
-	if (!_fs->exists(path)) {	return request->send(404, "text/plain", "FileNotFound");	}
+	if (!_fs->exists(path)) 	{	return request->send(404, "text/plain", "FileNotFound");	}
 	_fs->remove(path);
 	request->send(200, "text/plain", "");
 }
@@ -288,12 +341,20 @@ void Class_ProgSwd::web_FileDelete(AsyncWebServerRequest *request) {
 int Class_ProgSwd::web_FileUpload2FS( String filename, size_t index, uint8_t *data, size_t len, bool final) {
 	DEBUGLOGSWD(__PRETTY_FUNCTION__);	DEBUGLOGSWD("\r\n");
 	int  _ret= 0;
-	_hexFileUploadStatus = "";
 	static File fsUploadFile;
-	static size_t fileSize = 0;
+	static size_t totalSize = 0;
 	// Start
 	if (!index) {
+		totalSize = 0;
+		fileUpadedpercent = 0;
 		DEBUGLOGSWD("Name: %s\r\n", filename.c_str());
+
+		// Проверка длины имени файла (SPIFFS ограничение 32 байта)
+		if (filename.length() > MAX_FILENAME_LEN) {
+			DEBUGLOGSWD("ERROR: filename too long (%u > %u): %s\r\n", filename.length(), MAX_FILENAME_LEN, filename.c_str());
+			return -1;
+		}
+
 		if (!filename.startsWith("/")) {filename = "/" + filename;}
 		fsUploadFile = _fs->open(filename, "w");
 		DEBUGLOGSWD("First upload part.\r\n");
@@ -301,34 +362,27 @@ int Class_ProgSwd::web_FileUpload2FS( String filename, size_t index, uint8_t *da
 	// Continue
 	if (fsUploadFile) {
 		DEBUGLOGSWD("Continue upload part. Size = %u\r\n", len);
-		if (fsUploadFile.write(data, len) != len) {
-			_hexFileUploadStatus  += "uploadstatus|error|div\n";
-			_hexFileUploadStatus  += "file|"	  + _hexfileCheck		+"|div\n";
-			_hexFileUploadStatus  += "fileSize|" + (String)fileSize 	+"|div\n";
+		if (fsUploadFile.write(data, len) == len) {
+			totalSize += len;
+			if (_uploadFileSize > 0) {
+				fileUpadedpercent = (uint16_t)((totalSize * 100) / _uploadFileSize);
+			}
 		}
-		else {	fileSize += len;	}
 	}
 	// End
 	if (final) {
 		if (fsUploadFile) {	fsUploadFile.close();	}
-		_ret = fileSize;
-		DEBUGLOGSWD("HexFileUpload final Size: %u\n", fileSize);
+		_ret = totalSize;
+		fileUpadedpercent = 100;
+		DEBUGLOGSWD("HexFileUpload final Size: %u\n", totalSize);
 		_hexfileCheck = filename;
-		_hexFileUploadStatus  += "status|ok|div\n";
-		_hexFileUploadStatus  += "file|"	  + _hexfileCheck		+"|div\n";
-		_hexFileUploadStatus  += "fileSize|" + (String)fileSize 	+"|div\n";
-		fileSize = 0;
+		totalSize = 0;
 	}
 	return _ret;
 }
 
-
-void Class_ProgSwd::web_FileUpload2FS_Status(AsyncWebServerRequest *request) {
-	DEBUGLOGSWD(__FUNCTION__);	DEBUGLOGSWD("\r\n");
-	request->send(200, "text/plain", _hexFileUploadStatus);
-}
-
 void Class_ProgSwd::web_FileUpload2Chip(AsyncWebServerRequest *request) {
+	if (_fs == nullptr) 		{	return request->send(500, "text/plain", "FS not initialized");	}
 	if (request->args() == 0) 	{	return request->send(500, "text/plain", "BAD ARGS");	}
 	String path = "";
 	for (uint8_t i = 0; i < request->args(); i++) {
@@ -339,47 +393,44 @@ void Class_ProgSwd::web_FileUpload2Chip(AsyncWebServerRequest *request) {
 	if (!path.startsWith("/")) 		{path = "/" + path;}
 	if (!_fs->exists(path)) 		{	return request->send(404, "text/plain", "FileNotFound");	}
 
-	DEBUGLOGSWD("\t upload status: %s\r\n", path.c_str());
-	request->send(200, "text/plain", "");
-
-	String ntpStr = "";
-
-#if defined(MODULE_NTP)
-	ntpStr = NTP.getTimeDateString();
-#endif
+	
 	// Переключаем ESP8266 в AP режим на время прошивки STM32,
 	// чтобы WiFi стек не разрушался при отключённом watchdog
 	#if defined(ESP8266)
-		WiFi.mode(WIFI_AP);
+	WiFi.mode(WIFI_AP);
 	#endif
-
-	progSwd.prog_Programm(path, ntpStr );
-
+	
+	
 	// После прошивки переключаемся обратно в STA и переподключаемся к роутеру
 	#if defined(ESP8266)
-		WiFi.mode(WIFI_STA);
-		WiFi.reconnect();
+	WiFi.mode(WIFI_STA);
+	WiFi.reconnect();
 	#endif
-
+	
+	String ntpStr = "";
+	ntpStr = NTP.getTimeDateString();
+	progSwd.prog_Programm(path, ntpStr );
 	//здесь уже выход из программирования
+	
+	DEBUGLOGSWD("\t upload status: %s\r\n", path.c_str());
+	request->send(200, "text/plain", "");
 }
 
 // stm32.html ^^^
 
-
-
-
-String Class_ProgSwd::getVersionStr(){
-    return String(MODULE_PROG_SWD_VERSION);
+// Эндпоинт прогресса — возвращает "percent|X|div\n" для JS polling
+// Используется как для upload файла, так и для прошивки STM32
+void Class_ProgSwd::web_GetProgress(AsyncWebServerRequest *request) {
+	String values = "";
+	values += "percent|" + (String)fileUpadedpercent + "|div\n";
+	request->send(200, "text/plain", values);
 }
 
-String Class_ProgSwd::getGeneratedTime(){
-    return String(MODULE_PROG_SWD_GENERATED_TIME);
-}
 
-String Class_ProgSwd::getCommitDateStr(){
-    return String(MODULE_PROG_SWD_COMMIT_DATE_STR);
-}
+
+String Class_ProgSwd::getVersionStr(){ return String(MODULE_PROG_SWD_VERSION); }
+String Class_ProgSwd::getGeneratedTime(){ return String(MODULE_PROG_SWD_GENERATED_TIME); }
+String Class_ProgSwd::getCommitDateStr(){ return String(MODULE_PROG_SWD_COMMIT_DATE_STR);	}
 
 void Class_ProgSwd::html_ver_get(AsyncWebServerRequest *request) {
     DEBUGLOGSWD("%s\n\r", __FUNCTION__);
