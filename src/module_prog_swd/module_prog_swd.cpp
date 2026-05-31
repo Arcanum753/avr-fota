@@ -72,11 +72,14 @@ void  Class_ProgSwd::web_Init()	{
 
 	ESPHTTPServer.on("/prog/uploadfile", HTTP_POST, [this](AsyncWebServerRequest *request) {
 		if (!ESPHTTPServer.checkAuth(request)) {	return request->requestAuthentication(); };
-		_uploadFileSize = request->contentLength();
-		fileUpadedpercent = 0;
-		request->send(200, "text/plain", "");
+		request->send(200, "text/plain", "uploadstatus|begin|div");
 	}, [this](AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final) {
 		web_FileUpload2FS( filename, index, data, len, final);
+	});
+
+	ESPHTTPServer.on("/prog/uploadstat", [this](AsyncWebServerRequest *request) {
+		if (!ESPHTTPServer.checkAuth(request)) {	return request->requestAuthentication(); };
+		web_FileUpload2FS_Status(request);
 	});
 	ESPHTTPServer.on("/prog/flash", [this](AsyncWebServerRequest *request) {
 		if (!ESPHTTPServer.checkAuth(request)) {	return request->requestAuthentication(); };
@@ -86,24 +89,6 @@ void  Class_ProgSwd::web_Init()	{
 	ESPHTTPServer.on("/prog/ver", [this](AsyncWebServerRequest *request) {
         html_ver_get(request);
     });
-
-	// Эндпоинт прогресса прошивки STM32 (для прогресс-бара на stm32.html)
-	ESPHTTPServer.on("/prog/progress", [this](AsyncWebServerRequest *request) {
-		if (!ESPHTTPServer.checkAuth(request)) {	return request->requestAuthentication(); };
-		web_GetProgress(request);
-	});
-
-	// Эндпоинт определения платформы (esp32 / esp8266) для выбора поведения прогресс-бара на stm32.html
-	ESPHTTPServer.on("/prog/platform", [this](AsyncWebServerRequest *request) {
-		if (!ESPHTTPServer.checkAuth(request)) {	return request->requestAuthentication(); };
-		String platform = "";
-#if defined(ESP32)
-		platform = "esp32";
-#elif defined(ESP8266)
-		platform = "esp8266";
-#endif
-		request->send(200, "text/plain", platform);
-	});
 
 //stm32.html ^^^
 
@@ -341,12 +326,12 @@ void Class_ProgSwd::web_FileDelete(AsyncWebServerRequest *request) {
 int Class_ProgSwd::web_FileUpload2FS( String filename, size_t index, uint8_t *data, size_t len, bool final) {
 	DEBUGLOGSWD(__PRETTY_FUNCTION__);	DEBUGLOGSWD("\r\n");
 	int  _ret= 0;
+	_hexFileUploadStatus = "";
 	static File fsUploadFile;
-	static size_t totalSize = 0;
+	static size_t fileSize = 0;
 	// Start
 	if (!index) {
-		totalSize = 0;
-		fileUpadedpercent = 0;
+		fileSize = 0;
 		DEBUGLOGSWD("Name: %s\r\n", filename.c_str());
 
 		// Проверка длины имени файла (SPIFFS ограничение 32 байта)
@@ -362,26 +347,35 @@ int Class_ProgSwd::web_FileUpload2FS( String filename, size_t index, uint8_t *da
 	// Continue
 	if (fsUploadFile) {
 		DEBUGLOGSWD("Continue upload part. Size = %u\r\n", len);
-		if (fsUploadFile.write(data, len) == len) {
-			totalSize += len;
-			if (_uploadFileSize > 0) {
-				fileUpadedpercent = (uint16_t)((totalSize * 100) / _uploadFileSize);
-			}
+		if (fsUploadFile.write(data, len) != len) {
+			_hexFileUploadStatus  += "uploadstatus|error|div\n";
+			_hexFileUploadStatus  += "file|"	  + _hexfileCheck		+"|div\n";
+			_hexFileUploadStatus  += "fileSize|" + (String)fileSize 	+"|div\n";
 		}
+		else {	fileSize += len;	}
 	}
 	// End
 	if (final) {
 		if (fsUploadFile) {	fsUploadFile.close();	}
-		_ret = totalSize;
-		fileUpadedpercent = 100;
-		DEBUGLOGSWD("HexFileUpload final Size: %u\n", totalSize);
+		_ret = fileSize;
+		DEBUGLOGSWD("HexFileUpload final Size: %u\n", fileSize);
 		_hexfileCheck = filename;
-		totalSize = 0;
+		_hexFileUploadStatus  += "status|ok|div\n";
+		_hexFileUploadStatus  += "file|"	  + _hexfileCheck		+"|div\n";
+		_hexFileUploadStatus  += "fileSize|" + (String)fileSize 	+"|div\n";
+		fileSize = 0;
 	}
 	return _ret;
 }
 
+
+void Class_ProgSwd::web_FileUpload2FS_Status(AsyncWebServerRequest *request) {
+	DEBUGLOGSWD(__FUNCTION__);	DEBUGLOGSWD("\r\n");
+	request->send(200, "text/plain", _hexFileUploadStatus);
+}
+
 void Class_ProgSwd::web_FileUpload2Chip(AsyncWebServerRequest *request) {
+
 	if (_fs == nullptr) 		{	return request->send(500, "text/plain", "FS not initialized");	}
 	if (request->args() == 0) 	{	return request->send(500, "text/plain", "BAD ARGS");	}
 	String path = "";
@@ -393,40 +387,32 @@ void Class_ProgSwd::web_FileUpload2Chip(AsyncWebServerRequest *request) {
 	if (!path.startsWith("/")) 		{path = "/" + path;}
 	if (!_fs->exists(path)) 		{	return request->send(404, "text/plain", "FileNotFound");	}
 
-	
+	DEBUGLOGSWD("\t upload status: %s\r\n", path.c_str());
+	request->send(200, "text/plain", "");
+
+	String ntpStr = "";
+
+#if defined(MODULE_NTP)
+	ntpStr = NTP.getTimeDateString();
+#endif
 	// Переключаем ESP8266 в AP режим на время прошивки STM32,
 	// чтобы WiFi стек не разрушался при отключённом watchdog
 	#if defined(ESP8266)
-	WiFi.mode(WIFI_AP);
+		WiFi.mode(WIFI_AP);
 	#endif
-	
-	
+
+	progSwd.prog_Programm(path, ntpStr );
+
 	// После прошивки переключаемся обратно в STA и переподключаемся к роутеру
 	#if defined(ESP8266)
-	WiFi.mode(WIFI_STA);
-	WiFi.reconnect();
+		WiFi.mode(WIFI_STA);
+		WiFi.reconnect();
 	#endif
-	
-	String ntpStr = "";
-	ntpStr = NTP.getTimeDateString();
-	progSwd.prog_Programm(path, ntpStr );
+
 	//здесь уже выход из программирования
-	
-	DEBUGLOGSWD("\t upload status: %s\r\n", path.c_str());
-	request->send(200, "text/plain", "");
 }
 
 // stm32.html ^^^
-
-// Эндпоинт прогресса — возвращает "percent|X|div\n" для JS polling
-// Используется как для upload файла, так и для прошивки STM32
-void Class_ProgSwd::web_GetProgress(AsyncWebServerRequest *request) {
-	String values = "";
-	values += "percent|" + (String)fileUpadedpercent + "|div\n";
-	request->send(200, "text/plain", values);
-}
-
-
 
 String Class_ProgSwd::getVersionStr(){ return String(MODULE_PROG_SWD_VERSION); }
 String Class_ProgSwd::getGeneratedTime(){ return String(MODULE_PROG_SWD_GENERATED_TIME); }

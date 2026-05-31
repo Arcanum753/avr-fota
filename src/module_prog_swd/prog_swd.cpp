@@ -36,9 +36,6 @@ ESP_PROGSWD::ESP_PROGSWD(){}
 int ESP_PROGSWD::stm32_ChipProgrammMain( String &path)  {
   DEBUGLOGSWD(__PRETTY_FUNCTION__);    DEBUGLOGSWD("\r\n");
   
-  // Сбрасываем процент прогресса перед началом прошивки
-  progSwd.fileUpadedpercent = 0;
-  
   // TODO пркрутить тип f1xx f4xx
 	stm32Fx_abort_all();
 	stm32Fx_halt();
@@ -220,11 +217,9 @@ uint8_t ESP_PROGSWD::stm32_flash_file(uint32_t offset, String &path) {
 		file.read(buffer, (size_t)cur_len);
 		stm32fX_write_bank(addr, buffer, cur_len);
 		addr += cur_len;
-		progSwd.fileUpadedpercent = (uint16_t)(((float)posi / (float)file_size) * 100);
-		DEBUGLOGSWD("%i percents \r\n", progSwd.fileUpadedpercent);
+		DEBUGLOGSWD("%i percents \r\n", (uint16_t)(((float)posi / (float)file_size) * 100));
     #if defined(ESP32)
 		  esp_task_wdt_reset();
-      delay(1); // Даём возможность AsyncWebServer обработать polling запросы
     #endif
 	}
     file.close();

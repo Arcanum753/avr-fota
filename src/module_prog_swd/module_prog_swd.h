@@ -77,6 +77,7 @@ private:
 public:
     String _hexfileProg;
     String _hexfileCheck;
+    String _hexFileUploadStatus;
 
     // cfg
     int			cfg_FileStructGet(CfgFile_ProgSwd_t &_inStruct);
@@ -95,18 +96,16 @@ public:
     void    web_GetDiskInfoExe  (AsyncWebServerRequest *request);
     void    web_FileDelete         (AsyncWebServerRequest *request) ;
     int     web_FileUpload2FS( String filename, size_t index, uint8_t *data, size_t len, bool final);
+    void    web_FileUpload2FS_Status(AsyncWebServerRequest *request);
     // programming
     void    web_FileUpload2Chip(AsyncWebServerRequest *request) ;
-    void    web_GetProgress(AsyncWebServerRequest *request);
 
-    uint16_t fileUpadedpercent = 0;
 private:
     String getVersionStr();
     String getGeneratedTime();
     String getCommitDateStr();
     void  html_ver_get(AsyncWebServerRequest *request);
 protected:
-    uint32_t _uploadFileSize = 0;
     uint8_t _in;
     //fs + hex file
 #if defined(ESP32)

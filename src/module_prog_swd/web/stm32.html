@@ -12,30 +12,6 @@
     <h2 class="title" style="background: #7D8EE2; padding: 8px;"> STM32 SWD Programmer</h2>
     <hr>
 
-    <!-- Прогресс-бар (скрыт по умолчанию, для upload) -->
-    <div id="progressContainer" style="text-align: center; margin: 10px 0; padding: 10px; background-color: #f0f0f0; border-radius: 5px; display: none;">
-        <div id="progressText">Programming progress: 0%</div>
-        <div style="width: 100%; background-color: #ddd; border-radius: 3px; margin-top: 5px;">
-            <div id="progressBar" style="width: 0%; height: 20px; background-color: #4CAF50; border-radius: 3px; transition: width 0.3s;"></div>
-        </div>
-    </div>
-
-    <!-- Сообщение "Programming in progress..." для ESP8266 (WiFi отключается, polling не работает) -->
-    <div id="progWaitMessage" style="text-align: center; margin: 10px 0; padding: 20px; background-color: #fff3cd; border: 1px solid #ffc107; border-radius: 5px; display: none;">
-        <div style="font-size: 18px; font-weight: bold; color: #856404;">Programming in progress...</div>
-        <div style="font-size: 14px; color: #856404; margin-top: 8px;">Please wait, the device is being programmed. WiFi will be temporarily unavailable.</div>
-        <div style="margin-top: 12px;">
-            <div class="spinner" style="display: inline-block; width: 30px; height: 30px; border: 3px solid #ffc107; border-top: 3px solid #856404; border-radius: 50%; animation: spin 1s linear infinite;"></div>
-        </div>
-    </div>
-
-    <style>
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-    </style>
-
     <!-- Информация о диске -->
     <div id="diskinfo" style="text-align: center; margin: 10px 0;"></div>
 
@@ -74,23 +50,7 @@
     <script src="GetJson.js" defer></script>
     <script src="microajax.js" defer></script>
     <script> 
-        let progressTimer = null;
-        let isUploading = false;
-        let isProgramming = false;
-        let platform = "esp32"; // Определяется при загрузке через /prog/platform
-        const POLLING_MAX_ERRORS = 5; // Максимум ошибок polling подряд перед остановкой
-
         window.onload = function () {
-            // Определяем платформу (esp32 / esp8266) для выбора поведения прогресс-бара
-            const xhrPlatform = new XMLHttpRequest();
-            xhrPlatform.open('GET', '/prog/platform', true);
-            xhrPlatform.onload = function() {
-                if (xhrPlatform.status === 200) {
-                    platform = xhrPlatform.responseText.trim();
-                }
-            };
-            xhrPlatform.send();
-
             setTimeout(() => {
                 loadDiskInfo();
                 loadFilesList();
@@ -195,56 +155,21 @@
 
         // ========== Flash File (Program STM32) ==========
         function flashFile(filename) {
-            if (isProgramming) {
-                alert('Programming already in progress!');
-                return;
-            }
             if (!confirm('Program STM32 with "' + decodeURIComponent(filename) + '"?')) return;
-
-            isProgramming = true;
-
-            // Для ESP32 — прогресс-бар с polling (WiFi не отключается)
-            // Для ESP8266 — сообщение "Programming in progress..." (WiFi отключается, polling не работает)
-            if (platform === "esp32") {
-                startProgressPolling();
-            } else {
-                showProgWaitMessage();
-            }
 
             const xhr = new XMLHttpRequest();
             xhr.open('GET', '/prog/flash?path=' + encodeURIComponent(filename), true);
             
             xhr.onload = function() {
-                isProgramming = false;
-                
-                if (platform === "esp32") {
-                    stopProgressPolling();
-                    updateProgressDisplay(100);
-                    setTimeout(() => {
-                        hideProgressBarFinal();
-                        loadFilesList();
-                        loadDiskInfo();
-                        alert('Programming completed successfully!');
-                    }, 2000);
-                } else {
-                    hideProgWaitMessage();
-                    setTimeout(() => {
-                        loadFilesList();
-                        loadDiskInfo();
-                        alert('Programming completed successfully!');
-                    }, 2000);
-                }
+                setTimeout(() => {
+                    loadFilesList();
+                    loadDiskInfo();
+                    alert('Programming completed successfully!');
+                }, 2000);
             };
             
             xhr.onerror = function() {
                 console.error('Network error during programming');
-                if (platform === "esp32") {
-                    stopProgressPolling();
-                    hideProgressBarFinal();
-                } else {
-                    hideProgWaitMessage();
-                }
-                isProgramming = false;
                 alert('Network error during programming');
             };
             

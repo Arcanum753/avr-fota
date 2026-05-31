@@ -142,6 +142,7 @@ protected:
     uint32_t         _file_size = 0;
     String           _filename = "";
     volatile float    _speed = 0;
+    volatile uint8_t _percent = 0;
     //fs + hex file
     #if defined(ESP32)
     fs::SPIFFSFS*               _fs;
