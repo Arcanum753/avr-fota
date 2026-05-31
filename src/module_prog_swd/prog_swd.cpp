@@ -4,10 +4,11 @@
 #include "FSWebServerLib.h"
 #include "debug_cm.h"
 
-#ifdef ESP32
+#if defined(ESP32)
 #include <SPIFFS.h>
 #include <esp_task_wdt.h>
-#elif defined(ESP8266)
+#endif
+#if defined(ESP8266)
 #include <FS.h>
 
 extern "C" {
@@ -24,9 +25,10 @@ extern "C" {
 ESP_PROGSWD swdprog;
 ESP_PROGSWD::ESP_PROGSWD(){}
 
-#if ESP32
+#if defined(ESP32)
     void ESP_PROGSWD::setFs(fs::SPIFFSFS* fs)
-#elif defined(ESP8266)
+#endif
+#if defined(ESP8266)
     void ESP_PROGSWD::setFs(FS* fs)                         // esp8266/esp32 flash file system
 #endif
 {   _fs = fs;   }
@@ -147,7 +149,7 @@ void ESP_PROGSWD::stm32f1_unlock_erase_flash() {
   stm32Fx_write_register(FLASH_CR + FLASH_BANK1_OFFSET, FLASH_CR_MER  , 0);
   stm32Fx_write_register(FLASH_CR + FLASH_BANK1_OFFSET, FLASH_CR_STRT | FLASH_CR_MER , 0);
 
-  while (stm32f1_flash_busy())  {    if( millis() - timeout > 100 )  { return ; }   }
+  while (stm32f1_flash_busy())  {    if( millis() - timeout > 2000 )  { return ; }   }
 
   // TODO offset2 raeder
   // stm32f1_flash_unlock (FLASH_BANK2_OFFSET)
@@ -158,7 +160,7 @@ void ESP_PROGSWD::stm32f1_unlock_erase_flash() {
 }
 
 bool ESP_PROGSWD::stm32f1_flash_busy(void) {
-	return ( stm32f_read_register(FLASH_SR) & STM32F1_FLASH_SR_BSY , 1);
+	return ( stm32f_read_register(FLASH_SR) & STM32F1_FLASH_SR_BSY );
 }
 
 /*_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-*/
@@ -189,13 +191,15 @@ bool ESP_PROGSWD::stm32f4_flash_busy(void) {
 
 
 uint8_t ESP_PROGSWD::stm32_flash_file(uint32_t offset, String &path) {
-  if (!_fs) { _fs->begin();  }// If SPIFFS is not started
+  // проверка на инициализированность файловой системы
+  if (!_fs) { return 2; }
   if (!path.startsWith("/")){ path = "/" + path;}
 	uint32_t addr =  offset;
 	File file;
-  #ifdef ESP32
-	file = SPIFFS.open(path, "rb");
-  #elif defined(ESP8266)
+  #if defined(ESP32)
+	file = _fs->open(path, "rb");
+  #endif
+  #if defined(ESP8266)
   file = _fs->open(path, "r");
   #endif
 	if (file == 0)  {    return 1;  }
@@ -215,15 +219,15 @@ uint8_t ESP_PROGSWD::stm32_flash_file(uint32_t offset, String &path) {
 		addr += cur_len;
 		_percent = (uint8_t)(((float)posi / (float)file_size) * 100);
 		DEBUGLOGSWD("%i percents \r\n", _percent);
-    #ifdef ESP32
+    #if defined(ESP32)
 		  esp_task_wdt_reset();
-    #elif defined(ESP8266)
+    #endif
+    #if defined(ESP8266)
       ESP.wdtDisable();
     #endif
 	}
     file.close();
-    #ifdef ESP32
-    #elif defined(ESP8266)
+    #if defined(ESP8266)
     ESP.wdtEnable(WDTO_8S);
     #endif
     _speed = (float)((float)(file_size / (float)(millis() - millis_start)));
@@ -281,10 +285,3 @@ bool ESP_PROGSWD::stm32Fx_write_flash_16bit(uint32_t address, uint32_t value, bo
   if (muted == false)   { DEBUGLOGSWD("%i %i %i Write 0x%08x : 0x%08x  read 0x%08x \r\n", state1, state2, state3, address, value, temp );}
   return ret = state1 * state2 * state3;
 }
-
-
-
-
-
-
-

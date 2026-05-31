@@ -98,9 +98,10 @@
 class ESP_PROGSWD {
 public:
     ESP_PROGSWD();
-#if ESP32
+#if defined(ESP32)
     void setFs(fs::SPIFFSFS* fs);
-#elif defined(ESP8266)
+#endif
+#if defined(ESP8266)
     void setFs(FS* fs) ;                       // esp8266/esp32 flash file system
 #endif
 
@@ -143,9 +144,10 @@ protected:
     volatile uint8_t  _percent = 0;
     volatile float    _speed = 0;
     //fs + hex file
-    #if ESP32
+    #if defined(ESP32)
     fs::SPIFFSFS*               _fs;
-    #elif defined(ESP8266)
+    #endif
+    #if defined(ESP8266)
     FS*                         _fs;                        // esp8266/esp32 flash file system
     #endif
 

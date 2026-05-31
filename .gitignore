@@ -16,3 +16,4 @@ build_counter.txt
 example
 plans
 log
+__pycache__
