@@ -15,6 +15,9 @@
 
 CORE_OTA_CLASS modOtaClass(false);
 
+// Global flag to prevent double _fs->end() crashes
+bool _ota_fsEndCalled = false;
+
 CORE_OTA_CLASS :: CORE_OTA_CLASS (bool _in) {
 	 dumb = _in;
  }
@@ -477,7 +480,7 @@ void CORE_OTA_CLASS::updateFileExecute (AsyncWebServerRequest *request) {
 		} else {
 			message = "<META http-equiv=\"refresh\" content=\"15;URL=/update\">Update correct. Restarting...";
 		}
-		if (this->_fs) { this->_fs->end(); }
+		// FS already ended in html_uploadUpdateFile() - do NOT call _fs->end() again!
 		ESPHTTPServer.restart_esp();
 	}
 	
@@ -696,10 +699,7 @@ void CORE_OTA_CLASS::html_uploadUpdateFile(AsyncWebServerRequest *request, Strin
         DEBUGOTA("Free sketch space: %u\r\n", freeSketchSpace);
         DEBUGOTA("New sketch size: %u\r\n", _updateFileSize);
 
-        if (_browserFileMD5 != NULL && _browserFileMD5 != "") {
-            Update.setMD5(_browserFileMD5.c_str());
-            DEBUGOTA("Hash from browser: %s\r\n", _browserFileMD5.c_str());
-        } else {
+        if (_browserFileMD5 == NULL || _browserFileMD5 == "") {
             values = "OTA Update error no MD5 hash!";
             DEBUGOTA("%s\n", values.c_str());
             request->send(500, "text/plain", values);
@@ -719,6 +719,7 @@ void CORE_OTA_CLASS::html_uploadUpdateFile(AsyncWebServerRequest *request, Strin
         if (_fs) { 
             DEBUGOTA("Ending filesystem...\n");
             _fs->end(); 
+            _ota_fsEndCalled = true;
             delay(100);
         }
         
@@ -746,6 +747,11 @@ void CORE_OTA_CLASS::html_uploadUpdateFile(AsyncWebServerRequest *request, Strin
             }
             return;
         }
+        
+        // Set MD5 AFTER Update.begin() - begin() resets the MD5 internally!
+        // Setting it before was useless - it was always cleared by begin()
+        Update.setMD5(_browserFileMD5.c_str());
+        DEBUGOTA("Hash from browser: %s\r\n", _browserFileMD5.c_str());
     }
     
     if (errorOccurred)  { return; }
@@ -802,11 +808,11 @@ void CORE_OTA_CLASS::html_uploadUpdateFile(AsyncWebServerRequest *request, Strin
                 _fsVersionCached = false;
             }
 #endif
-            DEBUGOTA("Update Success: %u\nRebooting...\r\n", request->contentLength());
-            values = "Update successful! Device will restart in 3 seconds...";
-            request->send(200, "text/plain", values);
-            responseSent = true;
-            delay(100);
+            // FIX: use _updateFileSize instead of request->contentLength()
+            // request->contentLength() includes HTTP overhead, not just the file size
+            DEBUGOTA("Update Success: %u\nRebooting...\r\n", _updateFileSize);
+            // Do NOT send response here - updateFileExecute() will handle it
+            // request->send() removed to prevent double-response with updateFileExecute()
         } else {
             updateHash = Update.md5String();
             DEBUGOTA("Upload failed. Calculated MD5: %s\r\n", updateHash.c_str());
@@ -863,3 +869,15 @@ void CORE_OTA_CLASS::html_ver_get(AsyncWebServerRequest *request) {
     
     request->send(200, "text/plain", values);
 }
+</｜｜DSML｜｜parameter>
+<｜｜DSML｜｜parameter name="task_progress" string="true">
+- [x] Added `_ota_fsEndCalled` global flag to core_ota.h
+- [x] Wrote complete updated core_ota.cpp with fixes:
+  - [x] `_ota_fsEndCalled = true` after `_fs->end()` in upload handler
+  - [x] `setMD5()` moved AFTER `Update.begin()`
+  - [x] Removed `_fs->end()` from `updateFileExecute()` — FS already ended in upload handler
+  - [x] Removed double `request->send()` from `final==true` block
+  - [x] Fixed log: `request->contentLength()` → `_updateFileSize`
+  - [ ] Protect `restart_esp()` in FSWebServerLib.cpp with `_ota_fsEndCalled` check
+</｜｜DSML｜｜parameter>
+</｜｜DSML｜｜tool_calls>
