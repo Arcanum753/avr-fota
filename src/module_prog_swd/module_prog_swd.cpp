@@ -1,4 +1,3 @@
-
 #include <cstddef>
 #include <Arduino.h>
 #include <ArduinoJson.h>
@@ -338,12 +337,15 @@ int Class_ProgSwd::web_FileUpload2FS( String filename, size_t index, uint8_t *da
 	DEBUGLOGSWD(__PRETTY_FUNCTION__);	DEBUGLOGSWD("\r\n");
 	int  _ret= 0;
 	_hexFileUploadStatus = "";
-	static File fsUploadFile;
-	static size_t fileSize = 0;
 	// Start
 	if (!index) {
 		_uploadPercent = 0;
-		fileSize = 0;
+		_fileUploadBytes = 0;
+		// если предыдущий файл не закрыт (например, загрузка прервана) — закрываем
+		if (_fsUploadFile) {
+			_fsUploadFile.close();
+			DEBUGLOGSWD("WARN: previous upload file was open, closed.\r\n");
+		}
 		DEBUGLOGSWD("Name: %s\r\n", filename.c_str());
 
 		// Проверка длины имени файла (SPIFFS ограничение 32 байта)
@@ -353,34 +355,37 @@ int Class_ProgSwd::web_FileUpload2FS( String filename, size_t index, uint8_t *da
 		}
 
 		if (!filename.startsWith("/")) {filename = "/" + filename;}
-		fsUploadFile = _fs->open(filename, "w");
+		_fsUploadFile = _fs->open(filename, "w");
 		DEBUGLOGSWD("First upload part.\r\n");
 	}
 	// Continue
-	if (fsUploadFile) {
+	if (_fsUploadFile) {
 		DEBUGLOGSWD("Continue upload part. Size = %u\r\n", len);
-		if (fsUploadFile.write(data, len) != len) {
+		if (_fsUploadFile.write(data, len) != len) {
 			_hexFileUploadStatus  += "uploadstatus|error|div\n";
 			_hexFileUploadStatus  += "file|"	  + _hexfileCheck		+"|div\n";
-			_hexFileUploadStatus  += "fileSize|" + (String)fileSize 	+"|div\n";
+			_hexFileUploadStatus  += "fileSize|" + (String)_fileUploadBytes 	+"|div\n";
 		}
 		else {
-			fileSize += len;
+			_fileUploadBytes += len;
 			if (_uploadFileSize > 0) {
-				_uploadPercent = (fileSize * 100) / _uploadFileSize;
+				_uploadPercent = (_fileUploadBytes * 100) / _uploadFileSize;
 			}
 		}
 	}
 	// End
 	if (final) {
-		if (fsUploadFile) {	fsUploadFile.close();	}
-		_ret = fileSize;
-		DEBUGLOGSWD("HexFileUpload final Size: %u\n", fileSize);
+		if (_fsUploadFile) {
+			_fsUploadFile.close();
+			_fsUploadFile = File(); // сбрасываем в "пустой" файл
+		}
+		_ret = _fileUploadBytes;
+		DEBUGLOGSWD("HexFileUpload final Size: %u\n", _fileUploadBytes);
 		_hexfileCheck = filename;
 		_hexFileUploadStatus  += "status|ok|div\n";
 		_hexFileUploadStatus  += "file|"	  + _hexfileCheck		+"|div\n";
-		_hexFileUploadStatus  += "fileSize|" + (String)fileSize 	+"|div\n";
-		fileSize = 0;
+		_hexFileUploadStatus  += "fileSize|" + (String)_fileUploadBytes 	+"|div\n";
+		_fileUploadBytes = 0;
 	}
 	return _ret;
 }
@@ -405,7 +410,7 @@ void Class_ProgSwd::web_FileUpload2Chip(AsyncWebServerRequest *request) {
 	if (!_fs->exists(path)) 		{	return request->send(404, "text/plain", "FileNotFound");	}
 
 	DEBUGLOGSWD("\t upload status: %s\r\n", path.c_str());
-	request->send(200, "text/plain", "");
+	request->send(200, "text/plain", "ok");
 
 	String ntpStr = "";
 
@@ -414,14 +419,20 @@ void Class_ProgSwd::web_FileUpload2Chip(AsyncWebServerRequest *request) {
 #endif
 	// Переключаем ESP8266 в AP режим на время прошивки STM32,
 	// чтобы WiFi стек не разрушался при отключённом watchdog
+	// и устанавливаем флаги состояния для асинхронного опроса с фронтенда
 	#if defined(ESP8266)
 		WiFi.mode(WIFI_AP);
+		_progRunning = true;
+		_progResult = -1;
+		_progStartTime = millis();
 	#endif
 
-	progSwd.prog_Programm(path, ntpStr );
+	int res = progSwd.prog_Programm(path, ntpStr );
 
 	// После прошивки переключаемся обратно в STA и переподключаемся к роутеру
 	#if defined(ESP8266)
+		_progResult = res;
+		_progRunning = false;
 		WiFi.mode(WIFI_STA);
 		WiFi.reconnect();
 	#endif
@@ -447,6 +458,28 @@ void Class_ProgSwd::web_FileUploadSize(AsyncWebServerRequest *request) {
 void Class_ProgSwd::web_FileUploadProgress(AsyncWebServerRequest *request) {
 	DEBUGLOGSWD(__FUNCTION__);	DEBUGLOGSWD("\r\n");
 	String values = "";
+	// Для ESP8266: если идёт программирование — отдаём статус программирования
+	// вместо прогресса загрузки файла
+	#if defined(ESP8266)
+	if (_progRunning) {
+		values += "progStatus|running|div\n";
+		request->send(200, "text/plain", values);
+		return;
+	}
+	if (_progResult == 0) {
+		values += "progStatus|done|div\n";
+		_progResult = -1;  // сброс, чтобы следующий запрос не видел done
+		request->send(200, "text/plain", values);
+		return;
+	}
+	if (_progResult > 0 || _progResult < -1) {
+		values += "progStatus|error|div\n";
+		_progResult = -1;  // сброс
+		request->send(200, "text/plain", values);
+		return;
+	}
+	#endif
+	// Старое поведение: процент загрузки файла
 	values += "percent|" + (String)_uploadPercent + "|div\n";
 	request->send(200, "text/plain", values);
 }

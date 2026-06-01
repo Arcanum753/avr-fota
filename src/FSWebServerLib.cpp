@@ -187,7 +187,12 @@ void AsyncFSWebServer::restart_esp() {
 	DEBUGLOG(__FUNCTION__);	DEBUGLOG("\r\n");
 	modWifiClass.wifiStatus = FS_STAT_RESET;
 	WiFi.disconnect(true, false);
-	_fs->end();
+	// Only call _fs->end() if it hasn't been already ended by the OTA update process.
+	// OTA already ended the filesystem in html_uploadUpdateFile() before calling Update.begin().
+	// Calling _fs->end() again on an already-ended FS causes corruption and crash (Exception 9).
+	if (!_ota_fsEndCalled) {
+		_fs->end();
+	}
 	delay(1000);
 	ESP.restart();
 }

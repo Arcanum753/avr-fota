@@ -59,6 +59,8 @@
     <script> 
         let progressTimer = null;
         let isUploading = false;
+        let isProgramming = false;
+        let progTimer = null;
 
         window.onload = function () {
             setTimeout(() => {
@@ -166,16 +168,18 @@
         // ========== Flash File (Program STM32) ==========
         function flashFile(filename) {
             if (!confirm('Program STM32 with "' + decodeURIComponent(filename) + '"?')) return;
+            if (isProgramming) { alert('Programming already in progress...'); return; }
 
             const xhr = new XMLHttpRequest();
             xhr.open('GET', '/prog/flash?path=' + encodeURIComponent(filename), true);
             
             xhr.onload = function() {
-                setTimeout(() => {
-                    loadFilesList();
-                    loadDiskInfo();
-                    alert('Programming completed successfully!');
-                }, 2000);
+                if (xhr.status === 200) {
+                    // Сервер вернул "ok" — переходим в режим ожидания программирования
+                    startProgPolling();
+                } else {
+                    alert('Failed to start programming: ' + xhr.status);
+                }
             };
             
             xhr.onerror = function() {
@@ -184,6 +188,105 @@
             };
             
             xhr.send();
+        }
+
+        // ========== Programming Status Polling (ESP8266 async mode) ==========
+        function stopProgPolling() {
+            if (progTimer) {
+                clearTimeout(progTimer);
+                progTimer = null;
+            }
+            isProgramming = false;
+            document.getElementById('progressContainer').style.display = 'none';
+        }
+
+        function startProgPolling() {
+            isProgramming = true;
+            const container = document.getElementById('progressContainer');
+            const progressText = document.getElementById('progressText');
+            const progressBar = document.getElementById('progressBar');
+
+            container.style.display = 'block';
+            progressText.innerHTML = 'Programming... please wait';
+            progressBar.style.width = '100%';
+            progressBar.style.backgroundColor = '#ffaa00';
+            // "песочные часы" — пульсирующий индикатор
+            progressBar.style.animation = 'pulse 1.5s infinite';
+
+            let attempts = 0;
+            const maxAttempts = 24; // 24 * 5 секунд = 120 секунд (2 минуты)
+
+            if (progTimer) { clearTimeout(progTimer); progTimer = null; }
+
+            (function pollProgStatus() {
+                if (!isProgramming) { stopProgPolling(); return; }
+
+                const xhr = new XMLHttpRequest();
+                xhr.open('GET', '/prog/progress', true);
+
+                xhr.onload = function() {
+                    if (xhr.status === 200) {
+                        const fieldsRows = ParseCVT(xhr.response);
+                        for (let fields of fieldsRows) {
+                            if (fields[0] === "progStatus") {
+                                const status = fields[1];
+                                if (status === "running") {
+                                    // всё ещё программируется — ждём дальше
+                                    attempts++;
+                                    if (attempts >= maxAttempts) {
+                                        stopProgPolling();
+                                        progressBar.style.animation = '';
+                                        alert('Programming timeout! Please check device connection.');
+                                    } else {
+                                        progTimer = setTimeout(pollProgStatus, 5000);
+                                    }
+                                } else if (status === "done") {
+                                    stopProgPolling();
+                                    progressBar.style.animation = '';
+                                    progressText.innerHTML = 'Programming: 100%';
+                                    progressBar.style.width = '100%';
+                                    progressBar.style.backgroundColor = '#4CAF50';
+                                    loadFilesList();
+                                    loadDiskInfo();
+                                    setTimeout(function() {
+                                        container.style.display = 'none';
+                                        alert('Programming completed successfully!');
+                                    }, 500);
+                                } else if (status === "error") {
+                                    stopProgPolling();
+                                    progressBar.style.animation = '';
+                                    progressBar.style.backgroundColor = '#ff4444';
+                                    alert('Programming failed!');
+                                }
+                                return;
+                            }
+                        }
+                        // progStatus field not found, show old percent (likely upload progress, not programming)
+                        // this can happen if server is back but not in programming mode yet
+                        attempts++;
+                        if (attempts >= maxAttempts) {
+                            stopProgPolling();
+                            progressBar.style.animation = '';
+                            alert('Programming timeout!');
+                        } else {
+                            progTimer = setTimeout(pollProgStatus, 5000);
+                        }
+                    }
+                };
+
+                xhr.onerror = function() {
+                    attempts++;
+                    if (attempts >= maxAttempts) {
+                        stopProgPolling();
+                        progressBar.style.animation = '';
+                        alert('Programming timeout — connection lost!');
+                    } else {
+                        progTimer = setTimeout(pollProgStatus, 5000);
+                    }
+                };
+
+                xhr.send();
+            })();
         }
 
         // ========== Upload File ==========
@@ -256,7 +359,7 @@
         // ========== Progress Bar Polling ==========
         function stopProgressPolling() {
             if (progressTimer) {
-                clearInterval(progressTimer);
+                clearTimeout(progressTimer);
                 progressTimer = null;
             }
             isUploading = false;
@@ -267,11 +370,12 @@
             isUploading = true;
             
             if (progressTimer) {
-                clearInterval(progressTimer);
+                clearTimeout(progressTimer);
                 progressTimer = null;
             }
             
-            progressTimer = setInterval(function() {
+            // рекурсивный setTimeout — следующий запрос только после ответа предыдущего
+            (function pollProgress() {
                 if (!isUploading) {
                     stopProgressPolling();
                     return;
@@ -291,6 +395,10 @@
                             }
                         }
                     }
+                    // планируем следующий опрос через 1 секунду после ответа
+                    if (isUploading) {
+                        progressTimer = setTimeout(pollProgress, 1000);
+                    }
                 };
                 
                 xhr.onerror = function() { 
@@ -300,7 +408,7 @@
                 };
                 
                 xhr.send();
-            }, 1000);
+            })();
         }
 
         function updateProgressDisplay(percent) {

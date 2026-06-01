@@ -869,15 +869,3 @@ void CORE_OTA_CLASS::html_ver_get(AsyncWebServerRequest *request) {
     
     request->send(200, "text/plain", values);
 }
-</｜｜DSML｜｜parameter>
-<｜｜DSML｜｜parameter name="task_progress" string="true">
-- [x] Added `_ota_fsEndCalled` global flag to core_ota.h
-- [x] Wrote complete updated core_ota.cpp with fixes:
-  - [x] `_ota_fsEndCalled = true` after `_fs->end()` in upload handler
-  - [x] `setMD5()` moved AFTER `Update.begin()`
-  - [x] Removed `_fs->end()` from `updateFileExecute()` — FS already ended in upload handler
-  - [x] Removed double `request->send()` from `final==true` block
-  - [x] Fixed log: `request->contentLength()` → `_updateFileSize`
-  - [ ] Protect `restart_esp()` in FSWebServerLib.cpp with `_ota_fsEndCalled` check
-</｜｜DSML｜｜parameter>
-</｜｜DSML｜｜tool_calls>

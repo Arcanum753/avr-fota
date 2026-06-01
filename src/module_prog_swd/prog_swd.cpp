@@ -221,13 +221,13 @@ uint8_t ESP_PROGSWD::stm32_flash_file(uint32_t offset, String &path) {
     #if defined(ESP32)
 		  esp_task_wdt_reset();
     #endif
+    #if defined(ESP8266)
+          yield();
+    #endif
 	}
     file.close();
     _speed = (float)((float)(file_size / (float)(millis() - millis_start)));
     DEBUGLOGSWD("Done flashing file, it took %i ms speed: %.4f kbs\r\n", (int)(millis() - millis_start), _speed);
-    #if defined(ESP8266)
-      ESP.wdtEnable(WDTO_8S);
-    #endif
     return 0;
 }
 

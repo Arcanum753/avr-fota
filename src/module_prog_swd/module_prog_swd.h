@@ -111,6 +111,10 @@ protected:
     uint8_t _in;
     uint16_t _uploadPercent = 0;
     uint32_t _uploadFileSize = 0;
+    // Состояние программирования STM32 (для ESP8266 асинхронного режима)
+    volatile bool _progRunning = false;
+    int _progResult = -1;
+    uint32_t _progStartTime = 0;
     //fs + hex file
 #if defined(ESP32)
     fs::SPIFFSFS*   _fs;
@@ -118,6 +122,8 @@ protected:
 #if defined(ESP8266)
     FS* _fs;    // esp8266/esp32 flash file system
 #endif
+    File _fsUploadFile;        // открытый файл при загрузке в ФС
+    size_t _fileUploadBytes;   // счётчик записанных байт при загрузке
 
 };
 
