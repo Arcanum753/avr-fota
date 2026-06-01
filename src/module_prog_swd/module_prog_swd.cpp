@@ -81,6 +81,17 @@ void  Class_ProgSwd::web_Init()	{
 		if (!ESPHTTPServer.checkAuth(request)) {	return request->requestAuthentication(); };
 		web_FileUpload2FS_Status(request);
 	});
+
+	ESPHTTPServer.on("/prog/uploadsize", [this](AsyncWebServerRequest *request) {
+		if (!ESPHTTPServer.checkAuth(request)) {	return request->requestAuthentication(); };
+		web_FileUploadSize(request);
+	});
+
+	ESPHTTPServer.on("/prog/progress", [this](AsyncWebServerRequest *request) {
+		if (!ESPHTTPServer.checkAuth(request)) {	return request->requestAuthentication(); };
+		web_FileUploadProgress(request);
+	});
+
 	ESPHTTPServer.on("/prog/flash", [this](AsyncWebServerRequest *request) {
 		if (!ESPHTTPServer.checkAuth(request)) {	return request->requestAuthentication(); };
 		web_FileUpload2Chip(request);
@@ -331,6 +342,7 @@ int Class_ProgSwd::web_FileUpload2FS( String filename, size_t index, uint8_t *da
 	static size_t fileSize = 0;
 	// Start
 	if (!index) {
+		_uploadPercent = 0;
 		fileSize = 0;
 		DEBUGLOGSWD("Name: %s\r\n", filename.c_str());
 
@@ -352,7 +364,12 @@ int Class_ProgSwd::web_FileUpload2FS( String filename, size_t index, uint8_t *da
 			_hexFileUploadStatus  += "file|"	  + _hexfileCheck		+"|div\n";
 			_hexFileUploadStatus  += "fileSize|" + (String)fileSize 	+"|div\n";
 		}
-		else {	fileSize += len;	}
+		else {
+			fileSize += len;
+			if (_uploadFileSize > 0) {
+				_uploadPercent = (fileSize * 100) / _uploadFileSize;
+			}
+		}
 	}
 	// End
 	if (final) {
@@ -410,6 +427,28 @@ void Class_ProgSwd::web_FileUpload2Chip(AsyncWebServerRequest *request) {
 	#endif
 
 	//здесь уже выход из программирования
+}
+
+void Class_ProgSwd::web_FileUploadSize(AsyncWebServerRequest *request) {
+	DEBUGLOGSWD(__FUNCTION__);	DEBUGLOGSWD("\r\n");
+	if (request->args() > 0) {
+		for (uint8_t i = 0; i < request->args(); i++) {
+			if (request->argName(i) == "size") {
+				_uploadPercent = 0;	// сброс процента при установке нового размера файла
+				_uploadFileSize = request->arg(i).toInt();
+				DEBUGLOGSWD("Upload size set: %u\r\n", _uploadFileSize);
+				break;
+			}
+		}
+	}
+	request->send(200, "text/plain", "OK");
+}
+
+void Class_ProgSwd::web_FileUploadProgress(AsyncWebServerRequest *request) {
+	DEBUGLOGSWD(__FUNCTION__);	DEBUGLOGSWD("\r\n");
+	String values = "";
+	values += "percent|" + (String)_uploadPercent + "|div\n";
+	request->send(200, "text/plain", values);
 }
 
 // stm32.html ^^^

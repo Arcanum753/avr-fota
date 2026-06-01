@@ -97,6 +97,8 @@ public:
     void    web_FileDelete         (AsyncWebServerRequest *request) ;
     int     web_FileUpload2FS( String filename, size_t index, uint8_t *data, size_t len, bool final);
     void    web_FileUpload2FS_Status(AsyncWebServerRequest *request);
+    void    web_FileUploadProgress(AsyncWebServerRequest *request);
+    void    web_FileUploadSize(AsyncWebServerRequest *request);
     // programming
     void    web_FileUpload2Chip(AsyncWebServerRequest *request) ;
 
@@ -107,6 +109,8 @@ private:
     void  html_ver_get(AsyncWebServerRequest *request);
 protected:
     uint8_t _in;
+    uint16_t _uploadPercent = 0;
+    uint32_t _uploadFileSize = 0;
     //fs + hex file
 #if defined(ESP32)
     fs::SPIFFSFS*   _fs;

@@ -25,6 +25,13 @@
         </table>
     </form>
 
+    <div id="progressContainer" style="text-align: center; margin: 10px 0; padding: 10px; background-color: #f0f0f0; border-radius: 5px; display: none;">
+        <div id="progressText">Upload progress: 0%</div>
+        <div style="width: 100%; background-color: #ddd; border-radius: 3px; margin-top: 5px;">
+            <div id="progressBar" style="width: 0%; height: 20px; background-color: #4CAF50; border-radius: 3px; transition: width 0.3s;"></div>
+        </div>
+    </div>
+
     <hr>
 
     <!-- Таблица файлов прошивки -->
@@ -50,6 +57,9 @@
     <script src="GetJson.js" defer></script>
     <script src="microajax.js" defer></script>
     <script> 
+        let progressTimer = null;
+        let isUploading = false;
+
         window.onload = function () {
             setTimeout(() => {
                 loadDiskInfo();
@@ -196,56 +206,54 @@
                 return;
             }
 
-            const formData = new FormData();
-            formData.append('update', file);
+            // Сначала передаём размер файла на сервер для прогресс-бара
+            const xhrSize = new XMLHttpRequest();
+            xhrSize.open('GET', '/prog/uploadsize?size=' + file.size, true);
+            xhrSize.onload = function() {
+                // После передачи размера начинаем загрузку файла
+                const formData = new FormData();
+                formData.append('update', file);
 
-            const xhr = new XMLHttpRequest();
-            xhr.open('POST', '/prog/uploadfile', true);
-            
-            // Запускаем polling ПОСЛЕ отправки запроса, чтобы сервер уже знал размер файла
-            xhr.onloadstart = function() {
-                startProgressPolling();
-            };
-            
-            xhr.onload = function() {
-                stopProgressPolling();
+                const xhr = new XMLHttpRequest();
+                xhr.open('POST', '/prog/uploadfile', true);
                 
-                if (xhr.status === 200) {
-                    updateProgressDisplay(100);
-                    setTimeout(() => {
-                        hideProgressBarFinal();
-                        loadFilesList();
-                        loadDiskInfo();
-                        fileInput.value = "";
-                    }, 1500);
-                } else {
-                    hideProgressBarFinal();
-                    alert('Upload failed with status: ' + xhr.status);
-                }
+                xhr.onloadstart = function() {
+                    startProgressPolling();
+                };
+                
+                xhr.onload = function() {
+                    stopProgressPolling();
+                    
+                    if (xhr.status === 200) {
+                        updateProgressDisplay(100);
+                        setTimeout(() => {
+                            document.getElementById('progressContainer').style.display = 'none';
+                            loadFilesList();
+                            loadDiskInfo();
+                            fileInput.value = "";
+                        }, 1500);
+                    } else {
+                        document.getElementById('progressContainer').style.display = 'none';
+                        alert('Upload failed with status: ' + xhr.status);
+                    }
+                };
+                
+                xhr.onerror = function() {
+                    console.error('Network error during upload');
+                    stopProgressPolling();
+                    document.getElementById('progressContainer').style.display = 'none';
+                    alert('Network error during upload');
+                };
+                
+                xhr.send(formData);
             };
-            
-            xhr.onerror = function() {
-                console.error('Network error during upload');
-                stopProgressPolling();
-                hideProgressBarFinal();
-                alert('Network error during upload');
+            xhrSize.onerror = function() {
+                alert('Failed to set upload size');
             };
-            
-            xhr.send(formData);
+            xhrSize.send();
         }
 
         // ========== Progress Bar Polling ==========
-        function hideProgressBar() {
-            document.getElementById('progressContainer').style.display = 'none';
-            updateProgressDisplay(0);
-        }
-
-        // Скрыть прогресс-бар без сброса в 0% (для финального показа 100%)
-        function hideProgressBarFinal() {
-            document.getElementById('progressContainer').style.display = 'none';
-        }
-
-        // --- Единый Progress Polling (/prog/progress) ---
         function stopProgressPolling() {
             if (progressTimer) {
                 clearInterval(progressTimer);
@@ -288,7 +296,7 @@
                 xhr.onerror = function() { 
                     console.error('Error fetching progress');
                     stopProgressPolling();
-                    hideProgressBar();
+                    document.getElementById('progressContainer').style.display = 'none';
                 };
                 
                 xhr.send();
@@ -300,7 +308,7 @@
             const progressBar = document.getElementById('progressBar');
             
             if (progressText) {
-                progressText.innerHTML = 'Programming progress: ' + percent + '%';
+                progressText.innerHTML = 'Upload progress: ' + percent + '%';
             }
             if (progressBar) {
                 progressBar.style.width = percent + '%';
@@ -312,17 +320,6 @@
                     progressBar.style.backgroundColor = '#4CAF50';
                 }
             }
-        }
-
-        // ========== "Programming in progress..." message (for ESP8266) ==========
-        function showProgWaitMessage() {
-            const msg = document.getElementById('progWaitMessage');
-            if (msg) msg.style.display = 'block';
-        }
-
-        function hideProgWaitMessage() {
-            const msg = document.getElementById('progWaitMessage');
-            if (msg) msg.style.display = 'none';
         }
 
     </script>
