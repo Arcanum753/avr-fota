@@ -394,6 +394,10 @@ String getContentType(String filename, AsyncWebServerRequest *request) {
 }
 
 void AsyncFSWebServer::serverInit() {
+	// Запрещаем Keep-Alive, чтобы браузер не держал открытые
+	// TCP-соединения - они вызывали сброс ESP при длительном простое
+	DefaultHeaders::Instance().addHeader("Connection", "close");
+
 //system.html vvv	
 	on("/system/restart", HTTP_POST, [this](AsyncWebServerRequest *request) {
 		if (!this->checkAuth(request)) {	return request->requestAuthentication(); };
