@@ -25,11 +25,8 @@
 #define JSON_FILESIZEMAX		1024
 
 // Maximum filename length for upload (30 chars + null terminator = 31 bytes).
-// SPIFFS on ESP8266/ESP32 has a 32-byte limit for filenames (including path separator '/' and null terminator).
+// SPIFFS on ESP32 has a 32-byte limit for filenames (including path separator '/' and null terminator).
 // We use 30 to leave room for the '/' prefix added by the server.
-// Максимальная длина имени файла для загрузки (30 символов + нуль-терминатор = 31 байт).
-// SPIFFS на ESP8266/ESP32 имеет ограничение 32 байта на имя файла (включая разделитель '/' и нуль-терминатор).
-// Используем 30, чтобы оставить место для префикса '/', добавляемого сервером.
 #define MAX_FILENAME_LEN		30
 
 
@@ -64,12 +61,7 @@ class Class_ProgSwd {
 public:
 	Class_ProgSwd( uint8_t in);
     bool begin ();
-#if defined(ESP32)
     void setFs(fs::SPIFFSFS* fs);
-#endif
-#if defined(ESP8266)
-    void setFs(FS* fs)  ;                       // esp8266/esp32 flash file system
-#endif
 private:
     CfgFile_ProgSwd_t CfgFile_ProgSwd; //  структура конфига
 
@@ -99,8 +91,11 @@ public:
     void    web_FileUpload2FS_Status(AsyncWebServerRequest *request);
     void    web_FileUploadProgress(AsyncWebServerRequest *request);
     void    web_FileUploadSize(AsyncWebServerRequest *request);
+    void    setUploadPercent(uint8_t p) { _uploadPercent = p; }
     // programming
     void    web_FileUpload2Chip(AsyncWebServerRequest *request) ;
+    // Callback после завершения EERTOS-кооперативной прошивки
+    void    onFlashComplete();
 
 private:
     String getVersionStr();
@@ -111,17 +106,14 @@ protected:
     uint8_t _in;
     uint16_t _uploadPercent = 0;
     uint32_t _uploadFileSize = 0;
-    // Состояние программирования STM32 (для ESP8266 асинхронного режима)
+    // Состояние программирования STM32
     volatile bool _progRunning = false;
     int _progResult = -1;
     uint32_t _progStartTime = 0;
+    String _flashPath;      // путь к файлу прошивки (сохраняем между вызовами EERTOS)
+    String _flashNtpStr;    // строка времени (сохраняем между вызовами EERTOS)
     //fs + hex file
-#if defined(ESP32)
     fs::SPIFFSFS*   _fs;
-#endif
-#if defined(ESP8266)
-    FS* _fs;    // esp8266/esp32 flash file system
-#endif
     File _fsUploadFile;        // открытый файл при загрузке в ФС
     size_t _fileUploadBytes;   // счётчик записанных байт при загрузке
 

@@ -60,15 +60,58 @@
         let progressTimer = null;
         let isUploading = false;
         let isProgramming = false;
-        let progTimer = null;
+        let _uploadAbort = false;  // флаг для предотвращения гонок при остановке
 
         window.onload = function () {
             setTimeout(() => {
                 loadDiskInfo();
                 loadFilesList();
+                checkProgrammingStatus();
             }, 250);
         };
-
+        // ========== Check Programming Status on Page Load ==========
+        function checkProgrammingStatus() {
+            const xhr = new XMLHttpRequest();
+            xhr.open('GET', '/prog/progress', true);
+            xhr.timeout = 5000;
+            
+            xhr.onload = function() {
+                if (xhr.status === 200) {
+                    const fieldsRows = ParseCVT(xhr.response);
+                    let progStatus = "";
+                    let progPercent = -1;
+                    for (let fields of fieldsRows) {
+                        if (fields[0] === "progStatus")   progStatus = fields[1];
+                        if (fields[0] === "progPercent")  progPercent = parseInt(fields[1]);
+                    }
+                    
+                    if (progStatus === "running") {
+                        // Прошивка уже идёт — переходим в режим опроса
+                        console.log("Programming already in progress, resuming polling...");
+                        startProgPolling();
+                    } else if (progStatus === "done") {
+                        // Прошивка завершена — покажем что было 100%
+                        const container = document.getElementById('progressContainer');
+                        const progressText = document.getElementById('progressText');
+                        const progressBar = document.getElementById('progressBar');
+                        if (container) container.style.display = 'block';
+                        if (progressText) progressText.innerHTML = 'Programming: 100%';
+                        if (progressBar) {
+                            progressBar.style.width = '100%';
+                            progressBar.style.backgroundColor = '#4CAF50';
+                        }
+                        setTimeout(() => {
+                            if (container) container.style.display = 'none';
+                        }, 3000);
+                    }
+                }
+            };
+            xhr.onerror = function() {
+                // Не удалось проверить статус — это нормально, просто не показываем прогресс
+                console.log("Could not check programming status on load");
+            };
+            xhr.send();
+        }
         // ========== Disk Info ==========
         function loadDiskInfo() {
             const xhr = new XMLHttpRequest();
@@ -172,6 +215,12 @@
 
             const xhr = new XMLHttpRequest();
             xhr.open('GET', '/prog/flash?path=' + encodeURIComponent(filename), true);
+            xhr.timeout = 10000;
+            
+            xhr.ontimeout = function() {
+                if (isProgramming) { stopProgPolling(); }
+                alert('No response from device — cannot start programming');
+            };
             
             xhr.onload = function() {
                 if (xhr.status === 200) {
@@ -190,14 +239,34 @@
             xhr.send();
         }
 
-        // ========== Programming Status Polling (ESP8266 async mode) ==========
+        // ========== Programming Status Polling ==========
         function stopProgPolling() {
-            if (progTimer) {
-                clearTimeout(progTimer);
-                progTimer = null;
-            }
             isProgramming = false;
-            document.getElementById('progressContainer').style.display = 'none';
+            // снимаем анимацию пульсации
+            const progressBar = document.getElementById('progressBar');
+            if (progressBar) progressBar.style.animation = '';
+        }
+
+        // Показать ошибку прямо на прогресс-баре (без alert)
+        function showProgError(msg) {
+            const progressText = document.getElementById('progressText');
+            const progressBar = document.getElementById('progressBar');
+            if (progressText) progressText.innerHTML = '<span style="color: #cc0000; font-weight: bold;">' + msg + '</span>';
+            if (progressBar) {
+                progressBar.style.width = '100%';
+                progressBar.style.backgroundColor = '#cc0000';
+            }
+        }
+
+        // Показать успешное завершение на прогресс-баре (без alert)
+        function showProgSuccess() {
+            const progressText = document.getElementById('progressText');
+            const progressBar = document.getElementById('progressBar');
+            if (progressText) progressText.innerHTML = '<span style="color: #2e7d32; font-weight: bold;">Programming completed successfully!</span>';
+            if (progressBar) {
+                progressBar.style.width = '100%';
+                progressBar.style.backgroundColor = '#4CAF50';
+            }
         }
 
         function startProgPolling() {
@@ -207,81 +276,92 @@
             const progressBar = document.getElementById('progressBar');
 
             container.style.display = 'block';
-            progressText.innerHTML = 'Programming... please wait';
-            progressBar.style.width = '100%';
+            progressText.innerHTML = 'Programming: 0%';
+            progressBar.style.width = '0%';
             progressBar.style.backgroundColor = '#ffaa00';
-            // "песочные часы" — пульсирующий индикатор
-            progressBar.style.animation = 'pulse 1.5s infinite';
+            progressBar.style.animation = '';  // убираем пульсацию, будем показывать реальный %
 
             let attempts = 0;
-            const maxAttempts = 24; // 24 * 5 секунд = 120 секунд (2 минуты)
-
-            if (progTimer) { clearTimeout(progTimer); progTimer = null; }
+            let pollActive = true;
+            const maxAttempts = 60; // 60 * 2 сек = 120 секунд (2 минуты)
+            let lastPercent = 0;
 
             (function pollProgStatus() {
                 if (!isProgramming) { stopProgPolling(); return; }
 
                 const xhr = new XMLHttpRequest();
                 xhr.open('GET', '/prog/progress', true);
+                xhr.timeout = 5000;
+
+                xhr.ontimeout = function() {
+                    if (!isProgramming) { stopProgPolling(); return; }
+                    attempts++;
+                    if (attempts >= maxAttempts) {
+                        stopProgPolling();
+                        showProgError('Programming timeout — no response from device');
+                    } else {
+                        setTimeout(pollProgStatus, 2000);
+                    }
+                };
 
                 xhr.onload = function() {
+                    if (!isProgramming) { stopProgPolling(); return; }
+
                     if (xhr.status === 200) {
                         const fieldsRows = ParseCVT(xhr.response);
+                        let progStatus = "";
+                        let progPercent = -1;
                         for (let fields of fieldsRows) {
-                            if (fields[0] === "progStatus") {
-                                const status = fields[1];
-                                if (status === "running") {
-                                    // всё ещё программируется — ждём дальше
-                                    attempts++;
-                                    if (attempts >= maxAttempts) {
-                                        stopProgPolling();
-                                        progressBar.style.animation = '';
-                                        alert('Programming timeout! Please check device connection.');
-                                    } else {
-                                        progTimer = setTimeout(pollProgStatus, 5000);
-                                    }
-                                } else if (status === "done") {
-                                    stopProgPolling();
-                                    progressBar.style.animation = '';
-                                    progressText.innerHTML = 'Programming: 100%';
-                                    progressBar.style.width = '100%';
-                                    progressBar.style.backgroundColor = '#4CAF50';
-                                    loadFilesList();
-                                    loadDiskInfo();
-                                    setTimeout(function() {
-                                        container.style.display = 'none';
-                                        alert('Programming completed successfully!');
-                                    }, 500);
-                                } else if (status === "error") {
-                                    stopProgPolling();
-                                    progressBar.style.animation = '';
-                                    progressBar.style.backgroundColor = '#ff4444';
-                                    alert('Programming failed!');
-                                }
-                                return;
-                            }
+                            if (fields[0] === "progStatus")   progStatus = fields[1];
+                            if (fields[0] === "progPercent")  progPercent = parseInt(fields[1]);
                         }
-                        // progStatus field not found, show old percent (likely upload progress, not programming)
-                        // this can happen if server is back but not in programming mode yet
-                        attempts++;
-                        if (attempts >= maxAttempts) {
+
+                        if (progStatus === "running") {
+                            // Показываем реальный процент прошивки
+                            if (progPercent >= 0) {
+                                updateProgressDisplay(progPercent);
+                                progressText.innerHTML = 'Programming: ' + progPercent + '%';
+                                lastPercent = progPercent;
+                            }
+                            attempts = 0;  // сбрасываем счётчик при успешном ответе
+                            setTimeout(pollProgStatus, 2000);
+                        } else if (progStatus === "done") {
                             stopProgPolling();
-                            progressBar.style.animation = '';
-                            alert('Programming timeout!');
+                            updateProgressDisplay(100);
+                            progressText.innerHTML = 'Programming: 100%';
+                            progressBar.style.backgroundColor = '#4CAF50';
+                            loadFilesList();
+                            loadDiskInfo();
+                            setTimeout(function() {
+                                showProgSuccess();
+                            }, 300);
+                            setTimeout(function() {
+                                container.style.display = 'none';
+                            }, 5000);
+                        } else if (progStatus === "error") {
+                            stopProgPolling();
+                            showProgError('Programming failed!');
                         } else {
-                            progTimer = setTimeout(pollProgStatus, 5000);
+                            // progStatus не найден — возможно сервер ещё не в режиме программирования
+                            attempts++;
+                            if (attempts >= maxAttempts) {
+                                stopProgPolling();
+                                showProgError('Programming timeout — status not received');
+                            } else {
+                                setTimeout(pollProgStatus, 2000);
+                            }
                         }
                     }
                 };
 
                 xhr.onerror = function() {
+                    if (!isProgramming) { stopProgPolling(); return; }
                     attempts++;
                     if (attempts >= maxAttempts) {
                         stopProgPolling();
-                        progressBar.style.animation = '';
-                        alert('Programming timeout — connection lost!');
+                        showProgError('Programming timeout — connection lost!');
                     } else {
-                        progTimer = setTimeout(pollProgStatus, 5000);
+                        setTimeout(pollProgStatus, 2000);
                     }
                 };
 
@@ -358,6 +438,7 @@
 
         // ========== Progress Bar Polling ==========
         function stopProgressPolling() {
+            _uploadAbort = true;  // сигнал остановки для in-flight запросов
             if (progressTimer) {
                 clearTimeout(progressTimer);
                 progressTimer = null;
@@ -366,8 +447,11 @@
         }
 
         function startProgressPolling() {
-            document.getElementById('progressContainer').style.display = 'block';
+            _uploadAbort = false;
             isUploading = true;
+            // Сбрасываем прогресс-бар на 0% сразу, чтобы не висело 100% от предыдущей загрузки
+            updateProgressDisplay(0);
+            document.getElementById('progressContainer').style.display = 'block';
             
             if (progressTimer) {
                 clearTimeout(progressTimer);
@@ -376,15 +460,25 @@
             
             // рекурсивный setTimeout — следующий запрос только после ответа предыдущего
             (function pollProgress() {
-                if (!isUploading) {
+                if (_uploadAbort || !isUploading) {
                     stopProgressPolling();
                     return;
                 }
                 
                 const xhr = new XMLHttpRequest();
                 xhr.open('GET', '/prog/progress', true);
+                xhr.timeout = 5000;
+                
+                xhr.ontimeout = function() {
+                    stopProgressPolling();
+                    document.getElementById('progressContainer').style.display = 'none';
+                    alert('Upload polling timeout — connection lost');
+                };
                 
                 xhr.onload = function() {
+                    // проверяем флаг abort — если вызван stop, игнорируем ответ
+                    if (_uploadAbort) { stopProgressPolling(); return; }
+                    
                     if (xhr.status === 200) {
                         const fieldsRows = ParseCVT(xhr.response);
                         for (let fields of fieldsRows) {
@@ -396,7 +490,7 @@
                         }
                     }
                     // планируем следующий опрос через 1 секунду после ответа
-                    if (isUploading) {
+                    if (!_uploadAbort && isUploading) {
                         progressTimer = setTimeout(pollProgress, 1000);
                     }
                 };

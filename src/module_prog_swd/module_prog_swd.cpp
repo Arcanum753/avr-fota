@@ -7,9 +7,6 @@
 #include <esp32-hal-gpio.h>
 #include <SPIFFS.h>
 #endif
-#if defined(ESP8266)
-#include <FS.h>
-#endif
 
 #include "FSWebServerLib.h"
 #include "debug.h"
@@ -29,12 +26,7 @@
 Class_ProgSwd progSwd(0);
 Class_ProgSwd::Class_ProgSwd(uint8_t in): _in(in){ }
 
-#if defined(ESP32)
     void Class_ProgSwd::setFs(fs::SPIFFSFS* fs)
-#endif
-#if defined(ESP8266)
-    void Class_ProgSwd::setFs(FS* fs)                         // esp8266/esp32 flash file system
-#endif
 {	_fs = fs;	}
 
 bool Class_ProgSwd::begin (){
@@ -159,19 +151,10 @@ bool Class_ProgSwd::web_GetDiskInfoExe(String &_str)	{
 	String values 	= 	"";
 	size_t sizeAll	=	0;
 	size_t sizeUsed	=	0;
-	#if defined(ESP32)
 	 if (_fs != nullptr) {
 		 sizeAll	=	_fs->totalBytes();
 		 sizeUsed	=	_fs->usedBytes();
 	 }
-	#endif
-	#if defined(ESP8266)
-		FSInfo fs_info;
-		if (_fs && _fs->info(fs_info)) {
-			sizeAll  = fs_info.totalBytes;
-			sizeUsed = fs_info.usedBytes;
-		}
-	#endif
 
 	size_t sizeFree = 0;
 
@@ -196,37 +179,6 @@ bool Class_ProgSwd::web_GetFilesListExe(String &_str)	{
 	// int _res = avrprog.cfgFileStructGet( AVRISP_HexFiles_Web	);
 
 	String json = "[";
-#if defined(ESP8266)
-	if (_fs == nullptr) { _ret = false; }
-	else {
-		Dir files = _fs->openDir("/");
-		while (files.next()) {
-			fname = files.fileName().c_str() ;
-			pos = fname.find_last_of(FILE_TYPE_COMMA);
-			ftype = fname.substr(pos + 1);
-			if ((ftype == FILE_TYPE_HEX) || (ftype == FILE_TYPE_BINARY) || (ftype == FILE_TYPE_BIN)  ) {
-				size_t fsize = files.fileSize();
-			// Определяем дату прошивки: если имя файла совпадает с last_prog_file — подставляем дату
-			String progDate = "";
-			if (strcmp(fname.c_str(), CfgFile_ProgSwd.last_prog_file.c_str()) == 0) {
-				progDate = CfgFile_ProgSwd.last_prog_date;
-			}
-			if (i) json += ",";
-			json += "{";
-			json +=  "\"filename\":\""; 	json += fname.c_str();		json += "\"";
-			json += ",\"filetype\":\""; 	json += ftype.c_str();		json += "\"";
-			json += ",\"filesizestr\":\"";	json += formatBytes(fsize); json += "\"";
-			json += ",\"filesizebyte\":\"";	json += (String)fsize;		json += "\"";
-			json += ",\"progchip\":\"";									json += "\"";
-			json += ",\"progactual\":\"";								json += "\"";
-			json += ",\"progdate\":\"";		json += progDate;			json += "\"";
-			json += "}";
-			i++;
-			}
-		}
-	}
-#endif
-#if defined(ESP32)
 	if (_fs == nullptr) { _ret = false; }// Если ФС не инициализирована — выходим
 	else {
 		File root =  _fs->open("/");
@@ -263,7 +215,6 @@ bool Class_ProgSwd::web_GetFilesListExe(String &_str)	{
 			}
 		}
 	}
-#endif
 
 	json += "]";
 	_str = json;
@@ -293,6 +244,32 @@ int  Class_ProgSwd::prog_Programm(String _path, String _fwTime)	{
 
 	DEBUGLOGSWD("Programming end \r\n");
 	return _res;
+}
+
+// Callback после завершения EERTOS-кооперативной прошивки (успех или ошибка)
+void Class_ProgSwd::onFlashComplete() {
+	if (swdprog.isFlashError()) {
+		DEBUGLOGSWD("onFlashComplete: ERROR during programming of %s\r\n", _flashPath.c_str());
+		_progResult = 1;  // сигнал ошибки для web_FileUploadProgress
+		_progRunning = false;
+		_uploadPercent = 0;
+		DEBUGLOGSWD("Programming error \r\n");
+	} else {
+		DEBUGLOGSWD("onFlashComplete: saving config for %s\r\n", _flashPath.c_str());
+		
+		// Сохраняем имя файла и дату в конфиг
+		CfgFile_ProgSwd.last_prog_file = _flashPath;
+		CfgFile_ProgSwd.last_prog_date = _flashNtpStr;
+		cfg_FileSave();
+		
+		DEBUGLOGSWD("Programming success, saved prog date: %s\r\n", _flashNtpStr.c_str());
+		
+		_progResult = 0;
+		_progRunning = false;
+		_uploadPercent = 100;
+		
+		DEBUGLOGSWD("Programming end \r\n");
+	}
 }
 
 
@@ -400,6 +377,17 @@ void Class_ProgSwd::web_FileUpload2Chip(AsyncWebServerRequest *request) {
 
 	if (_fs == nullptr) 		{	return request->send(500, "text/plain", "FS not initialized");	}
 	if (request->args() == 0) 	{	return request->send(500, "text/plain", "BAD ARGS");	}
+	
+	// Защита от повторного входа — если прошивка уже идёт
+	if (swdprog.isFlashBusy()) {
+		DEBUGLOGSWD("web_FileUpload2Chip: BUSY — programming already in progress\r\n");
+		return request->send(423, "text/plain", "busy");
+	}
+	if (_progRunning) {
+		DEBUGLOGSWD("web_FileUpload2Chip: _progRunning already true\r\n");
+		return request->send(423, "text/plain", "busy");
+	}
+	
 	String path = "";
 	for (uint8_t i = 0; i < request->args(); i++) {
 		DEBUGLOGSWD("Arg %d: %s\r\n", i, request->arg(i).c_str());
@@ -410,34 +398,27 @@ void Class_ProgSwd::web_FileUpload2Chip(AsyncWebServerRequest *request) {
 	if (!_fs->exists(path)) 		{	return request->send(404, "text/plain", "FileNotFound");	}
 
 	DEBUGLOGSWD("\t upload status: %s\r\n", path.c_str());
+	
+	// Сохраняем параметры для onFlashComplete()
+	_flashPath = path;
+	_flashNtpStr = NTP.getTimeDateString();
+	
+	// Запускаем EERTOS-кооперативную прошивку
+	if (!swdprog.startFlash(FLASH_START_ADDR, _flashPath)) {
+		DEBUGLOGSWD("web_FileUpload2Chip: startFlash() failed\r\n");
+		return request->send(500, "text/plain", "startFlash failed");
+	}
+	
+	_progRunning = true;
+	_progResult = -1;
+	_progStartTime = millis();
+	
+	// Регистрируем задачу в EERTOS — она будет вызываться каждый loop()
+	swdprog.beginFlashStep();
+	
+	// Отвечаем сразу, не блокируя HTTP
 	request->send(200, "text/plain", "ok");
-
-	String ntpStr = "";
-
-#if defined(MODULE_NTP)
-	ntpStr = NTP.getTimeDateString();
-#endif
-	// Переключаем ESP8266 в AP режим на время прошивки STM32,
-	// чтобы WiFi стек не разрушался при отключённом watchdog
-	// и устанавливаем флаги состояния для асинхронного опроса с фронтенда
-	#if defined(ESP8266)
-		WiFi.mode(WIFI_AP);
-		_progRunning = true;
-		_progResult = -1;
-		_progStartTime = millis();
-	#endif
-
-	int res = progSwd.prog_Programm(path, ntpStr );
-
-	// После прошивки переключаемся обратно в STA и переподключаемся к роутеру
-	#if defined(ESP8266)
-		_progResult = res;
-		_progRunning = false;
-		WiFi.mode(WIFI_STA);
-		WiFi.reconnect();
-	#endif
-
-	//здесь уже выход из программирования
+	DEBUGLOGSWD("web_FileUpload2Chip: EERTOS flash started for %s\r\n", _flashPath.c_str());
 }
 
 void Class_ProgSwd::web_FileUploadSize(AsyncWebServerRequest *request) {
@@ -458,28 +439,33 @@ void Class_ProgSwd::web_FileUploadSize(AsyncWebServerRequest *request) {
 void Class_ProgSwd::web_FileUploadProgress(AsyncWebServerRequest *request) {
 	DEBUGLOGSWD(__FUNCTION__);	DEBUGLOGSWD("\r\n");
 	String values = "";
-	// Для ESP8266: если идёт программирование — отдаём статус программирования
-	// вместо прогресса загрузки файла
-	#if defined(ESP8266)
-	if (_progRunning) {
+	
+	// Если идёт программирование STM32 — отдаём статус и процент
+	if (_progRunning || swdprog.isFlashBusy()) {
 		values += "progStatus|running|div\n";
+		// Берём процент напрямую из swdprog, так как EERTOS обновляет его в реальном времени
+		uint8_t pct = swdprog.getPercent();
+		_uploadPercent = pct;
+		values += "progPercent|" + (String)pct + "|div\n";
 		request->send(200, "text/plain", values);
 		return;
 	}
 	if (_progResult == 0) {
 		values += "progStatus|done|div\n";
+		values += "progPercent|100|div\n";
 		_progResult = -1;  // сброс, чтобы следующий запрос не видел done
+		_uploadPercent = 0;
 		request->send(200, "text/plain", values);
 		return;
 	}
 	if (_progResult > 0 || _progResult < -1) {
 		values += "progStatus|error|div\n";
 		_progResult = -1;  // сброс
+		_uploadPercent = 0;
 		request->send(200, "text/plain", values);
 		return;
 	}
-	#endif
-	// Старое поведение: процент загрузки файла
+	// Обычный процент загрузки файла
 	values += "percent|" + (String)_uploadPercent + "|div\n";
 	request->send(200, "text/plain", values);
 }

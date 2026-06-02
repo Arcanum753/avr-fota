@@ -24,15 +24,6 @@
 #endif
 
  
-#elif defined(ESP8266)
-
-#ifndef SWDPIN_CLK
-#define SWDPIN_CLK  5   // d19 swclk
-#endif
-
-#ifndef SWDPIN_DATA
-#define SWDPIN_DATA  4   // d19 miso
-#endif
 
 #endif
 

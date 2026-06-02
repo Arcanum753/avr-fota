@@ -4,34 +4,19 @@
 #include "FSWebServerLib.h"
 #include "debug_cm.h"
 
-#if defined(ESP32)
 #include <SPIFFS.h>
 #include <esp_task_wdt.h>
-#endif
-#if defined(ESP8266)
-#include <FS.h>
-
-extern "C" {
-  #include "user_interface.h"
-  #include "mem.h"
-}
-#endif
 
 #include "module_prog_swd.h"
 #include "prog_swd.h"
 #include "swd.h"
+#include "eertos.h"
 
 
 ESP_PROGSWD swdprog;
 ESP_PROGSWD::ESP_PROGSWD(){}
 
-#if defined(ESP32)
-    void ESP_PROGSWD::setFs(fs::SPIFFSFS* fs)
-#endif
-#if defined(ESP8266)
-    void ESP_PROGSWD::setFs(FS* fs)                         // esp8266/esp32 flash file system
-#endif
-{   _fs = fs;   }
+void ESP_PROGSWD::setFs(fs::SPIFFSFS* fs) { _fs = fs; }
 
 int ESP_PROGSWD::stm32_ChipProgrammMain( String &path)  {
   DEBUGLOGSWD(__PRETTY_FUNCTION__);    DEBUGLOGSWD("\r\n");
@@ -46,6 +31,133 @@ int ESP_PROGSWD::stm32_ChipProgrammMain( String &path)  {
 	stm32Fx_unhalt();
 	stm32Fx_rst();
 	return 0;
+}
+
+// ===== EERTOS-кооперативная прошивка =====
+
+void ESP_PROGSWD::beginFlashStep() {
+    // Регистрируем задачу в EERTOS (будет вызываться каждый вызов loop())
+    SetTask(flash_step_task_wrapper);
+}
+
+// Глобальный враппер для регистрации в EERTOS.
+// Перерегистрирует себя в очереди, пока прошивка не завершена.
+void flash_step_task_wrapper() {
+    swdprog.flashStep();
+    // пока прошивка не завершена (FLASH_IDLE) — остаёмся в очереди EERTOS
+    if (swdprog.isFlashBusy()) {
+        SetTask(flash_step_task_wrapper);
+    }
+}
+
+bool ESP_PROGSWD::startFlash(uint32_t offset, String &path) {
+    if (isFlashBusy()) { return false; }  // защита от повторного входа
+    if (!_fs) { return false; }
+    if (!path.startsWith("/")) { path = "/" + path; }
+    
+    _flashPath = path;
+    _flashAddr = offset;
+    _flashPosi = 0;
+    _flashFileSize = 0;
+    _flashStartTime = 0;
+    _percent = 0;
+    _flashError = false;
+    _flashState = FLASH_INIT;
+    
+    DEBUGLOGSWD("startFlash: %s at 0x%08x\r\n", path.c_str(), offset);
+    return true;
+}
+
+void ESP_PROGSWD::flashStep() {
+    switch (_flashState) {
+        case FLASH_INIT: {
+            // Открываем файл и определяем размер
+            _flashFile = _fs->open(_flashPath, "rb");
+            if (!_flashFile) {
+                DEBUGLOGSWD("flashStep: FAILED to open %s\r\n", _flashPath.c_str());
+                _flashState = FLASH_IDLE;
+                return;
+            }
+            _flashFile.seek(0, SeekEnd);
+            _flashFileSize = _flashFile.position();
+            _flashFile.seek(0, SeekSet);
+            // _flashAddr уже установлен в startFlash(), не затираем!
+            _flashPosi = 0;
+            _flashStartTime = millis();
+            
+            DEBUGLOGSWD("Going to write %i bytes to flash\r\n", _flashFileSize);
+            _flashState = FLASH_WRITE;
+            break;
+        }
+        
+        case FLASH_WRITE: {
+            // Выполняем abort/halt/unlock/erase/progEn один раз перед началом записи
+            if (_flashPosi == 0) {
+                stm32Fx_abort_all();
+                stm32Fx_halt();
+                stm32f1_unlock_erase_flash();
+                stm32f1_progEn();
+            }
+            
+            // Записываем ОДНУ страницу (1024 байт)
+            uint8_t buffer[PAGESIZE] = {0x00};
+            uint32_t cur_len = (_flashFileSize - _flashPosi >= PAGESIZE) ? PAGESIZE : (_flashFileSize - _flashPosi);
+            _flashFile.read(buffer, (size_t)cur_len);
+            uint8_t write_ret = stm32fX_write_bank(_flashAddr, buffer, cur_len);
+            if (write_ret != 0) {
+                DEBUGLOGSWD("flashStep: write_bank returned %i at addr 0x%08x — aborting!\r\n", write_ret, _flashAddr);
+                _flashFile.close();
+                _flashError = true;
+                _flashState = FLASH_DONE;
+                break;
+            }
+            _flashAddr += cur_len;
+            _flashPosi += cur_len;
+            
+            // Обновляем процент
+            _percent = (uint8_t)(((float)_flashPosi / (float)_flashFileSize) * 100.0f);
+            DEBUGLOGSWD("%i percents \r\n", _percent);
+            progSwd.setUploadPercent(_percent);
+            esp_task_wdt_reset();
+            
+            // Проверяем, закончили ли
+            if (_flashPosi >= _flashFileSize) {
+                _flashFile.close();
+                _speed = (float)((float)(_flashFileSize / (float)(millis() - _flashStartTime)));
+                DEBUGLOGSWD("Done flashing file, it took %i ms speed: %.4f kbs\r\n",
+                    (int)(millis() - _flashStartTime), _speed);
+                
+                // Завершающие операции
+                stm32Fx_halt();
+                stm32Fx_unhalt();
+                stm32Fx_rst();
+                
+                _flashState = FLASH_DONE;
+            }
+            break;
+        }
+        
+        case FLASH_DONE: {
+            // Если была ошибка — всё равно делаем halt/unhalt/rst, 
+            // чтобы STM32 не завис в halt-режиме
+            if (_flashError) {
+                DEBUGLOGSWD("flashStep: FLASH_DONE with error, releasing target\r\n");
+                stm32Fx_halt();
+                stm32Fx_unhalt();
+                stm32Fx_rst();
+            }
+            // Сообщаем о завершении — вызываем callback в module_prog_swd
+            _flashState = FLASH_IDLE;
+            DEBUGLOGSWD("flashStep: FLASH_DONE -> IDLE\r\n");
+            progSwd.onFlashComplete();
+            break;
+        }
+        
+        case FLASH_IDLE:
+        default:
+            // Ничего не делаем
+            break;
+    }
 }
 
 void ESP_PROGSWD::stm32Fx_write_port(bool APorDP, uint8_t address, uint32_t value, bool muted) {
@@ -149,13 +261,10 @@ void ESP_PROGSWD::stm32f1_unlock_erase_flash() {
   stm32Fx_write_register(FLASH_CR + FLASH_BANK1_OFFSET, FLASH_CR_MER  , 0);
   stm32Fx_write_register(FLASH_CR + FLASH_BANK1_OFFSET, FLASH_CR_STRT | FLASH_CR_MER , 0);
 
-  while (stm32f1_flash_busy())  {    if( millis() - timeout > 2000 )  { return ; }   }
-
-  // TODO offset2 raeder
-  // stm32f1_flash_unlock (FLASH_BANK2_OFFSET)
-  // stm32Fx_write_register(FLASH_CR + FLASH_BANK2_OFFSET, FLASH_CR_MER  );
-  // stm32Fx_write_register(FLASH_CR + FLASH_BANK2_OFFSET, FLASH_CR_STRT | FLASH_CR_MER );
-  // while (stm32f1_flash_busy())  {    if( millis() - timeout > 100 )  { return ; }   }
+  while (stm32f1_flash_busy())  {
+    if( millis() - timeout > 2000 )  { return ; }
+    delay(1); // отдаём управление WiFi-стекам
+  }
 
 }
 
@@ -176,7 +285,6 @@ void ESP_PROGSWD::stm32f4_erase_flash_dap() {
   stm32f4_flash_unlock_dap();
   DEBUGLOGSWD(__FUNCTION__);	DEBUGLOGSWD("\r\n");
 
-  // stm32Fx_write_register(SWD_FLASH_PRGKEYR, FLASH_CR_MER | FLASH_CR_STRT | FLASH_CR_PSIZE_WORD); // base + 0x10
   long timeout = millis();
   while (stm32f4_flash_busy())  {    if( millis() - timeout > 100 )  { return ; }  }
   return ;
@@ -196,12 +304,7 @@ uint8_t ESP_PROGSWD::stm32_flash_file(uint32_t offset, String &path) {
   if (!path.startsWith("/")){ path = "/" + path;}
 	uint32_t addr =  offset;
 	File file;
-  #if defined(ESP32)
 	file = _fs->open(path, "rb");
-  #endif
-  #if defined(ESP8266)
-  file = _fs->open(path, "r");
-  #endif
 	if (file == 0)  {    return 1;  }
 	file.seek(0, SeekEnd);
 	uint32_t file_size = file.position();
@@ -217,13 +320,12 @@ uint8_t ESP_PROGSWD::stm32_flash_file(uint32_t offset, String &path) {
 		file.read(buffer, (size_t)cur_len);
 		stm32fX_write_bank(addr, buffer, cur_len);
 		addr += cur_len;
-		DEBUGLOGSWD("%i percents \r\n", (uint16_t)(((float)posi / (float)file_size) * 100));
-    #if defined(ESP32)
-		  esp_task_wdt_reset();
-    #endif
-    #if defined(ESP8266)
-          yield();
-    #endif
+		uint8_t percent = (uint16_t)(((float)posi / (float)file_size) * 100);
+		DEBUGLOGSWD("%i percents \r\n", percent);
+		// Обновляем процент для асинхронного опроса с фронтенда
+		progSwd.setUploadPercent(percent);
+		esp_task_wdt_reset();
+		delay(1);
 	}
     file.close();
     _speed = (float)((float)(file_size / (float)(millis() - millis_start)));
@@ -243,9 +345,12 @@ uint8_t ESP_PROGSWD::stm32fX_write_bank(uint32_t addr, uint8_t buffer[], uint32_
     uint32_t tmp = (uint32_t)data16b0 << (8U *((addr + posi) & 2U) );
 
     _ret = stm32Fx_write_flash_16bit(addr + posi, tmp);
-    //long end_micros = micros() + 500;
     if ( _ret != 1 ) {return 1;}
-
+    
+    // Каждые 128 байт отдаём управление WiFi-стекам (~8ms на страницу 1024 байт)
+    if ((posi % (WORDSIZE * 64)) == 0) {
+        delay(1);
+    }
   }
   return 0;
 }
@@ -271,11 +376,9 @@ bool ESP_PROGSWD::stm32Fx_write_flash_16bit(uint32_t address, uint32_t value, bo
   uint32_t temp = 0;
   bool ret = false;
 
-//   long end_micros = micros() + 500;
                 swd_AP_Write(AP_CSW, CSW_SIZE16);
   bool state1 = swd_AP_Write(AP_TAR, address);
   bool state2 = swd_AP_Write(AP_DRW, value);
-//   while (micros() < end_micros)    {    }
   bool state3 = swd_DP_Read(DP_RDBUFF, temp);
        state3 = swd_DP_Read(DP_RDBUFF, temp);
   if (muted == false)   { DEBUGLOGSWD("%i %i %i Write 0x%08x : 0x%08x  read 0x%08x \r\n", state1, state2, state3, address, value, temp );}

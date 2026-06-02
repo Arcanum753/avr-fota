@@ -1,7 +1,10 @@
 
 #ifndef _PROGSWD_h
 #define _PROGSWD_h
- 
+
+#include <Arduino.h>
+#include <FS.h>
+
 
 #include "swd.h"
 
@@ -95,22 +98,27 @@
 
 
 
+// Конечный автомат прошивки STM32 (для EERTOS-кооперативной работы)
+enum FlashState { FLASH_IDLE = 0, FLASH_INIT, FLASH_WRITE, FLASH_DONE };
+
 class ESP_PROGSWD {
 public:
     ESP_PROGSWD();
-#if defined(ESP32)
     void setFs(fs::SPIFFSFS* fs);
-#endif
-#if defined(ESP8266)
-    void setFs(FS* fs) ;                       // esp8266/esp32 flash file system
-#endif
-
 
     uint32_t stm32Fx_begin();
 
-
-    int stm32_ChipProgrammMain( String &path)  ;
+    // Блокирующая прошивка (старый метод — для совместимости)
+    int stm32_ChipProgrammMain( String &path);
     uint8_t stm32_flash_file(uint32_t offset, String &path);
+
+    // EERTOS-кооперативная прошивка
+    bool startFlash(uint32_t offset, String &path);
+    void flashStep();
+    void beginFlashStep();  // регистрация задачи в EERTOS
+    bool isFlashBusy() { return _flashState != FLASH_IDLE; }
+    bool isFlashError() { return _flashError; }
+    uint8_t getPercent() { return _percent; }
 
     void stm32Fx_abort_all();
     void stm32Fx_rst ();
@@ -144,18 +152,24 @@ protected:
     volatile float    _speed = 0;
     volatile uint8_t _percent = 0;
     //fs + hex file
-    #if defined(ESP32)
     fs::SPIFFSFS*               _fs;
-    #endif
-    #if defined(ESP8266)
-    FS*                         _fs;                        // esp8266/esp32 flash file system
-    #endif
 
+    // EERTOS state для кооперативной прошивки
+    FlashState       _flashState = FLASH_IDLE;
+    bool             _flashError = false;  // флаг ошибки при записи страницы
+    File             _flashFile;
+    uint32_t         _flashAddr = 0;
+    uint32_t         _flashPosi = 0;
+    uint32_t         _flashFileSize = 0;
+    uint32_t         _flashStartTime = 0;
+    String           _flashPath;
 };
 
+
+// EERTOS-враппер для кооперативной прошивки STM32 (определён в prog_swd.cpp)
+void flash_step_task_wrapper();
 
 extern ESP_PROGSWD swdprog;
 
 
 #endif // _PROGSWD_h
-
