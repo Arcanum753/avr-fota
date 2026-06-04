@@ -48,13 +48,11 @@
 	<script>
 		window.onload = function() {
 			setTimeout(() => {
-				ApplyCVT("/system/version");
-				ApplyCVT("/system/infovalues");
-				ApplyCVT("/ntp/info");
-				ApplyCVT("/wifi/info");
-				
+				ApplyCVT("/system/version")
+					.then(() => ApplyCVT("/system/infovalues"))
+					.then(() => ApplyCVT("/ntp/info"))
+					.then(() => ApplyCVT("/wifi/info"));
 			}, 250);
-			
 		};
 		</script>
 

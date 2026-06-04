@@ -50,6 +50,78 @@ void flash_step_task_wrapper() {
     }
 }
 
+// ===== EERTOS-кооперативная проверка чипа =====
+
+void ESP_PROGSWD::startChipCheck() {
+    if (isChipCheckBusy()) { return; }  // защита от повторного входа
+    _chipState = CHIP_INIT;
+    _chipRetry = 0;
+    _chipResultId = 0;
+    DEBUGLOGSWD("startChipCheck: beginning chip probe\r\n");
+    SetTask(chip_check_step_task_wrapper);
+}
+
+// Глобальный враппер для регистрации в EERTOS.
+// Перерегистрирует себя в очереди, пока проверка чипа не завершена.
+void chip_check_step_task_wrapper() {
+    swdprog.chipCheckStep();
+    if (swdprog.isChipCheckBusy()) {
+        SetTask(chip_check_step_task_wrapper);
+    }
+}
+
+void ESP_PROGSWD::chipCheckStep() {
+    switch (_chipState) {
+        case CHIP_INIT: {
+            swd_gpio_init();
+            _chipRetry = 0;
+            _chipState = CHIP_PROBE;
+            DEBUGLOGSWD("chipCheckStep: CHIP_INIT -> CHIP_PROBE\r\n");
+            break;
+        }
+        
+        case CHIP_PROBE: {
+            // Одна попытка прочитать IDCODE через однократные функции без ретраев
+            swd_write(0xffffffff, 32);
+            swd_write(0xffffffff, 32);
+            swd_write(0xe79e, 16);
+            swd_write(0xffffffff, 32);
+            swd_write(0xffffffff, 32);
+            swd_write(0, 32);
+            swd_write(0, 32);
+            
+            uint32_t idcode = 0;
+            if (swd_DP_Read_once(DP_IDCODE, idcode) && idcode != 0) {
+                _chipResultId = idcode;
+                _chipState = CHIP_DONE;
+                DEBUGLOGSWD("chipCheckStep: chip found, ID=0x%08x\r\n", idcode);
+            } else {
+                _chipRetry++;
+                if (_chipRetry >= 15) {
+                    _chipResultId = 0;
+                    _chipState = CHIP_DONE;
+                    DEBUGLOGSWD("chipCheckStep: chip NOT found after 15 attempts\r\n");
+                }
+                // иначе остаёмся в CHIP_PROBE — следующий вызов повторит
+            }
+            break;
+        }
+        
+        case CHIP_DONE: {
+            _chipState = CHIP_IDLE;
+            DEBUGLOGSWD("chipCheckStep: CHIP_DONE -> CHIP_IDLE, result=0x%08x\r\n", _chipResultId);
+            // Вызываем callback в module_prog_swd
+            progSwd.onChipCheckComplete(_chipResultId);
+            break;
+        }
+        
+        case CHIP_IDLE:
+        default:
+            // Ничего не делаем
+            break;
+    }
+}
+
 bool ESP_PROGSWD::startFlash(uint32_t offset, String &path) {
     if (isFlashBusy()) { return false; }  // защита от повторного входа
     if (!_fs) { return false; }
@@ -231,7 +303,7 @@ uint32_t ESP_PROGSWD::stm32Fx_begin()  {
   uint32_t temp = 0;
   temp = swd_init();
   if (temp == 0 ) { return temp; }
-  if (temp == SWD_STM32F103ID) {} // TODO
+  if (temp == SWD_STM32F103ID) {} //TODO 
 
   return temp;
 }

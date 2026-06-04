@@ -1,7 +1,7 @@
 
 #if defined(ESP32)
 #include <SPIFFS.h>
-#include "esp_task_wdt.h"
+#include <esp_task_wdt.h>
 #endif
 #if defined(ESP8266)
 #include <FS.h>
@@ -26,6 +26,16 @@ Ticker _secondEERtos;
 
 void setup() {
   
+#if defined(ESP32)
+    // Увеличиваем таймаут Task Watchdog до 30 секунд для обработки
+    // длительных операций SPIFFS и HTTP-запросов в async_tcp,
+    // особенно при загрузке страниц с множеством статических ресурсов
+    esp_task_wdt_init(30, true);
+#endif
+#if defined(ESP8266)
+    ESP.wdtFeed();
+#endif
+
     Serial.begin(115200);
     InitRTOS(); // init eertos
     fsMounted = SPIFFS.begin();
@@ -82,8 +92,11 @@ void printGitInfo() {
     Serial.println("*** ESP8266 FIRMWARE INFORMATION ***");
 	#endif
     Serial.println("Envoirement: " + String(BUILD_ENV));
+    
     Serial.println("Chip firmware ver: " + String(FIRMWARE_VERSION));
-    Serial.println("Build Date and time: " + String(BUILD_TIME));
+    Serial.println("File system ver: " + ESPHTTPServer.getFsVersionStr());
+    
+    
     
     Serial.println("Git Branch: " + String(GIT_BRANCH));
     Serial.println("Git Commit: " + String(GIT_COMMIT));

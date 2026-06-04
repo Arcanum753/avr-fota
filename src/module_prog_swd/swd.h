@@ -35,6 +35,9 @@
    bool swd_AP_Read(unsigned addr, uint32_t &data);
    bool swd_DP_Write(unsigned addr, uint32_t data);
    bool swd_DP_Read(unsigned addr, uint32_t &data);
+   // Однократные операции без ретраев (для неблокирующей проверки чипа)
+   bool swd_DP_Read_once(unsigned addr, uint32_t &data);
+   bool swd_AP_Read_once(unsigned addr, uint32_t &data);
    bool swd_transfer(unsigned port_address, bool APorDP, bool RorW, uint32_t &data);
    bool swd_calculate_parity(uint32_t in_data);
    void swd_write(uint32_t data, uint8_t bits);

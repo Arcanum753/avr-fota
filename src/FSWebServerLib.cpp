@@ -7,6 +7,7 @@
 
 #if defined(ESP32)
 #include <SPIFFS.h>
+#include <esp_task_wdt.h>
 #include <esp32-hal-gpio.h>
 #include <ESPmDNS.h>
 #endif
@@ -159,6 +160,7 @@ void AsyncFSWebServer::html_send_chipinfo(AsyncWebServerRequest *request) {
     
 #if defined(ESP8266)
     // Максимально простая версия для ESP8266 - минимум операций
+    ESP.wdtFeed();
     char buffer[256];
     snprintf(buffer, sizeof(buffer),
         "x_chipid|%08X|div\n"
@@ -172,8 +174,10 @@ void AsyncFSWebServer::html_send_chipinfo(AsyncWebServerRequest *request) {
     );
     request->send(200, "text/plain", buffer);
     
-#else
+#endif
+#if defined(ESP32)
     // Для ESP32 оставляем как было
+    esp_task_wdt_reset();
     String values = "";
     values += "x_chipid|" + (String)ESP.getChipModel() + "|div\n";
     values += "x_mhz|" + (String)ESP.getCpuFreqMHz() + "|div\n";
@@ -277,22 +281,55 @@ bool AsyncFSWebServer:: handleFileRead(String path, AsyncWebServerRequest *reque
 	DEBUGEDIT("handleFileRead: %s\r\n", path.c_str());
 	// CANNOT RUN DELAY() INSIDE CALLBACK
 	// if (CONNECTION_LED >= 0) {	flashLED(CONNECTION_LED, 1, 30); 	}	// Show activity on LED
+#if defined(ESP32)
+	esp_task_wdt_reset();
+#endif
+#if defined(ESP8266)
+	ESP.wdtFeed();
+#endif
 	if (path.endsWith("/")) {	path += HTML_INDEX;	}
 	String contentType = getContentType(path, request);
 	String pathWithGz = path + ".gz";
+	
+	// Сброс watchdog перед операциями SPIFFS (могут быть медленными)
+#if defined(ESP32)
+	esp_task_wdt_reset();
+#endif
+#if defined(ESP8266)
+	ESP.wdtFeed();
+#endif
+	
 	if (_fs->exists(pathWithGz) || _fs->exists(path)) {
 		if (_fs->exists(pathWithGz)) { path += ".gz"; }
 		DEBUGEDIT("Content type: %s\r\n", contentType.c_str());
-		// Используем штатную асинхронную отправку файлов.
-		// Проблема рекурсивного yield() решена добавлением yield() в loop() main.cpp
-
+		
+		// Сброс watchdog после exists() и перед beginResponse()
+#if defined(ESP32)
+	esp_task_wdt_reset();
+#endif
 #if defined(ESP8266)
     	ESP.wdtFeed();
 #endif
 		AsyncWebServerResponse *response = request->beginResponse(*_fs, path, contentType);
 		if (path.endsWith(".gz")) {response->addHeader("Content-Encoding", "gzip");}
+		
+		// Сброс watchdog после beginResponse() и перед send()
+#if defined(ESP32)
+	esp_task_wdt_reset();
+#endif
+#if defined(ESP8266)
+    	ESP.wdtFeed();
+#endif
 		DEBUGEDIT("File %s exist\r\n", path.c_str());
 		request->send(response);
+		
+		// Сброс watchdog после send()
+#if defined(ESP32)
+	esp_task_wdt_reset();
+#endif
+#if defined(ESP8266)
+    	ESP.wdtFeed();
+#endif
 		DEBUGEDIT("File %s Sent\r\n", path.c_str());
 		return true;
 	}
@@ -451,6 +488,12 @@ void AsyncFSWebServer::serverInit() {
 	onNotFound([this](AsyncWebServerRequest *request) {
 		DEBUGLOGFH("Not found: %s\r\n", request->url().c_str());
 		if (!this->checkAuth(request)) {	return request->requestAuthentication(); };
+#if defined(ESP32)
+		esp_task_wdt_reset();
+#endif
+#if defined(ESP8266)
+		ESP.wdtFeed();
+#endif
 		// Не создаём response заранее — handleFileRead сам отправит ответ
 		// или мы отправим 404. AsyncWebServer сам управляет памятью response после send().
 		if (!this->handleFileRead(request->url(), request)) {
@@ -557,7 +600,8 @@ void AsyncFSWebServer::serialShowAbout() {
 	Serial.printf("Project env: %s\n\r ", BUILD_ENV);	
 	Serial.printf("git branch: %s\n\r ", GIT_BRANCH);	
 	Serial.printf("ver date: %s\n\r ", BUILD_TIME);	
-	Serial.printf("ver build: %s\n\r ", String(VERSION_BUILD).c_str());
+	Serial.printf("Fiemware ver: %s\n\r ", String(VERSION_BUILD).c_str());
+	Serial.printf("File system ver: %s\n\r ", getFsVersionStr().c_str());
 	
 	Serial.printf("Device serial number: %s\n\r ", _sysConfig.deviceSerial.c_str());	
 	#if defined(ESP32)

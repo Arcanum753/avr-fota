@@ -101,6 +101,9 @@
 // Конечный автомат прошивки STM32 (для EERTOS-кооперативной работы)
 enum FlashState { FLASH_IDLE = 0, FLASH_INIT, FLASH_WRITE, FLASH_DONE };
 
+// Конечный автомат проверки чипа (для EERTOS-кооперативной работы)
+enum ChipCheckState { CHIP_IDLE = 0, CHIP_INIT, CHIP_PROBE, CHIP_DONE };
+
 class ESP_PROGSWD {
 public:
     ESP_PROGSWD();
@@ -119,6 +122,12 @@ public:
     bool isFlashBusy() { return _flashState != FLASH_IDLE; }
     bool isFlashError() { return _flashError; }
     uint8_t getPercent() { return _percent; }
+
+    // EERTOS-кооперативная проверка чипа
+    void startChipCheck();
+    void chipCheckStep();
+    bool isChipCheckBusy() { return _chipState != CHIP_IDLE; }
+    uint32_t getChipCheckResult() { return _chipResultId; }
 
     void stm32Fx_abort_all();
     void stm32Fx_rst ();
@@ -163,11 +172,19 @@ protected:
     uint32_t         _flashFileSize = 0;
     uint32_t         _flashStartTime = 0;
     String           _flashPath;
+
+    // EERTOS state для кооперативной проверки чипа
+    ChipCheckState   _chipState = CHIP_IDLE;
+    uint8_t          _chipRetry = 0;
+    uint32_t         _chipResultId = 0;
 };
 
 
 // EERTOS-враппер для кооперативной прошивки STM32 (определён в prog_swd.cpp)
 void flash_step_task_wrapper();
+
+// EERTOS-враппер для кооперативной проверки чипа (определён в prog_swd.cpp)
+void chip_check_step_task_wrapper();
 
 extern ESP_PROGSWD swdprog;
 

@@ -39,10 +39,10 @@
 	<script>
 		window.onload = function() {
 			setTimeout(() => {
-				ApplyCVT("/system/version");
-                ApplyCVT("/udp/info");
-                ApplyCVT("/udp/ver");
-			}, 100);
+				ApplyCVT("/system/version")
+					.then(() => ApplyCVT("/udp/info"))
+					.then(() => ApplyCVT("/udp/ver"));
+			}, 500);
 			
 		};
 

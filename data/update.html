@@ -63,35 +63,37 @@
 
         window.onload = function () {
             setTimeout(() => {
-                    ApplyCVT("/system/infovalues");
-                    ApplyCVT("/system/version");
-            }, 250);
-            
-            // Load current firmware and filesystem versions
-            setTimeout(() => {
-                const xhr = new XMLHttpRequest();
-                xhr.open('GET', '/update/ver', true);
-                xhr.onload = function() {
-                    if (xhr.status === 200) {
-                        const fieldsRows = ParseCVT(xhr.response);
-                        let fwVersion = "";
-                        let fsVersion = "";
-                        for (let fields of fieldsRows) {
-                            if (fields[0] === "fwVersion") {
-                                fwVersion = fields[1];
-                            } else if (fields[0] === "fsVersion") {
-                                fsVersion = fields[1];
-                            }
-                        }
-                        if (fwVersion) {
-                            document.getElementById('updFsCurrentFW').innerHTML = "Current Firmware: " + fwVersion;
-                        }
-                        if (fsVersion) {
-                            document.getElementById('updFsCurrentFS').innerHTML = "Current File System: " + fsVersion;
-                        }
-                    }
-                };
-                xhr.send();
+                ApplyCVT("/system/version")
+                    .then(() => ApplyCVT("/system/infovalues"))
+                    .then(() => {
+                        return new Promise((resolve) => {
+                            const xhr = new XMLHttpRequest();
+                            xhr.open('GET', '/update/ver', true);
+                            xhr.onload = function() {
+                                if (xhr.status === 200) {
+                                    const fieldsRows = ParseCVT(xhr.response);
+                                    let fwVersion = "";
+                                    let fsVersion = "";
+                                    for (let fields of fieldsRows) {
+                                        if (fields[0] === "fwVersion") {
+                                            fwVersion = fields[1];
+                                        } else if (fields[0] === "fsVersion") {
+                                            fsVersion = fields[1];
+                                        }
+                                    }
+                                    if (fwVersion) {
+                                        document.getElementById('updFsCurrentFW').innerHTML = "Current Firmware: " + fwVersion;
+                                    }
+                                    if (fsVersion) {
+                                        document.getElementById('updFsCurrentFS').innerHTML = "Current File System: " + fsVersion;
+                                    }
+                                }
+                                resolve();
+                            };
+                            xhr.onerror = function() { resolve(); };
+                            xhr.send();
+                        });
+                    });
             }, 500);
         };
 

@@ -404,14 +404,12 @@ async function saveSlotData(slotNumber) {
         window.onload = function() {
             console.log('Page loaded, initializing...');
             
-            getNetwork();
-            loadAllSlots();
-            
-            ApplyCVT("/system/infovalues");
-            ApplyCVT("/wifi/info");
-            
             setTimeout(() => {
-                ApplyCVT("/system/version");
+                ApplyCVT("/system/version")
+                    .then(() => ApplyCVT("/system/infovalues"))
+                    .then(() => ApplyCVT("/wifi/info"))
+                    .then(() => loadAllSlots())
+                    .then(() => getNetwork());
             }, 500);
         };
     </script>

@@ -1,5 +1,6 @@
 #include <cstddef>
 #include <cstring>
+#include <vector>
 #include <Arduino.h>
 #include <ArduinoJson.h>
 
@@ -7,7 +8,7 @@
 #include <esp_task_wdt.h>
 #include <esp32-hal-gpio.h>
 #include <SPIFFS.h>
-#include <mbedtls/md5.h>
+#include "esp_rom_md5.h"
 #endif
 
 #include "FSWebServerLib.h"
@@ -24,6 +25,7 @@
 #include "module_prog_swd.h"
 #include "common.h"
 #include "module_prog_swd_version.h"
+#include "StringArray.h"
 
 Class_ProgSwd progSwd(0);
 Class_ProgSwd::Class_ProgSwd(uint8_t in): _in(in){ }
@@ -35,7 +37,8 @@ bool Class_ProgSwd::begin (){
     DEBUGLOGSWD(__PRETTY_FUNCTION__);	DEBUGLOGSWD("\r\n");
     cfg_SetDefault();
     if (cfg_FileLoad() == false) {	cfg_FileSave();	}
-	swdprog.stm32Fx_begin();
+	swd_gpio_init();
+	
 	// прокидываем указатель на файловую систему в класс программатора
 	swdprog.setFs(_fs);
 	//TODO return init result
@@ -158,8 +161,14 @@ bool Class_ProgSwd::web_GetDiskInfoExe(String &_str)	{
 	size_t sizeAll	=	0;
 	size_t sizeUsed	=	0;
 	 if (_fs != nullptr) {
+#if defined(ESP32)
+		 esp_task_wdt_reset();
+#endif
 		 sizeAll	=	_fs->totalBytes();
 		 sizeUsed	=	_fs->usedBytes();
+#if defined(ESP32)
+		 esp_task_wdt_reset();
+#endif
 	 }
 
 	size_t sizeFree = 0;
@@ -176,12 +185,7 @@ bool Class_ProgSwd::web_GetDiskInfoExe(String &_str)	{
 bool Class_ProgSwd::web_GetFilesListExe(String &_str)	{
 	bool _ret = true;
 
-	size_t pos ;
-	std::string fname = "";
-	std::string ftype = "";
-    uint32_t i = 0;
-
-	// Загружаем filelist для получения всех метаданных
+	// Шаг 1: Один раз загружаем filelist JSON
 	JsonDocument listDoc;
 	bool listLoaded = filelist_Load(listDoc);
 	JsonArray arr;
@@ -191,63 +195,78 @@ bool Class_ProgSwd::web_GetFilesListExe(String &_str)	{
 		lastSuccessFilename = filelist_GetLastSuccessFilename();
 	}
 
-	String json = "[";
-	if (_fs == nullptr) { _ret = false; }// Если ФС не инициализирована — выходим
+	// Шаг 2: Первый проход по ФС — собираем данные файлов в три параллельных массива
+	// Используем std::vector для эффективного доступа по индексу
+	std::vector<String> fileNames;
+	std::vector<String> fileTypes;
+	std::vector<size_t> fileSizes;
+
+	if (_fs == nullptr) { _ret = false; }
 	else {
-		File root =  _fs->open("/");
+		File root = _fs->open("/");
 		if (root) {
 			File files = root.openNextFile();
 			while (files) {
-				fname = files.name() ;
-				pos = fname.find_last_of(FILE_TYPE_COMMA);
-				ftype = fname.substr(pos + 1);
-				if (
-					//	(ftype == FILE_TYPE_HEX) || //TODO HEX file viewing when we will
-					//di hexfile to swd
-					(ftype == FILE_TYPE_BINARY) || (ftype == FILE_TYPE_BIN))
-				{
-					size_t fsize = files.size();
-
-				// Get file metadata from filelist
-				String fileMD5 = "";
-				String uploadDate = "";
-				String progDate = "";
-				String progStatus = "";
-				if (listLoaded) {
-					for (JsonObject entry : arr) {
-						if (strcmp(entry["filename"].as<const char*>(), fname.c_str()) == 0) {
-							fileMD5 = entry["md5"].as<const char*>();
-							uploadDate = entry["upload_date"].as<const char*>();
-							progDate = entry["prog_date"].as<const char*>();
-							progStatus = entry["prog_status"].as<const char*>();
-							break;
-						}
-					}
-				}
-
-				// Определяем, является ли этот файл последним успешно прошитым
-				bool isLastSuccess = (lastSuccessFilename.length() > 0 && strcmp(fname.c_str(), lastSuccessFilename.c_str()) == 0);
-
-				if (i) json += ",";
-					json += "{";
-					json +=  "\"filename\":\""; 	json += fname.c_str();		json += "\"";
-					json += ",\"filetype\":\""; 	json += ftype.c_str();		json += "\"";
-					json += ",\"filesizestr\":\"";	json += formatBytes(fsize); json += "\"";
-					json += ",\"filesizebyte\":\"";	json += (String)fsize;		json += "\"";
-					json += ",\"progchip\":\"";									json += "\"";
-					json += ",\"progactual\":\"";								json += "\"";
-					json += ",\"upload_date\":\"";	json += uploadDate;			json += "\"";
-					json += ",\"prog_date\":\"";	json += progDate;			json += "\"";
-					json += ",\"prog_status\":\"";	json += progStatus;			json += "\"";
-					json += ",\"md5\":\"";			json += fileMD5;			json += "\"";
-					json += ",\"is_last_success\":"; json += (isLastSuccess ? "true" : "false");
-					json += "}";
-
-					i++;
+				std::string fname = files.name();
+				size_t pos = fname.find_last_of(FILE_TYPE_COMMA);
+				std::string ftype = fname.substr(pos + 1);
+				if ((ftype == FILE_TYPE_BINARY) || (ftype == FILE_TYPE_BIN)) {
+					fileNames.push_back(String(fname.c_str()));
+					fileTypes.push_back(String(ftype.c_str()));
+					fileSizes.push_back((size_t)files.size());
 				}
 				files = root.openNextFile();
+#if defined(ESP32)
+				esp_task_wdt_reset();
+#endif
 			}
 		}
+#if defined(ESP32)
+		esp_task_wdt_reset();
+#endif
+	}
+
+	// Шаг 3: Второй проход по индексу — собираем JSON с метаданными
+	String json = "[";
+	for (size_t i = 0; i < fileNames.size(); i++) {
+		const String& fname = fileNames[i];
+		const String& ftype = fileTypes[i];
+		size_t fsize = fileSizes[i];
+
+		// Получаем метаданные из filelist
+		String fileMD5 = "";
+		String uploadDate = "";
+		String progDate = "";
+		String progStatus = "";
+		if (listLoaded) {
+			for (JsonObject entry : arr) {
+				if (strcmp(entry["filename"].as<const char*>(), fname.c_str()) == 0) {
+					fileMD5 = entry["md5"].as<const char*>();
+					uploadDate = entry["upload_date"].as<const char*>();
+					progDate = entry["prog_date"].as<const char*>();
+					progStatus = entry["prog_status"].as<const char*>();
+					break;
+				}
+			}
+		}
+
+		// Определяем, является ли этот файл последним успешно прошитым
+		bool isLastSuccess = (lastSuccessFilename.length() > 0 && strcmp(fname.c_str(), lastSuccessFilename.c_str()) == 0);
+
+		if (i > 0) json += ",";
+		json += "{";
+		json +=  "\"filename\":\""; 	json += fname;				json += "\"";
+		json += ",\"filetype\":\""; 	json += ftype;				json += "\"";
+		json += ",\"filesizestr\":\"";	json += formatBytes(fsize); json += "\"";
+		json += ",\"filesizebyte\":\"";	json += (String)fsize;		json += "\"";
+		json += ",\"progchip\":\"";									json += "\"";
+		json += ",\"progactual\":\"";								json += "\"";
+		json += ",\"upload_date\":\"";	json += uploadDate;			json += "\"";
+		json += ",\"prog_date\":\"";	json += progDate;			json += "\"";
+		json += ",\"prog_status\":\"";	json += progStatus;			json += "\"";
+		json += ",\"md5\":\"";			json += fileMD5;			json += "\"";
+		json += ",\"is_last_success\":"; json += (isLastSuccess ? "true" : "false");
+		json += "}";
 	}
 
 	json += "]";
@@ -265,7 +284,7 @@ int  Class_ProgSwd::prog_Programm(String _path, String _fwTime)	{
 	if (!_fs->exists(_path)) { return ERR_NOFILE; }
 
 	int _res = ERR_OPENFILE;
-
+	swdprog.stm32Fx_begin();
 	_res  = swdprog.stm32_ChipProgrammMain(_path );
 
 	// Обновляем статус прошивки в filelist (вместо сохранения в конфиг)
@@ -336,8 +355,14 @@ void Class_ProgSwd::web_FileDelete(AsyncWebServerRequest *request) {
 	if (path == "/")			{	return request->send(500, "text/plain", "BAD PATH");	}
 	if (!path.startsWith("/")) 	{path = "/" + path;}
 	DEBUGLOGSWD("handleFileDelete: %s\r\n", path.c_str());
+#if defined(ESP32)
+	esp_task_wdt_reset();
+#endif
 	if (!_fs->exists(path)) 	{	return request->send(404, "text/plain", "FileNotFound");	}
 	_fs->remove(path);
+#if defined(ESP32)
+	esp_task_wdt_reset();
+#endif
 	// Также удаляем запись из filelist
 	filelist_RemoveEntry(path);
 	DEBUGLOGSWD("handleFileDelete: removed '%s' from filelist\r\n", path.c_str());
@@ -349,7 +374,7 @@ int Class_ProgSwd::web_FileUpload2FS( String filename, size_t index, uint8_t *da
 	DEBUGLOGSWD(__PRETTY_FUNCTION__);	DEBUGLOGSWD("\r\n");
 	int  _ret= 0;
 	_hexFileUploadStatus = "";
-	static mbedtls_md5_context _md5Ctx;
+	static md5_context_t _md5Ctx;
 	static bool _md5Initialized = false;
 	// Start
 	if (!index) {
@@ -374,8 +399,7 @@ int Class_ProgSwd::web_FileUpload2FS( String filename, size_t index, uint8_t *da
 		DEBUGLOGSWD("First upload part.\r\n");
 		
 		// Инициализируем MD5-контекст
-		mbedtls_md5_init(&_md5Ctx);
-		mbedtls_md5_starts(&_md5Ctx);
+		esp_rom_md5_init(&_md5Ctx);
 		_md5Initialized = true;
 	}
 	// Continue
@@ -394,7 +418,7 @@ int Class_ProgSwd::web_FileUpload2FS( String filename, size_t index, uint8_t *da
 			}
 			// Обновляем MD5 при каждом чанке
 			if (_md5Initialized) {
-				mbedtls_md5_update(&_md5Ctx, data, len);
+				esp_rom_md5_update(&_md5Ctx, data, len);
 			}
 		}
 	}
@@ -408,8 +432,7 @@ int Class_ProgSwd::web_FileUpload2FS( String filename, size_t index, uint8_t *da
 		// Финализируем MD5 и сравниваем
 		if (_md5Initialized && !_fileUploadError) {
 			uint8_t hash[16];
-			mbedtls_md5_finish(&_md5Ctx, hash);
-			mbedtls_md5_free(&_md5Ctx);
+			esp_rom_md5_final(hash, &_md5Ctx);
 			_md5Initialized = false;
 			
 			char hex[33];
@@ -740,19 +763,17 @@ String Class_ProgSwd::file_ComputeMD5(const String &path) {
 		return "";
 	}
 
-	mbedtls_md5_context md5Ctx;
-	mbedtls_md5_init(&md5Ctx);
-	mbedtls_md5_starts(&md5Ctx);
+	md5_context_t md5Ctx;
+	esp_rom_md5_init(&md5Ctx);
 
 	uint8_t buf[256];
 	size_t bytesRead;
 	while ((bytesRead = f.read(buf, sizeof(buf))) > 0) {
-		mbedtls_md5_update(&md5Ctx, buf, bytesRead);
+		esp_rom_md5_update(&md5Ctx, buf, bytesRead);
 	}
 
 	uint8_t hash[16];
-	mbedtls_md5_finish(&md5Ctx, hash);
-	mbedtls_md5_free(&md5Ctx);
+	esp_rom_md5_final(hash, &md5Ctx);
 	f.close();
 
 	char hex[33];
@@ -842,26 +863,37 @@ void Class_ProgSwd::web_CheckChipStatus(AsyncWebServerRequest *request) {
         return;
     }
 
-    // Делаем SWD-инициализацию (probe чипа)
-    uint32_t id = swdprog.stm32Fx_begin();
+    // Если проверка чипа уже запущена через EERTOS — сообщаем об этом
+    if (swdprog.isChipCheckBusy()) {
+        values += "status|checking|div\n";
+        request->send(200, "text/plain", values);
+        return;
+    }
+
+    // Запускаем EERTOS-кооперативную проверку чипа
+    // Браузер будет делать polling, пока не получит connected/disconnected
+    swdprog.startChipCheck();
+    
+    values += "status|checking|div\n";
+    request->send(200, "text/plain", values);
+    DEBUGLOGSWD("web_CheckChipStatus: EERTOS chip check started\r\n");
+}
+
+// Callback после завершения EERTOS-кооперативной проверки чипа
+void Class_ProgSwd::onChipCheckComplete(uint32_t chipId) {
+    DEBUGLOGSWD("%s: chipId=0x%08x\n\r", __FUNCTION__, chipId);
     
     _chipStatusTime = millis();
     
-    if (id != 0) {
+    if (chipId != 0) {
         // Чип найден
         _chipConnected = true;
-        _chipId = id;
-        values += "status|connected|div\n";
-        values += "chipid|0x" + String(id, HEX) + "|div\n";
-        DEBUGLOGSWD("web_CheckChipStatus: chip connected, ID=0x%08x\r\n", id);
+        _chipId = chipId;
+        DEBUGLOGSWD("onChipCheckComplete: chip connected, ID=0x%08x\r\n", chipId);
     } else {
         // Чип не обнаружен
         _chipConnected = false;
         _chipId = 0;
-        values += "status|disconnected|div\n";
-        values += "chipid|0|div\n";
-        DEBUGLOGSWD("web_CheckChipStatus: chip NOT detected\r\n");
+        DEBUGLOGSWD("onChipCheckComplete: chip NOT detected\r\n");
     }
-
-    request->send(200, "text/plain", values);
 }

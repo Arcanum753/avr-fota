@@ -111,9 +111,9 @@
     <script>
     	window.onload = function() {
     		setTimeout(() => {
-    		  ApplyCVT("/avr/info");
-    			ApplyCVT("/system/version");
-    			ApplyCVT("/system/infovalues");
+    			ApplyCVT("/system/version")
+    				.then(() => ApplyCVT("/system/infovalues"))
+    				.then(() => ApplyCVT("/avr/info"));
     		}, 500);
     	}
       var blobSlice = File.prototype.slice || File.prototype.mozSlice || File.prototype.webkitSlice,

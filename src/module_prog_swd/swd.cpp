@@ -82,6 +82,16 @@ bool swd_DP_Read(unsigned addr, uint32_t &data) {
   return false;
 }
 
+// Однократное чтение DP без ретраев (для неблокирующей проверки чипа)
+bool swd_DP_Read_once(unsigned addr, uint32_t &data) {
+  return swd_transfer(addr, 0, 1, data);
+}
+
+// Однократное чтение AP без ретраев (для неблокирующей проверки чипа)
+bool swd_AP_Read_once(unsigned addr, uint32_t &data) {
+  return swd_transfer(addr, 1, 1, data);
+}
+
 // port , ap = 1, ad = 0, read 1 write 0
 bool swd_transfer(unsigned port_address, bool APorDP, bool RorW, uint32_t &data)  {
   bool parity = APorDP ^ RorW ^ ((port_address >> 2) & 1) ^ ((port_address >> 3) & 1);

@@ -24,8 +24,10 @@
     <script src="microajax.js" defer></script>
 	<script>
 		window.onload = function() {
-			ApplyCVT("/system/version");
-            ApplyCVT("/project/info");
+			setTimeout(() => {
+				ApplyCVT("/system/version")
+					.then(() => ApplyCVT("/project/info"));
+			}, 500);
 		};
 
 

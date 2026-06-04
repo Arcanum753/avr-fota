@@ -3,6 +3,7 @@
 
 
 #include "main.h"
+#include <ArduinoJson.h>
 
 #ifdef DEBUG_SWD
 #define DEBUGLOGSWD(...) Serial.printf(__VA_ARGS__)
@@ -116,6 +117,8 @@ public:
     // chip status check
     void    web_CheckChipStatus(AsyncWebServerRequest *request);
     bool    chip_IsConnected();
+    // Callback после завершения EERTOS-кооперативной проверки чипа
+    void    onChipCheckComplete(uint32_t chipId);
 
 private:
     String getVersionStr();
