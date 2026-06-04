@@ -64,9 +64,10 @@
 
         window.onload = function () {
             setTimeout(() => {
-                loadDiskInfo();
-                loadFilesList();
-                checkProgrammingStatus();
+                ApplyCVT("/system/version")
+                    .then(() => loadDiskInfo())
+                    .then(() => loadFilesList())
+                    .then(() => checkProgrammingStatus());
             }, 250);
         };
         // ========== Check Programming Status on Page Load ==========
@@ -114,40 +115,48 @@
         }
         // ========== Disk Info ==========
         function loadDiskInfo() {
-            const xhr = new XMLHttpRequest();
-            xhr.open('GET', '/prog/diskinfo', true);
-            xhr.onload = function() {
-                if (xhr.status === 200) {
-                    const fieldsRows = ParseCVT(xhr.response);
-                    let all = "?", used = "?", free = "?";
-                    for (let fields of fieldsRows) {
-                        if (fields[0] === "diskall")   all = fields[1];
-                        if (fields[0] === "diskused")  used = fields[1];
-                        if (fields[0] === "diskfree")  free = fields[1];
+            return new Promise(function(resolve) {
+                const xhr = new XMLHttpRequest();
+                xhr.open('GET', '/prog/diskinfo', true);
+                xhr.onload = function() {
+                    if (xhr.status === 200) {
+                        const fieldsRows = ParseCVT(xhr.response);
+                        let all = "?", used = "?", free = "?";
+                        for (let fields of fieldsRows) {
+                            if (fields[0] === "diskall")   all = fields[1];
+                            if (fields[0] === "diskused")  used = fields[1];
+                            if (fields[0] === "diskfree")  free = fields[1];
+                        }
+                        document.getElementById('diskinfo').innerHTML =
+                            "Disk: Total <b>" + all + "</b> bytes, Used <b>" + used + "</b> bytes, Free <b>" + free + "</b> bytes";
                     }
-                    document.getElementById('diskinfo').innerHTML =
-                        "Disk: Total <b>" + all + "</b> bytes, Used <b>" + used + "</b> bytes, Free <b>" + free + "</b> bytes";
-                }
-            };
-            xhr.send();
+                    resolve();
+                };
+                xhr.onerror = function() { resolve(); };
+                xhr.send();
+            });
         }
 
         // ========== Files List ==========
         function loadFilesList() {
-            const xhr = new XMLHttpRequest();
-            xhr.open('GET', '/prog/fileslist', true);
-            xhr.onload = function() {
-                if (xhr.status === 200) {
-                    try {
-                        const files = JSON.parse(xhr.response);
-                        renderFilesTable(files);
-                    } catch(e) {
-                        document.getElementById('filesTableBody').innerHTML =
-                            '<tr><td colspan="5" style="text-align: center; padding: 20px; color: red;">Error parsing file list</td></tr>';
+            return new Promise(function(resolve) {
+                const xhr = new XMLHttpRequest();
+                xhr.open('GET', '/prog/fileslist', true);
+                xhr.onload = function() {
+                    if (xhr.status === 200) {
+                        try {
+                            const files = JSON.parse(xhr.response);
+                            renderFilesTable(files);
+                        } catch(e) {
+                            document.getElementById('filesTableBody').innerHTML =
+                                '<tr><td colspan="5" style="text-align: center; padding: 20px; color: red;">Error parsing file list</td></tr>';
+                        }
                     }
-                }
-            };
-            xhr.send();
+                    resolve();
+                };
+                xhr.onerror = function() { resolve(); };
+                xhr.send();
+            });
         }
 
         function renderFilesTable(files) {
@@ -163,10 +172,12 @@
                 const fname = f.filename || "";
                 const ftype = f.filetype || "";
                 const fsize = f.filesizestr || "";
-                const progdate = f.progdate || "";
+                const progdate = f.prog_date || "";
+                const isLastSuccess = f.is_last_success === true;
                 const encodedName = encodeURIComponent(fname);
 
-                html += "<tr>";
+                const rowStyle = isLastSuccess ? ' style="background-color: #e8f5e9; font-weight: bold;"' : '';
+                html += "<tr" + rowStyle + ">";
                 html += "<td style='padding: 6px; border-bottom: 1px solid #ddd;'>" + escapeHtml(fname) + "</td>";
                 html += "<td style='padding: 6px; border-bottom: 1px solid #ddd;'>" + escapeHtml(ftype) + "</td>";
                 html += "<td style='padding: 6px; border-bottom: 1px solid #ddd; text-align: right;'>" + escapeHtml(fsize) + "</td>";
