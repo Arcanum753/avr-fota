@@ -12,6 +12,12 @@
             50% { opacity: 1; }
             100% { opacity: 0.6; }
         }
+        /* Подсветка выбранной строки в таблице файлов */
+        .selected-row {
+            background-color: #bbdefb !important;
+            outline: 2px solid #1a73e8;
+            outline-offset: -2px;
+        }
     </style>
     <script src="FSBrowserNG.js"></script>
 </head>
@@ -52,27 +58,24 @@
                     <th style="padding: 8px; text-align: right; border-bottom: 2px solid #ddd;">Size</th>
                     <th style="padding: 8px; text-align: center; border-bottom: 2px solid #ddd;">Upload date</th>
                     <th style="padding: 8px; text-align: center; border-bottom: 2px solid #ddd;">Program date</th>
+                    <th style="padding: 8px; text-align: center; border-bottom: 2px solid #ddd;">Status</th>
                 </tr>
             </thead>
             <tbody id="filesTableBody">
-                <tr><td colspan="5" style="text-align: center; padding: 20px;">Loading...</td></tr>
+                <tr><td colspan="6" style="text-align: center; padding: 20px;">Loading...</td></tr>
             </tbody>
         </table>
     </div>
 
-    <!-- Блок с выбранным файлом и кнопками действий -->
-    <div style="text-align: center; margin: 15px auto; max-width: 600px;">
+    <!-- Кнопки действий (уменьшены на 50%, Delete слева, Program справа) -->
+    <div style="text-align: center; margin: 15px auto; max-width: 400px;">
         <table align="center" style="border-collapse: collapse;">
             <tr>
-                <td style="padding: 8px; text-align: center;"><b>Selected file:</b></td>
-                <td style="padding: 8px; text-align: center;"><span id="selectedFileDisplay" style="color: #1a73e8; font-weight: bold;">(none)</span></td>
-            </tr>
-            <tr>
-                <td style="padding: 8px; text-align: center;">
-                    <button onclick="programSelectedFile()" style="padding: 8px 20px; cursor: pointer; border: 1px solid #4CAF50; border-radius: 5px; background: #4CAF50; color: white; font-size: 14px; font-weight: bold;">💾 Program STM32</button>
+                <td style="padding: 4px; text-align: center;">
+                    <button onclick="deleteSelectedFile()" style="padding: 4px 10px; cursor: pointer; border: 1px solid #f44336; border-radius: 4px; background: #f44336; color: white; font-size: 11px; font-weight: bold;">🗑️ Delete</button>
                 </td>
-                <td style="padding: 8px; text-align: center;">
-                    <button onclick="deleteSelectedFile()" style="padding: 8px 20px; cursor: pointer; border: 1px solid #f44336; border-radius: 5px; background: #f44336; color: white; font-size: 14px; font-weight: bold;">🗑️ Delete file</button>
+                <td style="padding: 4px; text-align: center;">
+                    <button onclick="programSelectedFile()" style="padding: 4px 10px; cursor: pointer; border: 1px solid #4CAF50; border-radius: 4px; background: #4CAF50; color: white; font-size: 11px; font-weight: bold;">💾 Program</button>
                 </td>
             </tr>
         </table>
@@ -201,7 +204,7 @@
                             renderFilesTable(files);
                         } catch(e) {
                             document.getElementById('filesTableBody').innerHTML =
-                                '<tr><td colspan="5" style="text-align: center; padding: 20px; color: red;">Error parsing file list</td></tr>';
+                                '<tr><td colspan="6" style="text-align: center; padding: 20px; color: red;">Error parsing file list</td></tr>';
                         }
                     }
                     resolve();
@@ -214,7 +217,7 @@
         function renderFilesTable(files) {
             const tbody = document.getElementById('filesTableBody');
             if (!files || files.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 20px;">No firmware files found</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 20px;">No firmware files found</td></tr>';
                 return;
             }
 
@@ -246,29 +249,37 @@
                     }
                 }
 
-                // Иконка статуса
-                let statusIcon = '';
+                // Ячейка статуса (отдельный столбец)
+                let statusCell = '<td style="padding: 6px; border-bottom: 1px solid #ddd; text-align: center;">';
                 if (progStatus === 'ok') {
-                    statusIcon = ' <span title="Successfully programmed" style="color: #2e7d32;">✓</span>';
+                    statusCell += '<span title="Successfully programmed" style="color: #2e7d32; font-weight: bold;">OK</span>';
                 } else if (progStatus === 'error') {
-                    statusIcon = ' <span title="Programming error" style="color: #c62828;">✗</span>';
+                    statusCell += '<span title="Programming error" style="color: #c62828; font-weight: bold;">Error</span>';
+                } else {
+                    statusCell += '<span style="color: #999;">—</span>';
                 }
+                statusCell += '</td>';
 
-                html += "<tr" + rowStyle + ">";
-                html += "<td style='padding: 6px; border-bottom: 1px solid #ddd;'><a href='javascript:selectFile(\"" + encodedName + "\")' style='text-decoration: none; color: #1a73e8;'>" + escapeHtml(fname) + "</a>" + statusIcon + "</td>";
+                html += "<tr" + rowStyle + " onclick='selectFile(\"" + encodedName + "\", this)'>";
+                html += "<td style='padding: 6px; border-bottom: 1px solid #ddd;'><a style='text-decoration: none; color: #1a73e8; cursor: pointer;'>" + escapeHtml(fname) + "</a></td>";
                 html += "<td style='padding: 6px; border-bottom: 1px solid #ddd;'>" + escapeHtml(ftype) + "</td>";
                 html += "<td style='padding: 6px; border-bottom: 1px solid #ddd; text-align: right;'>" + escapeHtml(fsize) + "</td>";
                 html += "<td style='padding: 6px; border-bottom: 1px solid #ddd; text-align: center;'>" + escapeHtml(uploaddate) + "</td>";
                 html += "<td style='padding: 6px; border-bottom: 1px solid #ddd; text-align: center;'>" + escapeHtml(progdate) + "</td>";
+                html += statusCell;
                 html += "</tr>";
             }
             tbody.innerHTML = html;
         }
 
-        // ========== Select File (click on filename) ==========
-        function selectFile(encodedName) {
+        // ========== Select File (click on row) ==========
+        function selectFile(encodedName, row) {
             selectedFile = decodeURIComponent(encodedName);
-            document.getElementById('selectedFileDisplay').textContent = selectedFile;
+            // Убираем подсветку со всех строк
+            const rows = document.querySelectorAll('#filesTableBody tr');
+            rows.forEach(function(r) { r.classList.remove('selected-row'); });
+            // Подсвечиваем выбранную строку
+            if (row) row.classList.add('selected-row');
         }
 
         // ========== Delete Selected File ==========
@@ -284,7 +295,6 @@
             xhr.onload = function() {
                 if (xhr.status === 200) {
                     selectedFile = "";
-                    document.getElementById('selectedFileDisplay').textContent = "(none)";
                     loadFilesList();
                     loadDiskInfo();
                 } else {
