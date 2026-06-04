@@ -444,11 +444,13 @@ int Class_ProgSwd::web_FileUpload2FS( String filename, size_t index, uint8_t *da
 			
 			DEBUGLOGSWD("MD5 check: browser='%s' server='%s'\r\n", _browserFileMD5.c_str(), serverMD5.c_str());
 			
-			if (serverMD5 != _browserFileMD5) {
+		if (serverMD5 != _browserFileMD5) {
 				// MD5 не совпадает — удаляем файл, сообщаем об ошибке
 				_fileUploadError = true;
 				DEBUGLOGSWD("MD5 MISMATCH! Removing corrupted file %s\r\n", filename.c_str());
 				_fs->remove(filename);
+				// Также удаляем запись из filelist, если она была (например, от предыдущей загрузки)
+				filelist_RemoveEntry(filename);
 				_hexFileUploadStatus  = ""; // сброс
 				_hexFileUploadStatus  += "uploadstatus|error|div\n";
 				_hexFileUploadStatus  += "file|"	  + filename			+"|div\n";
@@ -655,9 +657,15 @@ bool Class_ProgSwd::filelist_AddEntry(const String &filename, const String &uplo
 	filelist_Load(doc);
 	JsonArray arr = doc.as<JsonArray>();
 
+	// Нормализуем имя файла — убираем ведущий слеш для единообразия
+	String normalizedName = filename;
+	if (normalizedName.startsWith("/")) {
+		normalizedName = normalizedName.substring(1);
+	}
+
 	// Проверяем, нет ли уже такой записи (дубликат)
 	for (JsonObject entry : arr) {
-		if (strcmp(entry["filename"].as<const char*>(), filename.c_str()) == 0) {
+		if (strcmp(entry["filename"].as<const char*>(), normalizedName.c_str()) == 0) {
 			// Обновляем существующую запись
 			entry["upload_date"] = upload_date;
 			entry["md5"] = md5;
@@ -667,7 +675,7 @@ bool Class_ProgSwd::filelist_AddEntry(const String &filename, const String &uplo
 
 	// Создаём новую запись
 	JsonObject newEntry = arr.add<JsonObject>();
-	newEntry["filename"] = filename;
+	newEntry["filename"] = normalizedName;
 	newEntry["upload_date"] = upload_date;
 	newEntry["md5"] = md5;
 
@@ -679,8 +687,14 @@ bool Class_ProgSwd::filelist_SetProgStatus(const String &filename, const String 
 	filelist_Load(doc);
 	JsonArray arr = doc.as<JsonArray>();
 
+	// Нормализуем имя файла — убираем ведущий слеш для единообразия
+	String normalizedName = filename;
+	if (normalizedName.startsWith("/")) {
+		normalizedName = normalizedName.substring(1);
+	}
+
 	for (JsonObject entry : arr) {
-		if (strcmp(entry["filename"].as<const char*>(), filename.c_str()) == 0) {
+		if (strcmp(entry["filename"].as<const char*>(), normalizedName.c_str()) == 0) {
 			entry["prog_date"] = prog_date;
 			entry["prog_status"] = prog_status;
 			return filelist_Save(doc);
@@ -689,10 +703,10 @@ bool Class_ProgSwd::filelist_SetProgStatus(const String &filename, const String 
 
 	// Если запись не найдена — создаём новую (на случай, если файл был на ФС до введения filelist)
 	JsonObject newEntry = arr.add<JsonObject>();
-	newEntry["filename"] = filename;
+	newEntry["filename"] = normalizedName;
 	newEntry["prog_date"] = prog_date;
 	newEntry["prog_status"] = prog_status;
-	DEBUGLOGSWD("filelist_SetProgStatus: created new entry for %s (was not in filelist)\r\n", filename.c_str());
+	DEBUGLOGSWD("filelist_SetProgStatus: created new entry for %s (was not in filelist)\r\n", normalizedName.c_str());
 	return filelist_Save(doc);
 }
 
@@ -724,9 +738,15 @@ bool Class_ProgSwd::filelist_RemoveEntry(const String &filename) {
 	filelist_Load(doc);
 	JsonArray arr = doc.as<JsonArray>();
 
+	// Нормализуем имя файла — убираем ведущий слеш для единообразия
+	String normalizedName = filename;
+	if (normalizedName.startsWith("/")) {
+		normalizedName = normalizedName.substring(1);
+	}
+
 	int idx = -1;
 	for (size_t i = 0; i < arr.size(); i++) {
-		if (strcmp(arr[i]["filename"].as<const char*>(), filename.c_str()) == 0) {
+		if (strcmp(arr[i]["filename"].as<const char*>(), normalizedName.c_str()) == 0) {
 			idx = (int)i;
 			break;
 		}
@@ -743,8 +763,14 @@ bool Class_ProgSwd::filelist_FileExists(const String &filename) {
 	filelist_Load(doc);
 	JsonArray arr = doc.as<JsonArray>();
 
+	// Нормализуем имя файла — убираем ведущий слеш для единообразия
+	String normalizedName = filename;
+	if (normalizedName.startsWith("/")) {
+		normalizedName = normalizedName.substring(1);
+	}
+
 	for (JsonObject entry : arr) {
-		if (strcmp(entry["filename"].as<const char*>(), filename.c_str()) == 0) {
+		if (strcmp(entry["filename"].as<const char*>(), normalizedName.c_str()) == 0) {
 			return true;
 		}
 	}
@@ -793,10 +819,15 @@ void Class_ProgSwd::web_FileUploadProgress(AsyncWebServerRequest *request) {
 	
 	// Если идёт программирование STM32 — отдаём статус и процент
 	if (_progRunning || swdprog.isFlashBusy()) {
-		values += "progStatus|running|div\n";
-		// Берём процент напрямую из swdprog, так как EERTOS обновляет его в реальном времени
 		uint8_t pct = swdprog.getPercent();
 		_uploadPercent = pct;
+		
+		// Если процент 0 и прошивка только началась — отдаём "starting"
+		if (pct == 0 && swdprog.isFlashBusy()) {
+			values += "progStatus|starting|div\n";
+		} else {
+			values += "progStatus|running|div\n";
+		}
 		values += "progPercent|" + (String)pct + "|div\n";
 		request->send(200, "text/plain", values);
 		return;
@@ -804,6 +835,11 @@ void Class_ProgSwd::web_FileUploadProgress(AsyncWebServerRequest *request) {
 	if (_progResult == 0) {
 		values += "progStatus|done|div\n";
 		values += "progPercent|100|div\n";
+		// Добавляем время прошивки
+		if (_progStartTime > 0) {
+			uint32_t elapsed = millis() - _progStartTime;
+			values += "progTime|" + (String)elapsed + "|div\n";
+		}
 		_progResult = -1;  // сброс, чтобы следующий запрос не видел done
 		_uploadPercent = 0;
 		request->send(200, "text/plain", values);
@@ -811,6 +847,11 @@ void Class_ProgSwd::web_FileUploadProgress(AsyncWebServerRequest *request) {
 	}
 	if (_progResult > 0 || _progResult < -1) {
 		values += "progStatus|error|div\n";
+		// Добавляем время прошивки даже при ошибке
+		if (_progStartTime > 0) {
+			uint32_t elapsed = millis() - _progStartTime;
+			values += "progTime|" + (String)elapsed + "|div\n";
+		}
 		_progResult = -1;  // сброс
 		_uploadPercent = 0;
 		request->send(200, "text/plain", values);

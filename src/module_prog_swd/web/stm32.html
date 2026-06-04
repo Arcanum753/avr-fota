@@ -5,6 +5,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta http-equiv="Content-type" content="text/html; charset=utf-8">
     <link rel="stylesheet" href="style.css">
+    <style>
+        /* Анимация пульсации для прогресс-бара во время старта прошивки */
+        @keyframes pulse {
+            0% { opacity: 0.6; }
+            50% { opacity: 1; }
+            100% { opacity: 0.6; }
+        }
+    </style>
     <script src="FSBrowserNG.js"></script>
 </head>
 <body>
@@ -173,12 +181,36 @@
                 const ftype = f.filetype || "";
                 const fsize = f.filesizestr || "";
                 const progdate = f.prog_date || "";
+                const progStatus = f.prog_status || "";
                 const isLastSuccess = f.is_last_success === true;
                 const encodedName = encodeURIComponent(fname);
 
-                const rowStyle = isLastSuccess ? ' style="background-color: #e8f5e9; font-weight: bold;"' : '';
+                // Определяем стиль строки по статусу прошивки
+                let rowStyle = '';
+                if (progStatus === 'ok') {
+                    rowStyle = ' style="background-color: #e8f5e9;"';  // зелёный — успешно прошито
+                } else if (progStatus === 'error') {
+                    rowStyle = ' style="background-color: #ffebee;"';  // красный — ошибка прошивки
+                }
+                // Если isLastSuccess — дополнительно выделяем жирным
+                if (isLastSuccess) {
+                    if (rowStyle) {
+                        rowStyle = rowStyle.replace('"', ' font-weight: bold;"');
+                    } else {
+                        rowStyle = ' style="background-color: #e8f5e9; font-weight: bold;"';
+                    }
+                }
+
+                // Иконка статуса
+                let statusIcon = '';
+                if (progStatus === 'ok') {
+                    statusIcon = ' <span title="Successfully programmed" style="color: #2e7d32;">✓</span>';
+                } else if (progStatus === 'error') {
+                    statusIcon = ' <span title="Programming error" style="color: #c62828;">✗</span>';
+                }
+
                 html += "<tr" + rowStyle + ">";
-                html += "<td style='padding: 6px; border-bottom: 1px solid #ddd;'>" + escapeHtml(fname) + "</td>";
+                html += "<td style='padding: 6px; border-bottom: 1px solid #ddd;'>" + escapeHtml(fname) + statusIcon + "</td>";
                 html += "<td style='padding: 6px; border-bottom: 1px solid #ddd;'>" + escapeHtml(ftype) + "</td>";
                 html += "<td style='padding: 6px; border-bottom: 1px solid #ddd; text-align: right;'>" + escapeHtml(fsize) + "</td>";
                 html += "<td style='padding: 6px; border-bottom: 1px solid #ddd; text-align: center;'>" + escapeHtml(progdate) + "</td>";
@@ -287,15 +319,17 @@
             const progressBar = document.getElementById('progressBar');
 
             container.style.display = 'block';
-            progressText.innerHTML = 'Programming: 0%';
+            progressText.innerHTML = 'Starting programming...';
             progressBar.style.width = '0%';
             progressBar.style.backgroundColor = '#ffaa00';
-            progressBar.style.animation = '';  // убираем пульсацию, будем показывать реальный %
+            // Пульсация на старте — пока не получим первый реальный процент
+            progressBar.style.animation = 'pulse 1.5s ease-in-out infinite';
 
             let attempts = 0;
             let pollActive = true;
             const maxAttempts = 60; // 60 * 2 сек = 120 секунд (2 минуты)
             let lastPercent = 0;
+            let firstRealPercent = false;  // флаг — получили ли первый реальный процент
 
             (function pollProgStatus() {
                 if (!isProgramming) { stopProgPolling(); return; }
@@ -322,12 +356,25 @@
                         const fieldsRows = ParseCVT(xhr.response);
                         let progStatus = "";
                         let progPercent = -1;
+                        let progTime = "";
                         for (let fields of fieldsRows) {
                             if (fields[0] === "progStatus")   progStatus = fields[1];
                             if (fields[0] === "progPercent")  progPercent = parseInt(fields[1]);
+                            if (fields[0] === "progTime")     progTime = fields[1];
                         }
 
-                        if (progStatus === "running") {
+                        if (progStatus === "starting") {
+                            // Старт прошивки — показываем пульсацию
+                            progressText.innerHTML = 'Starting programming...';
+                            progressBar.style.animation = 'pulse 1.5s ease-in-out infinite';
+                            attempts = 0;
+                            setTimeout(pollProgStatus, 1000);  // опрашиваем чаще на старте
+                        } else if (progStatus === "running") {
+                            // Первый реальный процент — убираем пульсацию
+                            if (!firstRealPercent) {
+                                firstRealPercent = true;
+                                progressBar.style.animation = '';
+                            }
                             // Показываем реальный процент прошивки
                             if (progPercent >= 0) {
                                 updateProgressDisplay(progPercent);
@@ -338,20 +385,33 @@
                             setTimeout(pollProgStatus, 2000);
                         } else if (progStatus === "done") {
                             stopProgPolling();
+                            progressBar.style.animation = '';
                             updateProgressDisplay(100);
-                            progressText.innerHTML = 'Programming: 100%';
+                            let doneMsg = 'Programming completed successfully!';
+                            if (progTime) {
+                                const secs = Math.floor(parseInt(progTime) / 1000);
+                                doneMsg += ' (' + secs + 's)';
+                            }
+                            progressText.innerHTML = '<span style="color: #2e7d32; font-weight: bold;">' + doneMsg + '</span>';
                             progressBar.style.backgroundColor = '#4CAF50';
+                            // Принудительно обновляем список файлов и диск
                             loadFilesList();
                             loadDiskInfo();
                             setTimeout(function() {
-                                showProgSuccess();
-                            }, 300);
-                            setTimeout(function() {
                                 container.style.display = 'none';
-                            }, 5000);
+                            }, 8000);
                         } else if (progStatus === "error") {
                             stopProgPolling();
-                            showProgError('Programming failed!');
+                            progressBar.style.animation = '';
+                            let errMsg = 'Programming failed!';
+                            if (progTime) {
+                                const secs = Math.floor(parseInt(progTime) / 1000);
+                                errMsg += ' (' + secs + 's)';
+                            }
+                            showProgError(errMsg);
+                            // При ошибке тоже обновляем список — чтобы увидеть статус error
+                            loadFilesList();
+                            loadDiskInfo();
                         } else {
                             // progStatus не найден — возможно сервер ещё не в режиме программирования
                             attempts++;
@@ -380,7 +440,7 @@
             })();
         }
 
-        // ========== Upload File ==========
+        // ========== Upload File with MD5 Pre-check ==========
         function uploadFile() {
             const fileInput = document.getElementById('fileName');
             const file = fileInput.files[0];
@@ -400,6 +460,119 @@
                 return;
             }
 
+            // Показываем прогресс с сообщением "Loading MD5 library..."
+            const progressContainer = document.getElementById('progressContainer');
+            const progressText = document.getElementById('progressText');
+            const progressBar = document.getElementById('progressBar');
+            progressContainer.style.display = 'block';
+            progressText.innerHTML = 'Loading MD5 library...';
+            progressBar.style.width = '0%';
+            progressBar.style.backgroundColor = '#ffaa00';
+
+            // Динамически загружаем spark-md5.js только когда понадобился
+            loadScript('spark-md5.js', function() {
+                // Скрипт загружен — начинаем вычисление MD5
+                computeMD5AndUpload(file, fileInput);
+            }, function() {
+                // Ошибка загрузки скрипта — fallback без MD5
+                progressContainer.style.display = 'none';
+                if (confirm('Failed to load MD5 library. Upload without MD5 verification?')) {
+                    doUpload(file, fileInput);
+                }
+            });
+        }
+
+        // Динамическая загрузка скрипта
+        function loadScript(url, onSuccess, onError) {
+            var script = document.createElement('script');
+            script.src = url;
+            script.onload = onSuccess;
+            script.onerror = onError;
+            document.head.appendChild(script);
+        }
+
+        // Вычисление MD5 и отправка на сервер (вызывается после загрузки spark-md5.js)
+        function computeMD5AndUpload(file, fileInput) {
+            const progressContainer = document.getElementById('progressContainer');
+            const progressText = document.getElementById('progressText');
+            const progressBar = document.getElementById('progressBar');
+            progressText.innerHTML = 'Computing MD5...';
+            progressBar.style.width = '0%';
+            progressBar.style.backgroundColor = '#ffaa00';
+
+            const reader = new FileReader();
+            const spark = new SparkMD5.ArrayBuffer();
+            let chunkSize = 2 * 1024 * 1024; // 2MB chunks
+            let chunks = Math.ceil(file.size / chunkSize);
+            let currentChunk = 0;
+
+            reader.onload = function(e) {
+                spark.append(e.target.result);
+                currentChunk++;
+
+                if (currentChunk < chunks) {
+                    loadNext();
+                } else {
+                    const fileMD5 = spark.end();
+                    progressText.innerHTML = 'MD5: ' + fileMD5 + ' — checking server...';
+
+                    // Отправляем MD5 на сервер для предварительной проверки
+                    const xhrSetMD5 = new XMLHttpRequest();
+                    xhrSetMD5.open('GET', '/prog/setmd5?md5=' + fileMD5 + '&size=' + file.size + '&name=' + encodeURIComponent(file.name), true);
+                    xhrSetMD5.timeout = 10000;
+
+                    xhrSetMD5.ontimeout = function() {
+                        progressContainer.style.display = 'none';
+                        alert('Server did not respond to MD5 check — upload cancelled');
+                    };
+
+                    xhrSetMD5.onload = function() {
+                        if (xhrSetMD5.status === 200) {
+                            const response = xhrSetMD5.responseText.trim();
+                            if (response === "OK") {
+                                // Сервер подтвердил — можно загружать
+                                doUpload(file, fileInput);
+                            } else if (response.startsWith("ERROR|FILENAME_EXISTS")) {
+                                progressContainer.style.display = 'none';
+                                alert('File "' + file.name + '" already exists on device!\n' +
+                                      'Delete it first or rename the file.');
+                                fileInput.value = "";
+                            } else if (response.startsWith("ERROR|NO_SPACE")) {
+                                progressContainer.style.display = 'none';
+                                alert('Not enough free space on device!\n' +
+                                      'Free up space and try again.');
+                                fileInput.value = "";
+                            } else {
+                                progressContainer.style.display = 'none';
+                                alert('Server rejected upload: ' + response);
+                                fileInput.value = "";
+                            }
+                        } else {
+                            progressContainer.style.display = 'none';
+                            alert('MD5 check failed with status: ' + xhrSetMD5.status);
+                        }
+                    };
+
+                    xhrSetMD5.onerror = function() {
+                        progressContainer.style.display = 'none';
+                        alert('Network error during MD5 check');
+                    };
+
+                    xhrSetMD5.send();
+                }
+            };
+
+            function loadNext() {
+                var start = currentChunk * chunkSize;
+                var end = Math.min(start + chunkSize, file.size);
+                reader.readAsArrayBuffer(file.slice(start, end));
+            }
+
+            loadNext();
+        }
+
+        // Внутренняя функция — фактическая загрузка файла после MD5 проверки
+        function doUpload(file, fileInput) {
             // Сначала передаём размер файла на сервер для прогресс-бара
             const xhrSize = new XMLHttpRequest();
             xhrSize.open('GET', '/prog/uploadsize?size=' + file.size, true);

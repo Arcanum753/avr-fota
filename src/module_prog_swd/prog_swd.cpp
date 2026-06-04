@@ -165,13 +165,63 @@ void ESP_PROGSWD::flashStep() {
         case FLASH_WRITE: {
             // Выполняем abort/halt/unlock/erase/progEn один раз перед началом записи
             if (_flashPosi == 0) {
+                // Инициализация SWD и проверка IDCODE
+                uint32_t idcode = stm32Fx_begin();
+                if (idcode == 0) {
+                    DEBUGLOGSWD("flashStep: STM32 not detected (IDCODE=0) — aborting!\r\n");
+                    _flashFile.close();
+                    _flashError = true;
+                    _flashState = FLASH_DONE;
+                    break;
+                }
+                if (idcode != SWD_STM32F103ID) {
+                    DEBUGLOGSWD("flashStep: WARNING unexpected IDCODE 0x%08x (expected 0x%08x), continuing...\r\n", idcode, SWD_STM32F103ID);
+                }
                 stm32Fx_abort_all();
                 stm32Fx_halt();
                 stm32f1_unlock_erase_flash();
                 stm32f1_progEn();
+                
+                // НЕМЕДЛЕННО пишем первую страницу, пока PG бит ещё установлен!
+                // Если вернуть управление EERTOS между progEn и первой записью,
+                // STM32 может сбросить PG бит, и запись не сработает.
+                uint8_t buffer[PAGESIZE] = {0x00};
+                uint32_t cur_len = (_flashFileSize - _flashPosi >= PAGESIZE) ? PAGESIZE : (_flashFileSize - _flashPosi);
+                _flashFile.read(buffer, (size_t)cur_len);
+                uint8_t write_ret = stm32fX_write_bank(_flashAddr, buffer, cur_len);
+                if (write_ret != 0) {
+                    DEBUGLOGSWD("flashStep: write_bank returned %i at addr 0x%08x — aborting!\r\n", write_ret, _flashAddr);
+                    _flashFile.close();
+                    _flashError = true;
+                    _flashState = FLASH_DONE;
+                    break;
+                }
+                _flashAddr += cur_len;
+                _flashPosi += cur_len;
+                
+                // Обновляем процент
+                _percent = (uint8_t)(((float)_flashPosi / (float)_flashFileSize) * 100.0f);
+                DEBUGLOGSWD("%i percents \r\n", _percent);
+                progSwd.setUploadPercent(_percent);
+                esp_task_wdt_reset();
+                
+                // Проверяем, закончили ли (файл меньше одной страницы)
+                if (_flashPosi >= _flashFileSize) {
+                    _flashFile.close();
+                    _speed = (float)((float)(_flashFileSize / (float)(millis() - _flashStartTime)));
+                    DEBUGLOGSWD("Done flashing file, it took %i ms speed: %.4f kbs\r\n",
+                        (int)(millis() - _flashStartTime), _speed);
+                    
+                    stm32Fx_halt();
+                    stm32Fx_unhalt();
+                    stm32Fx_rst();
+                    
+                    _flashState = FLASH_DONE;
+                }
+                break;  // ← ВАЖНО: выходим из switch, чтобы EERTOS перепланировал задачу
             }
             
-            // Записываем ОДНУ страницу (1024 байт)
+            // Все последующие страницы (не первая) — пишем как обычно
             uint8_t buffer[PAGESIZE] = {0x00};
             uint32_t cur_len = (_flashFileSize - _flashPosi >= PAGESIZE) ? PAGESIZE : (_flashFileSize - _flashPosi);
             _flashFile.read(buffer, (size_t)cur_len);
@@ -335,7 +385,7 @@ void ESP_PROGSWD::stm32f1_unlock_erase_flash() {
 
   while (stm32f1_flash_busy())  {
     if( millis() - timeout > 2000 )  { return ; }
-    delay(1); // отдаём управление WiFi-стекам
+    delay(1);
   }
 
 }
@@ -418,11 +468,7 @@ uint8_t ESP_PROGSWD::stm32fX_write_bank(uint32_t addr, uint8_t buffer[], uint32_
 
     _ret = stm32Fx_write_flash_16bit(addr + posi, tmp);
     if ( _ret != 1 ) {return 1;}
-    
-    // Каждые 128 байт отдаём управление WiFi-стекам (~8ms на страницу 1024 байт)
-    if ((posi % (WORDSIZE * 64)) == 0) {
-        delay(1);
-    }
+    delay(1);
   }
   return 0;
 }
