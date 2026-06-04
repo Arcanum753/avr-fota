@@ -21,6 +21,11 @@
 #define DEFAULT_PROG_PROJNAME       "projname" // дефолтное имя проекта
 #define DEFAULT_chipsize            32768  // размер чипа по дефолту
 
+#define SWD_FILELIST_JSON       "/swd_filelist.json"
+
+// Время актуальности статуса чипа после проверки (5 минут = 300 секунд)
+#define CHIP_STATUS_TIMEOUT     300
+
 #define JSON_STR_LEN			512
 #define JSON_FILESIZEMAX		1024
 
@@ -52,8 +57,6 @@ typedef enum progerr_e  {
 typedef struct {
     String project_name;	//имя проекта.
     uint32_t chip_size;		// размер чипа.
-    String last_prog_file;	// имя последнего прошитого файла
-    String last_prog_date;	// дата последней прошивки
 } CfgFile_ProgSwd_t;
 
 
@@ -91,11 +94,28 @@ public:
     void    web_FileUpload2FS_Status(AsyncWebServerRequest *request);
     void    web_FileUploadProgress(AsyncWebServerRequest *request);
     void    web_FileUploadSize(AsyncWebServerRequest *request);
+    void    web_setMD5(AsyncWebServerRequest *request);
     void    setUploadPercent(uint8_t p) { _uploadPercent = p; }
+    // filelist management
+    bool    filelist_Load(JsonDocument &doc);
+    bool    filelist_Save(JsonDocument &doc);
+    bool    filelist_AddEntry(const String &filename, const String &upload_date, const String &md5);
+    bool    filelist_RemoveEntry(const String &filename);
+    // check if filename exists in FS filelist
+    bool    filelist_FileExists(const String &filename);
+    // set prog_date and prog_status after programming attempt
+    bool    filelist_SetProgStatus(const String &filename, const String &prog_date, const String &prog_status);
+    // find the last successfully programmed filename (newest prog_date with "ok" status)
+    String  filelist_GetLastSuccessFilename();
+    // compute md5 for an existing file
+    String  file_ComputeMD5(const String &path);
     // programming
     void    web_FileUpload2Chip(AsyncWebServerRequest *request) ;
     // Callback после завершения EERTOS-кооперативной прошивки
     void    onFlashComplete();
+    // chip status check
+    void    web_CheckChipStatus(AsyncWebServerRequest *request);
+    bool    chip_IsConnected();
 
 private:
     String getVersionStr();
@@ -116,7 +136,17 @@ protected:
     fs::SPIFFSFS*   _fs;
     File _fsUploadFile;        // открытый файл при загрузке в ФС
     size_t _fileUploadBytes;   // счётчик записанных байт при загрузке
+    
+    // MD5 verification
+    String _browserFileMD5;    // MD5 переданный от браузера
+    uint32_t _browserFileSize; // размер файла от браузера
+    String _browserFileName;   // имя файла от браузера
+    bool _fileUploadError;     // флаг ошибки загрузки (несовпадение MD5)
 
+    // Chip status (SWD connection)
+    uint32_t _chipId = 0;
+    bool     _chipConnected = false;
+    uint32_t _chipStatusTime = 0;  // millis() последней проверки статуса
 };
 
 extern Class_ProgSwd progSwd;

@@ -6,21 +6,47 @@
   <meta http-equiv="Content-type" content="text/html; charset=utf-8">
     <link rel="stylesheet" href="style.css">
     <script src="FSBrowserNG.js"></script>
+    <script src="spark-md5.js"></script>
 </head>
 <body>
     <markup>./page_head.html</markup>
     <h2 class="title" style="background: #7D8EE2; padding: 8px;"> STM32 SWD Programmer</h2>
     <hr>
 
-    <!-- Информация о диске -->
+    <!-- Статус соединения с чипом STM32 -->
+    <div id="chipStatusContainer" style="text-align: center; margin: 8px auto; padding: 8px 12px; max-width: 600px; border-radius: 6px; background-color: #f5f5f5; border: 1px solid #ddd; display: flex; align-items: center; justify-content: center; gap: 12px; flex-wrap: wrap;">
+        <span id="chipStatusText" style="font-size: 15px; font-weight: bold;">🔍 Checking chip...</span>
+        <button id="checkChipBtn" onclick="checkChipStatus()" style="padding: 5px 14px; cursor: pointer; border: 1px solid #aaa; border-radius: 4px; background: #fff; font-size: 13px;">🔍 Check chip</button>
+    </div>
+
+    <!-- Визуализация дискового пространства -->
     <div id="diskinfo" style="text-align: center; margin: 10px 0;"></div>
+    <div id="diskBarContainer" style="width: 80%; max-width: 600px; margin: 8px auto; display: none;">
+        <div id="diskBar" style="height: 22px; border-radius: 4px; overflow: hidden; background-color: #e0e0e0; position: relative;">
+            <div id="diskBarUsed" style="height: 100%; width: 0%; background-color: #4CAF50; transition: width 0.5s;"></div>
+            <div id="diskBarLabel" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; line-height: 22px; text-align: center; font-size: 12px; font-weight: bold; color: #333;"></div>
+        </div>
+    </div>
 
     <!-- Форма загрузки файла прошивки -->
     <form id="uploadForm" enctype='multipart/form-data'>
         <table align = "center"> 
-            <tr><th> <input id="fileName" type='file' name='update' style="display: block; margin: 20px auto; padding: 10px; font-size: 16px; width: auto; min-width: 300px;"> </th> </tr>
+            <tr><th> <input id="fileName" type='file' name='update' onchange="summd5()" style="display: block; margin: 20px auto; padding: 10px; font-size: 16px; width: auto; min-width: 300px;"> </th> </tr>
+            <tr><td id="md5row">
+                    File: <span id="fileNameLoaded" style="font-weight: bold;"></span><br>
+                    Size: <span id="fileSize"></span> Bytes<br>
+                    MD5: <span id="clientHash" style="font-family: monospace;"></span>
+                  </td>
+            </tr>
+            <tr><td id="validRow">
+                    <span id="updStatus"></span><br>
+                    <span id="updSizeFree"></span><br>
+                    <span id="updSizeNeeded"></span><br>
+                    <span id="updFileType"></span><br>
+                 </td>
+            </tr>
             <tr><td> 
-                <input id="uploadButton" type='button' value='Upload firmware file' onclick="uploadFile()">
+                <input id="uploadButton" type='button' value='Upload firmware file' disabled onclick="uploadFile()">
               </td> </tr>
         </table>
     </form>
@@ -30,26 +56,40 @@
         <div style="width: 100%; background-color: #ddd; border-radius: 3px; margin-top: 5px;">
             <div id="progressBar" style="width: 0%; height: 20px; background-color: #4CAF50; border-radius: 3px; transition: width 0.3s;"></div>
         </div>
+        <div id="md5VerifyStatus" style="margin-top: 6px; font-size: 14px; font-weight: bold;"></div>
     </div>
 
     <hr>
 
     <!-- Таблица файлов прошивки -->
     <div style="overflow-x: auto;">
-        <table id="filesTable" align="center" style="width: 100%; max-width: 1000px; border-collapse: collapse;">
+        <table id="filesTable" align="center" style="width: 100%; max-width: 1200px; border-collapse: collapse;">
             <thead>
                 <tr style="background-color: #f2f2f2;">
                     <th style="padding: 8px; text-align: left; border-bottom: 2px solid #ddd;">Name</th>
                     <th style="padding: 8px; text-align: left; border-bottom: 2px solid #ddd;">Type</th>
                     <th style="padding: 8px; text-align: right; border-bottom: 2px solid #ddd;">Size</th>
+                    <th style="padding: 8px; text-align: center; border-bottom: 2px solid #ddd;">Upload date</th>
+                    <th style="padding: 8px; text-align: center; border-bottom: 2px solid #ddd;">MD5</th>
                     <th style="padding: 8px; text-align: center; border-bottom: 2px solid #ddd;">Program date</th>
-                    <th style="padding: 8px; text-align: center; border-bottom: 2px solid #ddd;">Actions</th>
+                    <th style="padding: 8px; text-align: center; border-bottom: 2px solid #ddd;">Status</th>
                 </tr>
             </thead>
             <tbody id="filesTableBody">
-                <tr><td colspan="5" style="text-align: center; padding: 20px;">Loading...</td></tr>
+                <tr><td colspan="7" style="text-align: center; padding: 20px;">Loading...</td></tr>
             </tbody>
         </table>
+    </div>
+
+    <!-- Панель выбранного файла -->
+    <div id="fileActionPanel" style="display: none; text-align: center; margin: 16px auto; padding: 12px; max-width: 600px; border: 2px solid #4CAF50; border-radius: 6px; background-color: #f9fff9;">
+        <div style="font-size: 16px; margin-bottom: 10px;">
+            Selected: <span id="selectedFileName" style="font-weight: bold;"></span>
+        </div>
+        <div>
+            <button id="deleteSelectedBtn" onclick="deleteSelectedFile()" title="Delete file" style="margin: 0 8px; padding: 8px 16px; cursor: pointer; border: 1px solid #ccc; border-radius: 4px; background: #fff; font-size: 14px;">🗑️ Delete</button>
+            <button id="flashSelectedBtn" onclick="flashSelectedFile()" title="Program STM32" style="margin: 0 8px; padding: 8px 16px; cursor: pointer; border: 1px solid #ccc; border-radius: 4px; background: #fff; font-size: 14px;">⚡ Program</button>
+        </div>
     </div>
 
     <markup>./page_bottom.html</markup>
@@ -60,15 +100,207 @@
         let progressTimer = null;
         let isUploading = false;
         let isProgramming = false;
-        let _uploadAbort = false;  // флаг для предотвращения гонок при остановке
+        let _uploadAbort = false;
+        let selectedFile = null;
+        let selectedRow = null;
+        
+        // Состояние последней проверки файла
+        let lastFileCheck = {
+            canUpload: false,
+            errorMsg: "",
+            md5: "",
+            fileName: "",
+            fileSize: 0
+        };
+
+        // ========== Chip Status (STM32 connection) ==========
+        // Должен совпадать с CHIP_STATUS_TIMEOUT в module_prog_swd.h (300 секунд)
+        const CHIP_STATUS_TIMEOUT_MS = 300000;
+        let chipStatusTimer = null;
+        let chipState = 'unknown'; // 'unknown', 'connected', 'disconnected', 'busy'
 
         window.onload = function () {
             setTimeout(() => {
                 loadDiskInfo();
                 loadFilesList();
                 checkProgrammingStatus();
+                checkChipStatus(); // автопроверка статуса чипа при загрузке
             }, 250);
         };
+
+        // ========== Chip Status Functions ==========
+        function checkChipStatus() {
+            const statusText = document.getElementById('chipStatusText');
+            const checkBtn = document.getElementById('checkChipBtn');
+            statusText.innerHTML = '⏳ Checking chip...';
+            statusText.style.color = '#888';
+            checkBtn.disabled = true;
+
+            const xhr = new XMLHttpRequest();
+            xhr.open('GET', '/prog/chipstatus', true);
+            xhr.timeout = 8000;
+
+            xhr.ontimeout = function() {
+                checkBtn.disabled = false;
+                updateChipUI('timeout', 0);
+            };
+
+            xhr.onload = function() {
+                checkBtn.disabled = false;
+                if (xhr.status === 200) {
+                    const fieldsRows = ParseCVT(xhr.response);
+                    let status = '';
+                    let chipId = 0;
+                    for (let fields of fieldsRows) {
+                        if (fields[0] === 'status') status = fields[1];
+                        if (fields[0] === 'chipid') {
+                            const idStr = fields[1];
+                            if (idStr.startsWith('0x') || idStr.startsWith('0X')) {
+                                chipId = parseInt(idStr, 16);
+                            } else {
+                                chipId = parseInt(idStr);
+                            }
+                        }
+                    }
+                    updateChipUI(status, chipId);
+                } else {
+                    updateChipUI('error', 0);
+                }
+            };
+
+            xhr.onerror = function() {
+                checkBtn.disabled = false;
+                updateChipUI('error', 0);
+            };
+
+            xhr.send();
+        }
+
+        function updateChipUI(status, chipId) {
+            const statusText = document.getElementById('chipStatusText');
+            const container = document.getElementById('chipStatusContainer');
+            const flashBtn = document.getElementById('flashSelectedBtn');
+
+            // Сброс старого таймера
+            if (chipStatusTimer) {
+                clearTimeout(chipStatusTimer);
+                chipStatusTimer = null;
+            }
+
+            if (status === 'connected') {
+                chipState = 'connected';
+                const idHex = '0x' + chipId.toString(16).toUpperCase();
+                statusText.innerHTML = '✅ STM32 connected — ID: <span style="font-family: monospace; font-weight: bold;">' + idHex + '</span>';
+                statusText.style.color = '#2e7d32';
+                container.style.backgroundColor = '#e8f5e9';
+                container.style.borderColor = '#4CAF50';
+                flashBtn.disabled = false;
+                flashBtn.title = 'Program STM32';
+
+                // Запускаем таймер на CHIP_STATUS_TIMEOUT_MS
+                chipStatusTimer = setTimeout(function() {
+                    chipState = 'unknown';
+                    statusText.innerHTML = '⏳ Status unknown — click "Check chip"';
+                    statusText.style.color = '#888';
+                    container.style.backgroundColor = '#f5f5f5';
+                    container.style.borderColor = '#ddd';
+                    flashBtn.disabled = true;
+                    flashBtn.title = 'Chip status unknown — check chip first';
+                }, CHIP_STATUS_TIMEOUT_MS);
+
+            } else if (status === 'disconnected') {
+                chipState = 'disconnected';
+                statusText.innerHTML = '❌ No STM32 chip detected';
+                statusText.style.color = '#cc0000';
+                container.style.backgroundColor = '#ffebee';
+                container.style.borderColor = '#ef5350';
+                flashBtn.disabled = true;
+                flashBtn.title = 'No chip detected — cannot program';
+
+            } else if (status === 'busy') {
+                chipState = 'busy';
+                statusText.innerHTML = '⏳ Programming in progress...';
+                statusText.style.color = '#e65100';
+                container.style.backgroundColor = '#fff3e0';
+                container.style.borderColor = '#ff9800';
+                flashBtn.disabled = true;
+                flashBtn.title = 'Programming in progress';
+
+            } else if (status === 'timeout') {
+                chipState = 'unknown';
+                statusText.innerHTML = '⏳ Connection timeout — try again';
+                statusText.style.color = '#e65100';
+                container.style.backgroundColor = '#fff3e0';
+                container.style.borderColor = '#ff9800';
+                flashBtn.disabled = true;
+                flashBtn.title = 'Connection timeout — check chip first';
+
+            } else {
+                chipState = 'unknown';
+                statusText.innerHTML = '⚠️ Chip check failed — try again';
+                statusText.style.color = '#e65100';
+                container.style.backgroundColor = '#fff3e0';
+                container.style.borderColor = '#ff9800';
+                flashBtn.disabled = true;
+                flashBtn.title = 'Chip check failed';
+            }
+        }
+
+        // ========== Disk Info & Visualization ==========
+        function loadDiskInfo() {
+            const xhr = new XMLHttpRequest();
+            xhr.open('GET', '/prog/diskinfo', true);
+            xhr.onload = function() {
+                if (xhr.status === 200) {
+                    const fieldsRows = ParseCVT(xhr.response);
+                    let all = 0, used = 0, free = 0;
+                    for (let fields of fieldsRows) {
+                        if (fields[0] === "diskall")   all = parseInt(fields[1]);
+                        if (fields[0] === "diskused")  used = parseInt(fields[1]);
+                        if (fields[0] === "diskfree")  free = parseInt(fields[1]);
+                    }
+                    document.getElementById('diskinfo').innerHTML =
+                        "Disk: Total <b>" + all + "</b> bytes, Used <b>" + used + "</b> bytes, Free <b>" + free + "</b> bytes";
+                    
+                    updateDiskBar(all, used, free);
+                }
+            };
+            xhr.send();
+        }
+
+        function updateDiskBar(total, used, free) {
+            const container = document.getElementById('diskBarContainer');
+            const barUsed = document.getElementById('diskBarUsed');
+            const label = document.getElementById('diskBarLabel');
+            
+            if (!total) { container.style.display = 'none'; return; }
+            
+            container.style.display = 'block';
+            const pct = (used / total) * 100;
+            barUsed.style.width = pct + '%';
+            
+            if (pct < 60) {
+                barUsed.style.backgroundColor = '#4CAF50';
+            } else if (pct < 85) {
+                barUsed.style.backgroundColor = '#ffaa00';
+            } else {
+                barUsed.style.backgroundColor = '#ff4444';
+            }
+            
+            let labelText = formatBytes(used) + " / " + formatBytes(total);
+            if (free >= 0) labelText += " (" + formatBytes(free) + " free)";
+            label.innerHTML = labelText;
+        }
+
+        function formatBytes(bytes) {
+            if (bytes === 0) return '0';
+            const k = 1024;
+            const sizes = ['', 'K', 'M', 'G'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            const val = bytes / Math.pow(k, i);
+            return i === 0 ? val.toFixed(0) + ' B' : val.toFixed(1) + ' ' + sizes[i] + 'B';
+        }
+
         // ========== Check Programming Status on Page Load ==========
         function checkProgrammingStatus() {
             const xhr = new XMLHttpRequest();
@@ -86,11 +318,9 @@
                     }
                     
                     if (progStatus === "running") {
-                        // Прошивка уже идёт — переходим в режим опроса
                         console.log("Programming already in progress, resuming polling...");
                         startProgPolling();
                     } else if (progStatus === "done") {
-                        // Прошивка завершена — покажем что было 100%
                         const container = document.getElementById('progressContainer');
                         const progressText = document.getElementById('progressText');
                         const progressBar = document.getElementById('progressBar');
@@ -107,27 +337,7 @@
                 }
             };
             xhr.onerror = function() {
-                // Не удалось проверить статус — это нормально, просто не показываем прогресс
                 console.log("Could not check programming status on load");
-            };
-            xhr.send();
-        }
-        // ========== Disk Info ==========
-        function loadDiskInfo() {
-            const xhr = new XMLHttpRequest();
-            xhr.open('GET', '/prog/diskinfo', true);
-            xhr.onload = function() {
-                if (xhr.status === 200) {
-                    const fieldsRows = ParseCVT(xhr.response);
-                    let all = "?", used = "?", free = "?";
-                    for (let fields of fieldsRows) {
-                        if (fields[0] === "diskall")   all = fields[1];
-                        if (fields[0] === "diskused")  used = fields[1];
-                        if (fields[0] === "diskfree")  free = fields[1];
-                    }
-                    document.getElementById('diskinfo').innerHTML =
-                        "Disk: Total <b>" + all + "</b> bytes, Used <b>" + used + "</b> bytes, Free <b>" + free + "</b> bytes";
-                }
             };
             xhr.send();
         }
@@ -143,7 +353,7 @@
                         renderFilesTable(files);
                     } catch(e) {
                         document.getElementById('filesTableBody').innerHTML =
-                            '<tr><td colspan="5" style="text-align: center; padding: 20px; color: red;">Error parsing file list</td></tr>';
+                            '<tr><td colspan="7" style="text-align: center; padding: 20px; color: red;">Error parsing file list</td></tr>';
                     }
                 }
             };
@@ -153,7 +363,9 @@
         function renderFilesTable(files) {
             const tbody = document.getElementById('filesTableBody');
             if (!files || files.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 20px;">No firmware files found</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; padding: 20px;">No firmware files found</td></tr>';
+                document.getElementById('fileActionPanel').style.display = 'none';
+                selectedFile = null;
                 return;
             }
 
@@ -163,18 +375,42 @@
                 const fname = f.filename || "";
                 const ftype = f.filetype || "";
                 const fsize = f.filesizestr || "";
-                const progdate = f.progdate || "";
+                const uploadDate = f.upload_date || "";
+                const progDate = f.prog_date || "";
+                const progStatus = f.prog_status || "";
+                const isLastSuccess = f.is_last_success === true;
+                const md5 = f.md5 || "";
                 const encodedName = encodeURIComponent(fname);
+                const md5Short = md5 ? md5.substring(0, 8) + "…" + md5.substring(24) : "";
+                const md5Full = md5 || "";
 
-                html += "<tr>";
-                html += "<td style='padding: 6px; border-bottom: 1px solid #ddd;'>" + escapeHtml(fname) + "</td>";
-                html += "<td style='padding: 6px; border-bottom: 1px solid #ddd;'>" + escapeHtml(ftype) + "</td>";
-                html += "<td style='padding: 6px; border-bottom: 1px solid #ddd; text-align: right;'>" + escapeHtml(fsize) + "</td>";
-                html += "<td style='padding: 6px; border-bottom: 1px solid #ddd; text-align: center;'>" + escapeHtml(progdate) + "</td>";
-                html += "<td style='padding: 6px; border-bottom: 1px solid #ddd; text-align: center; white-space: nowrap;'>";
-                html += "<button onclick='deleteFile(\"" + encodedName + "\")' title='Delete file' style='margin: 0 4px; padding: 4px 8px; cursor: pointer; border: 1px solid #ccc; border-radius: 3px; background: #fff;'>🗑️</button>";
-                html += "<button onclick='flashFile(\"" + encodedName + "\")' title='Program STM32' style='margin: 0 4px; padding: 4px 8px; cursor: pointer; border: 1px solid #ccc; border-radius: 3px; background: #fff;'>💾</button>";
+                let statusHtml = "<span style='color: #999;'>—</span>";
+                if (progStatus === "ok") {
+                    statusHtml = "<span style='color: #2e7d32; font-weight: bold;'>✓ OK</span>";
+                } else if (progStatus === "error") {
+                    statusHtml = "<span style='color: #cc0000; font-weight: bold;'>✗ Error</span>";
+                } else if (progStatus) {
+                    statusHtml = escapeHtml(progStatus);
+                }
+
+                const rowStyle = isLastSuccess
+                    ? "padding: 6px; border-bottom: 1px solid #ddd; background-color: #e8f5e9;"
+                    : "padding: 6px; border-bottom: 1px solid #ddd;";
+
+                html += "<tr style='cursor: pointer;' onclick='selectFile(\"" + encodedName + "\", this)'>";
+                html += "<td style='" + rowStyle + "'>" + escapeHtml(fname) + "</td>";
+                html += "<td style='" + rowStyle + "'>" + escapeHtml(ftype) + "</td>";
+                html += "<td style='" + rowStyle + " text-align: right;'>" + escapeHtml(fsize) + "</td>";
+                html += "<td style='" + rowStyle + " text-align: center;'>" + escapeHtml(uploadDate) + "</td>";
+                html += "<td style='" + rowStyle + " text-align: center; font-family: monospace; font-size: 12px;' title='" + escapeHtml(md5Full) + "'>";
+                if (md5) {
+                    html += md5Short;
+                } else {
+                    html += "<span style='color: #999;'>—</span>";
+                }
                 html += "</td>";
+                html += "<td style='" + rowStyle + " text-align: center;'>" + escapeHtml(progDate) + "</td>";
+                html += "<td style='" + rowStyle + " text-align: center;'>" + statusHtml + "</td>";
                 html += "</tr>";
             }
             tbody.innerHTML = html;
@@ -224,7 +460,6 @@
             
             xhr.onload = function() {
                 if (xhr.status === 200) {
-                    // Сервер вернул "ok" — переходим в режим ожидания программирования
                     startProgPolling();
                 } else {
                     alert('Failed to start programming: ' + xhr.status);
@@ -242,12 +477,10 @@
         // ========== Programming Status Polling ==========
         function stopProgPolling() {
             isProgramming = false;
-            // снимаем анимацию пульсации
             const progressBar = document.getElementById('progressBar');
             if (progressBar) progressBar.style.animation = '';
         }
 
-        // Показать ошибку прямо на прогресс-баре (без alert)
         function showProgError(msg) {
             const progressText = document.getElementById('progressText');
             const progressBar = document.getElementById('progressBar');
@@ -258,7 +491,6 @@
             }
         }
 
-        // Показать успешное завершение на прогресс-баре (без alert)
         function showProgSuccess() {
             const progressText = document.getElementById('progressText');
             const progressBar = document.getElementById('progressBar');
@@ -279,11 +511,10 @@
             progressText.innerHTML = 'Programming: 0%';
             progressBar.style.width = '0%';
             progressBar.style.backgroundColor = '#ffaa00';
-            progressBar.style.animation = '';  // убираем пульсацию, будем показывать реальный %
+            progressBar.style.animation = '';
 
             let attempts = 0;
-            let pollActive = true;
-            const maxAttempts = 60; // 60 * 2 сек = 120 секунд (2 минуты)
+            const maxAttempts = 60;
             let lastPercent = 0;
 
             (function pollProgStatus() {
@@ -317,13 +548,12 @@
                         }
 
                         if (progStatus === "running") {
-                            // Показываем реальный процент прошивки
                             if (progPercent >= 0) {
                                 updateProgressDisplay(progPercent);
                                 progressText.innerHTML = 'Programming: ' + progPercent + '%';
                                 lastPercent = progPercent;
                             }
-                            attempts = 0;  // сбрасываем счётчик при успешном ответе
+                            attempts = 0;
                             setTimeout(pollProgStatus, 2000);
                         } else if (progStatus === "done") {
                             stopProgPolling();
@@ -342,7 +572,6 @@
                             stopProgPolling();
                             showProgError('Programming failed!');
                         } else {
-                            // progStatus не найден — возможно сервер ещё не в режиме программирования
                             attempts++;
                             if (attempts >= maxAttempts) {
                                 stopProgPolling();
@@ -369,6 +598,172 @@
             })();
         }
 
+        // ========== MD5 Calculation & File Validation ==========
+        function summd5() {
+            const input = document.getElementById('fileName');
+            if (!input.files.length) {
+                console.error('Please select a file');
+                updateButtonState();
+                return;
+            }
+            
+            const file = input.files[0];
+            
+            lastFileCheck = {
+                canUpload: false,
+                errorMsg: "",
+                md5: "",
+                fileName: file.name,
+                fileSize: file.size
+            };
+            
+            document.getElementById('fileNameLoaded').innerHTML = file.name;
+            document.getElementById('fileSize').innerHTML = file.size;
+            document.getElementById('clientHash').innerHTML = "computing...";
+            
+            const MAX_FILENAME_LEN = 30;
+            if (file.name.length > MAX_FILENAME_LEN) {
+                lastFileCheck.errorMsg = "Filename too long! Max " + MAX_FILENAME_LEN + " chars (current: " + file.name.length + ")";
+                document.getElementById('clientHash').innerHTML = "—";
+                updateButtonState();
+                return;
+            }
+            
+            loadDiskInfoForCheck(file);
+            
+            const fileReader = new FileReader();
+            let time;
+            
+            fileReader.onload = function (e) {
+                if (file.size != e.target.result.length) {
+                    console.error('ERROR: Browser could not read the file until the end');
+                    lastFileCheck.errorMsg = "File read error";
+                    updateButtonState();
+                    return;
+                }
+                
+                const md5hash = SparkMD5.hashBinary(e.target.result);
+                console.info('Computed MD5: ' + md5hash);
+                console.info('Time: ' + (new Date().getTime() - time) + 'ms');
+                
+                document.getElementById('clientHash').innerHTML = md5hash;
+                lastFileCheck.md5 = md5hash;
+                
+                validateFileOnServer(md5hash, file);
+            };
+            
+            fileReader.onerror = function () {
+                console.error('ERROR: FileReader onerror');
+                lastFileCheck.errorMsg = "Error reading file";
+                document.getElementById('clientHash').innerHTML = "—";
+                updateButtonState();
+            };
+            
+            console.info('Computing MD5 for ' + file.name + ' (' + file.size + ' bytes)...');
+            time = new Date().getTime();
+            fileReader.readAsBinaryString(file);
+        }
+
+        function loadDiskInfoForCheck(file) {
+            const xhr = new XMLHttpRequest();
+            xhr.open('GET', '/prog/diskinfo', true);
+            xhr.onload = function() {
+                if (xhr.status === 200) {
+                    const fieldsRows = ParseCVT(xhr.response);
+                    let all = 0, used = 0, free = 0;
+                    for (let fields of fieldsRows) {
+                        if (fields[0] === "diskall")   all = parseInt(fields[1]);
+                        if (fields[0] === "diskused")  used = parseInt(fields[1]);
+                        if (fields[0] === "diskfree")  free = parseInt(fields[1]);
+                    }
+                    document.getElementById('updSizeFree').innerHTML = "Free: " + all + " bytes total, " + free + " bytes available";
+                    document.getElementById('updSizeNeeded').innerHTML = "Need: " + file.size + " bytes";
+                    
+                    if (file.size > free) {
+                        lastFileCheck.errorMsg = "Not enough free space! Need " + file.size + " bytes, only " + free + " available";
+                        updateButtonState();
+                    }
+                }
+            };
+            xhr.send();
+        }
+
+        function validateFileOnServer(md5hash, file) {
+            const url = '/prog/setmd5?md5=' + encodeURIComponent(md5hash) + 
+                        '&size=' + file.size + 
+                        '&name=' + encodeURIComponent(file.name);
+            
+            const xhr = new XMLHttpRequest();
+            xhr.open('GET', url, true);
+            
+            xhr.onload = function() {
+                if (xhr.status === 200) {
+                    const resp = xhr.responseText.trim();
+                    console.info('Server validation: ' + resp);
+                    
+                    if (resp === "OK") {
+                        lastFileCheck.canUpload = true;
+                        lastFileCheck.errorMsg = "";
+                        document.getElementById('updStatus').innerHTML = '<span style="color: #2e7d32;">✓ File validated, ready to upload</span>';
+                    } else {
+                        const parts = resp.split('|');
+                        lastFileCheck.canUpload = false;
+                        if (parts.length >= 3) {
+                            lastFileCheck.errorMsg = parts[2];
+                        } else {
+                            lastFileCheck.errorMsg = resp;
+                        }
+                        document.getElementById('updStatus').innerHTML = '<span style="color: #cc0000;">✗ ' + escapeHtml(lastFileCheck.errorMsg) + '</span>';
+                    }
+                } else {
+                    lastFileCheck.errorMsg = "Server validation failed (HTTP " + xhr.status + ")";
+                    document.getElementById('updStatus').innerHTML = '<span style="color: #cc0000;">✗ ' + escapeHtml(lastFileCheck.errorMsg) + '</span>';
+                }
+                updateButtonState();
+            };
+            
+            xhr.onerror = function() {
+                lastFileCheck.errorMsg = "Network error during validation";
+                document.getElementById('updStatus').innerHTML = '<span style="color: #cc0000;">✗ Network error</span>';
+                updateButtonState();
+            };
+            
+            xhr.send();
+        }
+
+        // ========== Upload Button State ==========
+        function updateButtonState() {
+            const button = document.getElementById('uploadButton');
+            const statusEl = document.getElementById('updStatus');
+            
+            if (!lastFileCheck.fileName) {
+                button.disabled = true;
+                button.value = 'Upload firmware file';
+                button.style.backgroundColor = '';
+                button.style.color = '';
+                button.style.border = '';
+                return;
+            }
+            
+            if (lastFileCheck.canUpload) {
+                button.disabled = false;
+                button.value = 'Upload firmware file';
+                button.style.backgroundColor = '';
+                button.style.color = '';
+                button.style.border = '';
+            } else {
+                button.disabled = true;
+                button.value = 'Upload blocked';
+                button.style.backgroundColor = '#ff4444';
+                button.style.color = '#ffffff';
+                button.style.border = '2px solid #cc0000';
+                
+                if (!statusEl.innerHTML) {
+                    statusEl.innerHTML = '<span style="color: #cc0000;">✗ ' + escapeHtml(lastFileCheck.errorMsg || "Validation failed") + '</span>';
+                }
+            }
+        }
+
         // ========== Upload File ==========
         function uploadFile() {
             const fileInput = document.getElementById('fileName');
@@ -378,22 +773,15 @@
                 alert('Please select a file first');
                 return;
             }
-
-            // Проверка длины имени файла (SPIFFS ограничение 32 байта)
-            const MAX_FILENAME_LEN = 30;
-            if (file.name.length > MAX_FILENAME_LEN) {
-                alert('Filename too long! Maximum ' + MAX_FILENAME_LEN + ' characters allowed.\n' +
-                      'Current filename length: ' + file.name.length + ' characters.\n\n' +
-                      'Please rename the file and try again.');
-                fileInput.value = "";
+            
+            if (!lastFileCheck.canUpload) {
+                alert('Cannot upload: ' + (lastFileCheck.errorMsg || "Validation failed"));
                 return;
             }
 
-            // Сначала передаём размер файла на сервер для прогресс-бара
             const xhrSize = new XMLHttpRequest();
             xhrSize.open('GET', '/prog/uploadsize?size=' + file.size, true);
             xhrSize.onload = function() {
-                // После передачи размера начинаем загрузку файла
                 const formData = new FormData();
                 formData.append('update', file);
 
@@ -402,6 +790,7 @@
                 
                 xhr.onloadstart = function() {
                     startProgressPolling();
+                    document.getElementById('md5VerifyStatus').innerHTML = '';
                 };
                 
                 xhr.onload = function() {
@@ -409,12 +798,7 @@
                     
                     if (xhr.status === 200) {
                         updateProgressDisplay(100);
-                        setTimeout(() => {
-                            document.getElementById('progressContainer').style.display = 'none';
-                            loadFilesList();
-                            loadDiskInfo();
-                            fileInput.value = "";
-                        }, 1500);
+                        setTimeout(checkUploadStatus, 500);
                     } else {
                         document.getElementById('progressContainer').style.display = 'none';
                         alert('Upload failed with status: ' + xhr.status);
@@ -436,9 +820,70 @@
             xhrSize.send();
         }
 
+        // ========== Check Upload Status (MD5 verification) ==========
+        function checkUploadStatus() {
+            const xhr = new XMLHttpRequest();
+            xhr.open('GET', '/prog/uploadstat', true);
+            xhr.timeout = 5000;
+            
+            xhr.onload = function() {
+                if (xhr.status === 200) {
+                    const response = xhr.responseText;
+                    const fieldsRows = ParseCVT(response);
+                    let status = "";
+                    let md5error = "";
+                    
+                    for (let fields of fieldsRows) {
+                        if (fields[0] === "status")     status = fields[1];
+                        if (fields[0] === "uploadstatus") status = fields[1];
+                        if (fields[0] === "md5error")   md5error = fields[1];
+                    }
+                    
+                    const md5VerifyStatus = document.getElementById('md5VerifyStatus');
+                    
+                    if (md5error) {
+                        md5VerifyStatus.innerHTML = '<span style="color: #cc0000;">✗ MD5 verification FAILED! File was removed.</span>';
+                        md5VerifyStatus.style.display = 'block';
+                        
+                        setTimeout(() => {
+                            document.getElementById('progressContainer').style.display = 'none';
+                        }, 4000);
+                    } else if (status === "ok") {
+                        md5VerifyStatus.innerHTML = '<span style="color: #2e7d32;">✓ MD5 verified, upload successful</span>';
+                        md5VerifyStatus.style.display = 'block';
+                        
+                        setTimeout(() => {
+                            document.getElementById('progressContainer').style.display = 'none';
+                            loadFilesList();
+                            loadDiskInfo();
+                            document.getElementById('fileName').value = "";
+                            lastFileCheck = { canUpload: false, errorMsg: "", md5: "", fileName: "", fileSize: 0 };
+                            updateButtonState();
+                        }, 2000);
+                    } else if (status === "error") {
+                        md5VerifyStatus.innerHTML = '<span style="color: #cc0000;">✗ Upload error</span>';
+                        md5VerifyStatus.style.display = 'block';
+                        setTimeout(() => {
+                            document.getElementById('progressContainer').style.display = 'none';
+                        }, 3000);
+                    } else {
+                        setTimeout(checkUploadStatus, 500);
+                    }
+                }
+            };
+            
+            xhr.onerror = function() {
+                loadFilesList();
+                loadDiskInfo();
+                document.getElementById('progressContainer').style.display = 'none';
+            };
+            
+            xhr.send();
+        }
+
         // ========== Progress Bar Polling ==========
         function stopProgressPolling() {
-            _uploadAbort = true;  // сигнал остановки для in-flight запросов
+            _uploadAbort = true;
             if (progressTimer) {
                 clearTimeout(progressTimer);
                 progressTimer = null;
@@ -449,7 +894,6 @@
         function startProgressPolling() {
             _uploadAbort = false;
             isUploading = true;
-            // Сбрасываем прогресс-бар на 0% сразу, чтобы не висело 100% от предыдущей загрузки
             updateProgressDisplay(0);
             document.getElementById('progressContainer').style.display = 'block';
             
@@ -458,7 +902,6 @@
                 progressTimer = null;
             }
             
-            // рекурсивный setTimeout — следующий запрос только после ответа предыдущего
             (function pollProgress() {
                 if (_uploadAbort || !isUploading) {
                     stopProgressPolling();
@@ -476,7 +919,6 @@
                 };
                 
                 xhr.onload = function() {
-                    // проверяем флаг abort — если вызван stop, игнорируем ответ
                     if (_uploadAbort) { stopProgressPolling(); return; }
                     
                     if (xhr.status === 200) {
@@ -489,7 +931,6 @@
                             }
                         }
                     }
-                    // планируем следующий опрос через 1 секунду после ответа
                     if (!_uploadAbort && isUploading) {
                         progressTimer = setTimeout(pollProgress, 1000);
                     }
@@ -514,17 +955,95 @@
             }
             if (progressBar) {
                 progressBar.style.width = percent + '%';
-                if (percent < 30) {
-                    progressBar.style.backgroundColor = '#ff4444';
-                } else if (percent < 70) {
-                    progressBar.style.backgroundColor = '#ffaa00';
-                } else {
-                    progressBar.style.backgroundColor = '#4CAF50';
-                }
             }
         }
 
+        // ========== Select File (click on row) ==========
+        function selectFile(encodedName, rowElement) {
+            if (selectedRow) {
+                selectedRow.style.outline = '';
+                selectedRow.style.outlineOffset = '';
+            }
+            selectedRow = rowElement;
+            selectedRow.style.outline = '2px solid #4CAF50';
+            selectedRow.style.outlineOffset = '-2px';
+
+            const decodedName = decodeURIComponent(encodedName);
+            selectedFile = decodedName;
+            document.getElementById('selectedFileName').textContent = decodedName;
+            document.getElementById('fileActionPanel').style.display = 'block';
+
+            // Проверяем статус чипа для блокировки кнопки Program
+            const flashBtn = document.getElementById('flashSelectedBtn');
+            if (chipState !== 'connected') {
+                flashBtn.disabled = true;
+                if (chipState === 'unknown') {
+                    flashBtn.title = 'Chip status unknown — click "Check chip"';
+                } else if (chipState === 'disconnected') {
+                    flashBtn.title = 'No chip detected — cannot program';
+                } else if (chipState === 'busy') {
+                    flashBtn.title = 'Programming in progress';
+                }
+            } else {
+                flashBtn.disabled = false;
+                flashBtn.title = 'Program STM32';
+            }
+        }
+
+        function deleteSelectedFile() {
+            if (!selectedFile) return;
+            deleteFile(encodeURIComponent(selectedFile));
+            selectedFile = null;
+            document.getElementById('fileActionPanel').style.display = 'none';
+            if (selectedRow) {
+                selectedRow.style.outline = '';
+                selectedRow.style.outlineOffset = '';
+                selectedRow = null;
+            }
+        }
+
+        function flashSelectedFile() {
+            if (!selectedFile) return;
+            
+            // Дополнительная проверка статуса чипа перед прошивкой
+            if (chipState !== 'connected') {
+                if (chipState === 'unknown') {
+                    alert('Chip status unknown! Click "Check chip" first.');
+                } else if (chipState === 'disconnected') {
+                    alert('No STM32 chip detected! Cannot program.');
+                } else {
+                    alert('Cannot program: chip status is "' + chipState + '". Check chip first.');
+                }
+                return;
+            }
+
+            if (!confirm('Program STM32 with "' + selectedFile + '"?')) return;
+            if (isProgramming) { alert('Programming already in progress...'); return; }
+
+            const xhr = new XMLHttpRequest();
+            xhr.open('GET', '/prog/flash?path=' + encodeURIComponent(selectedFile), true);
+            xhr.timeout = 10000;
+
+            xhr.ontimeout = function() {
+                if (isProgramming) { stopProgPolling(); }
+                alert('No response from device — cannot start programming');
+            };
+
+            xhr.onload = function() {
+                if (xhr.status === 200) {
+                    startProgPolling();
+                } else {
+                    alert('Failed to start programming: ' + xhr.status);
+                }
+            };
+
+            xhr.onerror = function() {
+                console.error('Network error during programming');
+                alert('Network error during programming');
+            };
+
+            xhr.send();
+        }
     </script>
-   
 </body>
 </html>
