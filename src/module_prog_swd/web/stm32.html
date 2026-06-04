@@ -50,13 +50,31 @@
                     <th style="padding: 8px; text-align: left; border-bottom: 2px solid #ddd;">Name</th>
                     <th style="padding: 8px; text-align: left; border-bottom: 2px solid #ddd;">Type</th>
                     <th style="padding: 8px; text-align: right; border-bottom: 2px solid #ddd;">Size</th>
+                    <th style="padding: 8px; text-align: center; border-bottom: 2px solid #ddd;">Upload date</th>
                     <th style="padding: 8px; text-align: center; border-bottom: 2px solid #ddd;">Program date</th>
-                    <th style="padding: 8px; text-align: center; border-bottom: 2px solid #ddd;">Actions</th>
                 </tr>
             </thead>
             <tbody id="filesTableBody">
                 <tr><td colspan="5" style="text-align: center; padding: 20px;">Loading...</td></tr>
             </tbody>
+        </table>
+    </div>
+
+    <!-- Блок с выбранным файлом и кнопками действий -->
+    <div style="text-align: center; margin: 15px auto; max-width: 600px;">
+        <table align="center" style="border-collapse: collapse;">
+            <tr>
+                <td style="padding: 8px; text-align: center;"><b>Selected file:</b></td>
+                <td style="padding: 8px; text-align: center;"><span id="selectedFileDisplay" style="color: #1a73e8; font-weight: bold;">(none)</span></td>
+            </tr>
+            <tr>
+                <td style="padding: 8px; text-align: center;">
+                    <button onclick="programSelectedFile()" style="padding: 8px 20px; cursor: pointer; border: 1px solid #4CAF50; border-radius: 5px; background: #4CAF50; color: white; font-size: 14px; font-weight: bold;">💾 Program STM32</button>
+                </td>
+                <td style="padding: 8px; text-align: center;">
+                    <button onclick="deleteSelectedFile()" style="padding: 8px 20px; cursor: pointer; border: 1px solid #f44336; border-radius: 5px; background: #f44336; color: white; font-size: 14px; font-weight: bold;">🗑️ Delete file</button>
+                </td>
+            </tr>
         </table>
     </div>
 
@@ -69,6 +87,7 @@
         let isUploading = false;
         let isProgramming = false;
         let _uploadAbort = false;  // флаг для предотвращения гонок при остановке
+        let selectedFile = "";     // выбранный файл для действий внизу таблицы
 
         window.onload = function () {
             setTimeout(() => {
@@ -121,7 +140,7 @@
             };
             xhr.send();
         }
-        // ========== Disk Info ==========
+        // ========== Disk Info with Progress Bar ==========
         function loadDiskInfo() {
             return new Promise(function(resolve) {
                 const xhr = new XMLHttpRequest();
@@ -135,8 +154,33 @@
                             if (fields[0] === "diskused")  used = fields[1];
                             if (fields[0] === "diskfree")  free = fields[1];
                         }
+                        // Парсим числа для расчёта процента
+                        const allNum = parseInt(all) || 0;
+                        const usedNum = parseInt(used) || 0;
+                        const percent = allNum > 0 ? Math.round((usedNum / allNum) * 100) : 0;
+                        // Цвет прогресс-бара в зависимости от заполнения
+                        let barColor = '#4CAF50';
+                        if (percent > 90) barColor = '#f44336';
+                        else if (percent > 70) barColor = '#ffaa00';
+                        // Форматируем размеры в человекочитаемый вид
+                        function formatSize(bytes) {
+                            if (bytes >= 1048576) return (bytes / 1048576).toFixed(1) + ' MB';
+                            if (bytes >= 1024) return (bytes / 1024).toFixed(1) + ' KB';
+                            return bytes + ' B';
+                        }
                         document.getElementById('diskinfo').innerHTML =
-                            "Disk: Total <b>" + all + "</b> bytes, Used <b>" + used + "</b> bytes, Free <b>" + free + "</b> bytes";
+                            '<div style="margin: 10px auto; max-width: 400px;">' +
+                                '<div style="display: flex; justify-content: space-between; margin-bottom: 4px;">' +
+                                    '<span style="font-size: 13px;">Used: <b>' + formatSize(usedNum) + '</b></span>' +
+                                    '<span style="font-size: 13px;">Total: <b>' + formatSize(allNum) + '</b></span>' +
+                                '</div>' +
+                                '<div style="width: 100%; background-color: #ddd; border-radius: 4px; height: 22px; overflow: hidden;">' +
+                                    '<div style="width: ' + percent + '%; height: 22px; background-color: ' + barColor + '; border-radius: 4px; transition: width 0.5s;"></div>' +
+                                '</div>' +
+                                '<div style="text-align: center; margin-top: 4px; font-size: 13px;">' +
+                                    percent + '% used (' + formatSize(usedNum) + ' / ' + formatSize(allNum) + ')' +
+                                '</div>' +
+                            '</div>';
                     }
                     resolve();
                 };
@@ -180,6 +224,7 @@
                 const fname = f.filename || "";
                 const ftype = f.filetype || "";
                 const fsize = f.filesizestr || "";
+                const uploaddate = f.upload_date || "";
                 const progdate = f.prog_date || "";
                 const progStatus = f.prog_status || "";
                 const isLastSuccess = f.is_last_success === true;
@@ -210,17 +255,55 @@
                 }
 
                 html += "<tr" + rowStyle + ">";
-                html += "<td style='padding: 6px; border-bottom: 1px solid #ddd;'>" + escapeHtml(fname) + statusIcon + "</td>";
+                html += "<td style='padding: 6px; border-bottom: 1px solid #ddd;'><a href='javascript:selectFile(\"" + encodedName + "\")' style='text-decoration: none; color: #1a73e8;'>" + escapeHtml(fname) + "</a>" + statusIcon + "</td>";
                 html += "<td style='padding: 6px; border-bottom: 1px solid #ddd;'>" + escapeHtml(ftype) + "</td>";
                 html += "<td style='padding: 6px; border-bottom: 1px solid #ddd; text-align: right;'>" + escapeHtml(fsize) + "</td>";
+                html += "<td style='padding: 6px; border-bottom: 1px solid #ddd; text-align: center;'>" + escapeHtml(uploaddate) + "</td>";
                 html += "<td style='padding: 6px; border-bottom: 1px solid #ddd; text-align: center;'>" + escapeHtml(progdate) + "</td>";
-                html += "<td style='padding: 6px; border-bottom: 1px solid #ddd; text-align: center; white-space: nowrap;'>";
-                html += "<button onclick='deleteFile(\"" + encodedName + "\")' title='Delete file' style='margin: 0 4px; padding: 4px 8px; cursor: pointer; border: 1px solid #ccc; border-radius: 3px; background: #fff;'>🗑️</button>";
-                html += "<button onclick='flashFile(\"" + encodedName + "\")' title='Program STM32' style='margin: 0 4px; padding: 4px 8px; cursor: pointer; border: 1px solid #ccc; border-radius: 3px; background: #fff;'>💾</button>";
-                html += "</td>";
                 html += "</tr>";
             }
             tbody.innerHTML = html;
+        }
+
+        // ========== Select File (click on filename) ==========
+        function selectFile(encodedName) {
+            selectedFile = decodeURIComponent(encodedName);
+            document.getElementById('selectedFileDisplay').textContent = selectedFile;
+        }
+
+        // ========== Delete Selected File ==========
+        function deleteSelectedFile() {
+            if (!selectedFile) {
+                alert('No file selected. Click on a filename in the table first.');
+                return;
+            }
+            if (!confirm('Delete file "' + selectedFile + '"?')) return;
+            
+            const xhr = new XMLHttpRequest();
+            xhr.open('GET', '/prog/delete?path=' + encodeURIComponent(selectedFile), true);
+            xhr.onload = function() {
+                if (xhr.status === 200) {
+                    selectedFile = "";
+                    document.getElementById('selectedFileDisplay').textContent = "(none)";
+                    loadFilesList();
+                    loadDiskInfo();
+                } else {
+                    alert('Delete failed: ' + xhr.status);
+                }
+            };
+            xhr.onerror = function() {
+                alert('Network error during delete');
+            };
+            xhr.send();
+        }
+
+        // ========== Program Selected File ==========
+        function programSelectedFile() {
+            if (!selectedFile) {
+                alert('No file selected. Click on a filename in the table first.');
+                return;
+            }
+            flashFile(encodeURIComponent(selectedFile));
         }
 
         function escapeHtml(text) {
