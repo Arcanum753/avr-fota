@@ -66,7 +66,8 @@
 #define FLASH_CR_PER        (1U << 1U)
 #define FLASH_CR_PG         (1U << 0U)
 
-
+// Значение CSW для доступа к flash STM32F1 (32-bit, auto-increment, debug mode)
+#define CSW_VALUE_STM32F1   0xa2000002
 
 // stm32F4
 #define SWD_FLASH_BASE_F4     0x40023c00  //  0x 4002 3c00

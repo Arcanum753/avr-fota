@@ -14,6 +14,7 @@
 #include "prog_swd.h"
 #include "swd.h"
 #include "eertos.h"
+#include "format_bin.h"
 
 
 ESP_PROGSWD swdprog;
@@ -31,7 +32,18 @@ int ESP_PROGSWD::stm32_ChipProgrammMain( String &path)  {
 	stm32Fx_halt();
 	stm32f1_unlock_erase_flash();
 	stm32f1_progEn();
-	stm32_flash_file(FLASH_START_ADDR, path) ;
+	
+	// Проверяем результат прошивки
+	uint8_t flash_ret = stm32_flash_file(FLASH_START_ADDR, path);
+	if (flash_ret != 0) {
+		DEBUGLOGSWD("stm32_ChipProgrammMain: flash_file failed with code %u\r\n", flash_ret);
+		// Всё равно пытаемся вывести чип из halt
+		stm32Fx_halt();
+		stm32Fx_unhalt();
+		stm32Fx_rst();
+		return (int)flash_ret;
+	}
+	
 	stm32Fx_halt();
 	stm32Fx_unhalt();
 	stm32Fx_rst();
@@ -149,16 +161,14 @@ void ESP_PROGSWD::flashStep() {
     switch (_flashState) {
         case FLASH_INIT: {
             // Открываем файл и определяем размер
-            _flashFile = _fs->open(_flashPath, "rb");
+            _flashFile = binFileOpen(*_fs, _flashPath);
             if (!_flashFile) {
                 DEBUGLOGSWD("flashStep: FAILED to open %s\r\n", _flashPath.c_str());
                 _flashError = true;
                 _flashState = FLASH_DONE;
                 break;
             }
-            _flashFile.seek(0, SeekEnd);
-            _flashFileSize = _flashFile.position();
-            _flashFile.seek(0, SeekSet);
+            _flashFileSize = binFileGetSize(_flashFile);
             // _flashAddr уже установлен в startFlash(), не затираем!
             _flashPosi = 0;
             _flashStartTime = millis();
@@ -175,7 +185,7 @@ void ESP_PROGSWD::flashStep() {
                 uint32_t idcode = stm32Fx_begin();
                 if (idcode == 0) {
                     DEBUGLOGSWD("flashStep: STM32 not detected (IDCODE=0) — aborting!\r\n");
-                    _flashFile.close();
+                    binFileClose(_flashFile);
                     _flashError = true;
                     _flashState = FLASH_DONE;
                     break;
@@ -193,11 +203,11 @@ void ESP_PROGSWD::flashStep() {
                 // STM32 может сбросить PG бит, и запись не сработает.
                 uint8_t buffer[PAGESIZE] = {0x00};
                 uint32_t cur_len = (_flashFileSize - _flashPosi >= PAGESIZE) ? PAGESIZE : (_flashFileSize - _flashPosi);
-                _flashFile.read(buffer, (size_t)cur_len);
+                binFileReadPage(_flashFile, buffer, cur_len);
                 uint8_t write_ret = stm32fX_write_bank(_flashAddr, buffer, cur_len);
                 if (write_ret != 0) {
                     DEBUGLOGSWD("flashStep: write_bank returned %i at addr 0x%08x — aborting!\r\n", write_ret, _flashAddr);
-                    _flashFile.close();
+                    binFileClose(_flashFile);
                     _flashError = true;
                     _flashState = FLASH_DONE;
                     break;
@@ -215,7 +225,7 @@ void ESP_PROGSWD::flashStep() {
                 
                 // Проверяем, закончили ли (файл меньше одной страницы)
                 if (_flashPosi >= _flashFileSize) {
-                    _flashFile.close();
+                    binFileClose(_flashFile);
                     _speed = (float)((float)(_flashFileSize / (float)(millis() - _flashStartTime)));
                     DEBUGLOGSWD("Done flashing file, it took %i ms speed: %.4f kbs\r\n",
                         (int)(millis() - _flashStartTime), _speed);
@@ -232,11 +242,11 @@ void ESP_PROGSWD::flashStep() {
             // Все последующие страницы (не первая) — пишем как обычно
             uint8_t buffer[PAGESIZE] = {0x00};
             uint32_t cur_len = (_flashFileSize - _flashPosi >= PAGESIZE) ? PAGESIZE : (_flashFileSize - _flashPosi);
-            _flashFile.read(buffer, (size_t)cur_len);
+            binFileReadPage(_flashFile, buffer, cur_len);
             uint8_t write_ret = stm32fX_write_bank(_flashAddr, buffer, cur_len);
             if (write_ret != 0) {
                 DEBUGLOGSWD("flashStep: write_bank returned %i at addr 0x%08x — aborting!\r\n", write_ret, _flashAddr);
-                _flashFile.close();
+                binFileClose(_flashFile);
                 _flashError = true;
                 _flashState = FLASH_DONE;
                 break;
@@ -254,7 +264,7 @@ void ESP_PROGSWD::flashStep() {
             
             // Проверяем, закончили ли
             if (_flashPosi >= _flashFileSize) {
-                _flashFile.close();
+                binFileClose(_flashFile);
                 _speed = (float)((float)(_flashFileSize / (float)(millis() - _flashStartTime)));
                 DEBUGLOGSWD("Done flashing file, it took %i ms speed: %.4f kbs\r\n",
                     (int)(millis() - _flashStartTime), _speed);
@@ -328,7 +338,7 @@ void ESP_PROGSWD::stm32Fx_write_register(uint32_t address, uint32_t value, bool 
 //sam code
 // work
 void ESP_PROGSWD::stm32Fx_halt() {
-  swd_AP_Write(AP_CSW, 0xa2000002);
+  swd_AP_Write(AP_CSW, CSW_VALUE_STM32F1);
   swd_AP_Write(AP_TAR, 0xe000edf0);
   uint32_t retry = AP_TIMES;
   while (retry--){    swd_AP_Write(AP_DRW, SWD_HALT);  }
@@ -433,14 +443,12 @@ bool ESP_PROGSWD::stm32f4_flash_busy(void) {
 uint8_t ESP_PROGSWD::stm32_flash_file(uint32_t offset, String &path) {
   // проверка на инициализированность файловой системы
   if (!_fs) { return 2; }
-  if (!path.startsWith("/")){ path = "/" + path;}
-	uint32_t addr =  offset;
-	File file;
-	file = _fs->open(path, "rb");
-	if (file == 0)  {    return 1;  }
-	file.seek(0, SeekEnd);
-	uint32_t file_size = file.position();
-	file.seek(0, SeekSet);
+
+	uint32_t addr = offset;
+	File file = binFileOpen(*_fs, path);
+	if (!file) { return 1; }
+
+	uint32_t file_size = binFileGetSize(file);
 
 	DEBUGLOGSWD("Going to write %i bytes to flash\r\n", file_size);
 
@@ -449,7 +457,7 @@ uint8_t ESP_PROGSWD::stm32_flash_file(uint32_t offset, String &path) {
 
 	for (uint32_t posi = 0; posi < file_size; posi += PAGESIZE)  {
 		uint32_t cur_len = (file_size - posi >= PAGESIZE) ? PAGESIZE : file_size - posi;
-		file.read(buffer, (size_t)cur_len);
+		binFileReadPage(file, buffer, cur_len);
 		stm32fX_write_bank(addr, buffer, cur_len);
 		addr += cur_len;
 		uint8_t percent = (uint16_t)(((float)posi / (float)file_size) * 100);
@@ -461,10 +469,10 @@ uint8_t ESP_PROGSWD::stm32_flash_file(uint32_t offset, String &path) {
 #endif
 		delay(1);
 	}
-    file.close();
-    _speed = (float)((float)(file_size / (float)(millis() - millis_start)));
-    DEBUGLOGSWD("Done flashing file, it took %i ms speed: %.4f kbs\r\n", (int)(millis() - millis_start), _speed);
-    return 0;
+	binFileClose(file);
+	_speed = (float)((float)(file_size / (float)(millis() - millis_start)));
+	DEBUGLOGSWD("Done flashing file, it took %i ms speed: %.4f kbs\r\n", (int)(millis() - millis_start), _speed);
+	return 0;
 }
 
 

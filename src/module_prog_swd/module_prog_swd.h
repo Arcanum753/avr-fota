@@ -36,23 +36,21 @@
 #define MAX_FILENAME_LEN		30
 
 
-// TODO навести тут порядок с кодами ошибок
+// Коды ошибок программатора SWD
 typedef enum progerr_e  {
-	ERROR_OK = 0 // ошибок нет
-	,ERR_SIGN = -1 // не совпадает сигнатура чипа
-	,ERR_BUSY = -2 // программатор занят
-	,ERR_FLASH = -3 // идёт прошивка
-	,ERR_ERASE = -4 // идёт стирание
-	,ERR_HEX = -5 // что-то с хекс файлом
-	,ERR_CFG = -6 // что-то с конфигфайлом
-	,ERR_RNM = -7 // TODO вспомнить бы год спустя что это
-	,ERR_OPENFILE = -8 // файл прошивки не открывается.
-	,ERR_INCORRECTFILE = -9 // он неправильный
-	,ERR_NOFILE = -10 // наверное его нет
-	,ERR_HEXCRC = -11 // что-то с CRC
-	,ERR_HEXMEMOVER = -12 // FIXME
-	,ERR_HEXADDR = -13 // FIXME
+	ERROR_OK = 0,           // Ошибок нет
+	ERR_SIGN = -1,          // Не совпадает сигнатура чипа (IDCODE)
+	ERR_BUSY = -2,          // Программатор занят
+	ERR_FLASH = -3,         // Идёт прошивка
+	ERR_ERASE = -4,         // Идёт стирание
+	ERR_HEX = -5,           // Ошибка в hex-файле
+	ERR_CFG = -6,           // Ошибка конфигурационного файла
+	ERR_OPENFILE = -8,      // Файл прошивки не открывается
+	ERR_INCORRECTFILE = -9, // Неверный формат файла
+	ERR_NOFILE = -10,       // Файл не найден
+	ERR_HEXCRC = -11,       // Ошибка CRC в hex-файле
 } progerr_t;
+
 
 // главная структура настроек программатора.
 typedef struct {

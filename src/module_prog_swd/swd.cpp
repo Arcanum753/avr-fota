@@ -13,8 +13,10 @@
 
 #include"module_prog_swd.h"
 
-bool gpioInitState = false;
-bool turn_state = 0;
+// Флаги состояния SWD-интерфейса
+// Используем volatile для безопасного доступа из разных контекстов (EERTOS, loop)
+static volatile bool gpioInitState = false;
+static volatile bool turn_state = 0;
 
 
 void swd_gpio_init()  {
