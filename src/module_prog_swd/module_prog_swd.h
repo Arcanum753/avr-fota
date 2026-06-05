@@ -68,9 +68,6 @@ public:
 #if defined(ESP32)
     void setFs(fs::SPIFFSFS* fs);
 #endif
-#if defined(ESP8266)
-    void setFs(fs::FS* fs);
-#endif
 private:
     CfgFile_ProgSwd_t CfgFile_ProgSwd; //  структура конфига
 
@@ -143,9 +140,6 @@ protected:
     //fs + hex file
 #if defined(ESP32)
     fs::SPIFFSFS*   _fs;
-#endif
-#if defined(ESP8266)
-    fs::FS*   _fs;
 #endif
     File _fsUploadFile;        // открытый файл при загрузке в ФС
     size_t _fileUploadBytes;   // счётчик записанных байт при загрузке

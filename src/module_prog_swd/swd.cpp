@@ -1,7 +1,4 @@
 
-// Many thanks to scanlime for the work on the ESP8266 SWD Library, parts of this code have inspiration and help from it
-// https://github.com/scanlime/esp8266-arm-swd
-
 #include "main.h"
 
 

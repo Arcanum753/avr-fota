@@ -110,9 +110,6 @@ public:
 #if defined(ESP32)
     void setFs(fs::SPIFFSFS* fs);
 #endif
-#if defined(ESP8266)
-    void setFs(fs::FS* fs);
-#endif
 
     uint32_t stm32Fx_begin();
 
@@ -168,9 +165,6 @@ protected:
     //fs + hex file
 #if defined(ESP32)
     fs::SPIFFSFS*               _fs;
-#endif
-#if defined(ESP8266)
-    fs::FS*                     _fs;
 #endif
 
     // EERTOS state для кооперативной прошивки

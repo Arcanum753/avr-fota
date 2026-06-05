@@ -9,13 +9,6 @@
 #include <esp_task_wdt.h>
 #endif
 
-#if defined(ESP8266)
-#include <FS.h>
-extern "C" {
-    #include "user_interface.h"
-    #include "mem.h"
-}
-#endif
 
 #include "module_prog_swd.h"
 #include "prog_swd.h"
@@ -28,9 +21,6 @@ ESP_PROGSWD::ESP_PROGSWD(){}
 
 #if defined(ESP32)
 void ESP_PROGSWD::setFs(fs::SPIFFSFS* fs) { _fs = fs; }
-#endif
-#if defined(ESP8266)
-void ESP_PROGSWD::setFs(fs::FS* fs) { _fs = fs; }
 #endif
 
 int ESP_PROGSWD::stm32_ChipProgrammMain( String &path)  {

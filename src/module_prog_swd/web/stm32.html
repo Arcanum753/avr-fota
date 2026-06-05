@@ -825,7 +825,7 @@
                 
                 const xhr = new XMLHttpRequest();
                 xhr.open('GET', '/prog/progress', true);
-                xhr.timeout = 15000;  // увеличенный таймаут для ESP8266
+                xhr.timeout = 15000;
                 
                 xhr.ontimeout = function() {
                     if (_uploadAbort) { stopProgressPolling(); return; }
