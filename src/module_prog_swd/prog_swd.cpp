@@ -15,6 +15,7 @@
 #include "swd.h"
 #include "eertos.h"
 #include "format_bin.h"
+#include "format_hex.h"
 
 
 ESP_PROGSWD swdprog;
@@ -139,7 +140,8 @@ void ESP_PROGSWD::chipCheckStep() {
     }
 }
 
-bool ESP_PROGSWD::startFlash(uint32_t offset, String &path) {
+bool ESP_PROGSWD::startFlash(uint32_t offset, String &path, uint32_t chipMemSize,
+                            uint32_t pageSize, uint32_t wordSize, uint32_t cswValue) {
     if (isFlashBusy()) { return false; }  // защита от повторного входа
     if (!_fs) { return false; }
     if (!path.startsWith("/")) { path = "/" + path; }
@@ -151,30 +153,90 @@ bool ESP_PROGSWD::startFlash(uint32_t offset, String &path) {
     _flashStartTime = 0;
     _percent = 0;
     _flashError = false;
+    _flashErrorString = "";
     _flashState = FLASH_INIT;
+    _chipMemSize = chipMemSize;
+    _isHexFormat = false;
+    _hexBinDataBuf.clear();
     
-    DEBUGLOGSWD("startFlash: %s at 0x%08x\r\n", path.c_str(), offset);
+    // Сохраняем параметры прошивки из конфига чипа
+    _pageSize = pageSize;
+    _wordSize = wordSize;
+    _cswValue = cswValue;
+    _flashStart = offset;
+    
+    // Определяем формат по расширению файла
+    if (hexFileIsFormat(path)) {
+        _isHexFormat = true;
+        DEBUGLOGSWD("startFlash: HEX format detected for %s\r\n", path.c_str());
+    } else if (binFileIsFormat(path)) {
+        _isHexFormat = false;
+        DEBUGLOGSWD("startFlash: BIN format detected for %s\r\n", path.c_str());
+    } else {
+        DEBUGLOGSWD("startFlash: unknown format for %s, treating as BIN\r\n", path.c_str());
+        _isHexFormat = false;
+    }
+    
+    DEBUGLOGSWD("startFlash: %s at 0x%08x, chipMemSize=%u, pageSize=%u, wordSize=%u, csw=0x%08x\r\n",
+        path.c_str(), offset, chipMemSize, pageSize, wordSize, cswValue);
     return true;
 }
 
 void ESP_PROGSWD::flashStep() {
     switch (_flashState) {
         case FLASH_INIT: {
-            // Открываем файл и определяем размер
-            _flashFile = binFileOpen(*_fs, _flashPath);
-            if (!_flashFile) {
-                DEBUGLOGSWD("flashStep: FAILED to open %s\r\n", _flashPath.c_str());
-                _flashError = true;
-                _flashState = FLASH_DONE;
-                break;
+            if (_isHexFormat) {
+                // HEX-формат: потоковый парсинг файла в бинарный буфер
+                File hexFile = _fs->open(_flashPath, "r");
+                if (!hexFile) {
+                    DEBUGLOGSWD("flashStep: FAILED to open HEX %s\r\n", _flashPath.c_str());
+                    _flashError = true;
+                    _flashErrorString = "Failed to open HEX file";
+                    _flashState = FLASH_DONE;
+                    break;
+                }
+                
+                uint32_t totalBins = 0;
+                int32_t parseRet = hexFileParseStream(hexFile, _hexBinDataBuf, _flashStart, _chipMemSize, totalBins);
+                hexFile.close();
+                
+                if (parseRet < 0) {
+                    DEBUGLOGSWD("flashStep: HEX validation failed (err=%d)\r\n", parseRet);
+                    _flashError = true;
+                    // Преобразуем код ошибки в текст
+                    switch (parseRet) {
+                        case -9:  _flashErrorString = "HEX: incorrect file format"; break;
+                        case -10: _flashErrorString = "HEX: file not found"; break;
+                        case -11: _flashErrorString = "HEX: CRC error"; break;
+                        case -12: _flashErrorString = "HEX: memory overflow (exceeds chip size)"; break;
+                        case -13: _flashErrorString = "HEX: non-monotonic address"; break;
+                        default:  _flashErrorString = "HEX: validation error (" + String(parseRet) + ")"; break;
+                    }
+                    _flashState = FLASH_DONE;
+                    break;
+                }
+                
+                _flashFileSize = (uint32_t)parseRet;
+                _flashPosi = 0;
+                _flashStartTime = millis();
+                DEBUGLOGSWD("flashStep: HEX parsed, %u bytes binary data\r\n", _flashFileSize);
+                _flashState = FLASH_WRITE;
+            } else {
+                // BIN-формат: открываем файл как обычно
+                _flashFile = binFileOpen(*_fs, _flashPath);
+                if (!_flashFile) {
+                    DEBUGLOGSWD("flashStep: FAILED to open %s\r\n", _flashPath.c_str());
+                    _flashError = true;
+                    _flashErrorString = "Failed to open BIN file";
+                    _flashState = FLASH_DONE;
+                    break;
+                }
+                _flashFileSize = binFileGetSize(_flashFile);
+                _flashPosi = 0;
+                _flashStartTime = millis();
+                DEBUGLOGSWD("Going to write %i bytes to flash\r\n", _flashFileSize);
+                _flashState = FLASH_WRITE;
             }
-            _flashFileSize = binFileGetSize(_flashFile);
-            // _flashAddr уже установлен в startFlash(), не затираем!
-            _flashPosi = 0;
-            _flashStartTime = millis();
-            
-            DEBUGLOGSWD("Going to write %i bytes to flash\r\n", _flashFileSize);
-            _flashState = FLASH_WRITE;
             break;
         }
         
@@ -185,8 +247,9 @@ void ESP_PROGSWD::flashStep() {
                 uint32_t idcode = stm32Fx_begin();
                 if (idcode == 0) {
                     DEBUGLOGSWD("flashStep: STM32 not detected (IDCODE=0) — aborting!\r\n");
-                    binFileClose(_flashFile);
+                    if (!_isHexFormat) binFileClose(_flashFile);
                     _flashError = true;
+                    _flashErrorString = "STM32 not detected";
                     _flashState = FLASH_DONE;
                     break;
                 }
@@ -199,16 +262,23 @@ void ESP_PROGSWD::flashStep() {
                 stm32f1_progEn();
                 
                 // НЕМЕДЛЕННО пишем первую страницу, пока PG бит ещё установлен!
-                // Если вернуть управление EERTOS между progEn и первой записью,
-                // STM32 может сбросить PG бит, и запись не сработает.
-                uint8_t buffer[PAGESIZE] = {0x00};
-                uint32_t cur_len = (_flashFileSize - _flashPosi >= PAGESIZE) ? PAGESIZE : (_flashFileSize - _flashPosi);
-                binFileReadPage(_flashFile, buffer, cur_len);
+                uint8_t buffer[_pageSize];
+                memset(buffer, 0x00, _pageSize);
+                uint32_t cur_len = (_flashFileSize - _flashPosi >= _pageSize) ? _pageSize : (_flashFileSize - _flashPosi);
+                
+                if (_isHexFormat) {
+                    // Читаем из распарсенного HEX-буфера
+                    memcpy(buffer, _hexBinDataBuf.data() + _flashPosi, cur_len);
+                } else {
+                    binFileReadPage(_flashFile, buffer, cur_len);
+                }
+                
                 uint8_t write_ret = stm32fX_write_bank(_flashAddr, buffer, cur_len);
                 if (write_ret != 0) {
                     DEBUGLOGSWD("flashStep: write_bank returned %i at addr 0x%08x — aborting!\r\n", write_ret, _flashAddr);
-                    binFileClose(_flashFile);
+                    if (!_isHexFormat) binFileClose(_flashFile);
                     _flashError = true;
+                    _flashErrorString = "Flash write error at address 0x" + String(_flashAddr, HEX);
                     _flashState = FLASH_DONE;
                     break;
                 }
@@ -225,7 +295,7 @@ void ESP_PROGSWD::flashStep() {
                 
                 // Проверяем, закончили ли (файл меньше одной страницы)
                 if (_flashPosi >= _flashFileSize) {
-                    binFileClose(_flashFile);
+                    if (!_isHexFormat) binFileClose(_flashFile);
                     _speed = (float)((float)(_flashFileSize / (float)(millis() - _flashStartTime)));
                     DEBUGLOGSWD("Done flashing file, it took %i ms speed: %.4f kbs\r\n",
                         (int)(millis() - _flashStartTime), _speed);
@@ -240,14 +310,23 @@ void ESP_PROGSWD::flashStep() {
             }
             
             // Все последующие страницы (не первая) — пишем как обычно
-            uint8_t buffer[PAGESIZE] = {0x00};
-            uint32_t cur_len = (_flashFileSize - _flashPosi >= PAGESIZE) ? PAGESIZE : (_flashFileSize - _flashPosi);
-            binFileReadPage(_flashFile, buffer, cur_len);
+            uint8_t buffer[_pageSize];
+            memset(buffer, 0x00, _pageSize);
+            uint32_t cur_len = (_flashFileSize - _flashPosi >= _pageSize) ? _pageSize : (_flashFileSize - _flashPosi);
+            
+            if (_isHexFormat) {
+                // Читаем из распарсенного HEX-буфера
+                memcpy(buffer, _hexBinDataBuf.data() + _flashPosi, cur_len);
+            } else {
+                binFileReadPage(_flashFile, buffer, cur_len);
+            }
+            
             uint8_t write_ret = stm32fX_write_bank(_flashAddr, buffer, cur_len);
             if (write_ret != 0) {
                 DEBUGLOGSWD("flashStep: write_bank returned %i at addr 0x%08x — aborting!\r\n", write_ret, _flashAddr);
-                binFileClose(_flashFile);
+                if (!_isHexFormat) binFileClose(_flashFile);
                 _flashError = true;
+                _flashErrorString = "Flash write error at address 0x" + String(_flashAddr, HEX);
                 _flashState = FLASH_DONE;
                 break;
             }
@@ -264,7 +343,7 @@ void ESP_PROGSWD::flashStep() {
             
             // Проверяем, закончили ли
             if (_flashPosi >= _flashFileSize) {
-                binFileClose(_flashFile);
+                if (!_isHexFormat) binFileClose(_flashFile);
                 _speed = (float)((float)(_flashFileSize / (float)(millis() - _flashStartTime)));
                 DEBUGLOGSWD("Done flashing file, it took %i ms speed: %.4f kbs\r\n",
                     (int)(millis() - _flashStartTime), _speed);
@@ -288,6 +367,8 @@ void ESP_PROGSWD::flashStep() {
                 stm32Fx_unhalt();
                 stm32Fx_rst();
             }
+            // Очищаем HEX-буфер
+            _hexBinDataBuf.clear();
             // Сообщаем о завершении — вызываем callback в module_prog_swd
             _flashState = FLASH_IDLE;
             DEBUGLOGSWD("flashStep: FLASH_DONE -> IDLE\r\n");
@@ -338,7 +419,7 @@ void ESP_PROGSWD::stm32Fx_write_register(uint32_t address, uint32_t value, bool 
 //sam code
 // work
 void ESP_PROGSWD::stm32Fx_halt() {
-  swd_AP_Write(AP_CSW, CSW_VALUE_STM32F1);
+  swd_AP_Write(AP_CSW, _cswValue);
   swd_AP_Write(AP_TAR, 0xe000edf0);
   uint32_t retry = AP_TIMES;
   while (retry--){    swd_AP_Write(AP_DRW, SWD_HALT);  }
@@ -445,31 +526,74 @@ uint8_t ESP_PROGSWD::stm32_flash_file(uint32_t offset, String &path) {
   if (!_fs) { return 2; }
 
 	uint32_t addr = offset;
-	File file = binFileOpen(*_fs, path);
-	if (!file) { return 1; }
+	uint32_t file_size = 0;
+	std::vector<char> hexBinBuf;
+	bool isHex = hexFileIsFormat(path);
 
-	uint32_t file_size = binFileGetSize(file);
+	if (isHex) {
+		// HEX-формат: потоковый парсинг файла в бинарный буфер
+		File hexFile = _fs->open(path, "r");
+		if (!hexFile) {
+			DEBUGLOGSWD("stm32_flash_file: FAILED to open HEX %s\r\n", path.c_str());
+			return 1;
+		}
+		
+		uint32_t totalBins = 0;
+		int32_t parseRet = hexFileParseStream(hexFile, hexBinBuf, FLASH_START_ADDR, _chipMemSize, totalBins);
+		hexFile.close();
+		
+		if (parseRet < 0) {
+			DEBUGLOGSWD("stm32_flash_file: HEX validation failed (err=%d)\r\n", parseRet);
+			return 1;
+		}
+		file_size = (uint32_t)parseRet;
+		DEBUGLOGSWD("Going to write %i bytes from HEX to flash\r\n", file_size);
+	} else {
+		// BIN-формат: открываем файл
+		File file = binFileOpen(*_fs, path);
+		if (!file) { return 1; }
+		file_size = binFileGetSize(file);
+		DEBUGLOGSWD("Going to write %i bytes from BIN to flash\r\n", file_size);
+		
+		uint8_t buffer[PAGESIZE] = {0x00};
+		long millis_start = millis();
 
-	DEBUGLOGSWD("Going to write %i bytes to flash\r\n", file_size);
-
+		for (uint32_t posi = 0; posi < file_size; posi += PAGESIZE)  {
+			uint32_t cur_len = (file_size - posi >= PAGESIZE) ? PAGESIZE : file_size - posi;
+			binFileReadPage(file, buffer, cur_len);
+			stm32fX_write_bank(addr, buffer, cur_len);
+			addr += cur_len;
+			uint8_t percent = (uint16_t)(((float)posi / (float)file_size) * 100);
+			DEBUGLOGSWD("%i percents \r\n", percent);
+			progSwd.setUploadPercent(percent);
+#if defined(ESP32)
+			esp_task_wdt_reset();
+#endif
+			delay(1);
+		}
+		binFileClose(file);
+		_speed = (float)((float)(file_size / (float)(millis() - millis_start)));
+		DEBUGLOGSWD("Done flashing file, it took %i ms speed: %.4f kbs\r\n", (int)(millis() - millis_start), _speed);
+		return 0;
+	}
+	
+	// HEX: прошиваем из буфера
 	uint8_t buffer[PAGESIZE] = {0x00};
 	long millis_start = millis();
-
+	
 	for (uint32_t posi = 0; posi < file_size; posi += PAGESIZE)  {
 		uint32_t cur_len = (file_size - posi >= PAGESIZE) ? PAGESIZE : file_size - posi;
-		binFileReadPage(file, buffer, cur_len);
+		memcpy(buffer, hexBinBuf.data() + posi, cur_len);
 		stm32fX_write_bank(addr, buffer, cur_len);
 		addr += cur_len;
 		uint8_t percent = (uint16_t)(((float)posi / (float)file_size) * 100);
 		DEBUGLOGSWD("%i percents \r\n", percent);
-		// Обновляем процент для асинхронного опроса с фронтенда
 		progSwd.setUploadPercent(percent);
 #if defined(ESP32)
 		esp_task_wdt_reset();
 #endif
 		delay(1);
 	}
-	binFileClose(file);
 	_speed = (float)((float)(file_size / (float)(millis() - millis_start)));
 	DEBUGLOGSWD("Done flashing file, it took %i ms speed: %.4f kbs\r\n", (int)(millis() - millis_start), _speed);
 	return 0;
@@ -477,11 +601,11 @@ uint8_t ESP_PROGSWD::stm32_flash_file(uint32_t offset, String &path) {
 
 
 uint8_t ESP_PROGSWD::stm32fX_write_bank(uint32_t addr, uint8_t buffer[], uint32_t size) {
-  if (size > PAGESIZE) {    return 2;  }  // buffer bigger then a bank
+  if (size > _pageSize) {    return 2;  }  // buffer bigger then a bank
   uint16_t data16b0 = 0;
   uint8_t _ret = 0;
 
-  for (int posi = 0; posi < size; posi += WORDSIZE)   { //WORDSIZE
+  for (int posi = 0; posi < size; posi += _wordSize)   {
     //  { data16b0 = (buffer[posi+1] << 8) | (buffer[posi + 0]);    }
     data16b0 =  (buffer[posi + 1] << 8)  | (buffer[posi + 0]);
     uint32_t tmp = (uint32_t)data16b0 << (8U *((addr + posi) & 2U) );
@@ -514,7 +638,9 @@ bool ESP_PROGSWD::stm32Fx_write_flash_16bit(uint32_t address, uint32_t value, bo
   uint32_t temp = 0;
   bool ret = false;
 
-                swd_AP_Write(AP_CSW, CSW_SIZE16);
+  // Формируем CSW для 16-битного доступа: берём _cswValue, очищаем биты размера [2:0], устанавливаем CSW_SIZE16
+  uint32_t csw16 = (_cswValue & ~CSW_SIZE) | CSW_SIZE16;
+                swd_AP_Write(AP_CSW, csw16);
   bool state1 = swd_AP_Write(AP_TAR, address);
   bool state2 = swd_AP_Write(AP_DRW, value);
   bool state3 = swd_DP_Read(DP_RDBUFF, temp);

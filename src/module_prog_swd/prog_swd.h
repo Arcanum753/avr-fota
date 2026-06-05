@@ -4,6 +4,7 @@
 
 #include <Arduino.h>
 #include <FS.h>
+#include <vector>
 
 
 #include "swd.h"
@@ -119,12 +120,14 @@ public:
     uint8_t stm32_flash_file(uint32_t offset, String &path);
 
     // EERTOS-кооперативная прошивка
-    bool startFlash(uint32_t offset, String &path);
+    bool startFlash(uint32_t offset, String &path, uint32_t chipMemSize = 0,
+                    uint32_t pageSize = 1024, uint32_t wordSize = 2, uint32_t cswValue = 0xa2000002);
     void flashStep();
     void beginFlashStep();  // регистрация задачи в EERTOS
     bool isFlashBusy() { return _flashState != FLASH_IDLE; }
     bool isFlashError() { return _flashError; }
     uint8_t getPercent() { return _percent; }
+    String getFlashErrorString() { return _flashErrorString; }
 
     // EERTOS-кооперативная проверка чипа
     void startChipCheck();
@@ -171,12 +174,20 @@ protected:
     // EERTOS state для кооперативной прошивки
     FlashState       _flashState = FLASH_IDLE;
     bool             _flashError = false;  // флаг ошибки при записи страницы
+    String           _flashErrorString = "";  // текст ошибки для фронтенда
     File             _flashFile;
     uint32_t         _flashAddr = 0;
     uint32_t         _flashPosi = 0;
     uint32_t         _flashFileSize = 0;
     uint32_t         _flashStartTime = 0;
     String           _flashPath;
+    uint32_t         _chipMemSize = 0;  // размер памяти чипа (из конфига)
+    uint32_t         _pageSize = 1024;  // размер страницы (из конфига чипа)
+    uint32_t         _wordSize = 2;     // размер слова (из конфига чипа)
+    uint32_t         _cswValue = 0xa2000002;  // значение CSW (из конфига чипа)
+    uint32_t         _flashStart = 0x08000000;  // стартовый адрес flash (из конфига чипа)
+    bool             _isHexFormat = false;  // true если прошиваем HEX-файл
+    std::vector<char> _hexBinDataBuf;  // распарсенные бинарные данные из HEX
 
     // EERTOS state для кооперативной проверки чипа
     ChipCheckState   _chipState = CHIP_IDLE;

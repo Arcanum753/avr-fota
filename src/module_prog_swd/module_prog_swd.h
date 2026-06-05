@@ -13,6 +13,7 @@
 
 
 #define CONFIG_PROG_JSON  "/config_prog_swd.json"
+#define SWD_CFG_JSON      "/swd_cfg.json"
 
 #define  FILE_TYPE_COMMA            '.'
 #define  FILE_TYPE_HEX              "hex"
@@ -21,6 +22,12 @@
 
 #define DEFAULT_PROG_PROJNAME       "projname" // дефолтное имя проекта
 #define DEFAULT_chipsize            32768  // размер чипа по дефолту
+
+// Fallback-константы для параметров прошивки (когда нет swd_cfg.json или чип не найден)
+#define DEFAULT_FLASH_START_ADDR    0x08000000
+#define DEFAULT_PAGE_SIZE           1024
+#define DEFAULT_WORD_SIZE           2
+#define DEFAULT_CSW_VALUE           0xa2000002
 
 #define SWD_FILELIST_JSON       "/swd_filelist.json"
 
@@ -49,6 +56,8 @@ typedef enum progerr_e  {
 	ERR_INCORRECTFILE = -9, // Неверный формат файла
 	ERR_NOFILE = -10,       // Файл не найден
 	ERR_HEXCRC = -11,       // Ошибка CRC в hex-файле
+	ERR_HEXADDR = -12,      // Нарушение монотонности адресов в HEX-файле
+	ERR_HEXMEMOVER = -13,   // Превышение размера памяти чипа
 } progerr_t;
 
 
@@ -57,6 +66,18 @@ typedef struct {
     String project_name;	//имя проекта.
     uint32_t chip_size;		// размер чипа.
 } CfgFile_ProgSwd_t;
+
+// Структура конфигурации чипа из swd_cfg.json
+typedef struct {
+    uint32_t idcode;        // IDCODE чипа (например, 0x2ba01477 для STM32F103)
+    String   name;          // Название чипа (например, "STM32F103C8")
+    String   family;        // Семейство (например, "stm32f1")
+    uint32_t flash_size;    // Размер flash в байтах
+    uint32_t flash_start;   // Стартовый адрес flash
+    uint32_t page_size;     // Размер страницы в байтах
+    uint32_t word_size;     // Размер слова в байтах
+    uint32_t csw_value;     // Значение CSW для SWD-доступа
+} ChipConfig_t;
 
 
 class Class_ProgSwd {
@@ -105,7 +126,7 @@ public:
     // check if filename exists in FS filelist
     bool    filelist_FileExists(const String &filename);
     // set prog_date and prog_status after programming attempt
-    bool    filelist_SetProgStatus(const String &filename, const String &prog_date, const String &prog_status);
+    bool    filelist_SetProgStatus(const String &filename, const String &prog_date, const String &prog_status, const String &prog_error = "");
     // find the last successfully programmed filename (newest prog_date with "ok" status)
     String  filelist_GetLastSuccessFilename();
     // compute md5 for an existing file
@@ -119,6 +140,10 @@ public:
     bool    chip_IsConnected();
     // Callback после завершения EERTOS-кооперативной проверки чипа
     void    onChipCheckComplete(uint32_t chipId);
+
+    // Chip config from swd_cfg.json
+    bool    chipCfg_Load();
+    bool    chipCfg_FindById(uint32_t idcode, ChipConfig_t &cfg);
 
 private:
     String getVersionStr();

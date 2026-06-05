@@ -213,7 +213,7 @@ bool Class_ProgSwd::web_GetFilesListExe(String &_str)	{
 				std::string fname = files.name();
 				size_t pos = fname.find_last_of(FILE_TYPE_COMMA);
 				std::string ftype = fname.substr(pos + 1);
-				if ((ftype == FILE_TYPE_BINARY) || (ftype == FILE_TYPE_BIN)) {
+				if ((ftype == FILE_TYPE_BINARY) || (ftype == FILE_TYPE_BIN) || (ftype == FILE_TYPE_HEX)) {
 					fileNames.push_back(String(fname.c_str()));
 					fileTypes.push_back(String(ftype.c_str()));
 					fileSizes.push_back((size_t)files.size());
@@ -301,16 +301,18 @@ int  Class_ProgSwd::prog_Programm(String _path, String _fwTime)	{
 void Class_ProgSwd::onFlashComplete() {
 	if (swdprog.isFlashError()) {
 		DEBUGLOGSWD("onFlashComplete: ERROR during programming of %s\r\n", _flashPath.c_str());
-		// Сохраняем статус ошибки в filelist
-		filelist_SetProgStatus(_flashPath, _flashNtpStr, "error");
+		// Получаем текст ошибки из программатора
+		String errorText = swdprog.getFlashErrorString();
+		// Сохраняем статус ошибки в filelist с текстом ошибки
+		filelist_SetProgStatus(_flashPath, _flashNtpStr, "error", errorText);
 		_progResult = 1;  // сигнал ошибки для web_FileUploadProgress
 		_progRunning = false;
 		_uploadPercent = 0;
-		DEBUGLOGSWD("Programming error, saved prog status to filelist\r\n");
+		DEBUGLOGSWD("Programming error: %s, saved prog status to filelist\r\n", errorText.c_str());
 	} else {
 		DEBUGLOGSWD("onFlashComplete: success for %s\r\n", _flashPath.c_str());
 		
-		// Сохраняем статус успеха в filelist (вместо конфига)
+		// Сохраняем статус успеха в filelist (без ошибки)
 		filelist_SetProgStatus(_flashPath, _flashNtpStr, "ok");
 		
 		DEBUGLOGSWD("Programming success, saved prog date to filelist: %s\r\n", _flashNtpStr.c_str());
@@ -549,8 +551,41 @@ void Class_ProgSwd::web_FileUpload2Chip(AsyncWebServerRequest *request) {
 	_flashPath = path;
 	_flashNtpStr = NTP.getTimeDateString();
 	
-	// Запускаем EERTOS-кооперативную прошивку
-	if (!swdprog.startFlash(FLASH_START_ADDR, _flashPath)) {
+	// ===== Новая логика: читаем IDCODE, ищем в swd_cfg.json, подставляем параметры =====
+	uint32_t flashStart = DEFAULT_FLASH_START_ADDR;
+	uint32_t chipMemSize = CfgFile_ProgSwd.chip_size;
+	uint32_t pageSize = DEFAULT_PAGE_SIZE;
+	uint32_t wordSize = DEFAULT_WORD_SIZE;
+	uint32_t cswValue = DEFAULT_CSW_VALUE;
+	
+	// Синхронно читаем IDCODE чипа (быстрая SWD-транзакция)
+	swd_gpio_init();
+	uint32_t idcode = swd_init();
+	
+	if (idcode != 0) {
+		DEBUGLOGSWD("web_FileUpload2Chip: detected chip ID=0x%08x\n\r", idcode);
+		
+		// Ищем чип в swd_cfg.json
+		ChipConfig_t chipCfg;
+		if (chipCfg_FindById(idcode, chipCfg)) {
+			// Нашли — используем параметры из конфига
+			flashStart = chipCfg.flash_start;
+			chipMemSize = chipCfg.flash_size;
+			pageSize = chipCfg.page_size;
+			wordSize = chipCfg.word_size;
+			cswValue = chipCfg.csw_value;
+			DEBUGLOGSWD("web_FileUpload2Chip: using config for %s (flash=%u start=0x%08x page=%u word=%u csw=0x%08x)\n\r",
+				chipCfg.name.c_str(), chipMemSize, flashStart, pageSize, wordSize, cswValue);
+		} else {
+			// Чип не найден в конфиге — используем дефолтные параметры
+			DEBUGLOGSWD("web_FileUpload2Chip: chip ID=0x%08x not in swd_cfg.json, using defaults\n\r", idcode);
+		}
+	} else {
+		DEBUGLOGSWD("web_FileUpload2Chip: chip not detected, using defaults\n\r");
+	}
+	
+	// Запускаем EERTOS-кооперативную прошивку с параметрами из конфига чипа
+	if (!swdprog.startFlash(flashStart, _flashPath, chipMemSize, pageSize, wordSize, cswValue)) {
 		DEBUGLOGSWD("web_FileUpload2Chip: startFlash() failed\r\n");
 		return request->send(500, "text/plain", "startFlash failed");
 	}
@@ -566,6 +601,7 @@ void Class_ProgSwd::web_FileUpload2Chip(AsyncWebServerRequest *request) {
 	request->send(200, "text/plain", "ok");
 	DEBUGLOGSWD("web_FileUpload2Chip: EERTOS flash started for %s\r\n", _flashPath.c_str());
 }
+
 
 void Class_ProgSwd::web_FileUploadSize(AsyncWebServerRequest *request) {
 	DEBUGLOGSWD(__FUNCTION__);	DEBUGLOGSWD("\r\n");
@@ -717,7 +753,7 @@ bool Class_ProgSwd::filelist_AddEntry(const String &filename, const String &uplo
 	return filelist_Save(doc);
 }
 
-bool Class_ProgSwd::filelist_SetProgStatus(const String &filename, const String &prog_date, const String &prog_status) {
+bool Class_ProgSwd::filelist_SetProgStatus(const String &filename, const String &prog_date, const String &prog_status, const String &prog_error) {
 	JsonDocument doc;
 	filelist_Load(doc);
 	JsonArray arr = doc.as<JsonArray>();
@@ -732,6 +768,11 @@ bool Class_ProgSwd::filelist_SetProgStatus(const String &filename, const String 
 		if (strcmp(entry["filename"].as<const char*>(), normalizedName.c_str()) == 0) {
 			entry["prog_date"] = prog_date;
 			entry["prog_status"] = prog_status;
+			if (prog_error.length() > 0) {
+				entry["prog_error"] = prog_error;
+			} else {
+				entry.remove("prog_error");
+			}
 			return filelist_Save(doc);
 		}
 	}
@@ -741,6 +782,9 @@ bool Class_ProgSwd::filelist_SetProgStatus(const String &filename, const String 
 	newEntry["filename"] = normalizedName;
 	newEntry["prog_date"] = prog_date;
 	newEntry["prog_status"] = prog_status;
+	if (prog_error.length() > 0) {
+		newEntry["prog_error"] = prog_error;
+	}
 	DEBUGLOGSWD("filelist_SetProgStatus: created new entry for %s (was not in filelist)\r\n", normalizedName.c_str());
 	return filelist_Save(doc);
 }
@@ -889,11 +933,34 @@ void Class_ProgSwd::web_FileUploadProgress(AsyncWebServerRequest *request) {
 			uint32_t elapsed = millis() - _progStartTime;
 			values += "progTime|" + (String)elapsed + "|div\n";
 		}
+		// Получаем текст ошибки из filelist для этого файла
+		String errorText = "";
+		JsonDocument doc;
+		if (filelist_Load(doc)) {
+			JsonArray arr = doc.as<JsonArray>();
+			String normalizedName = _flashPath;
+			if (normalizedName.startsWith("/")) {
+				normalizedName = normalizedName.substring(1);
+			}
+			for (JsonObject entry : arr) {
+				if (strcmp(entry["filename"].as<const char*>(), normalizedName.c_str()) == 0) {
+					const char* err = entry["prog_error"].as<const char*>();
+					if (err && strlen(err) > 0) {
+						errorText = String(err);
+					}
+					break;
+				}
+			}
+		}
+		if (errorText.length() > 0) {
+			values += "progError|" + errorText + "|div\n";
+		}
 		_progResult = -1;  // сброс
 		_uploadPercent = 0;
 		request->send(200, "text/plain", values);
 		return;
 	}
+
 	// Обычный процент загрузки файла
 	values += "percent|" + (String)_uploadPercent + "|div\n";
 	request->send(200, "text/plain", values);
@@ -975,3 +1042,99 @@ void Class_ProgSwd::onChipCheckComplete(uint32_t chipId) {
         DEBUGLOGSWD("onChipCheckComplete: chip NOT detected\r\n");
     }
 }
+
+// ========== Chip Config from swd_cfg.json ==========
+
+bool Class_ProgSwd::chipCfg_Load() {
+    DEBUGLOGSWD("%s\n\r", __FUNCTION__);
+    if (!_fs) {
+        DEBUGLOGSWD("chipCfg_Load: FS not initialized\n\r");
+        return false;
+    }
+    if (!_fs->exists(SWD_CFG_JSON)) {
+        DEBUGLOGSWD("chipCfg_Load: %s not found, using defaults\n\r", SWD_CFG_JSON);
+        return false;
+    }
+    // Файл существует — это успех, данные будем читать в FindById
+    return true;
+}
+
+bool Class_ProgSwd::chipCfg_FindById(uint32_t idcode, ChipConfig_t &cfg) {
+    DEBUGLOGSWD("%s: searching for ID=0x%08x\n\r", __FUNCTION__, idcode);
+    
+    if (!_fs) {
+        DEBUGLOGSWD("chipCfg_FindById: FS not initialized\n\r");
+        return false;
+    }
+    if (!_fs->exists(SWD_CFG_JSON)) {
+        DEBUGLOGSWD("chipCfg_FindById: %s not found\n\r", SWD_CFG_JSON);
+        return false;
+    }
+    
+    File file = _fs->open(SWD_CFG_JSON, "r");
+    if (!file) {
+        DEBUGLOGSWD("chipCfg_FindById: failed to open %s\n\r", SWD_CFG_JSON);
+        return false;
+    }
+    
+    JsonDocument doc;
+    DeserializationError err = deserializeJson(doc, file);
+    file.close();
+    
+    if (err) {
+        DEBUGLOGSWD("chipCfg_FindById: JSON parse error: %s\n\r", err.c_str());
+        return false;
+    }
+    
+    JsonArray chips = doc["chips"].as<JsonArray>();
+    if (chips.isNull()) {
+        DEBUGLOGSWD("chipCfg_FindById: no 'chips' array in %s\n\r", SWD_CFG_JSON);
+        return false;
+    }
+    
+    for (JsonObject chip : chips) {
+        // IDCODE может быть строкой "0x..." или числом
+        uint32_t chipIdcode = 0;
+        if (chip["idcode"].is<const char*>()) {
+            // Строковый hex-формат "0x2ba01477"
+            chipIdcode = strtoul(chip["idcode"].as<const char*>(), NULL, 0);
+        } else {
+            chipIdcode = chip["idcode"].as<uint32_t>();
+        }
+        
+        if (chipIdcode == idcode) {
+            // Нашли чип — заполняем структуру
+            cfg.idcode = chipIdcode;
+            cfg.name = chip["name"].as<const char*>();
+            cfg.family = chip["family"].as<const char*>();
+            cfg.flash_size = chip["flash_size"].as<uint32_t>();
+            
+            // flash_start может быть строкой "0x..." или числом
+            if (chip["flash_start"].is<const char*>()) {
+                cfg.flash_start = strtoul(chip["flash_start"].as<const char*>(), NULL, 0);
+            } else {
+                cfg.flash_start = chip["flash_start"].as<uint32_t>();
+            }
+            
+            cfg.page_size = chip["page_size"].as<uint32_t>();
+            cfg.word_size = chip["word_size"].as<uint32_t>();
+            
+            // csw_value может быть строкой "0x..." или числом
+            if (chip["csw_value"].is<const char*>()) {
+                cfg.csw_value = strtoul(chip["csw_value"].as<const char*>(), NULL, 0);
+            } else {
+                cfg.csw_value = chip["csw_value"].as<uint32_t>();
+            }
+            
+            DEBUGLOGSWD("chipCfg_FindById: found %s (family=%s) flash=%u start=0x%08x page=%u word=%u csw=0x%08x\n\r",
+                cfg.name.c_str(), cfg.family.c_str(), cfg.flash_size, cfg.flash_start,
+                cfg.page_size, cfg.word_size, cfg.csw_value);
+            return true;
+        }
+    }
+    
+    DEBUGLOGSWD("chipCfg_FindById: ID=0x%08x not found in %s\n\r", idcode, SWD_CFG_JSON);
+    return false;
+}
+
+
