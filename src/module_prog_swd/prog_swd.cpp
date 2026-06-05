@@ -4,8 +4,18 @@
 #include "FSWebServerLib.h"
 #include "debug_cm.h"
 
+#if defined(ESP32)
 #include <SPIFFS.h>
 #include <esp_task_wdt.h>
+#endif
+
+#if defined(ESP8266)
+#include <FS.h>
+extern "C" {
+    #include "user_interface.h"
+    #include "mem.h"
+}
+#endif
 
 #include "module_prog_swd.h"
 #include "prog_swd.h"
@@ -16,7 +26,12 @@
 ESP_PROGSWD swdprog;
 ESP_PROGSWD::ESP_PROGSWD(){}
 
+#if defined(ESP32)
 void ESP_PROGSWD::setFs(fs::SPIFFSFS* fs) { _fs = fs; }
+#endif
+#if defined(ESP8266)
+void ESP_PROGSWD::setFs(fs::FS* fs) { _fs = fs; }
+#endif
 
 int ESP_PROGSWD::stm32_ChipProgrammMain( String &path)  {
   DEBUGLOGSWD(__PRETTY_FUNCTION__);    DEBUGLOGSWD("\r\n");
@@ -147,8 +162,9 @@ void ESP_PROGSWD::flashStep() {
             _flashFile = _fs->open(_flashPath, "rb");
             if (!_flashFile) {
                 DEBUGLOGSWD("flashStep: FAILED to open %s\r\n", _flashPath.c_str());
-                _flashState = FLASH_IDLE;
-                return;
+                _flashError = true;
+                _flashState = FLASH_DONE;
+                break;
             }
             _flashFile.seek(0, SeekEnd);
             _flashFileSize = _flashFile.position();
@@ -203,7 +219,9 @@ void ESP_PROGSWD::flashStep() {
                 _percent = (uint8_t)(((float)_flashPosi / (float)_flashFileSize) * 100.0f);
                 DEBUGLOGSWD("%i percents \r\n", _percent);
                 progSwd.setUploadPercent(_percent);
+#if defined(ESP32)
                 esp_task_wdt_reset();
+#endif
                 
                 // Проверяем, закончили ли (файл меньше одной страницы)
                 if (_flashPosi >= _flashFileSize) {
@@ -240,7 +258,9 @@ void ESP_PROGSWD::flashStep() {
             _percent = (uint8_t)(((float)_flashPosi / (float)_flashFileSize) * 100.0f);
             DEBUGLOGSWD("%i percents \r\n", _percent);
             progSwd.setUploadPercent(_percent);
+#if defined(ESP32)
             esp_task_wdt_reset();
+#endif
             
             // Проверяем, закончили ли
             if (_flashPosi >= _flashFileSize) {
@@ -446,7 +466,9 @@ uint8_t ESP_PROGSWD::stm32_flash_file(uint32_t offset, String &path) {
 		DEBUGLOGSWD("%i percents \r\n", percent);
 		// Обновляем процент для асинхронного опроса с фронтенда
 		progSwd.setUploadPercent(percent);
+#if defined(ESP32)
 		esp_task_wdt_reset();
+#endif
 		delay(1);
 	}
     file.close();

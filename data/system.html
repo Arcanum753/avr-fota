@@ -48,8 +48,6 @@
     <markup>./page_bottom.html</markup>
     <script src="GetJson.js" defer></script>
     <script src="GetMarkup.js" defer></script>
-    <script src="microajax.js" defer></script>
-
     <script>
             window.onload = function() {
                 ApplyCVT("/system/devconf")
@@ -92,11 +90,11 @@
         }
 
         function restartESP() {
-            setValues("/system/restart");
+            fetch("/system/restart").catch(function() {});
         }
 
         function GetState() {
-            setValues("/system/wwwauth");
+            ApplyCVT("/system/wwwauth");
         }
         
         // УНИВЕРСАЛЬНАЯ ФУНКЦИЯ - работает только с вызвавшим её input

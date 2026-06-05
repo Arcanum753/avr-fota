@@ -107,7 +107,12 @@ enum ChipCheckState { CHIP_IDLE = 0, CHIP_INIT, CHIP_PROBE, CHIP_DONE };
 class ESP_PROGSWD {
 public:
     ESP_PROGSWD();
+#if defined(ESP32)
     void setFs(fs::SPIFFSFS* fs);
+#endif
+#if defined(ESP8266)
+    void setFs(fs::FS* fs);
+#endif
 
     uint32_t stm32Fx_begin();
 
@@ -161,7 +166,12 @@ protected:
     volatile float    _speed = 0;
     volatile uint8_t _percent = 0;
     //fs + hex file
+#if defined(ESP32)
     fs::SPIFFSFS*               _fs;
+#endif
+#if defined(ESP8266)
+    fs::FS*                     _fs;
+#endif
 
     // EERTOS state для кооперативной прошивки
     FlashState       _flashState = FLASH_IDLE;

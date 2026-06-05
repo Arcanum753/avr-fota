@@ -11,6 +11,10 @@
 #include "esp_rom_md5.h"
 #endif
 
+#if defined(ESP8266)
+#include <FS.h>
+#endif
+
 #include "FSWebServerLib.h"
 #include "debug.h"
 
@@ -30,8 +34,15 @@
 Class_ProgSwd progSwd(0);
 Class_ProgSwd::Class_ProgSwd(uint8_t in): _in(in){ }
 
+// esp8266/esp32 flash file system
+#if defined(ESP32)
     void Class_ProgSwd::setFs(fs::SPIFFSFS* fs)
 {	_fs = fs;	}
+#endif
+#if defined(ESP8266)
+    void Class_ProgSwd::setFs(fs::FS* fs) 
+{	_fs = fs;	} 
+#endif
 
 bool Class_ProgSwd::begin (){
     DEBUGLOGSWD(__PRETTY_FUNCTION__);	DEBUGLOGSWD("\r\n");
@@ -163,11 +174,16 @@ bool Class_ProgSwd::web_GetDiskInfoExe(String &_str)	{
 	 if (_fs != nullptr) {
 #if defined(ESP32)
 		 esp_task_wdt_reset();
-#endif
 		 sizeAll	=	_fs->totalBytes();
 		 sizeUsed	=	_fs->usedBytes();
-#if defined(ESP32)
 		 esp_task_wdt_reset();
+#endif
+#if defined(ESP8266)
+		 FSInfo fs_info;
+		 if (_fs->info(fs_info)) {
+			 sizeAll = fs_info.totalBytes;
+			 sizeUsed = fs_info.usedBytes;
+		 }
 #endif
 	 }
 
@@ -203,6 +219,7 @@ bool Class_ProgSwd::web_GetFilesListExe(String &_str)	{
 
 	if (_fs == nullptr) { _ret = false; }
 	else {
+#if defined(ESP32)
 		File root = _fs->open("/");
 		if (root) {
 			File files = root.openNextFile();
@@ -216,13 +233,23 @@ bool Class_ProgSwd::web_GetFilesListExe(String &_str)	{
 					fileSizes.push_back((size_t)files.size());
 				}
 				files = root.openNextFile();
-#if defined(ESP32)
 				esp_task_wdt_reset();
-#endif
 			}
 		}
-#if defined(ESP32)
 		esp_task_wdt_reset();
+#endif
+#if defined(ESP8266)
+		Dir dir = _fs->openDir("/");
+		while (dir.next()) {
+			String fname = dir.fileName();
+			int pos = fname.lastIndexOf(FILE_TYPE_COMMA);
+			String ftype = fname.substring(pos + 1);
+			if ((ftype == FILE_TYPE_BINARY) || (ftype == FILE_TYPE_BIN)) {
+				fileNames.push_back(fname);
+				fileTypes.push_back(ftype);
+				fileSizes.push_back(dir.fileSize());
+			}
+		}
 #endif
 	}
 
@@ -374,13 +401,20 @@ int Class_ProgSwd::web_FileUpload2FS( String filename, size_t index, uint8_t *da
 	DEBUGLOGSWD(__PRETTY_FUNCTION__);	DEBUGLOGSWD("\r\n");
 	int  _ret= 0;
 	_hexFileUploadStatus = "";
+#if defined(ESP32)
 	static md5_context_t _md5Ctx;
+#endif
+#if defined(ESP8266)
+	static MD5Builder _md5Ctx;
+#endif
 	static bool _md5Initialized = false;
+	static size_t _expectedFileSize = 0;  // сохраняем ожидаемый размер локально
 	// Start
 	if (!index) {
 		_uploadPercent = 0;
 		_fileUploadBytes = 0;
 		_fileUploadError = false;
+		_expectedFileSize = _browserFileSize;  // фиксируем размер на момент старта
 		// если предыдущий файл не закрыт (например, загрузка прервана) — закрываем
 		if (_fsUploadFile) {
 			_fsUploadFile.close();
@@ -399,7 +433,12 @@ int Class_ProgSwd::web_FileUpload2FS( String filename, size_t index, uint8_t *da
 		DEBUGLOGSWD("First upload part.\r\n");
 		
 		// Инициализируем MD5-контекст
+#if defined(ESP32)
 		esp_rom_md5_init(&_md5Ctx);
+#endif
+#if defined(ESP8266)
+		_md5Ctx.begin();
+#endif
 		_md5Initialized = true;
 	}
 	// Continue
@@ -418,7 +457,12 @@ int Class_ProgSwd::web_FileUpload2FS( String filename, size_t index, uint8_t *da
 			}
 			// Обновляем MD5 при каждом чанке
 			if (_md5Initialized) {
+#if defined(ESP32)
 				esp_rom_md5_update(&_md5Ctx, data, len);
+#endif
+#if defined(ESP8266)
+				_md5Ctx.add(data, len);
+#endif
 			}
 		}
 	}
@@ -429,18 +473,42 @@ int Class_ProgSwd::web_FileUpload2FS( String filename, size_t index, uint8_t *da
 			_fsUploadFile = File(); // сбрасываем в "пустой" файл
 		}
 		
+		// Проверяем размер файла (используем _expectedFileSize, сохранённый на старте)
+		if (!_fileUploadError && _expectedFileSize > 0 && _fileUploadBytes != _expectedFileSize) {
+			_fileUploadError = true;
+			DEBUGLOGSWD("SIZE MISMATCH! expected=%u received=%u, removing corrupted file %s\r\n", _expectedFileSize, _fileUploadBytes, filename.c_str());
+			_fs->remove(filename);
+			filelist_RemoveEntry(filename);
+			_hexFileUploadStatus  = "";
+			_hexFileUploadStatus  += "uploadstatus|error|div\n";
+			_hexFileUploadStatus  += "file|"      + filename           +"|div\n";
+			_hexFileUploadStatus  += "fileSize|" + (String)_fileUploadBytes   +"|div\n";
+			_hexFileUploadStatus  += "sizeerror|Size mismatch - file corrupted and removed|div\n";
+			_fileUploadBytes = 0;
+			_expectedFileSize = 0;
+			_md5Initialized = false;
+			return -1;
+		}
+		
 		// Финализируем MD5 и сравниваем
 		if (_md5Initialized && !_fileUploadError) {
+			String serverMD5 = "";
+
+#if defined(ESP32)
 			uint8_t hash[16];
 			esp_rom_md5_final(hash, &_md5Ctx);
-			_md5Initialized = false;
-			
 			char hex[33];
 			for (int i = 0; i < 16; i++) {
 				sprintf(hex + i * 2, "%02x", hash[i]);
 			}
 			hex[32] = '\0';
-			String serverMD5 = String(hex);
+			serverMD5 = String(hex);
+#endif
+#if defined(ESP8266)
+			_md5Ctx.calculate();
+			serverMD5 = _md5Ctx.toString();
+#endif
+			_md5Initialized = false;
 			
 			DEBUGLOGSWD("MD5 check: browser='%s' server='%s'\r\n", _browserFileMD5.c_str(), serverMD5.c_str());
 			
@@ -457,6 +525,7 @@ int Class_ProgSwd::web_FileUpload2FS( String filename, size_t index, uint8_t *da
 				_hexFileUploadStatus  += "fileSize|" + (String)_fileUploadBytes 	+"|div\n";
 				_hexFileUploadStatus  += "md5error|MD5 mismatch - file corrupted and removed|div\n";
 				_fileUploadBytes = 0;
+				_expectedFileSize = 0;
 				return -1;
 			}
 			
@@ -479,6 +548,7 @@ int Class_ProgSwd::web_FileUpload2FS( String filename, size_t index, uint8_t *da
 			_hexFileUploadStatus  += "fileSize|" + (String)_fileUploadBytes 	+"|div\n";
 		}
 		_fileUploadBytes = 0;
+		_expectedFileSize = 0;
 	}
 	return _ret;
 }
@@ -597,8 +667,17 @@ void Class_ProgSwd::web_setMD5(AsyncWebServerRequest *request) {
 	size_t sizeAll = 0;
 	size_t sizeUsed = 0;
 	if (_fs != nullptr) {
+#if defined(ESP32)
 		sizeAll = _fs->totalBytes();
 		sizeUsed = _fs->usedBytes();
+#endif
+#if defined(ESP8266)
+		FSInfo fs_info;
+		if (_fs->info(fs_info)) {
+			sizeAll = fs_info.totalBytes;
+			sizeUsed = fs_info.usedBytes;
+		}
+#endif
 	}
 	size_t sizeFree = (sizeAll > sizeUsed) ? (sizeAll - sizeUsed) : 0;
 
@@ -618,11 +697,14 @@ bool Class_ProgSwd::filelist_Load(JsonDocument &doc) {
 	if (!_fs) return false;
 	File file = _fs->open(SWD_FILELIST_JSON, "r");
 	if (!file) {
-		DEBUGLOGSWD("filelist_Load: %s not found, returning empty array\r\n", SWD_FILELIST_JSON);
+		DEBUGLOGSWD("filelist_Load: %s not found, creating empty filelist\r\n", SWD_FILELIST_JSON);
 		doc.clear();
 		doc.to<JsonArray>();
+		// Создаём пустой filelist на диске
+		filelist_Save(doc);
 		return true; // нет файла — не ошибка, пустой массив
 	}
+
 	DeserializationError err = deserializeJson(doc, file);
 	file.close();
 	if (err) {
@@ -789,6 +871,7 @@ String Class_ProgSwd::file_ComputeMD5(const String &path) {
 		return "";
 	}
 
+#if defined(ESP32)
 	md5_context_t md5Ctx;
 	esp_rom_md5_init(&md5Ctx);
 
@@ -810,6 +893,24 @@ String Class_ProgSwd::file_ComputeMD5(const String &path) {
 
 	DEBUGLOGSWD("file_ComputeMD5: %s -> %s\r\n", path.c_str(), hex);
 	return String(hex);
+#endif
+#if defined(ESP8266)
+	MD5Builder md5Ctx;
+	md5Ctx.begin();
+
+	uint8_t buf[256];
+	size_t bytesRead;
+	while ((bytesRead = f.read(buf, sizeof(buf))) > 0) {
+		md5Ctx.add(buf, bytesRead);
+	}
+	f.close();
+
+	md5Ctx.calculate();
+	String result = md5Ctx.toString();
+
+	DEBUGLOGSWD("file_ComputeMD5: %s -> %s\r\n", path.c_str(), result.c_str());
+	return result;
+#endif
 }
 
 void Class_ProgSwd::web_FileUploadProgress(AsyncWebServerRequest *request) {

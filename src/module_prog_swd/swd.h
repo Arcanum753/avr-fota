@@ -23,7 +23,17 @@
 #define SWDPIN_DATA  19   // d19 miso
 #endif
 
- 
+#endif
+
+#if defined(ESP8266)
+
+#ifndef SWDPIN_CLK
+#define SWDPIN_CLK  5   // d5 swclk
+#endif
+
+#ifndef SWDPIN_DATA
+#define SWDPIN_DATA  4   // d4 miso
+#endif
 
 #endif
 

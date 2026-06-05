@@ -18,7 +18,9 @@
 
 #if defined(ESP32)
 #include <SPIFFS.h>
-#elif defined(ESP8266)
+#endif
+    
+#if defined(ESP8266)
 #include <FS.h>
 extern "C" {
     #include "user_interface.h"

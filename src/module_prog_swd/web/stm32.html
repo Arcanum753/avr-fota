@@ -19,7 +19,6 @@
             outline-offset: -2px;
         }
     </style>
-    <script src="FSBrowserNG.js"></script>
 </head>
 <body>
     <markup>./page_head.html</markup>
@@ -84,7 +83,6 @@
     <markup>./page_bottom.html</markup>
     <script src="GetMarkup.js" defer></script>
     <script src="GetJson.js" defer></script>
-    <script src="microajax.js" defer></script>
     <script> 
         let progressTimer = null;
         let isUploading = false;
@@ -686,12 +684,8 @@
                     
                     if (xhr.status === 200) {
                         updateProgressDisplay(100);
-                        setTimeout(() => {
-                            document.getElementById('progressContainer').style.display = 'none';
-                            loadFilesList();
-                            loadDiskInfo();
-                            fileInput.value = "";
-                        }, 1500);
+                        // Проверяем, что файл действительно загрузился (сверяем размер)
+                        verifyUploadedFile(file, fileInput);
                     } else {
                         document.getElementById('progressContainer').style.display = 'none';
                         alert('Upload failed with status: ' + xhr.status);
@@ -711,6 +705,90 @@
                 alert('Failed to set upload size');
             };
             xhrSize.send();
+        }
+
+        // ========== Verify Uploaded File (check result after upload) ==========
+        // Сервер сам проверяет размер и MD5, и при ошибке удаляет файл.
+        // Клиент только запрашивает /prog/uploadstat, чтобы узнать результат.
+        function verifyUploadedFile(file, fileInput) {
+            const progressContainer = document.getElementById('progressContainer');
+            const progressText = document.getElementById('progressText');
+            const progressBar = document.getElementById('progressBar');
+
+            // Запрашиваем статус загрузки у сервера
+            const xhr = new XMLHttpRequest();
+            xhr.open('GET', '/prog/uploadstat', true);
+            xhr.timeout = 10000;
+
+            xhr.ontimeout = function() {
+                progressText.innerHTML = 'Upload completed (status check timed out)';
+                progressBar.style.backgroundColor = '#ffaa00';
+                setTimeout(function() {
+                    progressContainer.style.display = 'none';
+                    loadFilesList();
+                    loadDiskInfo();
+                }, 3000);
+                fileInput.value = "";
+            };
+
+            xhr.onload = function() {
+                if (xhr.status === 200) {
+                    const fieldsRows = ParseCVT(xhr.response);
+                    let status = "";
+                    let md5error = "";
+                    let sizeerror = "";
+                    for (let fields of fieldsRows) {
+                        if (fields[0] === "status")      status = fields[1];
+                        if (fields[0] === "md5error")    md5error = fields[1];
+                        if (fields[0] === "sizeerror")   sizeerror = fields[1];
+                    }
+
+                    if (status === "ok") {
+                        // Сервер подтвердил успешную загрузку
+                        progressText.innerHTML = '<span style="color: #2e7d32; font-weight: bold;">Upload completed successfully!</span>';
+                        progressBar.style.width = '100%';
+                        progressBar.style.backgroundColor = '#4CAF50';
+                    } else if (md5error) {
+                        // Ошибка MD5 — сервер уже удалил файл
+                        progressText.innerHTML = '<span style="color: #cc0000; font-weight: bold;">Upload error: ' + escapeHtml(md5error) + '</span>';
+                        progressBar.style.width = '100%';
+                        progressBar.style.backgroundColor = '#cc0000';
+                    } else if (sizeerror) {
+                        // Ошибка размера — сервер уже удалил файл
+                        progressText.innerHTML = '<span style="color: #cc0000; font-weight: bold;">Upload error: ' + escapeHtml(sizeerror) + '</span>';
+                        progressBar.style.width = '100%';
+                        progressBar.style.backgroundColor = '#cc0000';
+                    } else {
+                        // Неизвестный статус
+                        progressText.innerHTML = 'Upload completed (unknown status)';
+                        progressBar.style.backgroundColor = '#ffaa00';
+                    }
+                } else {
+                    progressText.innerHTML = 'Upload completed (status unavailable)';
+                    progressBar.style.backgroundColor = '#ffaa00';
+                }
+                // Обновляем список файлов и диск
+                loadFilesList();
+                loadDiskInfo();
+                // Скрываем прогресс через 5 секунд
+                setTimeout(function() {
+                    progressContainer.style.display = 'none';
+                }, 5000);
+                fileInput.value = "";
+            };
+
+            xhr.onerror = function() {
+                progressText.innerHTML = 'Upload completed (status network error)';
+                progressBar.style.backgroundColor = '#ffaa00';
+                setTimeout(function() {
+                    progressContainer.style.display = 'none';
+                    loadFilesList();
+                    loadDiskInfo();
+                }, 3000);
+                fileInput.value = "";
+            };
+
+            xhr.send();
         }
 
         // ========== Progress Bar Polling ==========
@@ -735,6 +813,9 @@
                 progressTimer = null;
             }
             
+            let attempts = 0;
+            const maxAttempts = 30; // 30 попыток с интервалом ~1 сек = 30 секунд максимум
+            
             // рекурсивный setTimeout — следующий запрос только после ответа предыдущего
             (function pollProgress() {
                 if (_uploadAbort || !isUploading) {
@@ -744,12 +825,28 @@
                 
                 const xhr = new XMLHttpRequest();
                 xhr.open('GET', '/prog/progress', true);
-                xhr.timeout = 5000;
+                xhr.timeout = 15000;  // увеличенный таймаут для ESP8266
                 
                 xhr.ontimeout = function() {
-                    stopProgressPolling();
-                    document.getElementById('progressContainer').style.display = 'none';
-                    alert('Upload polling timeout — connection lost');
+                    if (_uploadAbort) { stopProgressPolling(); return; }
+                    attempts++;
+                    console.warn('Upload polling timeout (attempt ' + attempts + '/' + maxAttempts + ')');
+                    if (attempts >= maxAttempts) {
+                        // Исчерпали все попытки — показываем ошибку без alert
+                        stopProgressPolling();
+                        const progressText = document.getElementById('progressText');
+                        const progressBar = document.getElementById('progressBar');
+                        if (progressText) progressText.innerHTML = '<span style="color: #cc0000; font-weight: bold;">Upload timeout — connection lost</span>';
+                        if (progressBar) {
+                            progressBar.style.width = '100%';
+                            progressBar.style.backgroundColor = '#cc0000';
+                        }
+                    } else {
+                        // Продолжаем опрос
+                        if (!_uploadAbort && isUploading) {
+                            progressTimer = setTimeout(pollProgress, 2000);
+                        }
+                    }
                 };
                 
                 xhr.onload = function() {
@@ -765,6 +862,8 @@
                                 break;
                             }
                         }
+                        // Сбрасываем счётчик попыток при успешном ответе
+                        attempts = 0;
                     }
                     // планируем следующий опрос через 1 секунду после ответа
                     if (!_uploadAbort && isUploading) {
@@ -773,9 +872,23 @@
                 };
                 
                 xhr.onerror = function() { 
-                    console.error('Error fetching progress');
-                    stopProgressPolling();
-                    document.getElementById('progressContainer').style.display = 'none';
+                    if (_uploadAbort) { stopProgressPolling(); return; }
+                    attempts++;
+                    console.error('Error fetching progress (attempt ' + attempts + '/' + maxAttempts + ')');
+                    if (attempts >= maxAttempts) {
+                        stopProgressPolling();
+                        const progressText = document.getElementById('progressText');
+                        const progressBar = document.getElementById('progressBar');
+                        if (progressText) progressText.innerHTML = '<span style="color: #cc0000; font-weight: bold;">Upload failed — connection lost</span>';
+                        if (progressBar) {
+                            progressBar.style.width = '100%';
+                            progressBar.style.backgroundColor = '#cc0000';
+                        }
+                    } else {
+                        if (!_uploadAbort && isUploading) {
+                            progressTimer = setTimeout(pollProgress, 2000);
+                        }
+                    }
                 };
                 
                 xhr.send();
