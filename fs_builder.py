@@ -753,6 +753,11 @@ def prepare_fs_image() -> Optional[Path]:
                 if not item.is_file():
                     continue
                 
+                # Пропускаем служебные файлы (начинающиеся с _)
+                if item.name.startswith("_"):
+                    log_debug(f"  - {module_name}/{WEB_FOLDER_NAME}/{item.name} (skipped, service file)")
+                    continue
+                
                 if not validate_module_name(item.name):
                     log_warning(f"Skipping file with invalid name in {module_name}: {item.name}")
                     continue
@@ -782,7 +787,7 @@ def prepare_fs_image() -> Optional[Path]:
             # Используем только module_* имена (не core_*) для правой колонки меню
             module_only_names = [m for m in all_web_modules if m.startswith(MODULE_PREFIX)]
             
-            page_head_html = generate_page_head(module_only_names)
+            page_head_html = generate_page_head(module_only_names, src_dir=str(src_dir))
             page_head_path = target_web_dir / "page_head.html"
             
             with open(page_head_path, 'w', encoding='utf-8') as f:

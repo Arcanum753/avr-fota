@@ -4,33 +4,36 @@
 
 Создаёт меню навигации на основе списка включённых модулей.
 Берёт за основу статический шаблон из data/page_head.html (с левой колонкой core-модулей)
-и добавляет правую колонку с пунктами меню для модулей, указанных в --modules.
+и добавляет правую колонку с пунктами меню для модулей.
+
+Пункты меню берутся из файла _menu.html в папке web каждого модуля.
+Если _menu.html отсутствует, пуст или содержит невалидные ссылки —
+генерируются ссылки по умолчанию из имён .html файлов модуля.
 
 Использование:
-    python gen_page_head.py --modules module_udp,module_prog_isp --output page_head.html
-    python gen_page_head.py --modules module_udp,module_prog_swd,module_gpio --output page_head.html
+    python gen_page_head.py --modules module_udp,module_prog_isp --src_dir src --output page_head.html
+    python gen_page_head.py --modules module_udp,module_prog_swd,module_gpio --src_dir src --output page_head.html
 
 Также может быть импортирован как модуль:
     from gen_page_head import generate_page_head
-    html = generate_page_head(["module_udp", "module_prog_isp"])
+    html = generate_page_head(["module_udp", "module_prog_isp"], "src")
 """
 
 import argparse
 import os
+import re
 import sys
-from typing import List, Optional, Tuple
+from pathlib import Path
+from typing import List, Optional, Set, Tuple
 
 
 # ============================================================
-# МАППИНГ: имя модуля -> (href, текст, [id])
+# КОНСТАНТЫ
 # ============================================================
-MODULE_MENU_ITEMS = {
-    "module_udp":        ("udp.html",        "UDP configuration"),
-    "module_prog_isp":   ("avr.html",        "AVR Programmer OTA",   "avr"),
-    "module_prog_swd":   ("stm32.html",      "STM32 Programmer OTA", "stm32"),
-    "module_gpio":       ("gpio.html",       "Esp gpio",             "gpio"),
-    "module_otaclient":  ("otaclient.html",  "Firmware & FS OTA client"),
-}
+
+MENU_CONFIG_FILE = "_menu.html"       # имя файла конфига меню в папке web модуля
+WEB_FOLDER_NAME = "web"               # имя папки с веб-файлами внутри модуля
+MODULE_PREFIX = "module_"             # префикс модулей
 
 
 # ============================================================
@@ -49,85 +52,207 @@ def log_error(msg: str) -> None:
     print(f"[gen_page_head] ERROR: {msg}")
 
 
-def build_module_link(item: Tuple) -> str:
+def parse_menu_links(menu_html: str) -> List[Tuple[str, str, Optional[str]]]:
     """
-    Формирует HTML-строку ссылки для пункта меню.
-    item может быть: (href, text) или (href, text, id)
+    Парсит HTML-строку и извлекает все теги <a>.
+    
+    Возвращает список кортежей (href, text, id_or_None).
     """
-    if len(item) == 3:
-        href, text, elem_id = item
+    links = []
+    # Ищем <a ... href="..." ...>...</a>
+    pattern = r'<a\s+([^>]*?)href="([^"]*)"([^>]*?)>(.*?)</a>'
+    
+    for match in re.finditer(pattern, menu_html, re.IGNORECASE | re.DOTALL):
+        href = match.group(2).strip()
+        text = match.group(4).strip()
+        
+        # Извлекаем id из атрибутов
+        all_attrs = match.group(1) + ' ' + match.group(3)
+        id_match = re.search(r'id="([^"]*)"', all_attrs)
+        elem_id = id_match.group(1).strip() if id_match else None
+        
+        if href and text:
+            links.append((href, text, elem_id))
+    
+    return links
+
+
+def build_link_html(href: str, text: str, elem_id: Optional[str] = None) -> str:
+    """Формирует HTML-строку ссылки для пункта меню."""
+    if elem_id:
         return f'        <a id="{elem_id}" href="{href}">{text}</a>'
     else:
-        href, text = item
         return f'        <a href="{href}">{text}</a>'
 
 
-def generate_right_column(modules: List[str]) -> str:
+def get_default_links(web_dir: Path) -> List[Tuple[str, str, Optional[str]]]:
+    """
+    Генерирует ссылки по умолчанию из .html файлов в папке web модуля.
+    Исключает файлы, начинающиеся с '_'.
+    Для каждого файла: <a href="filename.html">filename</a>
+    """
+    links = []
+    
+    if not web_dir.exists() or not web_dir.is_dir():
+        return links
+    
+    try:
+        for item in sorted(web_dir.iterdir()):
+            if not item.is_file():
+                continue
+            if item.name.startswith("_"):
+                continue
+            if not item.name.lower().endswith(".html"):
+                continue
+            
+            name_without_ext = item.name[:-5]  # удаляем .html
+            links.append((item.name, name_without_ext, None))
+    except Exception as e:
+        log_warning(f"Error scanning {web_dir} for default links: {e}")
+    
+    return links
+
+
+def get_module_menu_links(module_name: str, src_dir: Path) -> List[Tuple[str, str, Optional[str]]]:
+    """
+    Получает пункты меню для указанного модуля.
+    
+    Приоритет:
+    1. _menu.html в папке web модуля (с проверкой существования файлов)
+    2. Если _menu.html нет/пуст/все ссылки невалидны — автогенерация из .html файлов
+    
+    Возвращает список кортежей (href, text, id_or_None).
+    """
+    web_dir = src_dir / module_name / WEB_FOLDER_NAME
+    
+    if not web_dir.exists() or not web_dir.is_dir():
+        log_warning(f"Module '{module_name}' has no web folder: {web_dir}")
+        return []
+    
+    menu_config = web_dir / MENU_CONFIG_FILE
+    
+    # Пробуем прочитать _menu.html
+    if menu_config.exists() and menu_config.is_file():
+        try:
+            content = menu_config.read_text(encoding='utf-8').strip()
+            
+            if not content:
+                log_warning(f"  {module_name}: {MENU_CONFIG_FILE} is empty, using default links")
+                return get_default_links(web_dir)
+            
+            # Парсим ссылки
+            parsed_links = parse_menu_links(content)
+            
+            if not parsed_links:
+                log_warning(f"  {module_name}: {MENU_CONFIG_FILE} has no valid <a> tags, using default links")
+                return get_default_links(web_dir)
+            
+            # Проверяем существование файлов, на которые ссылаются
+            valid_links = []
+            for href, text, elem_id in parsed_links:
+                target_file = web_dir / href
+                if target_file.exists() and target_file.is_file():
+                    valid_links.append((href, text, elem_id))
+                else:
+                    log_warning(f"  {module_name}: file '{href}' not found in web folder, skipping menu link")
+            
+            if not valid_links:
+                log_warning(f"  {module_name}: no valid files referenced in {MENU_CONFIG_FILE}, using default links")
+                return get_default_links(web_dir)
+            
+            log_info(f"  {module_name}: {len(valid_links)} menu items from {MENU_CONFIG_FILE}")
+            return valid_links
+            
+        except Exception as e:
+            log_warning(f"  {module_name}: error reading {MENU_CONFIG_FILE}: {e}, using default links")
+            return get_default_links(web_dir)
+    
+    # _menu.html нет — используем автогенерацию
+    log_info(f"  {module_name}: no {MENU_CONFIG_FILE}, using auto-generated links from .html files")
+    return get_default_links(web_dir)
+
+
+# ============================================================
+# ОСНОВНЫЕ ФУНКЦИИ
+# ============================================================
+
+def generate_right_column(modules: List[str], src_dir: Path) -> str:
     """
     Генерирует HTML-код для правой колонки меню (второй <div>)
     на основе списка имён модулей.
+    
+    Аргументы:
+        modules: список имён модулей (например, ["module_udp", "module_prog_isp"])
+        src_dir: путь к папке src/ проекта
+    
+    Возвращает:
+        Строку с HTML-кодом правой колонки меню
     """
     lines = ['    <div>']
     has_items = False
-
+    
     for module_name in modules:
-        if module_name in MODULE_MENU_ITEMS:
-            link = build_module_link(MODULE_MENU_ITEMS[module_name])
-            lines.append(link)
+        module_links = get_module_menu_links(module_name, src_dir)
+        
+        for href, text, elem_id in module_links:
+            link_html = build_link_html(href, text, elem_id)
+            lines.append(link_html)
             has_items = True
-            log_info(f"  + menu item: {module_name} -> {MODULE_MENU_ITEMS[module_name][0]}")
-        else:
-            log_warning(f"Unknown module '{module_name}' — no menu item defined")
-
+    
     lines.append('    </div>')
-
+    
     if not has_items:
         log_info("  No module menu items to add (right column will be empty)")
-
+    
     return '\n'.join(lines)
 
 
-# ============================================================
-# ОСНОВНАЯ ФУНКЦИЯ ГЕНЕРАЦИИ
-# ============================================================
-
 def generate_page_head(
     modules: List[str],
+    src_dir: Optional[str] = None,
     template_path: Optional[str] = None
 ) -> str:
     """
     Генерирует полный HTML-код page_head.html.
-
+    
     Аргументы:
         modules: список имён модулей (например, ["module_udp", "module_prog_isp"])
+        src_dir: путь к папке src/ проекта.
+                 Если None — ищет src/ относительно директории скрипта.
         template_path: путь к шаблону page_head.html.
                        Если None — ищет в data/page_head.html относительно
                        директории скрипта.
-
+    
     Возвращает:
         Строку с полным HTML-кодом page_head.html
     """
+    # Определяем путь к src/
+    if src_dir is None:
+        script_dir = Path(os.path.dirname(os.path.abspath(__file__)))
+        src_dir = script_dir / "src"
+    else:
+        src_dir = Path(src_dir)
+    
     # Определяем путь к шаблону
     if template_path is None:
-        script_dir = os.path.dirname(os.path.abspath(__file__))
-        template_path = os.path.join(script_dir, "data", "page_head.html")
-
+        script_dir = Path(os.path.dirname(os.path.abspath(__file__)))
+        template_path = str(script_dir / "data" / "page_head.html")
+    
     # Читаем шаблон
     if not os.path.exists(template_path):
         log_error(f"Template not found: {template_path}")
-        # Возвращаем минимальный fallback
-        return _generate_fallback(modules)
-
+        return _generate_fallback(modules, src_dir)
+    
     try:
         with open(template_path, 'r', encoding='utf-8') as f:
             template = f.read()
     except Exception as e:
         log_error(f"Failed to read template {template_path}: {e}")
-        return _generate_fallback(modules)
-
+        return _generate_fallback(modules, src_dir)
+    
     # Генерируем правую колонку
-    right_column = generate_right_column(modules)
-
+    right_column = generate_right_column(modules, src_dir)
+    
     # Ищем маркер для замены: комментарий <!-- MODULES_RIGHT_COLUMN -->
     # вместе со следующим за ним пустым <div></div>
     marker_block = "<!-- MODULES_RIGHT_COLUMN -->\n    <div>\n    </div>"
@@ -137,7 +262,6 @@ def generate_page_head(
     else:
         # Если маркера нет — ищем пустой <div></div> после первого <div>
         # и заменяем его на сгенерированную правую колонку
-        import re
         pattern = r'(<div>\s*\n\s*</div>)'
         match = re.search(pattern, template)
         if match:
@@ -147,15 +271,15 @@ def generate_page_head(
             log_warning("Could not find placeholder for right column, appending at end")
             # Вставляем перед закрывающим </div> основного контейнера
             result = template.replace('</div>\n</div>', f'{right_column}\n</div>', 1)
-
+    
     return result
 
 
-def _generate_fallback(modules: List[str]) -> str:
+def _generate_fallback(modules: List[str], src_dir: Path) -> str:
     """
     Генерирует минимальный page_head.html если шаблон не найден.
     """
-    right = generate_right_column(modules)
+    right = generate_right_column(modules, src_dir)
     return f"""<h3 class="top">Device web-server.<sup>&copy;</sup></h3>
 <div class="menu">
     <div>
@@ -185,6 +309,11 @@ def main() -> None:
         help="Comma-separated list of module names (e.g. module_udp,module_prog_isp)"
     )
     parser.add_argument(
+        "--src_dir",
+        default=None,
+        help="Path to src/ directory (default: <script_dir>/src)"
+    )
+    parser.add_argument(
         "--output",
         default=None,
         help="Output file path (default: <script_dir>/data/page_head.html)"
@@ -207,7 +336,7 @@ def main() -> None:
     log_info(f"Generating page_head.html for modules: {', '.join(modules)}")
 
     # Генерируем HTML
-    html = generate_page_head(modules, args.template)
+    html = generate_page_head(modules, args.src_dir, args.template)
 
     # Определяем путь для сохранения
     if args.output:

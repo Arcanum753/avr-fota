@@ -2,10 +2,12 @@
 
 #ifndef _PROGISP_h
 #define _PROGISP_h
- 
 
+#include <Arduino.h>
+#include <FS.h>
 #include <vector>
-// #include "debug.h"
+#include "format_hex.h"
+
 
 #if defined(ESP32)
 #ifndef PIN_MISO
@@ -22,23 +24,6 @@
 
 #ifndef PIN_RST
 #define PIN_RST   5    // d5 rst
-#endif
-
-#elif defined(ESP8266)
-#ifndef PIN_MISO
-#define PIN_MISO  12   // d6 miso
-#endif
-
-#ifndef PIN_MOSI
-#define PIN_MOSI  13   // d7 mosi
-#endif
-
-#ifndef PIN_SCK
-#define PIN_SCK   14   // d5 sck
-#endif
-
-#ifndef PIN_RST
-#define PIN_RST   5    // d1 rst
 #endif
 
 #endif
@@ -74,35 +59,11 @@
 #define STK_CHIPFUSEHIGH_WR 0xAC, 0xA8, 0x00         /* High fuse read*/
 #define STK_CHIPFUSEEXT_WR  0xAC, 0xA4, 0x00         /* Extended fuse read*/
 
-#define CONFIG_AVRPROG_JSON  "/config_avr.json"
-
-#define HEX_PARSE_METALINEBEGIN       '$'    //spec symb for delimiter
-#define HEX_PARSE_WORD_SIGN  "sign"
-#define HEX_PARSE_WORD_PROJ  "proj"
-#define HEX_PARSE_WORD_VER   "vers"
-#define HEX_PARSE_WORD_DATE  "date"
-#define HEX_PARSE_WORD_TIME  "time"
-
-#define HEX_PARSE_LINEBEGIN      ':'
-#define HEX_PARSE_CHAR_SPACE       ' '    //spec symb for delimiter
-
 #define  FILE_TYPE_COMMA        '.'
 #define  FILE_TYPE_HEX          "hex"
 #define  FILE_TYPE_BIN          "bin"
 #define  FILE_TYPE_BINARY       "binary"
 
-// atmega 328p and all about firmwares hex files
-#define DEFAULT_HEXFILENAME     ""
-#define DEFAULT_VER             "0.01"
-
-
-#define DEFAULT_AVR_SIGN        "1e950f"
-#define DEFAULT_AVR_MCU         "m328p"
-
-
-
-
-#define DEFAULT_TEMPDIRNAME        "temp"
 // uncomment if you use an n-mos to level-shift the reset line
 // #define AVRISP_ACTIVE_HIGH_RESET
 
@@ -123,90 +84,51 @@ typedef struct {
  uint8_t ext;
 } AVRISP_fuses_t;
 
-// структура для мета информации загруженного hex файла
-typedef struct {
-    String hex_filename;
-    String signture;
-    String project_name;
-    String version;
-    uint32_t size;
-    String buildtime;
-    bool cmpsign;
-    bool cmpproj;
-} AVRISP_HexFileUploaded_t;
+// Конечный автомат прошивки AVR (для EERTOS-кооперативной работы)
+enum FlashState { FLASH_IDLE = 0, FLASH_INIT, FLASH_WRITE, FLASH_DONE };
 
-// актуальное состояние
-typedef struct {
-    String hex_filename;
-    String hex_version;
-    String hex_buildtime;
-    String fwTS;
-
-    //String avr_signature;
-    // String project_name;
-    uint32_t pagesize;
-    // bool cleanFS;
-    // uint32_t chipsize;
-} AVRISP_CfgFile_t;
-
-class ESP8266_AVRISP {
+class ESP_AVRISP {
 public:
-    ESP8266_AVRISP(uint8_t reset_pin
+    ESP_AVRISP(uint8_t reset_pin
     , bool reset_state = false
     , bool reset_activehigh = false);
 
     void setReset(bool);
-#if ESP32
+#if defined(ESP32)
     void setFs(fs::SPIFFSFS* fs);
-#elif defined(ESP8266)
-    void setFs(FS* fs)  ;                       // esp8266/esp32 flash file system
 #endif
     bool begin ();
 
-    int             avrChipProgrammDBG(String _in);     // отладка для консоли
-    int             avr_ChipProgrammMain(String _in, String _fwTime); // основной "сценарий" программирования из веба
-
-    int32_t         hexFileUploadedBodyCheck(String _in);
-    int             cfgFileStructGet(AVRISP_CfgFile_t &_inStruct) ;
-    void            cfgFileLoadWeb(AVRISP_CfgFile_t &_inStruct);
-    String          chipFlashVerificationResultGet();
-
+    // EERTOS-кооперативная прошивка
+    bool startFlash(uint32_t offset, String &path, uint32_t chipMemSize = 0, uint32_t pageSize = 128);
+    void flashStep();
+    void beginFlashStep();  // регистрация задачи в EERTOS
+    bool isFlashBusy() { return _flashState != FLASH_IDLE; }
+    bool isFlashError() { return _flashError; }
+    uint8_t getPercent() { return _percent; }
+    String getFlashErrorString() { return _flashErrorString; }
 
     void            chipFusesRead(AVRISP_fuses_t &AVRISP_fuses);
     void            chipFusesWrite( uint8_t _high, uint8_t _low, uint8_t _lock, uint8_t _ext);
-    //void            filesClean ();
     String          avrChipSignGet();
     String          chipSignRead();
-    AVRISP_CfgFile_t _AVRISP_CfgFile;
 
 protected:
     String          chipNow;
     int             chipErase();
     void            chipBusyWaitPolling();
 
-//all about json & configs
-
-    bool            cfgFileLoad();
-    bool            cfgFileSave();
-    void            cfg_setDefault();
-    int             cfgFilSetUploadeAsNow( String _fwTime);
 //state
     int _error = 0;
 
 //fs + hex file
-#if ESP32
+#if defined(ESP32)
     fs::SPIFFSFS*               _fs;
-#elif defined(ESP8266)
-    FS*                         _fs;                        // esp8266/esp32 flash file system
 #endif
     int                         hexFileOpen(String _in);
-    std::vector<char>           _hexFileBuf;
     std::vector<char>           _hexFileBinDataBuf;
-    AVRISP_HexFileUploaded_t    AVRISP_HexFileUploaded;
     int                         hexFileBinDataCheck ();
-    int32_t                     hexFileLineParser (uint32_t begin, uint16_t & pageaddr, byte *page,  uint8_t  &chsum, uint8_t &type, uint8_t &binReadNum , uint32_t &totalBins ) ;
     String                      chipFlashVerification();
-    String                      verificationResult ;
 
 // avr chip spi + rst
     void pmode_begin();     // enter program mode
@@ -222,16 +144,28 @@ protected:
     bool _reset_activehigh;
     inline bool _resetLevel(bool reset_state) { return reset_state == _reset_activehigh; }
 
-    void dbgPrintVector(); //FIXME debug
+    // EERTOS state для кооперативной прошивки
+    FlashState       _flashState = FLASH_IDLE;
+    bool             _flashError = false;  // флаг ошибки при записи страницы
+    String           _flashErrorString = "";  // текст ошибки для фронтенда
+    uint32_t         _flashAddr = 0;
+    uint32_t         _flashPosi = 0;
+    uint32_t         _flashFileSize = 0;
+    uint32_t         _flashStartTime = 0;
+    String           _flashPath;
+    uint32_t         _chipMemSize = 0;  // размер памяти чипа (из конфига)
+    uint32_t         _pageSize = 128;   // размер страницы (из конфига чипа)
+    uint32_t         _flashStart = 0;   // стартовый адрес flash (всегда 0 для AVR)
+    volatile uint8_t _percent = 0;
 
 };
 
 
-extern ESP8266_AVRISP avrprog;
+// EERTOS-враппер для кооперативной прошивки AVR (определён в prog_isp.cpp)
+void flash_step_task_wrapper();
+
+extern ESP_AVRISP avrprog;
 
 
 
 #endif // _PROGISP_h
-
-
-
