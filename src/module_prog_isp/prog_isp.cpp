@@ -15,6 +15,7 @@
 // #include "debug.h"
 #include "common.h"
 #include "format_hex.h"
+#include "format_bin.h"
 #include "eertos.h"
 
 
@@ -219,12 +220,12 @@ int ESP_AVRISP::hexFileOpen(String _in){
     
     uint32_t chipMemSize = _chipMemSize; // размер памяти чипа (из конфига)
     uint32_t totalBins = 0;
-    int32_t ret = hexFileParseStream(hexFile, _hexFileBinDataBuf, 0, chipMemSize, totalBins);
+    int32_t ret = hexFileParseStream(hexFile, _hexBinDataBuf, 0, chipMemSize, totalBins);
     hexFile.close();
     
     if (ret < 0) {
         DEBUGLOGISP("Failed to parse %s (err=%d)\r\n", _in.c_str(), ret);
-        _hexFileBinDataBuf.clear();
+        _hexBinDataBuf.clear();
         return ERR_INCORRECTFILE;
     }
     
@@ -238,24 +239,24 @@ int ESP_AVRISP::hexFileOpen(String _in){
 int ESP_AVRISP::hexFileBinDataCheck (  )   {
     DEBUGLOGISP(__PRETTY_FUNCTION__); DEBUGLOGISP("\r\n");
 
-    if (_hexFileBinDataBuf.empty()) {
+    if (_hexBinDataBuf.empty()) {
         return ERR_NOFILE;
     }
 
-    DEBUGLOGISP("hexFileBinDataCheck OK: %u bytes\r\n", _hexFileBinDataBuf.size());
-    return (int)_hexFileBinDataBuf.size();
+    DEBUGLOGISP("hexFileBinDataCheck OK: %u bytes\r\n", _hexBinDataBuf.size());
+    return (int)_hexBinDataBuf.size();
 }
 
 
 int  ESP_AVRISP::hexFile2flashByPages( ){
     DEBUGLOGISP(__PRETTY_FUNCTION__);    DEBUGLOGISP("\r\n");
     int _ret = ERROR_OK;
-    if (_hexFileBinDataBuf.empty()) {
+    if (_hexBinDataBuf.empty()) {
         return ERR_NOFILE;
     }
 
     uint32_t  pagesize = _pageSize;
-    uint32_t  fileSize = _hexFileBinDataBuf.size();
+    uint32_t  fileSize = _hexBinDataBuf.size();
     uint8_t   spipageBuffer[pagesize];
     uint16_t  spipageaddr = 0;
     uint32_t  posi = 0;
@@ -267,7 +268,7 @@ int  ESP_AVRISP::hexFile2flashByPages( ){
         // Заполняем страницу из бинарного буфера
         uint16_t bufPos = 0;
         while (bufPos < pagesize && posi < fileSize) {
-            spipageBuffer[bufPos++] = (uint8_t)_hexFileBinDataBuf.at(posi++);
+            spipageBuffer[bufPos++] = (uint8_t)_hexBinDataBuf.at(posi++);
         }
 
         // Прошиваем страницу
@@ -298,8 +299,8 @@ String ESP_AVRISP::chipFlashVerification() {
     uint8_t bytebuf = 0;
     uint8_t bytespi = 0;
     pmode_begin();
-    for (addr = 0; addr < _hexFileBinDataBuf.size(); addr++){
-        bytebuf = _hexFileBinDataBuf.at(addr);
+    for (addr = 0; addr < _hexBinDataBuf.size(); addr++){
+        bytebuf = _hexBinDataBuf.at(addr);
 // read this byte
         SPI.beginTransaction(flash_spisettings);
         if (addr % 2) {
@@ -365,11 +366,24 @@ bool ESP_AVRISP::startFlash(uint32_t offset, String &path, uint32_t chipMemSize,
     _flashErrorString = "";
     _flashState = FLASH_INIT;
     _chipMemSize = chipMemSize;
-    _hexFileBinDataBuf.clear();
+    _isHexFormat = false;
+    _hexBinDataBuf.clear();
     
     // Сохраняем параметры прошивки из конфига чипа
     _pageSize = pageSize;
     _flashStart = offset;
+    
+    // Определяем формат по расширению файла
+    if (hexFileIsFormat(path)) {
+        _isHexFormat = true;
+        DEBUGLOGISP("startFlash: HEX format detected for %s\r\n", path.c_str());
+    } else if (binFileIsFormat(path)) {
+        _isHexFormat = false;
+        DEBUGLOGISP("startFlash: BIN format detected for %s\r\n", path.c_str());
+    } else {
+        DEBUGLOGISP("startFlash: unknown format for %s, treating as BIN\r\n", path.c_str());
+        _isHexFormat = false;
+    }
     
     DEBUGLOGISP("startFlash: %s at 0x%08x, chipMemSize=%u, pageSize=%u\r\n",
         path.c_str(), offset, chipMemSize, pageSize);
@@ -379,40 +393,56 @@ bool ESP_AVRISP::startFlash(uint32_t offset, String &path, uint32_t chipMemSize,
 void ESP_AVRISP::flashStep() {
     switch (_flashState) {
         case FLASH_INIT: {
-            // HEX-формат: потоковый парсинг файла в бинарный буфер
-            File hexFile = _fs->open(_flashPath, "r");
-            if (!hexFile) {
-                DEBUGLOGISP("flashStep: FAILED to open HEX %s\r\n", _flashPath.c_str());
-                _flashError = true;
-                _flashErrorString = "Failed to open HEX file";
-                _flashState = FLASH_DONE;
-                break;
-            }
-            
-            uint32_t totalBins = 0;
-            int32_t parseRet = hexFileParseStream(hexFile, _hexFileBinDataBuf, _flashStart, _chipMemSize, totalBins);
-            hexFile.close();
-            
-            if (parseRet < 0) {
-                DEBUGLOGISP("flashStep: HEX validation failed (err=%d)\r\n", parseRet);
-                _flashError = true;
-                // Преобразуем код ошибки в текст
-                switch (parseRet) {
-                    case -9:  _flashErrorString = "HEX: incorrect file format"; break;
-                    case -10: _flashErrorString = "HEX: file not found"; break;
-                    case -11: _flashErrorString = "HEX: CRC error"; break;
-                    case -12: _flashErrorString = "HEX: memory overflow (exceeds chip size)"; break;
-                    case -13: _flashErrorString = "HEX: non-monotonic address"; break;
-                    default:  _flashErrorString = "HEX: validation error (" + String(parseRet) + ")"; break;
+            if (_isHexFormat) {
+                // HEX-формат: потоковый парсинг файла в бинарный буфер
+                File hexFile = _fs->open(_flashPath, "r");
+                if (!hexFile) {
+                    DEBUGLOGISP("flashStep: FAILED to open HEX %s\r\n", _flashPath.c_str());
+                    _flashError = true;
+                    _flashErrorString = "Failed to open HEX file";
+                    _flashState = FLASH_DONE;
+                    break;
                 }
-                _flashState = FLASH_DONE;
-                break;
+                
+                uint32_t totalBins = 0;
+                int32_t parseRet = hexFileParseStream(hexFile, _hexBinDataBuf, _flashStart, _chipMemSize, totalBins);
+                hexFile.close();
+                
+                if (parseRet < 0) {
+                    DEBUGLOGISP("flashStep: HEX validation failed (err=%d)\r\n", parseRet);
+                    _flashError = true;
+                    // Преобразуем код ошибки в текст
+                    switch (parseRet) {
+                        case -9:  _flashErrorString = "HEX: incorrect file format"; break;
+                        case -10: _flashErrorString = "HEX: file not found"; break;
+                        case -11: _flashErrorString = "HEX: CRC error"; break;
+                        case -12: _flashErrorString = "HEX: memory overflow (exceeds chip size)"; break;
+                        case -13: _flashErrorString = "HEX: non-monotonic address"; break;
+                        default:  _flashErrorString = "HEX: validation error (" + String(parseRet) + ")"; break;
+                    }
+                    _flashState = FLASH_DONE;
+                    break;
+                }
+                
+                _flashFileSize = (uint32_t)parseRet;
+                _flashPosi = 0;
+                _flashStartTime = millis();
+                DEBUGLOGISP("flashStep: HEX parsed, %u bytes binary data\r\n", _flashFileSize);
+            } else {
+                // BIN-формат: открываем файл как обычно
+                _flashFile = binFileOpen(*_fs, _flashPath);
+                if (!_flashFile) {
+                    DEBUGLOGISP("flashStep: FAILED to open %s\r\n", _flashPath.c_str());
+                    _flashError = true;
+                    _flashErrorString = "Failed to open BIN file";
+                    _flashState = FLASH_DONE;
+                    break;
+                }
+                _flashFileSize = binFileGetSize(_flashFile);
+                _flashPosi = 0;
+                _flashStartTime = millis();
+                DEBUGLOGISP("Going to write %i bytes to flash\r\n", _flashFileSize);
             }
-            
-            _flashFileSize = (uint32_t)parseRet;
-            _flashPosi = 0;
-            _flashStartTime = millis();
-            DEBUGLOGISP("flashStep: HEX parsed, %u bytes binary data\r\n", _flashFileSize);
             
             // Стираем чип перед прошивкой
             chipErase();
@@ -427,10 +457,19 @@ void ESP_AVRISP::flashStep() {
             uint8_t spipageBuffer[pagesize];
             for (uint16_t y = 0; y < pagesize; y++) spipageBuffer[y] = 0xff;
             
-            // Заполняем страницу из бинарного буфера
+            // Заполняем страницу из данных
             uint16_t bufPos = 0;
-            while (bufPos < pagesize && _flashPosi < _flashFileSize) {
-                spipageBuffer[bufPos++] = (uint8_t)_hexFileBinDataBuf.at(_flashPosi++);
+            if (_isHexFormat) {
+                // HEX: читаем из распарсенного буфера
+                while (bufPos < pagesize && _flashPosi < _flashFileSize) {
+                    spipageBuffer[bufPos++] = (uint8_t)_hexBinDataBuf.at(_flashPosi++);
+                }
+            } else {
+                // BIN: читаем напрямую из файла
+                uint32_t cur_len = (_flashFileSize - _flashPosi >= pagesize) ? pagesize : (_flashFileSize - _flashPosi);
+                binFileReadPage(_flashFile, spipageBuffer, cur_len);
+                _flashPosi += cur_len;
+                bufPos = cur_len;
             }
             
             // Прошиваем страницу
@@ -440,6 +479,7 @@ void ESP_AVRISP::flashStep() {
             
             if (_ret != ERROR_OK) {
                 DEBUGLOGISP("flashStep: chipFlashPage returned %d at addr 0x%04x — aborting!\r\n", _ret, _flashAddr);
+                if (!_isHexFormat) binFileClose(_flashFile);
                 _flashError = true;
                 _flashErrorString = "Flash write error at page 0x" + String(_flashAddr, HEX);
                 _flashState = FLASH_DONE;
@@ -455,6 +495,7 @@ void ESP_AVRISP::flashStep() {
             
             // Проверяем, закончили ли
             if (_flashPosi >= _flashFileSize) {
+                if (!_isHexFormat) binFileClose(_flashFile);
                 DEBUGLOGISP("Done flashing file, it took %u ms\r\n", (int)(millis() - _flashStartTime));
                 _flashState = FLASH_DONE;
             }
@@ -463,7 +504,7 @@ void ESP_AVRISP::flashStep() {
         
         case FLASH_DONE: {
             // Очищаем HEX-буфер
-            _hexFileBinDataBuf.clear();
+            _hexBinDataBuf.clear();
             // Сообщаем о завершении — вызываем callback в module_prog_isp
             _flashState = FLASH_IDLE;
             DEBUGLOGISP("flashStep: FLASH_DONE -> IDLE\r\n");

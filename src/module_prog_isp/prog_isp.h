@@ -7,6 +7,7 @@
 #include <FS.h>
 #include <vector>
 #include "format_hex.h"
+#include "format_bin.h"
 
 
 #if defined(ESP32)
@@ -126,7 +127,7 @@ protected:
     fs::SPIFFSFS*               _fs;
 #endif
     int                         hexFileOpen(String _in);
-    std::vector<char>           _hexFileBinDataBuf;
+    std::vector<char>           _hexBinDataBuf;
     int                         hexFileBinDataCheck ();
     String                      chipFlashVerification();
 
@@ -148,6 +149,7 @@ protected:
     FlashState       _flashState = FLASH_IDLE;
     bool             _flashError = false;  // флаг ошибки при записи страницы
     String           _flashErrorString = "";  // текст ошибки для фронтенда
+    File             _flashFile;
     uint32_t         _flashAddr = 0;
     uint32_t         _flashPosi = 0;
     uint32_t         _flashFileSize = 0;
@@ -157,6 +159,7 @@ protected:
     uint32_t         _pageSize = 128;   // размер страницы (из конфига чипа)
     uint32_t         _flashStart = 0;   // стартовый адрес flash (всегда 0 для AVR)
     volatile uint8_t _percent = 0;
+    bool             _isHexFormat = false;  // true если прошиваем HEX-файл
 
 };
 
