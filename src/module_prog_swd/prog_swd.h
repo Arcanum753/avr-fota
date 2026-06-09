@@ -8,6 +8,8 @@
 
 
 #include "swd.h"
+#include "stm32f1_flash.h"
+#include "stm32f4_flash.h"
 
 
 
@@ -30,52 +32,6 @@
 #define DEMCR 0xe000edfc
 #define AIRCR 0xe000ed0c
 
-
-
-// stm32 F1xx
-#define KEY1                    0x45670123
-#define KEY2                    0xcdef89ab
-#define FLASH_BANK1_OFFSET      0x00U
-#define FLASH_BANK2_OFFSET      0x40U
-#define FLASH_BANK_SPLIT        0x08080000U
-
-
-#define SR_ERROR_MASK 0x14U
-#define SR_PROG_ERROR 0x04U
-#define SR_EOP        (1U << 5U)
-
-
-#define WORDSIZE       2 // bytes
-#define PAGESIZE       1024 // bytes
-
-#define SWD_FLASH_BASE_F1     0x40022000
-#define FLASH_ACR             SWD_FLASH_BASE_F1 + 0x00
-#define FLASH_KEYR            SWD_FLASH_BASE_F1 + 0x04
-#define FLASH_OPTKEYR         SWD_FLASH_BASE_F1 + 0x08
-#define FLASH_SR              SWD_FLASH_BASE_F1 + 0x0c
-#define FLASH_CR              SWD_FLASH_BASE_F1 + 0x10
-#define FLASH_OPTCR           SWD_FLASH_BASE_F1 + 0x14
-
-#define STM32F1_FLASH_SR_BSY (1U << 0U)
-#define FLASH_CR_OBL_LAUNCH (1U << 13U)
-#define FLASH_CR_OPTWRE     (1U << 9U)
-#define FLASH_CR_LOCK       (1U << 7U) // don't touch!
-#define FLASH_CR_STRT       (1U << 6U)
-#define FLASH_CR_OPTER      (1U << 5U)
-#define FLASH_CR_OPTPG      (1U << 4U)
-#define FLASH_CR_MER        (1U << 2U)
-#define FLASH_CR_PER        (1U << 1U)
-#define FLASH_CR_PG         (1U << 0U)
-
-// Значение CSW для доступа к flash STM32F1 (32-bit, auto-increment, debug mode)
-#define CSW_VALUE_STM32F1   0xa2000002
-
-// stm32F4
-#define SWD_FLASH_BASE_F4     0x40023c00  //  0x 4002 3c00
-#define SWD_FLASH_PECR        SWD_FLASH_BASE_F4 + 0x04
-#define SWD_FLASH_PEKEYR      SWD_FLASH_BASE_F4 + 0x0C
-#define SWD_FLASH_PRGKEYR     SWD_FLASH_BASE_F4 + 0x10 // #define FLASH_CR (FLASH_R_BASE + 0x10)
-#define SWD_FLASH_SR          SWD_FLASH_BASE_F4 + 0x18
 
 #define AP_NRF_RESET             0x00
 #define AP_NRF_ERASEALL          0x04
@@ -119,9 +75,14 @@ public:
     int stm32_ChipProgrammMain( String &path);
     uint8_t stm32_flash_file(uint32_t offset, String &path);
 
+    // Установка семейства чипа для выбора алгоритма прошивки
+    void setChipFamily(const String &family) { _chipFamily = family; }
+    const String& getChipFamily() const { return _chipFamily; }
+
     // EERTOS-кооперативная прошивка
     bool startFlash(uint32_t offset, String &path, uint32_t chipMemSize = 0,
                     uint32_t pageSize = 1024, uint32_t wordSize = 2, uint32_t cswValue = 0xa2000002);
+
     void flashStep();
     void beginFlashStep();  // регистрация задачи в EERTOS
     bool isFlashBusy() { return _flashState != FLASH_IDLE; }
@@ -152,7 +113,12 @@ public:
     bool stm32f4_flash_busy(void);
     void stm32f4_flash_unlock_dap() ;
     void stm32f4_erase_flash_dap();
+    void stm32f4_prog_enable();
+    void stm32f4_prog_disable();
+    void stm32f4_erase_sector(uint8_t sector_num);
+    void stm32f4_mass_erase();
     /*_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-*/
+
     void stm32f1_progEn (void) ;
     void stm32f1_progOff (void) ;
     void stm32f1_clear_eop(uint32_t bank_offset);
@@ -189,10 +155,14 @@ protected:
     bool             _isHexFormat = false;  // true если прошиваем HEX-файл
     std::vector<char> _hexBinDataBuf;  // распарсенные бинарные данные из HEX
 
+    // Семейство чипа (stm32f1, stm32f4 и т.д.) — для выбора алгоритма прошивки
+    String           _chipFamily = "stm32f1";
+
     // EERTOS state для кооперативной проверки чипа
     ChipCheckState   _chipState = CHIP_IDLE;
     uint8_t          _chipRetry = 0;
     uint32_t         _chipResultId = 0;
+
 };
 
 

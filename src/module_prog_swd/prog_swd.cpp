@@ -16,6 +16,8 @@
 #include "eertos.h"
 #include "format_bin.h"
 #include "format_hex.h"
+#include "stm32f1_flash.h"
+#include "stm32f4_flash.h"
 
 
 ESP_PROGSWD swdprog;
@@ -28,27 +30,33 @@ void ESP_PROGSWD::setFs(fs::SPIFFSFS* fs) { _fs = fs; }
 int ESP_PROGSWD::stm32_ChipProgrammMain( String &path)  {
   DEBUGLOGSWD(__PRETTY_FUNCTION__);    DEBUGLOGSWD("\r\n");
   
-  // TODO пркрутить тип f1xx f4xx
-	stm32Fx_abort_all();
-	stm32Fx_halt();
-	stm32f1_unlock_erase_flash();
-	stm32f1_progEn();
-	
-	// Проверяем результат прошивки
-	uint8_t flash_ret = stm32_flash_file(FLASH_START_ADDR, path);
-	if (flash_ret != 0) {
-		DEBUGLOGSWD("stm32_ChipProgrammMain: flash_file failed with code %u\r\n", flash_ret);
-		// Всё равно пытаемся вывести чип из halt
-		stm32Fx_halt();
-		stm32Fx_unhalt();
-		stm32Fx_rst();
-		return (int)flash_ret;
-	}
-	
-	stm32Fx_halt();
-	stm32Fx_unhalt();
-	stm32Fx_rst();
-	return 0;
+  stm32Fx_abort_all();
+  stm32Fx_halt();
+  
+  // Выбор алгоритма по семейству чипа
+  if (_chipFamily == "stm32f4") {
+    stm32f4_erase_flash_dap();  // unlock + mass erase
+    stm32f4_prog_enable();
+  } else {
+    stm32f1_unlock_erase_flash();
+    stm32f1_progEn();
+  }
+  
+  // Проверяем результат прошивки
+  uint8_t flash_ret = stm32_flash_file(FLASH_START_ADDR, path);
+  if (flash_ret != 0) {
+    DEBUGLOGSWD("stm32_ChipProgrammMain: flash_file failed with code %u\r\n", flash_ret);
+    // Всё равно пытаемся вывести чип из halt
+    stm32Fx_halt();
+    stm32Fx_unhalt();
+    stm32Fx_rst();
+    return (int)flash_ret;
+  }
+  
+  stm32Fx_halt();
+  stm32Fx_unhalt();
+  stm32Fx_rst();
+  return 0;
 }
 
 // ===== EERTOS-кооперативная прошивка =====
@@ -258,8 +266,17 @@ void ESP_PROGSWD::flashStep() {
                 }
                 stm32Fx_abort_all();
                 stm32Fx_halt();
-                stm32f1_unlock_erase_flash();
-                stm32f1_progEn();
+                
+                // Выбор алгоритма по семейству чипа
+                if (_chipFamily == "stm32f4") {
+                    DEBUGLOGSWD("flashStep: using F4 algorithm (family=%s)\r\n", _chipFamily.c_str());
+                    stm32f4_erase_flash_dap();  // unlock + mass erase
+                    stm32f4_prog_enable();
+                } else {
+                    DEBUGLOGSWD("flashStep: using F1 algorithm (family=%s)\r\n", _chipFamily.c_str());
+                    stm32f1_unlock_erase_flash();
+                    stm32f1_progEn();
+                }
                 
                 // НЕМЕДЛЕННО пишем первую страницу, пока PG бит ещё установлен!
                 uint8_t buffer[_pageSize];
@@ -432,22 +449,6 @@ void ESP_PROGSWD::stm32Fx_unhalt() {
 void ESP_PROGSWD::stm32Fx_rst(){
   stm32Fx_write_register(AIRCR, SWD_RST, 0);
 }
-// ???
-void ESP_PROGSWD::stm32f1_clear_eop(uint32_t bank_offset) {
-	uint32_t status = stm32f_read_register( FLASH_SR + bank_offset);
-	stm32Fx_write_register(FLASH_SR + bank_offset, status | SR_EOP, 0); /* EOP is W1C */
-}
-// work
-void ESP_PROGSWD::stm32f1_progEn (void) {
-  stm32Fx_write_register (FLASH_CR, FLASH_CR_PG, 0);  // Enable programming bit: PG
-}
-
-void ESP_PROGSWD::stm32f1_progOff (void) {
-  stm32Fx_write_register (FLASH_CR, 0, 0);  // Disaable programming bit
-}
-
-
-/*_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-*/
 uint32_t ESP_PROGSWD::stm32Fx_begin()  {
   DEBUGLOGSWD(__FUNCTION__);	DEBUGLOGSWD("\r\n");
   swd_gpio_init();
@@ -466,57 +467,6 @@ void ESP_PROGSWD::stm32Fx_abort_all()  {
 }
 
 
-// stm32F1xxx //black magic stm32f1.c
-void ESP_PROGSWD::stm32f1_flash_unlock(uint32_t bank_offset) {
-  DEBUGLOGSWD(__FUNCTION__);	DEBUGLOGSWD("\r\n");
-  // command for unlock flash mem
-  stm32Fx_write_register(FLASH_KEYR + bank_offset, KEY1, 0 ); // base + 0x04
-  stm32Fx_write_register(FLASH_KEYR + bank_offset, KEY2, 0 ); // base + 0x04
-}
-
-// stm32F1xxx
-void ESP_PROGSWD::stm32f1_unlock_erase_flash() {
-  DEBUGLOGSWD(__FUNCTION__);	DEBUGLOGSWD("\r\n");
-  long timeout = millis();
-
-  stm32f1_flash_unlock(FLASH_BANK1_OFFSET);
-  // commands to erase flash mem
-  stm32Fx_write_register(FLASH_CR + FLASH_BANK1_OFFSET, FLASH_CR_MER  , 0);
-  stm32Fx_write_register(FLASH_CR + FLASH_BANK1_OFFSET, FLASH_CR_STRT | FLASH_CR_MER , 0);
-
-  while (stm32f1_flash_busy())  {
-    if( millis() - timeout > 2000 )  { return ; }
-    delay(1);
-  }
-
-}
-
-bool ESP_PROGSWD::stm32f1_flash_busy(void) {
-	return ( stm32f_read_register(FLASH_SR) & STM32F1_FLASH_SR_BSY );
-}
-
-/*_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-*/
-// stm32F4xxx
-void ESP_PROGSWD::stm32f4_flash_unlock_dap() {
-  DEBUGLOGSWD(__FUNCTION__);	DEBUGLOGSWD("\r\n");
-  //swd_dap
-  stm32Fx_write_register(SWD_FLASH_PECR, KEY1, 0 ); // base + 0x04
-  stm32Fx_write_register(SWD_FLASH_PECR, KEY2, 0 ); // base + 0x04
-}
-void ESP_PROGSWD::stm32f4_erase_flash_dap() {
-
-  stm32f4_flash_unlock_dap();
-  DEBUGLOGSWD(__FUNCTION__);	DEBUGLOGSWD("\r\n");
-
-  long timeout = millis();
-  while (stm32f4_flash_busy())  {    if( millis() - timeout > 100 )  { return ; }  }
-  return ;
-}
-
-bool ESP_PROGSWD::stm32f4_flash_busy(void) {
-  return false;
-  // return ( stm32f_read_register(SWD_FLASH_PEKEYR) & FLASH_SR_BSY ); //FIXME
-}
 /*_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-*/
 
 
@@ -602,17 +552,26 @@ uint8_t ESP_PROGSWD::stm32_flash_file(uint32_t offset, String &path) {
 
 uint8_t ESP_PROGSWD::stm32fX_write_bank(uint32_t addr, uint8_t buffer[], uint32_t size) {
   if (size > _pageSize) {    return 2;  }  // buffer bigger then a bank
-  uint16_t data16b0 = 0;
   uint8_t _ret = 0;
 
   for (int posi = 0; posi < size; posi += _wordSize)   {
-    //  { data16b0 = (buffer[posi+1] << 8) | (buffer[posi + 0]);    }
-    data16b0 =  (buffer[posi + 1] << 8)  | (buffer[posi + 0]);
-    uint32_t tmp = (uint32_t)data16b0 << (8U *((addr + posi) & 2U) );
-
-    _ret = stm32Fx_write_flash_16bit(addr + posi, tmp);
-    if ( _ret != 1 ) {return 1;}
-    delay(1);
+    if (_wordSize == 4) {
+      // 32-bit запись для STM32F4
+      uint32_t data32 = ((uint32_t)buffer[posi + 3] << 24) |
+                        ((uint32_t)buffer[posi + 2] << 16) |
+                        ((uint32_t)buffer[posi + 1] << 8)  |
+                        ((uint32_t)buffer[posi + 0]);
+      _ret = stm32Fx_write_flash_32bit(addr + posi, data32);
+      if ( _ret != 1 ) {return 1;}
+      delay(1);
+    } else {
+      // 16-bit запись для STM32F1 (и других с wordSize == 2)
+      uint16_t data16b0 = (buffer[posi + 1] << 8) | (buffer[posi + 0]);
+      uint32_t tmp = (uint32_t)data16b0 << (8U *((addr + posi) & 2U) );
+      _ret = stm32Fx_write_flash_16bit(addr + posi, tmp);
+      if ( _ret != 1 ) {return 1;}
+      delay(1);
+    }
   }
   return 0;
 }

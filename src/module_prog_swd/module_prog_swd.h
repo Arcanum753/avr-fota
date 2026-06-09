@@ -4,6 +4,8 @@
 
 #include "main.h"
 #include <ArduinoJson.h>
+#include <FS.h>
+#include "ESPAsyncWebServer.h"
 
 #ifdef DEBUG_SWD
 #define DEBUGLOGSWD(...) Serial.printf(__VA_ARGS__)

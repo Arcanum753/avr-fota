@@ -574,11 +574,15 @@ void Class_ProgSwd::web_FileUpload2Chip(AsyncWebServerRequest *request) {
 			pageSize = chipCfg.page_size;
 			wordSize = chipCfg.word_size;
 			cswValue = chipCfg.csw_value;
-			DEBUGLOGSWD("web_FileUpload2Chip: using config for %s (flash=%u start=0x%08x page=%u word=%u csw=0x%08x)\n\r",
-				chipCfg.name.c_str(), chipMemSize, flashStart, pageSize, wordSize, cswValue);
+			// Устанавливаем семейство чипа для выбора алгоритма прошивки
+			swdprog.setChipFamily(chipCfg.family);
+			DEBUGLOGSWD("web_FileUpload2Chip: using config for %s (family=%s flash=%u start=0x%08x page=%u word=%u csw=0x%08x)\n\r",
+				chipCfg.name.c_str(), chipCfg.family.c_str(), chipMemSize, flashStart, pageSize, wordSize, cswValue);
 		} else {
 			// Чип не найден в конфиге — используем дефолтные параметры
-			DEBUGLOGSWD("web_FileUpload2Chip: chip ID=0x%08x not in swd_cfg.json, using defaults\n\r", idcode);
+			// Сбрасываем семейство на stm32f1 (безопасное значение по умолчанию)
+			swdprog.setChipFamily("stm32f1");
+			DEBUGLOGSWD("web_FileUpload2Chip: chip ID=0x%08x not in swd_cfg.json, using defaults (family=stm32f1)\n\r", idcode);
 		}
 	} else {
 		DEBUGLOGSWD("web_FileUpload2Chip: chip not detected, using defaults\n\r");

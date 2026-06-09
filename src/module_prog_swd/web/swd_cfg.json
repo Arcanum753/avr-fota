@@ -1,7 +1,7 @@
 {
   "chips": [
     {
-      "idcode": "0x2ba01477",
+      "idcode": "0x1ba01477",
       "name": "STM32F103C8",
       "family": "stm32f1",
       "flash_size": 65536,
@@ -11,13 +11,13 @@
       "csw_value": "0xa2000002"
     },
     {
-      "idcode": "0x1ba01477",
-      "name": "STM32F103C8 (rev A/Z)",
-      "family": "stm32f1",
-      "flash_size": 65536,
+      "idcode": "0x2ba01477",
+      "name": "STM32F411",
+      "family": "stm32f4",
+      "flash_size": 524288,
       "flash_start": "0x08000000",
-      "page_size": 1024,
-      "word_size": 2,
+      "page_size": 16384,
+      "word_size": 4,
       "csw_value": "0xa2000002"
     }
   ]
