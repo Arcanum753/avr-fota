@@ -238,6 +238,10 @@ bool Class_ProgSwd::web_GetFilesListExe(String &_str)	{
 		String uploadDate = "";
 		String progDate = "";
 		String progStatus = "";
+		String progTime = "";
+		String progError = "";
+		String progErrorStage = "";
+		String progErrorPercent = "";
 		if (listLoaded) {
 			for (JsonObject entry : arr) {
 				if (strcmp(entry["filename"].as<const char*>(), fname.c_str()) == 0) {
@@ -245,6 +249,10 @@ bool Class_ProgSwd::web_GetFilesListExe(String &_str)	{
 					uploadDate = entry["upload_date"].as<const char*>();
 					progDate = entry["prog_date"].as<const char*>();
 					progStatus = entry["prog_status"].as<const char*>();
+					progTime = entry["prog_time"].as<const char*>();
+					progError = entry["prog_error"].as<const char*>();
+					progErrorStage = entry["prog_error_stage"].as<const char*>();
+					progErrorPercent = entry["prog_error_percent"].as<const char*>();
 					break;
 				}
 			}
@@ -264,6 +272,10 @@ bool Class_ProgSwd::web_GetFilesListExe(String &_str)	{
 		json += ",\"upload_date\":\"";	json += uploadDate;			json += "\"";
 		json += ",\"prog_date\":\"";	json += progDate;			json += "\"";
 		json += ",\"prog_status\":\"";	json += progStatus;			json += "\"";
+		json += ",\"prog_time\":\"";	json += progTime;			json += "\"";
+		json += ",\"prog_error\":\"";	json += progError;			json += "\"";
+		json += ",\"prog_error_stage\":\"";	json += progErrorStage;		json += "\"";
+		json += ",\"prog_error_percent\":\""; json += progErrorPercent;	json += "\"";
 		json += ",\"md5\":\"";			json += fileMD5;			json += "\"";
 		json += ",\"is_last_success\":"; json += (isLastSuccess ? "true" : "false");
 		json += "}";
@@ -303,19 +315,34 @@ void Class_ProgSwd::onFlashComplete() {
 		DEBUGLOGSWD("onFlashComplete: ERROR during programming of %s\r\n", _flashPath.c_str());
 		// Получаем текст ошибки из программатора
 		String errorText = swdprog.getFlashErrorString();
-		// Сохраняем статус ошибки в filelist с текстом ошибки
-		filelist_SetProgStatus(_flashPath, _flashNtpStr, "error", errorText);
+		String errorStage = swdprog.getFlashErrorStage();
+		uint8_t errorPercent = swdprog.getFlashErrorPercent();
+		// Вычисляем время прошивки до ошибки
+		String elapsedStr = "";
+		if (_progStartTime > 0) {
+			uint32_t elapsed = millis() - _progStartTime;
+			elapsedStr = (String)(elapsed / 1000);  // в секундах
+		}
+		// Сохраняем статус ошибки в filelist с текстом ошибки, стадией и процентом
+		filelist_SetProgStatus(_flashPath, _flashNtpStr, "error", errorText, elapsedStr, errorStage, (String)errorPercent);
 		_progResult = 1;  // сигнал ошибки для web_FileUploadProgress
 		_progRunning = false;
 		_uploadPercent = 0;
-		DEBUGLOGSWD("Programming error: %s, saved prog status to filelist\r\n", errorText.c_str());
+		DEBUGLOGSWD("Programming error: %s, stage=%s, percent=%u, saved prog status to filelist\r\n", errorText.c_str(), errorStage.c_str(), errorPercent);
 	} else {
 		DEBUGLOGSWD("onFlashComplete: success for %s\r\n", _flashPath.c_str());
 		
-		// Сохраняем статус успеха в filelist (без ошибки)
-		filelist_SetProgStatus(_flashPath, _flashNtpStr, "ok");
+		// Вычисляем время прошивки
+		String elapsedStr = "";
+		if (_progStartTime > 0) {
+			uint32_t elapsed = millis() - _progStartTime;
+			elapsedStr = (String)(elapsed / 1000);  // в секундах
+		}
 		
-		DEBUGLOGSWD("Programming success, saved prog date to filelist: %s\r\n", _flashNtpStr.c_str());
+		// Сохраняем статус успеха в filelist с временем прошивки
+		filelist_SetProgStatus(_flashPath, _flashNtpStr, "ok", "", elapsedStr);
+		
+		DEBUGLOGSWD("Programming success, saved prog date to filelist: %s, time=%ss\r\n", _flashNtpStr.c_str(), elapsedStr.c_str());
 		
 		_progResult = 0;
 		_progRunning = false;
@@ -757,7 +784,7 @@ bool Class_ProgSwd::filelist_AddEntry(const String &filename, const String &uplo
 	return filelist_Save(doc);
 }
 
-bool Class_ProgSwd::filelist_SetProgStatus(const String &filename, const String &prog_date, const String &prog_status, const String &prog_error) {
+bool Class_ProgSwd::filelist_SetProgStatus(const String &filename, const String &prog_date, const String &prog_status, const String &prog_error, const String &prog_time, const String &prog_error_stage, const String &prog_error_percent) {
 	JsonDocument doc;
 	filelist_Load(doc);
 	JsonArray arr = doc.as<JsonArray>();
@@ -777,6 +804,21 @@ bool Class_ProgSwd::filelist_SetProgStatus(const String &filename, const String 
 			} else {
 				entry.remove("prog_error");
 			}
+			if (prog_time.length() > 0) {
+				entry["prog_time"] = prog_time;
+			} else {
+				entry.remove("prog_time");
+			}
+			if (prog_error_stage.length() > 0) {
+				entry["prog_error_stage"] = prog_error_stage;
+			} else {
+				entry.remove("prog_error_stage");
+			}
+			if (prog_error_percent.length() > 0) {
+				entry["prog_error_percent"] = prog_error_percent;
+			} else {
+				entry.remove("prog_error_percent");
+			}
 			return filelist_Save(doc);
 		}
 	}
@@ -788,6 +830,15 @@ bool Class_ProgSwd::filelist_SetProgStatus(const String &filename, const String 
 	newEntry["prog_status"] = prog_status;
 	if (prog_error.length() > 0) {
 		newEntry["prog_error"] = prog_error;
+	}
+	if (prog_time.length() > 0) {
+		newEntry["prog_time"] = prog_time;
+	}
+	if (prog_error_stage.length() > 0) {
+		newEntry["prog_error_stage"] = prog_error_stage;
+	}
+	if (prog_error_percent.length() > 0) {
+		newEntry["prog_error_percent"] = prog_error_percent;
 	}
 	DEBUGLOGSWD("filelist_SetProgStatus: created new entry for %s (was not in filelist)\r\n", normalizedName.c_str());
 	return filelist_Save(doc);

@@ -111,7 +111,7 @@ public:
     // check if filename exists in FS filelist
     bool    filelist_FileExists(const String &filename);
     // set prog_date and prog_status after programming attempt
-    bool    filelist_SetProgStatus(const String &filename, const String &prog_date, const String &prog_status, const String &prog_error = "");
+    bool    filelist_SetProgStatus(const String &filename, const String &prog_date, const String &prog_status, const String &prog_error = "", const String &prog_time = "", const String &prog_error_stage = "", const String &prog_error_percent = "");
     // find the last successfully programmed filename (newest prog_date with "ok" status)
     String  filelist_GetLastSuccessFilename();
     // compute md5 for an existing file

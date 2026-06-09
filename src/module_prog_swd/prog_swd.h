@@ -95,6 +95,8 @@ public:
     bool isFlashError() { return _flashError; }
     uint8_t getPercent() { return _percent; }
     String getFlashErrorString() { return _flashErrorString; }
+    String getFlashErrorStage() { return _flashErrorStage; }
+    uint8_t getFlashErrorPercent() { return _flashErrorPercent; }
 
     // EERTOS-кооперативная проверка чипа
     void startChipCheck();
@@ -148,6 +150,9 @@ protected:
     FlashState       _flashState = FLASH_IDLE;
     bool             _flashError = false;  // флаг ошибки при записи страницы
     String           _flashErrorString = "";  // текст ошибки для фронтенда
+    String           _flashErrorStage = "";   // стадия ошибки (FLASH_INIT, FLASH_WRITE)
+    uint8_t          _flashErrorPercent = 0;  // процент на момент ошибки
+
     File             _flashFile;
     uint32_t         _flashAddr = 0;
     uint32_t         _flashPosi = 0;

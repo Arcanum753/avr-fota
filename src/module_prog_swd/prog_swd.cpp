@@ -162,6 +162,8 @@ bool ESP_PROGSWD::startFlash(uint32_t offset, String &path, uint32_t chipMemSize
     _percent = 0;
     _flashError = false;
     _flashErrorString = "";
+    _flashErrorStage = "";
+    _flashErrorPercent = 0;
     _flashState = FLASH_INIT;
     _chipMemSize = chipMemSize;
     _isHexFormat = false;
@@ -200,6 +202,8 @@ void ESP_PROGSWD::flashStep() {
                     DEBUGLOGSWD("flashStep: FAILED to open HEX %s\r\n", _flashPath.c_str());
                     _flashError = true;
                     _flashErrorString = "Failed to open HEX file";
+                    _flashErrorStage = "FLASH_INIT";
+                    _flashErrorPercent = 0;
                     _flashState = FLASH_DONE;
                     break;
                 }
@@ -211,6 +215,8 @@ void ESP_PROGSWD::flashStep() {
                 if (parseRet < 0) {
                     DEBUGLOGSWD("flashStep: HEX validation failed (err=%d)\r\n", parseRet);
                     _flashError = true;
+                    _flashErrorStage = "FLASH_INIT";
+                    _flashErrorPercent = 0;
                     // Преобразуем код ошибки в текст
                     switch (parseRet) {
                         case -9:  _flashErrorString = "HEX: incorrect file format"; break;
@@ -236,6 +242,8 @@ void ESP_PROGSWD::flashStep() {
                     DEBUGLOGSWD("flashStep: FAILED to open %s\r\n", _flashPath.c_str());
                     _flashError = true;
                     _flashErrorString = "Failed to open BIN file";
+                    _flashErrorStage = "FLASH_INIT";
+                    _flashErrorPercent = 0;
                     _flashState = FLASH_DONE;
                     break;
                 }
@@ -258,6 +266,8 @@ void ESP_PROGSWD::flashStep() {
                     if (!_isHexFormat) binFileClose(_flashFile);
                     _flashError = true;
                     _flashErrorString = "STM32 not detected";
+                    _flashErrorStage = "FLASH_WRITE";
+                    _flashErrorPercent = 0;
                     _flashState = FLASH_DONE;
                     break;
                 }
@@ -315,6 +325,8 @@ void ESP_PROGSWD::flashStep() {
                 if (!_isHexFormat) binFileClose(_flashFile);
                 _flashError = true;
                 _flashErrorString = "Flash write error at address 0x" + String(_flashAddr, HEX);
+                _flashErrorStage = "FLASH_WRITE";
+                _flashErrorPercent = _percent;
                 _flashState = FLASH_DONE;
                 break;
             }

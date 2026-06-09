@@ -267,6 +267,10 @@ bool Class_ProgIsp::web_GetFilesListExe(String &_str)	{
 		String uploadDate = "";
 		String progDate = "";
 		String progStatus = "";
+		String progTime = "";
+		String progError = "";
+		String progErrorStage = "";
+		String progErrorPercent = "";
 		if (listLoaded) {
 			for (JsonObject entry : arr) {
 				if (strcmp(entry["filename"].as<const char*>(), fname.c_str()) == 0) {
@@ -274,6 +278,14 @@ bool Class_ProgIsp::web_GetFilesListExe(String &_str)	{
 					uploadDate = entry["upload_date"].as<const char*>();
 					progDate = entry["prog_date"].as<const char*>();
 					progStatus = entry["prog_status"].as<const char*>();
+					const char* pt = entry["prog_time"].as<const char*>();
+					if (pt) progTime = String(pt);
+					const char* pe = entry["prog_error"].as<const char*>();
+					if (pe) progError = String(pe);
+					const char* pes = entry["prog_error_stage"].as<const char*>();
+					if (pes) progErrorStage = String(pes);
+					const char* pep = entry["prog_error_percent"].as<const char*>();
+					if (pep) progErrorPercent = String(pep);
 					break;
 				}
 			}
@@ -293,9 +305,14 @@ bool Class_ProgIsp::web_GetFilesListExe(String &_str)	{
 		json += ",\"upload_date\":\"";	json += uploadDate;			json += "\"";
 		json += ",\"prog_date\":\"";	json += progDate;			json += "\"";
 		json += ",\"prog_status\":\"";	json += progStatus;			json += "\"";
+		json += ",\"prog_time\":\"";	json += progTime;			json += "\"";
+		json += ",\"prog_error\":\"";	json += progError;			json += "\"";
+		json += ",\"prog_error_stage\":\"";	json += progErrorStage;		json += "\"";
+		json += ",\"prog_error_percent\":\"";	json += progErrorPercent;	json += "\"";
 		json += ",\"md5\":\"";			json += fileMD5;			json += "\"";
 		json += ",\"is_last_success\":"; json += (isLastSuccess ? "true" : "false");
 		json += "}";
+
 	}
 
 	json += "]";
@@ -309,19 +326,32 @@ void Class_ProgIsp::onFlashComplete() {
 		DEBUGLOGISP("onFlashComplete: ERROR during programming of %s\r\n", _flashPath.c_str());
 		// Получаем текст ошибки из программатора
 		String errorText = avrprog.getFlashErrorString();
-		// Сохраняем статус ошибки в filelist с текстом ошибки
-		filelist_SetProgStatus(_flashPath, _flashNtpStr, "error", errorText);
+		// Получаем стадию и процент ошибки из программатора
+		String errorStage = avrprog.getFlashErrorStage();
+		String errorPercent = String(avrprog.getFlashErrorPercent());
+		// Вычисляем затраченное время (даже при ошибке)
+		String elapsedStr = "";
+		if (_progStartTime > 0) {
+			elapsedStr = String(millis() - _progStartTime);
+		}
+		// Сохраняем статус ошибки в filelist с текстом ошибки, стадией и процентом
+		filelist_SetProgStatus(_flashPath, _flashNtpStr, "error", errorText, elapsedStr, errorStage, errorPercent);
 		_progResult = 1;  // сигнал ошибки для web_FileUploadProgress
 		_progRunning = false;
 		_uploadPercent = 0;
-		DEBUGLOGISP("Programming error: %s, saved prog status to filelist\r\n", errorText.c_str());
+		DEBUGLOGISP("Programming error: %s, stage=%s, pct=%s, saved prog status to filelist\r\n", errorText.c_str(), errorStage.c_str(), errorPercent.c_str());
 	} else {
 		DEBUGLOGISP("onFlashComplete: success for %s\r\n", _flashPath.c_str());
 		
-		// Сохраняем статус успеха в filelist (без ошибки)
-		filelist_SetProgStatus(_flashPath, _flashNtpStr, "ok");
+		// Вычисляем затраченное время
+		String elapsedStr = "";
+		if (_progStartTime > 0) {
+			elapsedStr = String(millis() - _progStartTime);
+		}
+		// Сохраняем статус успеха в filelist с временем прошивки
+		filelist_SetProgStatus(_flashPath, _flashNtpStr, "ok", "", elapsedStr);
 		
-		DEBUGLOGISP("Programming success, saved prog date to filelist: %s\r\n", _flashNtpStr.c_str());
+		DEBUGLOGISP("Programming success, saved prog date to filelist: %s, time=%sms\r\n", _flashNtpStr.c_str(), elapsedStr.c_str());
 		
 		_progResult = 0;
 		_progRunning = false;
@@ -330,6 +360,7 @@ void Class_ProgIsp::onFlashComplete() {
 		DEBUGLOGISP("Programming end \r\n");
 	}
 }
+
 
 
 
@@ -753,7 +784,7 @@ bool Class_ProgIsp::filelist_AddEntry(const String &filename, const String &uplo
 	return filelist_Save(doc);
 }
 
-bool Class_ProgIsp::filelist_SetProgStatus(const String &filename, const String &prog_date, const String &prog_status, const String &prog_error) {
+bool Class_ProgIsp::filelist_SetProgStatus(const String &filename, const String &prog_date, const String &prog_status, const String &prog_error, const String &prog_time, const String &prog_error_stage, const String &prog_error_percent) {
 	JsonDocument doc;
 	filelist_Load(doc);
 	JsonArray arr = doc.as<JsonArray>();
@@ -768,10 +799,25 @@ bool Class_ProgIsp::filelist_SetProgStatus(const String &filename, const String 
 		if (strcmp(entry["filename"].as<const char*>(), normalizedName.c_str()) == 0) {
 			entry["prog_date"] = prog_date;
 			entry["prog_status"] = prog_status;
+			if (prog_time.length() > 0) {
+				entry["prog_time"] = prog_time;
+			} else {
+				entry.remove("prog_time");
+			}
 			if (prog_error.length() > 0) {
 				entry["prog_error"] = prog_error;
 			} else {
 				entry.remove("prog_error");
+			}
+			if (prog_error_stage.length() > 0) {
+				entry["prog_error_stage"] = prog_error_stage;
+			} else {
+				entry.remove("prog_error_stage");
+			}
+			if (prog_error_percent.length() > 0) {
+				entry["prog_error_percent"] = prog_error_percent;
+			} else {
+				entry.remove("prog_error_percent");
 			}
 			return filelist_Save(doc);
 		}
@@ -782,8 +828,17 @@ bool Class_ProgIsp::filelist_SetProgStatus(const String &filename, const String 
 	newEntry["filename"] = normalizedName;
 	newEntry["prog_date"] = prog_date;
 	newEntry["prog_status"] = prog_status;
+	if (prog_time.length() > 0) {
+		newEntry["prog_time"] = prog_time;
+	}
 	if (prog_error.length() > 0) {
 		newEntry["prog_error"] = prog_error;
+	}
+	if (prog_error_stage.length() > 0) {
+		newEntry["prog_error_stage"] = prog_error_stage;
+	}
+	if (prog_error_percent.length() > 0) {
+		newEntry["prog_error_percent"] = prog_error_percent;
 	}
 	DEBUGLOGISP("filelist_SetProgStatus: created new entry for %s (was not in filelist)\r\n", normalizedName.c_str());
 	return filelist_Save(doc);

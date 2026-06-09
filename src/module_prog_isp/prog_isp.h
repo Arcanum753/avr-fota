@@ -149,6 +149,8 @@ protected:
     FlashState       _flashState = FLASH_IDLE;
     bool             _flashError = false;  // флаг ошибки при записи страницы
     String           _flashErrorString = "";  // текст ошибки для фронтенда
+    String           _flashErrorStage = "";   // стадия на которой произошла ошибка (FLASH_INIT, FLASH_WRITE)
+    uint8_t          _flashErrorPercent = 0;  // процент на момент ошибки
     File             _flashFile;
     uint32_t         _flashAddr = 0;
     uint32_t         _flashPosi = 0;

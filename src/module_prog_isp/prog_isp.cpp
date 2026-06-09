@@ -364,6 +364,8 @@ bool ESP_AVRISP::startFlash(uint32_t offset, String &path, uint32_t chipMemSize,
     _percent = 0;
     _flashError = false;
     _flashErrorString = "";
+    _flashErrorStage = "";
+    _flashErrorPercent = 0;
     _flashState = FLASH_INIT;
     _chipMemSize = chipMemSize;
     _isHexFormat = false;
@@ -393,6 +395,8 @@ bool ESP_AVRISP::startFlash(uint32_t offset, String &path, uint32_t chipMemSize,
 void ESP_AVRISP::flashStep() {
     switch (_flashState) {
         case FLASH_INIT: {
+            _flashErrorStage = "FLASH_INIT";
+            _flashErrorPercent = 0;
             if (_isHexFormat) {
                 // HEX-формат: потоковый парсинг файла в бинарный буфер
                 File hexFile = _fs->open(_flashPath, "r");
@@ -481,6 +485,8 @@ void ESP_AVRISP::flashStep() {
                 DEBUGLOGISP("flashStep: chipFlashPage returned %d at addr 0x%04x — aborting!\r\n", _ret, _flashAddr);
                 if (!_isHexFormat) binFileClose(_flashFile);
                 _flashError = true;
+                _flashErrorStage = "FLASH_WRITE";
+                _flashErrorPercent = _percent;
                 _flashErrorString = "Flash write error at page 0x" + String(_flashAddr, HEX);
                 _flashState = FLASH_DONE;
                 break;

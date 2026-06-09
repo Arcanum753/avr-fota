@@ -329,6 +329,10 @@
                 const uploaddate = f.upload_date || "";
                 const progdate = f.prog_date || "";
                 const progStatus = f.prog_status || "";
+                const progTime = f.prog_time || "";
+                const progError = f.prog_error || "";
+                const progErrorStage = f.prog_error_stage || "";
+                const progErrorPercent = f.prog_error_percent || "";
                 const isLastSuccess = f.is_last_success === true;
                 const encodedName = encodeURIComponent(fname);
 
@@ -351,9 +355,24 @@
                 // Ячейка статуса (отдельный столбец)
                 let statusCell = '<td style="text-align: center;">';
                 if (progStatus === 'ok') {
-                    statusCell += '<span title="Successfully programmed" style="color: #2e7d32; font-weight: bold;">OK</span>';
+                    let okText = 'OK';
+                    if (progTime) {
+                        const secs = Math.floor(parseInt(progTime) / 1000);
+                        okText += ' (' + secs + 's)';
+                    }
+                    statusCell += '<span title="Successfully programmed" style="color: #2e7d32; font-weight: bold;">' + okText + '</span>';
                 } else if (progStatus === 'error') {
-                    statusCell += '<span title="Programming error" style="color: #c62828; font-weight: bold;">Error</span>';
+                    let errText = 'Error';
+                    // Добавляем детали ошибки в title
+                    let errTitle = 'Programming error';
+                    if (progErrorStage) errTitle += ' | Stage: ' + progErrorStage;
+                    if (progErrorPercent) errTitle += ' | At: ' + progErrorPercent + '%';
+                    if (progError) errTitle += ' | ' + progError;
+                    if (progTime) {
+                        const secs = Math.floor(parseInt(progTime) / 1000);
+                        errText += ' (' + secs + 's)';
+                    }
+                    statusCell += '<span title="' + escapeHtml(errTitle) + '" style="color: #c62828; font-weight: bold; cursor: help;">' + errText + '</span>';
                 } else {
                     statusCell += '<span style="color: #999;">—</span>';
                 }
@@ -370,6 +389,7 @@
             }
             tbody.innerHTML = html;
         }
+
 
         // ========== Select File (click on row) ==========
         function selectFile(encodedName, row) {
