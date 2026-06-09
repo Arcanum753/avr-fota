@@ -13,6 +13,12 @@
 
 
 
+// Размер буфера для записи в flash (в байтах).
+// Должен быть достаточно мал для безопасного размещения на стеке EERTOS-задачи,
+// но достаточно велик для эффективной записи.
+// 256 байт — оптимальный баланс.
+#define WRITE_BUF_SIZE  256
+
 // AD AD
 #define AP_TIMES  50
 
@@ -111,6 +117,7 @@ public:
 
     /*_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-*/
     bool stm32f4_flash_busy(void);
+    bool stm32f4_wait_busy(uint32_t timeout_ms = 5000);
     void stm32f4_flash_unlock_dap() ;
     void stm32f4_erase_flash_dap();
     void stm32f4_prog_enable();

@@ -114,7 +114,8 @@ int32_t hexFileParseStream(File &file, std::vector<char> &binDataBuf,
 
     // Очищаем выходной буфер
     binDataBuf.clear();
-    binDataBuf.reserve(chipMemSize > 0 ? chipMemSize : 65536);
+    // Не резервируем память заранее — вектор будет расти динамически.
+    // reserve(chipMemSize) для больших чипов (512 КБ у STM32F4) вызывает abort() на ESP32.
 
     uint16_t pageaddr = 0;
     uint16_t pageaddrPrev = 0;

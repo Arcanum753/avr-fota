@@ -27,6 +27,11 @@
 #define FLASH_CR_MER_F4       (1U << 2U)
 #define FLASH_CR_SNB_F4       (3U << 3U)    // Sector number mask
 #define FLASH_CR_SNB_POS_F4   3             // Sector number position
+#define FLASH_CR_PSIZE_F4     (3U << 8U)    // Program size mask
+#define FLASH_CR_PSIZE_8_F4   (0U << 8U)    // 8-bit
+#define FLASH_CR_PSIZE_16_F4  (1U << 8U)    // 16-bit
+#define FLASH_CR_PSIZE_32_F4  (2U << 8U)    // 32-bit (word)
+#define FLASH_CR_PSIZE_64_F4  (3U << 8U)    // 64-bit (dual bank)
 #define FLASH_CR_STRT_F4      (1U << 16U)
 #define FLASH_CR_LOCK_F4      (1U << 31U)
 #define FLASH_CR_EOPIE_F4     (1U << 24U)

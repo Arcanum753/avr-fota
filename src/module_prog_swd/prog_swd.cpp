@@ -277,67 +277,38 @@ void ESP_PROGSWD::flashStep() {
                     stm32f1_unlock_erase_flash();
                     stm32f1_progEn();
                 }
-                
-                // НЕМЕДЛЕННО пишем первую страницу, пока PG бит ещё установлен!
-                uint8_t buffer[_pageSize];
-                memset(buffer, 0x00, _pageSize);
-                uint32_t cur_len = (_flashFileSize - _flashPosi >= _pageSize) ? _pageSize : (_flashFileSize - _flashPosi);
-                
-                if (_isHexFormat) {
-                    // Читаем из распарсенного HEX-буфера
-                    memcpy(buffer, _hexBinDataBuf.data() + _flashPosi, cur_len);
-                } else {
-                    binFileReadPage(_flashFile, buffer, cur_len);
-                }
-                
-                uint8_t write_ret = stm32fX_write_bank(_flashAddr, buffer, cur_len);
-                if (write_ret != 0) {
-                    DEBUGLOGSWD("flashStep: write_bank returned %i at addr 0x%08x — aborting!\r\n", write_ret, _flashAddr);
-                    if (!_isHexFormat) binFileClose(_flashFile);
-                    _flashError = true;
-                    _flashErrorString = "Flash write error at address 0x" + String(_flashAddr, HEX);
-                    _flashState = FLASH_DONE;
-                    break;
-                }
-                _flashAddr += cur_len;
-                _flashPosi += cur_len;
-                
-                // Обновляем процент
-                _percent = (uint8_t)(((float)_flashPosi / (float)_flashFileSize) * 100.0f);
-                DEBUGLOGSWD("%i percents \r\n", _percent);
-                progSwd.setUploadPercent(_percent);
-#if defined(ESP32)
-                esp_task_wdt_reset();
-#endif
-                
-                // Проверяем, закончили ли (файл меньше одной страницы)
-                if (_flashPosi >= _flashFileSize) {
-                    if (!_isHexFormat) binFileClose(_flashFile);
-                    _speed = (float)((float)(_flashFileSize / (float)(millis() - _flashStartTime)));
-                    DEBUGLOGSWD("Done flashing file, it took %i ms speed: %.4f kbs\r\n",
-                        (int)(millis() - _flashStartTime), _speed);
-                    
-                    stm32Fx_halt();
-                    stm32Fx_unhalt();
-                    stm32Fx_rst();
-                    
-                    _flashState = FLASH_DONE;
-                }
-                break;  // ← ВАЖНО: выходим из switch, чтобы EERTOS перепланировал задачу
             }
             
-            // Все последующие страницы (не первая) — пишем как обычно
-            uint8_t buffer[_pageSize];
-            memset(buffer, 0x00, _pageSize);
-            uint32_t cur_len = (_flashFileSize - _flashPosi >= _pageSize) ? _pageSize : (_flashFileSize - _flashPosi);
+            // Пишем буфером WRITE_BUF_SIZE, пока не закончатся данные
+            uint8_t buffer[WRITE_BUF_SIZE];
+            uint32_t remaining = _flashFileSize - _flashPosi;
+            if (remaining == 0) {
+                // Всё записали — завершаем
+                if (!_isHexFormat) binFileClose(_flashFile);
+                _speed = (float)((float)(_flashFileSize / (float)(millis() - _flashStartTime)));
+                DEBUGLOGSWD("Done flashing file, it took %i ms speed: %.4f kbs\r\n",
+                    (int)(millis() - _flashStartTime), _speed);
+                
+                stm32Fx_halt();
+                stm32Fx_unhalt();
+                stm32Fx_rst();
+                
+                _flashState = FLASH_DONE;
+                break;
+            }
             
+            // Определяем размер текущего чанка (не больше WRITE_BUF_SIZE)
+            uint32_t cur_len = (remaining > WRITE_BUF_SIZE) ? WRITE_BUF_SIZE : remaining;
+            
+            // Читаем данные в буфер
+            memset(buffer, 0x00, WRITE_BUF_SIZE);
             if (_isHexFormat) {
-                // Читаем из распарсенного HEX-буфера
                 memcpy(buffer, _hexBinDataBuf.data() + _flashPosi, cur_len);
             } else {
                 binFileReadPage(_flashFile, buffer, cur_len);
             }
             
+            // Пишем чанк в flash
             uint8_t write_ret = stm32fX_write_bank(_flashAddr, buffer, cur_len);
             if (write_ret != 0) {
                 DEBUGLOGSWD("flashStep: write_bank returned %i at addr 0x%08x — aborting!\r\n", write_ret, _flashAddr);
@@ -358,21 +329,7 @@ void ESP_PROGSWD::flashStep() {
             esp_task_wdt_reset();
 #endif
             
-            // Проверяем, закончили ли
-            if (_flashPosi >= _flashFileSize) {
-                if (!_isHexFormat) binFileClose(_flashFile);
-                _speed = (float)((float)(_flashFileSize / (float)(millis() - _flashStartTime)));
-                DEBUGLOGSWD("Done flashing file, it took %i ms speed: %.4f kbs\r\n",
-                    (int)(millis() - _flashStartTime), _speed);
-                
-                // Завершающие операции
-                stm32Fx_halt();
-                stm32Fx_unhalt();
-                stm32Fx_rst();
-                
-                _flashState = FLASH_DONE;
-            }
-            break;
+            break;  // Выходим, чтобы EERTOS перепланировал задачу
         }
         
         case FLASH_DONE: {
@@ -581,10 +538,19 @@ uint8_t ESP_PROGSWD::stm32fX_write_bank(uint32_t addr, uint8_t buffer[], uint32_
 bool ESP_PROGSWD::stm32Fx_write_flash_32bit(uint32_t address, uint32_t value, bool muted) {
   uint32_t temp = 0;
   bool ret = false;
+
+  // Устанавливаем CSW для 32-битного доступа (как в 16-bit версии, но с CSW_SIZE32)
+  swd_AP_Write(AP_CSW, _cswValue);
   bool state1 = swd_AP_Write(AP_TAR, address);
   bool state2 = swd_AP_Write(AP_DRW, value);
   bool state3 = swd_DP_Read(DP_RDBUFF, temp);
        state3 = swd_DP_Read(DP_RDBUFF, temp);
+  
+  // Для STM32F4 ожидаем завершения программирования слова
+  if (_chipFamily == "stm32f4") {
+    stm32f4_wait_busy(100);  // таймаут 100ms на одно слово
+  }
+  
   if (muted == false) {
     DEBUGLOGSWD("%i %i %i Write 0x%08x : 0x%08x  read 0x%08x \r\n" ,
         state1, state2, state3, address, value, temp );	
