@@ -1,0 +1,21 @@
+# ESP32 Partition Table
+# 4MB flash (0x400000)
+# - bootloader:    0x1000  (4KB)   - not specified, PlatformIO handles it
+# - partition:     0x1000  (4KB)   - partition table
+# - nvs:           0x5000  (20KB)  - NVS storage
+# - otadata:       0x2000  (8KB)   - OTA boot data (rollback info)
+# - app0 (OTA_0):  0x110000 (1088KB) - current firmware
+# - app1 (OTA_1):  0x110000 (1088KB) - OTA backup firmware
+# - spiffs:        0x1CF000 (1852KB) - filesystem
+# - nvs_key:       0x1000  (4KB)   - NVS keys
+#
+# Total: 0x9000 + 0x5000 + 0x2000 + 0x110000 + 0x110000 + 0x1CF000 + 0x1000 = 0x400000
+#        36KB + 20KB + 8KB + 1088KB + 1088KB + 1852KB + 4KB = 4096KB = 4MB OK
+
+# Name,   Type, SubType, Offset,   Size,      Flags
+nvs,       data, nvs,     0x9000,   0x5000,
+otadata,   data, ota,     0xE000,   0x2000,
+app0,      app,  ota_0,   0x10000,  0x110000,
+app1,      app,  ota_1,   0x120000, 0x110000,
+spiffs,    data, spiffs,  0x230000, 0x1CF000,
+nvs_key,   data, nvs_keys,0x3FF000, 0x1000,

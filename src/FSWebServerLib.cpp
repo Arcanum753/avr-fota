@@ -567,7 +567,11 @@ void AsyncFSWebServer::serialShowAbout() {
 	Serial.printf("Flash chip size: %u\r\n", ESP.getFlashChipRealSize());
 	#endif
 	Serial.printf("Scketch size: %u\r\n", 		ESP.getSketchSize());
-	Serial.printf("Free flash space: %u\r\n", 	ESP.getFreeSketchSpace());
+	if (_fs) {
+		Serial.printf("FS total: %u\r\n", 		_fs->totalBytes());
+		Serial.printf("FS used: %u\r\n", 		_fs->usedBytes());
+		Serial.printf("FS free: %u\r\n", 		_fs->totalBytes() - _fs->usedBytes());
+	}
 
 	Serial.printf("wifi ssid: %s \n", WiFi.SSID().c_str());
 	Serial.printf("IP Address: %s \n", WiFi.localIP().toString().c_str());
