@@ -19,6 +19,36 @@
 #include "stm32f1_flash.h"
 #include "stm32f4_flash.h"
 
+// ===== Callback для потоковой записи HEX в flash =====
+// Вызывается из hexFileParseStreamWrite() для каждого чанка данных.
+// userData — это указатель на ESP_PROGSWD.
+static int hex_write_to_flash_cb(uint32_t chunkAddr, const uint8_t *data, uint32_t size, void *userData) {
+    ESP_PROGSWD *prog = (ESP_PROGSWD *)userData;
+    if (!prog) return -1;
+
+    // Пишем чанк в flash
+    uint8_t ret = prog->stm32fX_write_bank(chunkAddr, (uint8_t *)data, size);
+    if (ret != 0) {
+        DEBUGLOGSWD("hex_write_to_flash_cb: write_bank returned %u at addr 0x%08x\n\r", ret, chunkAddr);
+        return -1;
+    }
+
+    // Обновляем счётчик записанных байт и процент
+    prog->addToFlashPosi(size);
+    prog->updatePercent();
+
+    return 0;
+}
+
+// ===== Реализация updatePercent =====
+void ESP_PROGSWD::updatePercent() {
+    if (_flashFileSize > 0) {
+        _percent = (uint8_t)(((float)_flashPosi / (float)_flashFileSize) * 100.0f);
+        progSwd.setUploadPercent(_percent);
+        DEBUGLOGSWD("%i percents \r\n", _percent);
+    }
+}
+
 
 ESP_PROGSWD swdprog;
 ESP_PROGSWD::ESP_PROGSWD(){}
@@ -167,7 +197,6 @@ bool ESP_PROGSWD::startFlash(uint32_t offset, String &path, uint32_t chipMemSize
     _flashState = FLASH_INIT;
     _chipMemSize = chipMemSize;
     _isHexFormat = false;
-    _hexBinDataBuf.clear();
     
     // Сохраняем параметры прошивки из конфига чипа
     _pageSize = pageSize;
@@ -196,7 +225,7 @@ void ESP_PROGSWD::flashStep() {
     switch (_flashState) {
         case FLASH_INIT: {
             if (_isHexFormat) {
-                // HEX-формат: потоковый парсинг файла в бинарный буфер
+                // HEX-формат: потоковый парсинг с immediate-записью через callback
                 File hexFile = _fs->open(_flashPath, "r");
                 if (!hexFile) {
                     DEBUGLOGSWD("flashStep: FAILED to open HEX %s\r\n", _flashPath.c_str());
@@ -208,33 +237,72 @@ void ESP_PROGSWD::flashStep() {
                     break;
                 }
                 
-                uint32_t totalBins = 0;
-                int32_t parseRet = hexFileParseStream(hexFile, _hexBinDataBuf, _flashStart, _chipMemSize, totalBins);
+                // Устанавливаем размер файла для корректного расчёта процентов
+                _flashFileSize = hexFile.size();
+                _flashPosi = 0;
+                _flashStartTime = millis();
+                
+                // Выполняем abort/halt/unlock/erase/progEn перед началом записи
+                uint32_t idcode = stm32Fx_begin();
+                if (idcode == 0) {
+                    DEBUGLOGSWD("flashStep: STM32 not detected (IDCODE=0) — aborting!\r\n");
+                    hexFile.close();
+                    _flashError = true;
+                    _flashErrorString = "STM32 not detected";
+                    _flashErrorStage = "FLASH_INIT";
+                    _flashErrorPercent = 0;
+                    _flashState = FLASH_DONE;
+                    break;
+                }
+                if (idcode != SWD_STM32F103ID) {
+                    DEBUGLOGSWD("flashStep: WARNING unexpected IDCODE 0x%08x (expected 0x%08x), continuing...\r\n", idcode, SWD_STM32F103ID);
+                }
+                stm32Fx_abort_all();
+                stm32Fx_halt();
+                
+                // Выбор алгоритма по семейству чипа
+                if (_chipFamily == "stm32f4") {
+                    DEBUGLOGSWD("flashStep: using F4 algorithm (family=%s)\r\n", _chipFamily.c_str());
+                    stm32f4_erase_flash_dap();
+                    stm32f4_prog_enable();
+                } else {
+                    DEBUGLOGSWD("flashStep: using F1 algorithm (family=%s)\r\n", _chipFamily.c_str());
+                    stm32f1_unlock_erase_flash();
+                    stm32f1_progEn();
+                }
+                
+                // Потоковый парсинг HEX с immediate-записью в flash
+                int32_t parseRet = hexFileParseStreamWrite(hexFile, _flashStart, _chipMemSize, _pageSize, hex_write_to_flash_cb, this);
                 hexFile.close();
                 
                 if (parseRet < 0) {
-                    DEBUGLOGSWD("flashStep: HEX validation failed (err=%d)\r\n", parseRet);
+                    DEBUGLOGSWD("flashStep: HEX streaming write failed (err=%d)\r\n", parseRet);
                     _flashError = true;
                     _flashErrorStage = "FLASH_INIT";
-                    _flashErrorPercent = 0;
-                    // Преобразуем код ошибки в текст
+                    _flashErrorPercent = _percent;
                     switch (parseRet) {
                         case -9:  _flashErrorString = "HEX: incorrect file format"; break;
                         case -10: _flashErrorString = "HEX: file not found"; break;
                         case -11: _flashErrorString = "HEX: CRC error"; break;
                         case -12: _flashErrorString = "HEX: memory overflow (exceeds chip size)"; break;
                         case -13: _flashErrorString = "HEX: non-monotonic address"; break;
-                        default:  _flashErrorString = "HEX: validation error (" + String(parseRet) + ")"; break;
+                        case -14: _flashErrorString = "HEX: flash write error"; break;
+                        default:  _flashErrorString = "HEX: error (" + String(parseRet) + ")"; break;
                     }
                     _flashState = FLASH_DONE;
                     break;
                 }
                 
-                _flashFileSize = (uint32_t)parseRet;
-                _flashPosi = 0;
-                _flashStartTime = millis();
-                DEBUGLOGSWD("flashStep: HEX parsed, %u bytes binary data\r\n", _flashFileSize);
-                _flashState = FLASH_WRITE;
+                // Успешно записали весь HEX — пересчитываем скорость
+                _speed = (float)((float)(_flashFileSize / (float)(millis() - _flashStartTime)));
+                DEBUGLOGSWD("Done flashing file, it took %i ms speed: %.4f kbs\r\n",
+                    (int)(millis() - _flashStartTime), _speed);
+                
+                stm32Fx_halt();
+                stm32Fx_unhalt();
+                stm32Fx_rst();
+                
+                _flashState = FLASH_DONE;
             } else {
                 // BIN-формат: открываем файл как обычно
                 _flashFile = binFileOpen(*_fs, _flashPath);
@@ -312,11 +380,7 @@ void ESP_PROGSWD::flashStep() {
             
             // Читаем данные в буфер
             memset(buffer, 0x00, WRITE_BUF_SIZE);
-            if (_isHexFormat) {
-                memcpy(buffer, _hexBinDataBuf.data() + _flashPosi, cur_len);
-            } else {
-                binFileReadPage(_flashFile, buffer, cur_len);
-            }
+            binFileReadPage(_flashFile, buffer, cur_len);
             
             // Пишем чанк в flash
             uint8_t write_ret = stm32fX_write_bank(_flashAddr, buffer, cur_len);
@@ -353,8 +417,6 @@ void ESP_PROGSWD::flashStep() {
                 stm32Fx_unhalt();
                 stm32Fx_rst();
             }
-            // Очищаем HEX-буфер
-            _hexBinDataBuf.clear();
             // Сообщаем о завершении — вызываем callback в module_prog_swd
             _flashState = FLASH_IDLE;
             DEBUGLOGSWD("flashStep: FLASH_DONE -> IDLE\r\n");

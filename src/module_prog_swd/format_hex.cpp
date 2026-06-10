@@ -208,6 +208,177 @@ int32_t hexFileParseStream(File &file, std::vector<char> &binDataBuf,
 }
 
 /**
+ * @brief Потоковый парсинг HEX-файла с immediate-записью через callback.
+ *
+ * Аналог hexFileParseStream(), но вместо накопления данных в буфер
+ * вызывает writeCallback для каждого непрерывного чанка данных.
+ * Это позволяет писать данные напрямую в flash без хранения всего
+ * бинарного образа в RAM.
+ *
+ * @param file        Открытый File-объект для чтения.
+ * @param flashStartAddr Начальный адрес flash-памяти.
+ * @param chipMemSize    Размер памяти чипа в байтах.
+ * @param writeCallback  Callback для записи чанка данных.
+ * @param userData       Произвольный указатель для callback.
+ * @return >=0 количество записанных бинарных байт при успехе,
+ *         <0 код ошибки (см. hexFileParseStream).
+ */
+int32_t hexFileParseStreamWrite(File &file, uint32_t flashStartAddr, uint32_t chipMemSize,
+                                uint32_t pageSize,
+                                hex_write_callback_t writeCallback, void *userData) {
+    if (!file) {
+        return -10; // ERR_NOFILE
+    }
+    if (!writeCallback) {
+        return -9; // ERR_INCORRECTFILE — нет callback
+    }
+
+    // Защита pageSize: если 0 → 256, если > 1024 → 1024
+    if (pageSize == 0) pageSize = 256;
+    if (pageSize > 1024) pageSize = 1024;
+
+    uint16_t pageaddr = 0;
+    uint16_t pageaddrPrev = 0;
+    uint8_t lineBuffer[256];
+    uint8_t chsum = 0;
+    uint8_t rtype = 0;
+    uint8_t readedBins = 0;
+    uint32_t totalBins = 0;
+    bool firstDataLine = true;
+    uint32_t upperAddr = 0;       // старшие 16 бит адреса из записей типа 04
+    uint32_t maxRealAddr = 0;     // максимальный реальный адрес (для проверки переполнения)
+
+    // Буфер для накопления непрерывного чанка данных
+    // Размер равен pageSize (с защитой: 256..1024)
+    std::vector<uint8_t> chunkBuf(pageSize);
+    uint32_t chunkAddr = 0;
+    uint32_t chunkPos = 0;
+    bool chunkActive = false;
+
+    // Вспомогательная функция для сброса накопленного чанка через callback
+    // Используем лямбду, но для совместимости с C++ на ESP32 сделаем обычный блок
+    // (лямбды в C++11 на ESP32 работают)
+
+    // Читаем файл построчно
+    while (file.available()) {
+        String lineStr = file.readStringUntil('\n');
+        lineStr.trim(); // убираем \r и пробелы
+
+        // Пропускаем пустые строки
+        if (lineStr.length() == 0) {
+            continue;
+        }
+
+        // Должна начинаться с ':'
+        if (lineStr[0] != ':') {
+            continue; // пропускаем мусорные строки
+        }
+
+        // Парсим строку
+        if (!hexFileLineParser(lineStr, pageaddr, lineBuffer, chsum, rtype, readedBins)) {
+            return -9; // ERR_INCORRECTFILE
+        }
+
+        // Если тип 0x01 — конец файла
+        if (rtype == 0x01) {
+            break;
+        }
+
+        // Обработка Extended Linear Address (тип 04)
+        if (rtype == 0x04) {
+            if (readedBins >= 2) {
+                upperAddr = ((uint32_t)lineBuffer[0] << 8) | (uint32_t)lineBuffer[1];
+            }
+            continue; // не пишем в flash
+        }
+
+        // Проверка монотонности адресов (только для data-строк)
+        if (rtype == 0x00) {
+            if (!firstDataLine) {
+                if (pageaddrPrev > pageaddr) {
+                    return -13; // ERR_HEXADDR
+                }
+            }
+            pageaddrPrev = pageaddr;
+            firstDataLine = false;
+        }
+
+        // Проверка контрольной суммы
+        if (chsum != 0) {
+            return -11; // ERR_HEXCRC
+        }
+
+        // Вычисляем реальный адрес данных в этой строке
+        uint32_t realAddr = (upperAddr << 16) | pageaddr;
+
+        // Проверка переполнения памяти чипа по реальному адресу
+        uint32_t addrEnd = realAddr + readedBins;
+        if (addrEnd > flashStartAddr + chipMemSize) {
+            return -12; // ERR_HEXMEMOVER
+        }
+
+        // Отслеживаем максимальный реальный адрес для итоговой проверки
+        if (addrEnd > maxRealAddr) {
+            maxRealAddr = addrEnd;
+        }
+
+        // Если это первая data-строка или адрес не совпадает с ожидаемым —
+        // сбрасываем накопленный чанк через callback
+        if (readedBins > 0) {
+            uint32_t expectedAddr = flashStartAddr + totalBins;
+            if (realAddr != expectedAddr) {
+                // Адрес не совпадает — возможно, это другой регион или есть пропуск
+                // Сбрасываем текущий чанк, если он активен
+                if (chunkActive && chunkPos > 0) {
+                    int cbRet = writeCallback(chunkAddr, chunkBuf.data(), chunkPos, userData);
+                    if (cbRet != 0) {
+                        return -14; // ERR_HEXWRITE — callback вернул ошибку
+                    }
+                    chunkPos = 0;
+                    chunkActive = false;
+                }
+                // Начинаем новый чанк
+                chunkAddr = realAddr;
+                chunkActive = true;
+            } else if (!chunkActive) {
+                // Первый чанк
+                chunkAddr = realAddr;
+                chunkActive = true;
+            }
+
+            // Копируем данные в чанк-буфер
+            for (uint8_t i = 0; i < readedBins; i++) {
+                if (chunkPos >= chunkBuf.size()) {
+                    // Буфер чанка переполнен — сбрасываем через callback
+                    int cbRet = writeCallback(chunkAddr, chunkBuf.data(), chunkPos, userData);
+                    if (cbRet != 0) {
+                        return -14; // ERR_HEXWRITE
+                    }
+                    chunkAddr += chunkPos;
+                    chunkPos = 0;
+                }
+                chunkBuf.data()[chunkPos++] = lineBuffer[i];
+            }
+            totalBins += readedBins;
+        }
+    }
+
+    // Сбрасываем последний накопленный чанк
+    if (chunkActive && chunkPos > 0) {
+        int cbRet = writeCallback(chunkAddr, chunkBuf.data(), chunkPos, userData);
+        if (cbRet != 0) {
+            return -14; // ERR_HEXWRITE
+        }
+    }
+
+    if (totalBins == 0) {
+        return -9; // ERR_INCORRECTFILE — нет данных
+    }
+
+    return (int32_t)totalBins;
+}
+
+/**
  * @brief Проверить, является ли файл HEX-форматом (по расширению).
  */
 bool hexFileIsFormat(const String &path) {

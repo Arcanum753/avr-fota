@@ -91,6 +91,8 @@ public:
 
     void flashStep();
     void beginFlashStep();  // регистрация задачи в EERTOS
+    void updatePercent();   // вычисляет процент и выводит через DEBUGLOGSWD
+    inline void addToFlashPosi(uint32_t size) { _flashPosi += size; }  // добавляет к счётчику записанных байт
     bool isFlashBusy() { return _flashState != FLASH_IDLE; }
     bool isFlashError() { return _flashError; }
     uint8_t getPercent() { return _percent; }
@@ -165,7 +167,6 @@ protected:
     uint32_t         _cswValue = 0xa2000002;  // значение CSW (из конфига чипа)
     uint32_t         _flashStart = 0x08000000;  // стартовый адрес flash (из конфига чипа)
     bool             _isHexFormat = false;  // true если прошиваем HEX-файл
-    std::vector<char> _hexBinDataBuf;  // распарсенные бинарные данные из HEX
 
     // Семейство чипа (stm32f1, stm32f4 и т.д.) — для выбора алгоритма прошивки
     String           _chipFamily = "stm32f1";

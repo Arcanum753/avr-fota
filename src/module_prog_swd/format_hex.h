@@ -33,6 +33,19 @@ bool hexFileLineParser(const String &lineStr,
                        uint8_t &binReadNum);
 
 /**
+ * @brief Тип callback для потоковой записи HEX в flash.
+ *
+ * Вызывается для каждого непрерывного чанка бинарных данных.
+ *
+ * @param chunkAddr  Адрес в flash, куда нужно писать данные.
+ * @param data       Указатель на данные.
+ * @param size       Размер данных в байтах.
+ * @param userData   Произвольный указатель (например, на ESP_PROGSWD).
+ * @return 0 при успехе, -1 при ошибке (прерывает парсинг).
+ */
+typedef int (*hex_write_callback_t)(uint32_t chunkAddr, const uint8_t *data, uint32_t size, void *userData);
+
+/**
  * @brief Потоковый парсинг и валидация HEX-файла.
  *
  * Читает файл построчно из File-объекта, выполняет полную валидацию:
@@ -54,6 +67,27 @@ bool hexFileLineParser(const String &lineStr,
  */
 int32_t hexFileParseStream(File &file, std::vector<char> &binDataBuf,
                            uint32_t flashStartAddr, uint32_t chipMemSize, uint32_t &totalBins);
+
+/**
+ * @brief Потоковый парсинг HEX-файла с immediate-записью через callback.
+ *
+ * Аналог hexFileParseStream(), но вместо накопления данных в буфер
+ * вызывает writeCallback для каждого непрерывного чанка данных.
+ * Это позволяет писать данные напрямую в flash без хранения всего
+ * бинарного образа в RAM.
+ *
+ * @param file        Открытый File-объект для чтения.
+ * @param flashStartAddr Начальный адрес flash-памяти.
+ * @param chipMemSize    Размер памяти чипа в байтах.
+ * @param pageSize       Размер страницы flash (chunkBuf будет равен pageSize, но не более 1024).
+ * @param writeCallback  Callback для записи чанка данных.
+ * @param userData       Произвольный указатель для callback.
+ * @return >=0 количество записанных бинарных байт при успехе,
+ *         <0 код ошибки (см. hexFileParseStream).
+ */
+int32_t hexFileParseStreamWrite(File &file, uint32_t flashStartAddr, uint32_t chipMemSize,
+                                uint32_t pageSize,
+                                hex_write_callback_t writeCallback, void *userData);
 
 /**
  * @brief Проверить, является ли файл HEX-форматом (по расширению).

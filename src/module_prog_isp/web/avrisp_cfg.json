@@ -7,52 +7,10 @@
       "page_size": 128
     },
     {
-      "signature": "0x1E9502",
-      "name": "ATmega328PB",
-      "flash_size": 32768,
-      "page_size": 128
-    },
-    {
-      "signature": "0x1E9702",
-      "name": "ATmega2560",
-      "flash_size": 262144,
-      "page_size": 256
-    },
-    {
-      "signature": "0x1E950E",
+      "signature": "0x1E940B",
       "name": "ATmega168P",
       "flash_size": 16384,
       "page_size": 128
-    },
-    {
-      "signature": "0x1E9406",
-      "name": "ATmega8",
-      "flash_size": 8192,
-      "page_size": 64
-    },
-    {
-      "signature": "0x1E9506",
-      "name": "ATmega32U4",
-      "flash_size": 32768,
-      "page_size": 128
-    },
-    {
-      "signature": "0x1E9782",
-      "name": "ATmega1280",
-      "flash_size": 131072,
-      "page_size": 256
-    },
-    {
-      "signature": "0x1E9801",
-      "name": "ATtiny85",
-      "flash_size": 8192,
-      "page_size": 64
-    },
-    {
-      "signature": "0x1E930B",
-      "name": "ATtiny13",
-      "flash_size": 1024,
-      "page_size": 64
     }
   ]
 }
