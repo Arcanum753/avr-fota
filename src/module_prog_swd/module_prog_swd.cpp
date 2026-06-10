@@ -113,6 +113,35 @@ void  Class_ProgSwd::web_Init()	{
 
 //stm32.html ^^^
 
+//project.html vvv
+    // Project config page
+    ESPHTTPServer.on("/project/info", HTTP_GET, [this](AsyncWebServerRequest *request) {
+        if (!ESPHTTPServer.checkAuth(request)) { return request->requestAuthentication(); };
+        web_ProjectInfo(request);
+    });
+
+    ESPHTTPServer.on("/project/save", HTTP_GET, [this](AsyncWebServerRequest *request) {
+        if (!ESPHTTPServer.checkAuth(request)) { return request->requestAuthentication(); };
+        web_ProjectSave(request);
+    });
+
+    ESPHTTPServer.on("/project/chips", HTTP_GET, [this](AsyncWebServerRequest *request) {
+        if (!ESPHTTPServer.checkAuth(request)) { return request->requestAuthentication(); };
+        web_ProjectChips(request);
+    });
+
+    ESPHTTPServer.on("/project/chipinfo", HTTP_GET, [this](AsyncWebServerRequest *request) {
+        if (!ESPHTTPServer.checkAuth(request)) { return request->requestAuthentication(); };
+        web_ProjectChipInfo(request);
+    });
+
+    // Общий роут, отдающий HTML — последним
+    ESPHTTPServer.on("/project", HTTP_GET, [this](AsyncWebServerRequest *request) {
+        if (!ESPHTTPServer.checkAuth(request)) { return request->requestAuthentication(); };
+        ESPHTTPServer.handleFileRead("/web/project.html", request);
+    });
+//project.html ^^^
+
 }
 
 
@@ -120,8 +149,11 @@ void  Class_ProgSwd::web_Init()	{
 int Class_ProgSwd::cfg_FileSaveFromWeb(CfgFile_ProgSwd_t &_inStruct)  {
     DEBUGLOGSWD(__PRETTY_FUNCTION__);	DEBUGLOGSWD("\r\n");
 	CfgFile_ProgSwd	=  _inStruct;
-	int _ret =  (int)cfg_FileSave();
-	return _ret ;
+	bool ret = cfg_FileSave();
+	if (ret) {
+		return 0;
+	}
+	return 1;
 }
 
 int  Class_ProgSwd::cfg_FileStructGet(CfgFile_ProgSwd_t &_inStruct)  {
@@ -134,27 +166,24 @@ int  Class_ProgSwd::cfg_FileStructGet(CfgFile_ProgSwd_t &_inStruct)  {
 
 void Class_ProgSwd::cfg_SetDefault() {
 	DEBUGLOGSWD(__PRETTY_FUNCTION__);	DEBUGLOGSWD("\r\n");
-	// CfgFile_ProgSwd.programmer_type	= DEFAULT_PROG_TYPE;
     CfgFile_ProgSwd.project_name  	= DEFAULT_PROG_PROJNAME;
-    CfgFile_ProgSwd.chip_size      	= DEFAULT_chipsize;
+    CfgFile_ProgSwd.chip_name      	= DEFAULT_CHIP_NAME;
 }
 
 bool Class_ProgSwd::cfg_FileLoad() {
 	DEBUGLOGSWD(__PRETTY_FUNCTION__); DEBUGLOGSWD("\r\n");
 	JsonDocument jsonDoc;
 	if (ModClassJson.load_jsonDoc(CONFIG_PROG_JSON, jsonDoc) == false ){	return false;	}
-	// CfgFile_ProgSwd.programmer_type	= jsonDoc["type"].as<const char *>();
     CfgFile_ProgSwd.project_name		= jsonDoc["project"].as<const char *>();
-    CfgFile_ProgSwd.chip_size			= jsonDoc["chipsize"].as<uint32_t>();
+    CfgFile_ProgSwd.chip_name			= jsonDoc["chip_name"].as<const char *>();
 	return true;
 }
 
 bool Class_ProgSwd::cfg_FileSave(){
 	DEBUGLOGSWD("Save config PROJ\r\n");
 	JsonDocument jsonDoc;
-	// jsonDoc["type"]			= CfgFile_ProgSwd.programmer_type;
     jsonDoc["project"]		= CfgFile_ProgSwd.project_name;
-    jsonDoc["chipsize"]     = CfgFile_ProgSwd.chip_size;
+    jsonDoc["chip_name"]    = CfgFile_ProgSwd.chip_name;
 	return ModClassJson.save_jsonDoc(jsonDoc, CONFIG_PROG_JSON);
 }
 
@@ -317,11 +346,11 @@ void Class_ProgSwd::onFlashComplete() {
 		String errorText = swdprog.getFlashErrorString();
 		String errorStage = swdprog.getFlashErrorStage();
 		uint8_t errorPercent = swdprog.getFlashErrorPercent();
-		// Вычисляем время прошивки до ошибки
+		// Вычисляем время прошивки до ошибки (в миллисекундах для совместимости с фронтендом)
 		String elapsedStr = "";
 		if (_progStartTime > 0) {
 			uint32_t elapsed = millis() - _progStartTime;
-			elapsedStr = (String)(elapsed / 1000);  // в секундах
+			elapsedStr = (String)elapsed;  // в миллисекундах
 		}
 		// Сохраняем статус ошибки в filelist с текстом ошибки, стадией и процентом
 		filelist_SetProgStatus(_flashPath, _flashNtpStr, "error", errorText, elapsedStr, errorStage, (String)errorPercent);
@@ -332,17 +361,17 @@ void Class_ProgSwd::onFlashComplete() {
 	} else {
 		DEBUGLOGSWD("onFlashComplete: success for %s\r\n", _flashPath.c_str());
 		
-		// Вычисляем время прошивки
+		// Вычисляем время прошивки (в миллисекундах для совместимости с фронтендом)
 		String elapsedStr = "";
 		if (_progStartTime > 0) {
 			uint32_t elapsed = millis() - _progStartTime;
-			elapsedStr = (String)(elapsed / 1000);  // в секундах
+			elapsedStr = (String)elapsed;  // в миллисекундах
 		}
 		
 		// Сохраняем статус успеха в filelist с временем прошивки
 		filelist_SetProgStatus(_flashPath, _flashNtpStr, "ok", "", elapsedStr);
 		
-		DEBUGLOGSWD("Programming success, saved prog date to filelist: %s, time=%ss\r\n", _flashNtpStr.c_str(), elapsedStr.c_str());
+		DEBUGLOGSWD("Programming success, saved prog date to filelist: %s, time=%sms\r\n", _flashNtpStr.c_str(), elapsedStr.c_str());
 		
 		_progResult = 0;
 		_progRunning = false;
@@ -578,41 +607,68 @@ void Class_ProgSwd::web_FileUpload2Chip(AsyncWebServerRequest *request) {
 	_flashPath = path;
 	_flashNtpStr = NTP.getTimeDateString();
 	
-	// ===== Новая логика: читаем IDCODE, ищем в swd_cfg.json, подставляем параметры =====
+	// ===== Читаем IDCODE чипа (один раз) и определяем параметры =====
 	uint32_t flashStart = DEFAULT_FLASH_START_ADDR;
-	uint32_t chipMemSize = CfgFile_ProgSwd.chip_size;
+	uint32_t chipMemSize = DEFAULT_PAGE_SIZE * 64;  // дефолтный размер (будет переопределён из swd_cfg.json)
 	uint32_t pageSize = DEFAULT_PAGE_SIZE;
 	uint32_t wordSize = DEFAULT_WORD_SIZE;
 	uint32_t cswValue = DEFAULT_CSW_VALUE;
 	
-	// Синхронно читаем IDCODE чипа (быстрая SWD-транзакция)
+	String expectedChipName = CfgFile_ProgSwd.chip_name;
+	
 	swd_gpio_init();
 	uint32_t idcode = swd_init();
 	
-	if (idcode != 0) {
+	if (idcode == 0) {
+		if (expectedChipName.length() > 0) {
+			// В конфиге выбран чип, но чип не отвечает
+			String errorText = "Chip offline - unable to read IDCODE";
+			DEBUGLOGSWD("web_FileUpload2Chip: %s\n\r", errorText.c_str());
+			filelist_SetProgStatus(_flashPath, _flashNtpStr, "error", errorText);
+			return request->send(423, "text/plain", errorText);
+		}
+		// chip_name пустой — чип не отвечает, используем дефолты
+		DEBUGLOGSWD("web_FileUpload2Chip: chip not detected, using defaults\n\r");
+	} else {
 		DEBUGLOGSWD("web_FileUpload2Chip: detected chip ID=0x%08x\n\r", idcode);
 		
 		// Ищем чип в swd_cfg.json
 		ChipConfig_t chipCfg;
-		if (chipCfg_FindById(idcode, chipCfg)) {
-			// Нашли — используем параметры из конфига
+		bool found = chipCfg_FindById(idcode, chipCfg);
+		
+		if (found) {
+			// Нашли чип в конфиге
+			if (expectedChipName.length() > 0 && chipCfg.name != expectedChipName) {
+				// Имя не совпадает с ожидаемым
+				String errorText = "Chip mismatch: expected '" + expectedChipName + "', detected '" + chipCfg.name + "'";
+				DEBUGLOGSWD("web_FileUpload2Chip: %s\n\r", errorText.c_str());
+				filelist_SetProgStatus(_flashPath, _flashNtpStr, "error", errorText);
+				return request->send(423, "text/plain", errorText);
+			}
+			// Имя совпадает (или chip_name пустой) — используем параметры из конфига
 			flashStart = chipCfg.flash_start;
 			chipMemSize = chipCfg.flash_size;
 			pageSize = chipCfg.page_size;
 			wordSize = chipCfg.word_size;
 			cswValue = chipCfg.csw_value;
-			// Устанавливаем семейство чипа для выбора алгоритма прошивки
 			swdprog.setChipFamily(chipCfg.family);
 			DEBUGLOGSWD("web_FileUpload2Chip: using config for %s (family=%s flash=%u start=0x%08x page=%u word=%u csw=0x%08x)\n\r",
 				chipCfg.name.c_str(), chipCfg.family.c_str(), chipMemSize, flashStart, pageSize, wordSize, cswValue);
 		} else {
-			// Чип не найден в конфиге — используем дефолтные параметры
-			// Сбрасываем семейство на stm32f1 (безопасное значение по умолчанию)
+			// Чип не найден в конфиге
+			if (expectedChipName.length() > 0) {
+				// В конфиге выбран чип, но IDCODE не найден в swd_cfg.json
+				char idStr[12];
+				snprintf(idStr, sizeof(idStr), "0x%08x", idcode);
+				String errorText = "Chip '" + expectedChipName + "' not found in swd_cfg.json (IDCODE=" + String(idStr) + ")";
+				DEBUGLOGSWD("web_FileUpload2Chip: %s\n\r", errorText.c_str());
+				filelist_SetProgStatus(_flashPath, _flashNtpStr, "error", errorText);
+				return request->send(423, "text/plain", errorText);
+			}
+			// chip_name пустой — используем дефолтные параметры
 			swdprog.setChipFamily("stm32f1");
 			DEBUGLOGSWD("web_FileUpload2Chip: chip ID=0x%08x not in swd_cfg.json, using defaults (family=stm32f1)\n\r", idcode);
 		}
-	} else {
-		DEBUGLOGSWD("web_FileUpload2Chip: chip not detected, using defaults\n\r");
 	}
 	
 	// Запускаем EERTOS-кооперативную прошивку с параметрами из конфига чипа
@@ -953,21 +1009,8 @@ void Class_ProgSwd::web_FileUploadProgress(AsyncWebServerRequest *request) {
 	DEBUGLOGSWD(__FUNCTION__);	DEBUGLOGSWD("\r\n");
 	String values = "";
 	
-	// Если идёт программирование STM32 — отдаём статус и процент
-	if (_progRunning || swdprog.isFlashBusy()) {
-		uint8_t pct = swdprog.getPercent();
-		_uploadPercent = pct;
-		
-		// Если процент 0 и прошивка только началась — отдаём "starting"
-		if (pct == 0 && swdprog.isFlashBusy()) {
-			values += "progStatus|starting|div\n";
-		} else {
-			values += "progStatus|running|div\n";
-		}
-		values += "progPercent|" + (String)pct + "|div\n";
-		request->send(200, "text/plain", values);
-		return;
-	}
+	// Сначала проверяем результат прошивки (done/error), чтобы не пропустить
+	// финальный статус из-за race condition с isFlashBusy()
 	if (_progResult == 0) {
 		values += "progStatus|done|div\n";
 		values += "progPercent|100|div\n";
@@ -1012,6 +1055,22 @@ void Class_ProgSwd::web_FileUploadProgress(AsyncWebServerRequest *request) {
 		}
 		_progResult = -1;  // сброс
 		_uploadPercent = 0;
+		request->send(200, "text/plain", values);
+		return;
+	}
+	
+	// Если результат ещё не установлен — проверяем, идёт ли процесс
+	if (_progRunning || swdprog.isFlashBusy()) {
+		uint8_t pct = swdprog.getPercent();
+		_uploadPercent = pct;
+		
+		// Если процент 0 и прошивка только началась — отдаём "starting"
+		if (pct == 0 && swdprog.isFlashBusy()) {
+			values += "progStatus|starting|div\n";
+		} else {
+			values += "progStatus|running|div\n";
+		}
+		values += "progPercent|" + (String)pct + "|div\n";
 		request->send(200, "text/plain", values);
 		return;
 	}
@@ -1190,6 +1249,170 @@ bool Class_ProgSwd::chipCfg_FindById(uint32_t idcode, ChipConfig_t &cfg) {
     
     DEBUGLOGSWD("chipCfg_FindById: ID=0x%08x not found in %s\n\r", idcode, SWD_CFG_JSON);
     return false;
+}
+
+// ========== Project Config Page (project.html) ==========
+
+void Class_ProgSwd::web_ProjectInfo(AsyncWebServerRequest *request) {
+    DEBUGLOGSWD("%s\n\r", __FUNCTION__);
+    String values = "";
+
+    // Загружаем конфигурацию проекта
+    CfgFile_ProgSwd_t cfg;
+    cfg_FileStructGet(cfg);
+    values += "progproj|" + cfg.project_name + "|input\n";
+    values += "progchip|" + cfg.chip_name + "|select\n";
+
+    request->send(200, "text/plain", values);
+}
+
+void Class_ProgSwd::web_ProjectSave(AsyncWebServerRequest *request) {
+    DEBUGLOGSWD("%s\n\r", __FUNCTION__);
+    
+    if (request->args() == 0) {
+        request->send(500, "text/plain", "BAD ARGS");
+        return;
+    }
+
+    CfgFile_ProgSwd_t newCfg;
+    // Загружаем текущую конфигурацию как базовую
+    cfg_FileStructGet(newCfg);
+
+    for (uint8_t i = 0; i < request->args(); i++) {
+        DEBUGLOGSWD("Arg %d: %s = %s\r\n", i, request->argName(i).c_str(), request->arg(i).c_str());
+        if (request->argName(i) == "progproj") {
+            String val = urldecode(request->arg(i));
+            // Ограничение длины имени проекта
+            if (val.length() > PROJECT_NAME_MAX_LEN) {
+                val = val.substring(0, PROJECT_NAME_MAX_LEN);
+            }
+            newCfg.project_name = val;
+            continue;
+        }
+        if (request->argName(i) == "progchip") {
+            newCfg.chip_name = urldecode(request->arg(i));
+            continue;
+        }
+    }
+
+    if (newCfg.project_name.length() == 0) {
+        request->send(500, "text/plain", "ERROR|Project name cannot be empty");
+        return;
+    }
+
+    if (cfg_FileSaveFromWeb(newCfg) == 0) {
+        request->send(200, "text/plain", "OK");
+        DEBUGLOGSWD("web_ProjectSave: saved project='%s' chip='%s'\r\n",
+            newCfg.project_name.c_str(), newCfg.chip_name.c_str());
+    } else {
+        request->send(500, "text/plain", "ERROR|Failed to save configuration");
+    }
+}
+
+void Class_ProgSwd::web_ProjectChips(AsyncWebServerRequest *request) {
+    DEBUGLOGSWD("%s\n\r", __FUNCTION__);
+    
+    if (!_fs) {
+        request->send(500, "text/plain", "ERROR|FS not initialized");
+        return;
+    }
+    if (!_fs->exists(SWD_CFG_JSON)) {
+        request->send(200, "text/json", "[]");
+        return;
+    }
+    
+    File file = _fs->open(SWD_CFG_JSON, "r");
+    if (!file) {
+        request->send(500, "text/plain", "ERROR|Failed to open chip config");
+        return;
+    }
+    
+    JsonDocument doc;
+    DeserializationError err = deserializeJson(doc, file);
+    file.close();
+    
+    if (err) {
+        request->send(500, "text/plain", "ERROR|JSON parse error");
+        return;
+    }
+    
+    // Формируем JSON-массив имён чипов для фронтенда
+    String json = "[";
+    JsonArray chips = doc["chips"].as<JsonArray>();
+    if (!chips.isNull()) {
+        bool first = true;
+        for (JsonObject chip : chips) {
+            if (!first) json += ",";
+            json += "\"" + String(chip["name"].as<const char*>()) + "\"";
+            first = false;
+        }
+    }
+    json += "]";
+    
+    request->send(200, "text/json", json);
+}
+
+void Class_ProgSwd::web_ProjectChipInfo(AsyncWebServerRequest *request) {
+    DEBUGLOGSWD("%s\n\r", __FUNCTION__);
+    
+    String chipName = "";
+    if (request->args() > 0) {
+        for (uint8_t i = 0; i < request->args(); i++) {
+            if (request->argName(i) == "name") {
+                chipName = urldecode(request->arg(i));
+                break;
+            }
+        }
+    }
+    
+    if (chipName.length() == 0) {
+        request->send(500, "text/plain", "ERROR|No chip name provided");
+        return;
+    }
+    
+    if (!_fs || !_fs->exists(SWD_CFG_JSON)) {
+        request->send(500, "text/plain", "ERROR|Chip config not found");
+        return;
+    }
+    
+    File file = _fs->open(SWD_CFG_JSON, "r");
+    if (!file) {
+        request->send(500, "text/plain", "ERROR|Failed to open chip config");
+        return;
+    }
+    
+    JsonDocument doc;
+    DeserializationError err = deserializeJson(doc, file);
+    file.close();
+    
+    if (err) {
+        request->send(500, "text/plain", "ERROR|JSON parse error");
+        return;
+    }
+    
+    JsonArray chips = doc["chips"].as<JsonArray>();
+    if (chips.isNull()) {
+        request->send(500, "text/plain", "ERROR|No chips array");
+        return;
+    }
+    
+    String values = "";
+    for (JsonObject chip : chips) {
+        if (strcmp(chip["name"].as<const char*>(), chipName.c_str()) == 0) {
+            values += "chipinfo_name|" + String(chip["name"].as<const char*>()) + "|div\n";
+            values += "chipinfo_idcode|" + String(chip["idcode"].as<const char*>()) + "|div\n";
+            values += "chipinfo_family|" + String(chip["family"].as<const char*>()) + "|div\n";
+            values += "chipinfo_flash|" + String(chip["flash_size"].as<uint32_t>()) + "|div\n";
+            values += "chipinfo_page|" + String(chip["page_size"].as<uint32_t>()) + "|div\n";
+            break;
+        }
+    }
+    
+    if (values.length() == 0) {
+        values += "chipinfo_name|Unknown|div\n";
+    }
+    
+    request->send(200, "text/plain", values);
 }
 
 

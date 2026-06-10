@@ -108,6 +108,8 @@ public:
     bool isFlashError() { return _flashError; }
     uint8_t getPercent() { return _percent; }
     String getFlashErrorString() { return _flashErrorString; }
+    String getFlashErrorStage() { return _flashErrorStage; }
+    uint8_t getFlashErrorPercent() { return _flashErrorPercent; }
 
     void            chipFusesRead(AVRISP_fuses_t &AVRISP_fuses);
     void            chipFusesWrite( uint8_t _high, uint8_t _low, uint8_t _lock, uint8_t _ext);

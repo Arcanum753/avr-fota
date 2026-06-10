@@ -23,7 +23,8 @@
 #define  FILE_TYPE_BINARY           "binary"
 
 #define DEFAULT_PROG_PROJNAME       "projname" // дефолтное имя проекта
-#define DEFAULT_chipsize            32768  // размер чипа по дефолту
+#define DEFAULT_CHIP_NAME           ""       // имя чипа по дефолту (пустое — первый из списка)
+#define PROJECT_NAME_MAX_LEN        16       // макс длина имени проекта
 
 // Fallback-константы для параметров прошивки (когда нет swd_cfg.json или чип не найден)
 #define DEFAULT_FLASH_START_ADDR    0x08000000
@@ -60,13 +61,16 @@ typedef enum progerr_e  {
 	ERR_HEXCRC = -11,       // Ошибка CRC в hex-файле
 	ERR_HEXADDR = -12,      // Нарушение монотонности адресов в HEX-файле
 	ERR_HEXMEMOVER = -13,   // Превышение размера памяти чипа
+	ERR_CHIP_OFFLINE = -14, // Чип не обнаружен (не отвечает)
+	ERR_CHIP_MISMATCH = -15, // IDCODE чипа не совпадает с выбранным в конфиге
+	ERR_CHIP_NOT_IN_CFG = -16, // IDCODE чипа не найден в swd_cfg.json
 } progerr_t;
 
 
 // главная структура настроек программатора.
 typedef struct {
-    String project_name;	//имя проекта.
-    uint32_t chip_size;		// размер чипа.
+    String project_name;	// имя проекта (макс 16 символов)
+    String chip_name;		// имя выбранного чипа (из swd_cfg.json)
 } CfgFile_ProgSwd_t;
 
 // Структура конфигурации чипа из swd_cfg.json
@@ -146,6 +150,12 @@ public:
     // Chip config from swd_cfg.json
     bool    chipCfg_Load();
     bool    chipCfg_FindById(uint32_t idcode, ChipConfig_t &cfg);
+
+    // Project config page (project.html)
+    void    web_ProjectInfo(AsyncWebServerRequest *request);
+    void    web_ProjectSave(AsyncWebServerRequest *request);
+    void    web_ProjectChips(AsyncWebServerRequest *request);
+    void    web_ProjectChipInfo(AsyncWebServerRequest *request);
 
 private:
     String getVersionStr();

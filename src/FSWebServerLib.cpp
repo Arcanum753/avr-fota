@@ -17,15 +17,6 @@
 #include <ESP8266mDNS.h>
 #endif
 
-#if defined(PROGTYPE_ISP)
-#include "module_prog_isp/module_prog_isp.h"
-#endif
-
-#if defined(PROGTYPE_SWD)
-#include "module_prog_swd/module_prog_swd.h"
-#include "module_prog_swd/swd.h"
-#endif
-
 #if defined(MODULE_GPIO)
 #include "module_gpio/module_gpio.h"
 #endif
@@ -36,6 +27,14 @@
 
 #if (MODULE_OTACLIENT == 1)
 #include "module_otaclient/module_otaclient.h"
+#endif
+
+#ifdef PROGTYPE_SWD
+#include "module_prog_swd/module_prog_swd.h"
+#endif
+
+#ifdef PROGTYPE_ISP
+#include "module_prog_isp/module_prog_isp.h"
 #endif
 
 
@@ -338,37 +337,6 @@ bool AsyncFSWebServer:: handleFileRead(String path, AsyncWebServerRequest *reque
 	return false;
 }
 
-
-// project.html vvv
-void AsyncFSWebServer::send_project_configuration_values_html(AsyncWebServerRequest *request) { // answer for "get" request
-	//DEBUGLOG(__FUNCTION__);	DEBUGLOG("\r\n");
-	String values = "";
-
-	// CfgFile_ProgSwd_t Prog_CfgFile;
-	// int _res = progSwd.cfg_FileStructGet(Prog_CfgFile);
-	// values += "progproj|"	+ 		 Prog_CfgFile.project_name			+ "|input\n";
-	// values += "progmem|"	+(String)Prog_CfgFile.chip_size 	+ "|input\n";
-
-	request->send(200, "text/plain", values);
-}
-
-void AsyncFSWebServer::get_project_configuration_html(AsyncWebServerRequest *request) {
-	// CfgFile_ProgSwd_t Prog_CfgFile;
-	if (request->args() > 0) { // Save Settings
-		// for (uint8_t i = 0; i < request->args(); i++) {
-		// 	DEBUGLOG("Arg %d: %s %s\r\n", i, request->argName(i).c_str() ,request->arg(i).c_str() );
-		// 	// if (request->argName(i) == "devicesign") 		{ AVRISP_HexFiles_Web.avr_signature = urldecode(request->arg(i));	continue; }
-		// 	if (request->argName(i) == "progproj") 		{ Prog_CfgFile.project_name = urldecode(request->arg(i));	continue; }
-		// 	if (request->argName(i) == "progmem")  		{ Prog_CfgFile.chip_size = request->arg(i).toInt();			continue; }
-		// }
-		// request->send_P(200, "text/html", Page_GeneralPrj);
-		// progSwd.cfg_FileSaveFromWeb(Prog_CfgFile);
-	}
-	else {	handleFileRead(request->url(), request);	}
-	DEBUGLOG(__PRETTY_FUNCTION__);	DEBUGLOG("\r\n");
-}
-// project.html ^^^
-
 // system.html vvv
 void AsyncFSWebServer::html_system_Load(AsyncWebServerRequest *request) { // answer for "get" request
 	//DEBUGLOG(__FUNCTION__);	DEBUGLOG("\r\n");
@@ -470,18 +438,6 @@ void AsyncFSWebServer::serverInit() {
 	});	
 
 //system.html ^^^
-
-//project.html vvv
-	on("/project/info", HTTP_GET, [this](AsyncWebServerRequest *request) {
-		if (!this->checkAuth(request)) {	return request->requestAuthentication(); };
-		this->send_project_configuration_values_html(request); // show values
-	});
-
-	on("/project.html", HTTP_POST,  [this](AsyncWebServerRequest *request) {
-		if (!this->checkAuth(request)) {	return request->requestAuthentication(); };
-		this->get_project_configuration_html(request); // save values from the page
-	});
-//project.html ^^^
 
 	//called when the url is not defined here
 	//use it to load content from SPIFFS

@@ -142,6 +142,35 @@ void  Class_ProgIsp::web_Init()	{
     });
 //avrcfg.html ^^^
 
+//project.html vvv
+    // Project config page
+    ESPHTTPServer.on("/project/info", HTTP_GET, [this](AsyncWebServerRequest *request) {
+        if (!ESPHTTPServer.checkAuth(request)) { return request->requestAuthentication(); };
+        web_ProjectInfo(request);
+    });
+
+    ESPHTTPServer.on("/project/save", HTTP_GET, [this](AsyncWebServerRequest *request) {
+        if (!ESPHTTPServer.checkAuth(request)) { return request->requestAuthentication(); };
+        web_ProjectSave(request);
+    });
+
+    ESPHTTPServer.on("/project/chips", HTTP_GET, [this](AsyncWebServerRequest *request) {
+        if (!ESPHTTPServer.checkAuth(request)) { return request->requestAuthentication(); };
+        web_ProjectChips(request);
+    });
+
+    ESPHTTPServer.on("/project/chipinfo", HTTP_GET, [this](AsyncWebServerRequest *request) {
+        if (!ESPHTTPServer.checkAuth(request)) { return request->requestAuthentication(); };
+        web_ProjectChipInfo(request);
+    });
+
+    // Общий роут, отдающий HTML — последним
+    ESPHTTPServer.on("/project", HTTP_GET, [this](AsyncWebServerRequest *request) {
+        if (!ESPHTTPServer.checkAuth(request)) { return request->requestAuthentication(); };
+        ESPHTTPServer.handleFileRead("/web/project.html", request);
+    });
+//project.html ^^^
+
 }
 
 
@@ -149,8 +178,11 @@ void  Class_ProgIsp::web_Init()	{
 int Class_ProgIsp::cfg_FileSaveFromWeb(CfgFile_ProgIsp_t &_inStruct)  {
     DEBUGLOGISP(__PRETTY_FUNCTION__);	DEBUGLOGISP("\r\n");
 	CfgFile_ProgIsp	=  _inStruct;
-	int _ret =  (int)cfg_FileSave();
-	return _ret ;
+	bool ret = cfg_FileSave();
+	if (ret) {
+		return 0;
+	}
+	return 1;
 }
 
 int  Class_ProgIsp::cfg_FileStructGet(CfgFile_ProgIsp_t &_inStruct)  {
@@ -163,27 +195,24 @@ int  Class_ProgIsp::cfg_FileStructGet(CfgFile_ProgIsp_t &_inStruct)  {
 
 void Class_ProgIsp::cfg_SetDefault() {
 	DEBUGLOGISP(__PRETTY_FUNCTION__);	DEBUGLOGISP("\r\n");
-	// CfgFile_ProgIsp.programmer_type	= DEFAULT_PROG_TYPE;
     CfgFile_ProgIsp.project_name  	= DEFAULT_PROG_PROJNAME;
-    CfgFile_ProgIsp.chip_size      	= DEFAULT_chipsize;
+    CfgFile_ProgIsp.chip_name      	= DEFAULT_CHIP_NAME;
 }
 
 bool Class_ProgIsp::cfg_FileLoad() {
 	DEBUGLOGISP(__PRETTY_FUNCTION__); DEBUGLOGISP("\r\n");
 	JsonDocument jsonDoc;
 	if (ModClassJson.load_jsonDoc(CONFIG_PROG_JSON, jsonDoc) == false ){	return false;	}
-	// CfgFile_ProgIsp.programmer_type	= jsonDoc["type"].as<const char *>();
     CfgFile_ProgIsp.project_name		= jsonDoc["project"].as<const char *>();
-    CfgFile_ProgIsp.chip_size			= jsonDoc["chipsize"].as<uint32_t>();
+    CfgFile_ProgIsp.chip_name			= jsonDoc["chip_name"].as<const char *>();
 	return true;
 }
 
 bool Class_ProgIsp::cfg_FileSave(){
 	DEBUGLOGISP("Save config PROJ\r\n");
 	JsonDocument jsonDoc;
-	// jsonDoc["type"]			= CfgFile_ProgIsp.programmer_type;
     jsonDoc["project"]		= CfgFile_ProgIsp.project_name;
-    jsonDoc["chipsize"]     = CfgFile_ProgIsp.chip_size;
+    jsonDoc["chip_name"]    = CfgFile_ProgIsp.chip_name;
 	return ModClassJson.save_jsonDoc(jsonDoc, CONFIG_PROG_JSON);
 }
 
@@ -588,31 +617,57 @@ void Class_ProgIsp::web_FileUpload2Chip(AsyncWebServerRequest *request) {
 	_flashPath = path;
 	_flashNtpStr = NTP.getTimeDateString();
 	
-	// ===== Новая логика: читаем сигнатуру AVR, ищем в avrisp_cfg.json, подставляем параметры =====
+	// ===== Читаем сигнатуру чипа (один раз) и определяем параметры =====
 	uint32_t flashStart = 0;  // AVR всегда с адреса 0
-	uint32_t chipMemSize = CfgFile_ProgIsp.chip_size;
+	uint32_t chipMemSize = 32768;  // дефолтный размер, будет переопределён из конфига чипа
 	uint32_t pageSize = 128;  // дефолтный размер страницы
 	
-	// Синхронно читаем сигнатуру чипа (быстрая SPI-транзакция)
+	String expectedChipName = CfgFile_ProgIsp.chip_name;
 	String signature = avrprog.chipSignRead();
 	
-	if (signature.length() > 0 && signature != "0x000000") {
+	if (signature.length() == 0 || signature == "0x000000") {
+		if (expectedChipName.length() > 0) {
+			// В конфиге выбран чип, но чип не отвечает
+			String errorText = "Chip offline - unable to read signature";
+			DEBUGLOGISP("web_FileUpload2Chip: %s\n\r", errorText.c_str());
+			filelist_SetProgStatus(_flashPath, _flashNtpStr, "error", errorText);
+			return request->send(423, "text/plain", errorText);
+		}
+		// chip_name пустой — чип не отвечает, используем дефолты
+		DEBUGLOGISP("web_FileUpload2Chip: chip not detected, using defaults\n\r");
+	} else {
 		DEBUGLOGISP("web_FileUpload2Chip: detected chip signature=%s\n\r", signature.c_str());
 		
 		// Ищем чип в avrisp_cfg.json
 		ChipConfigAvr_t chipCfg;
-		if (chipCfg_FindBySignature(signature, chipCfg)) {
-			// Нашли — используем параметры из конфига
+		bool found = chipCfg_FindBySignature(signature, chipCfg);
+		
+		if (found) {
+			// Нашли чип в конфиге
+			if (expectedChipName.length() > 0 && chipCfg.name != expectedChipName) {
+				// Имя не совпадает с ожидаемым
+				String errorText = "Chip mismatch: expected '" + expectedChipName + "', detected '" + chipCfg.name + "'";
+				DEBUGLOGISP("web_FileUpload2Chip: %s\n\r", errorText.c_str());
+				filelist_SetProgStatus(_flashPath, _flashNtpStr, "error", errorText);
+				return request->send(423, "text/plain", errorText);
+			}
+			// Имя совпадает (или chip_name пустой) — используем параметры из конфига
 			chipMemSize = chipCfg.flash_size;
 			pageSize = chipCfg.page_size;
 			DEBUGLOGISP("web_FileUpload2Chip: using config for %s (flash=%u page=%u)\n\r",
 				chipCfg.name.c_str(), chipMemSize, pageSize);
 		} else {
-			// Чип не найден в конфиге — используем дефолтные параметры
+			// Чип не найден в конфиге
+			if (expectedChipName.length() > 0) {
+				// В конфиге выбран чип, но сигнатура не найдена в avrisp_cfg.json
+				String errorText = "Chip '" + expectedChipName + "' not found in avrisp_cfg.json (signature=" + signature + ")";
+				DEBUGLOGISP("web_FileUpload2Chip: %s\n\r", errorText.c_str());
+				filelist_SetProgStatus(_flashPath, _flashNtpStr, "error", errorText);
+				return request->send(423, "text/plain", errorText);
+			}
+			// chip_name пустой — используем дефолтные параметры
 			DEBUGLOGISP("web_FileUpload2Chip: chip signature=%s not in avrisp_cfg.json, using defaults\n\r", signature.c_str());
 		}
-	} else {
-		DEBUGLOGISP("web_FileUpload2Chip: chip not detected, using defaults\n\r");
 	}
 	
 	// Запускаем EERTOS-кооперативную прошивку с параметрами из конфига чипа
@@ -1180,7 +1235,7 @@ void Class_ProgIsp::web_AvrCfgInfo(AsyncWebServerRequest *request) {
     CfgFile_ProgIsp_t cfg;
     cfg_FileStructGet(cfg);
     values += "projname|" + cfg.project_name + "|input\n";
-    values += "chipsize|" + (String)cfg.chip_size + "|input\n";
+    values += "chipname|" + cfg.chip_name + "|input\n";
 
     // Информация о подключенном чипе из _chipIdstr (обновляется при вызове web_AvrCfgReadSignature)
     if (_chipIdstr.length() > 0 && _chipIdstr != "0x000000") {
@@ -1218,8 +1273,8 @@ void Class_ProgIsp::web_AvrCfgSave(AsyncWebServerRequest *request) {
             newCfg.project_name = urldecode(request->arg(i));
             continue;
         }
-        if (request->argName(i) == "chipsize") {
-            newCfg.chip_size = request->arg(i).toInt();
+        if (request->argName(i) == "chipname") {
+            newCfg.chip_name = urldecode(request->arg(i));
             continue;
         }
     }
@@ -1228,15 +1283,11 @@ void Class_ProgIsp::web_AvrCfgSave(AsyncWebServerRequest *request) {
         request->send(500, "text/plain", "ERROR|Project name cannot be empty");
         return;
     }
-    if (newCfg.chip_size == 0) {
-        request->send(500, "text/plain", "ERROR|Invalid chip memory size");
-        return;
-    }
 
     if (cfg_FileSaveFromWeb(newCfg) == 0) {
         request->send(200, "text/plain", "OK");
-        DEBUGLOGISP("web_AvrCfgSave: saved project='%s' chipsize=%u\r\n",
-            newCfg.project_name.c_str(), newCfg.chip_size);
+        DEBUGLOGISP("web_AvrCfgSave: saved project='%s' chip='%s'\r\n",
+            newCfg.project_name.c_str(), newCfg.chip_name.c_str());
     } else {
         request->send(500, "text/plain", "ERROR|Failed to save configuration");
     }
@@ -1249,3 +1300,167 @@ void Class_ProgIsp::web_AvrCfgReadSignature(AsyncWebServerRequest *request) {
     values += "signature|" + _chipIdstr + "|div\n";
     request->send(200, "text/plain", values);
 }
+
+// ========== Project Config Page (project.html) ==========
+
+void Class_ProgIsp::web_ProjectInfo(AsyncWebServerRequest *request) {
+    DEBUGLOGISP("%s\n\r", __FUNCTION__);
+    String values = "";
+
+    // Загружаем конфигурацию проекта
+    CfgFile_ProgIsp_t cfg;
+    cfg_FileStructGet(cfg);
+    values += "progproj|" + cfg.project_name + "|input\n";
+    values += "progchip|" + cfg.chip_name + "|select\n";
+
+    request->send(200, "text/plain", values);
+}
+
+void Class_ProgIsp::web_ProjectSave(AsyncWebServerRequest *request) {
+    DEBUGLOGISP("%s\n\r", __FUNCTION__);
+    
+    if (request->args() == 0) {
+        request->send(500, "text/plain", "BAD ARGS");
+        return;
+    }
+
+    CfgFile_ProgIsp_t newCfg;
+    // Загружаем текущую конфигурацию как базовую
+    cfg_FileStructGet(newCfg);
+
+    for (uint8_t i = 0; i < request->args(); i++) {
+        DEBUGLOGISP("Arg %d: %s = %s\r\n", i, request->argName(i).c_str(), request->arg(i).c_str());
+        if (request->argName(i) == "progproj") {
+            String val = urldecode(request->arg(i));
+            // Ограничение длины имени проекта
+            if (val.length() > PROJECT_NAME_MAX_LEN) {
+                val = val.substring(0, PROJECT_NAME_MAX_LEN);
+            }
+            newCfg.project_name = val;
+            continue;
+        }
+        if (request->argName(i) == "progchip") {
+            newCfg.chip_name = urldecode(request->arg(i));
+            continue;
+        }
+    }
+
+    if (newCfg.project_name.length() == 0) {
+        request->send(500, "text/plain", "ERROR|Project name cannot be empty");
+        return;
+    }
+
+    if (cfg_FileSaveFromWeb(newCfg) == 0) {
+        request->send(200, "text/plain", "OK");
+        DEBUGLOGISP("web_ProjectSave: saved project='%s' chip='%s'\r\n",
+            newCfg.project_name.c_str(), newCfg.chip_name.c_str());
+    } else {
+        request->send(500, "text/plain", "ERROR|Failed to save configuration");
+    }
+}
+
+void Class_ProgIsp::web_ProjectChips(AsyncWebServerRequest *request) {
+    DEBUGLOGISP("%s\n\r", __FUNCTION__);
+    
+    if (!_fs) {
+        request->send(500, "text/plain", "ERROR|FS not initialized");
+        return;
+    }
+    if (!_fs->exists(AVRISP_CFG_JSON)) {
+        request->send(200, "text/json", "[]");
+        return;
+    }
+    
+    File file = _fs->open(AVRISP_CFG_JSON, "r");
+    if (!file) {
+        request->send(500, "text/plain", "ERROR|Failed to open chip config");
+        return;
+    }
+    
+    JsonDocument doc;
+    DeserializationError err = deserializeJson(doc, file);
+    file.close();
+    
+    if (err) {
+        request->send(500, "text/plain", "ERROR|JSON parse error");
+        return;
+    }
+    
+    // Формируем JSON-массив имён чипов для фронтенда
+    String json = "[";
+    JsonArray chips = doc["chips"].as<JsonArray>();
+    if (!chips.isNull()) {
+        bool first = true;
+        for (JsonObject chip : chips) {
+            if (!first) json += ",";
+            json += "\"" + String(chip["name"].as<const char*>()) + "\"";
+            first = false;
+        }
+    }
+    json += "]";
+    
+    request->send(200, "text/json", json);
+}
+
+void Class_ProgIsp::web_ProjectChipInfo(AsyncWebServerRequest *request) {
+    DEBUGLOGISP("%s\n\r", __FUNCTION__);
+    
+    String chipName = "";
+    if (request->args() > 0) {
+        for (uint8_t i = 0; i < request->args(); i++) {
+            if (request->argName(i) == "name") {
+                chipName = urldecode(request->arg(i));
+                break;
+            }
+        }
+    }
+    
+    if (chipName.length() == 0) {
+        request->send(500, "text/plain", "ERROR|No chip name provided");
+        return;
+    }
+    
+    if (!_fs || !_fs->exists(AVRISP_CFG_JSON)) {
+        request->send(500, "text/plain", "ERROR|Chip config not found");
+        return;
+    }
+    
+    File file = _fs->open(AVRISP_CFG_JSON, "r");
+    if (!file) {
+        request->send(500, "text/plain", "ERROR|Failed to open chip config");
+        return;
+    }
+    
+    JsonDocument doc;
+    DeserializationError err = deserializeJson(doc, file);
+    file.close();
+    
+    if (err) {
+        request->send(500, "text/plain", "ERROR|JSON parse error");
+        return;
+    }
+    
+    JsonArray chips = doc["chips"].as<JsonArray>();
+    if (chips.isNull()) {
+        request->send(500, "text/plain", "ERROR|No chips array");
+        return;
+    }
+    
+    String values = "";
+    for (JsonObject chip : chips) {
+        if (strcmp(chip["name"].as<const char*>(), chipName.c_str()) == 0) {
+            values += "chipinfo_name|" + String(chip["name"].as<const char*>()) + "|div\n";
+            values += "chipinfo_signature|" + String(chip["signature"].as<const char*>()) + "|div\n";
+            values += "chipinfo_flash|" + String(chip["flash_size"].as<uint32_t>()) + "|div\n";
+            values += "chipinfo_page|" + String(chip["page_size"].as<uint32_t>()) + "|div\n";
+            break;
+        }
+    }
+    
+    if (values.length() == 0) {
+        values += "chipinfo_name|Unknown|div\n";
+    }
+    
+    request->send(200, "text/plain", values);
+}
+

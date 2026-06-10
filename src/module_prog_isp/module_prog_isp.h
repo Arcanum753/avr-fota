@@ -22,7 +22,8 @@
 #define  FILE_TYPE_BINARY           "binary"
 
 #define DEFAULT_PROG_PROJNAME       "projname" // дефолтное имя проекта
-#define DEFAULT_chipsize            32768  // размер чипа по дефолту
+#define DEFAULT_CHIP_NAME           ""       // имя чипа по дефолту (пустое — первый из списка)
+#define PROJECT_NAME_MAX_LEN        16       // макс длина имени проекта
 
 #define ISP_FILELIST_JSON       "/isp_filelist.json"
 
@@ -50,13 +51,16 @@ typedef enum progerr_e  {
 	ERR_HEXCRC = -11,       // Ошибка CRC в hex-файле
 	ERR_HEXADDR = -12,      // Нарушение монотонности адресов в HEX-файле
 	ERR_HEXMEMOVER = -13,   // Превышение размера памяти чипа
+	ERR_CHIP_OFFLINE = -14, // Чип не обнаружен (не отвечает)
+	ERR_CHIP_MISMATCH = -15, // Сигнатура чипа не совпадает с выбранной в конфиге
+	ERR_CHIP_NOT_IN_CFG = -16, // Сигнатура чипа не найдена в avrisp_cfg.json
 } progerr_t;
 
 
 // главная структура настроек программатора.
 typedef struct {
-    String project_name;	//имя проекта.
-    uint32_t chip_size;		// размер чипа.
+    String project_name;	// имя проекта (макс 16 символов)
+    String chip_name;		// имя выбранного чипа (из avrisp_cfg.json)
 } CfgFile_ProgIsp_t;
 
 // Структура конфигурации AVR-чипа из avrisp_cfg.json
@@ -132,6 +136,12 @@ public:
     // AVR-specific (fuses)
     void    avrFusesRead(AsyncWebServerRequest *request);
     void    avrWebFusesWrite(AsyncWebServerRequest *request);
+
+    // Project config page (project.html)
+    void    web_ProjectInfo(AsyncWebServerRequest *request);
+    void    web_ProjectSave(AsyncWebServerRequest *request);
+    void    web_ProjectChips(AsyncWebServerRequest *request);
+    void    web_ProjectChipInfo(AsyncWebServerRequest *request);
 
 private:
     String getVersionStr();

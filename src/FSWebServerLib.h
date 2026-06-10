@@ -69,13 +69,6 @@ const char Page_GeneralSys[] = R"=====(
 Please Wait....Configuring.
 )=====";
 
-const char Page_GeneralPrj[] = R"=====(
-<meta http-equiv="refresh" content="10; URL=/project.html">
-Please Wait....Configuring.
-)=====";
-
-
-
 String getContentType(String filename, AsyncWebServerRequest *request);
 
 class AsyncFSWebServer : public AsyncWebServer {
@@ -131,11 +124,8 @@ public:
 private:
     void html_version_info(AsyncWebServerRequest *request);
     void html_system_Load(AsyncWebServerRequest *request);
-    void send_project_configuration_values_html(AsyncWebServerRequest *request);
-
     void html_send_chipinfo(AsyncWebServerRequest *request);
     void html_system_Save(AsyncWebServerRequest *request);
-    void get_project_configuration_html(AsyncWebServerRequest *request);
     void send_wwwauth_configuration_values_html(AsyncWebServerRequest *request);
     void set_wwwauth_configuration(AsyncWebServerRequest *request);
 
