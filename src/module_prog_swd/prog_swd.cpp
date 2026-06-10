@@ -208,6 +208,21 @@ bool ESP_PROGSWD::startFlash(uint32_t offset, String &path, uint32_t chipMemSize
     if (hexFileIsFormat(path)) {
         _isHexFormat = true;
         DEBUGLOGSWD("startFlash: HEX format detected for %s\r\n", path.c_str());
+        
+        // Для HEX-формата сразу определяем реальный бинарный размер файла,
+        // чтобы корректно рассчитывать процент прошивки.
+        // Размер HEX-файла (текстовый) не равен размеру прошивки (бинарному).
+        File hexSizeFile = _fs->open(path, "r");
+        if (hexSizeFile) {
+            int32_t binSize = hexFileGetBinarySize(hexSizeFile);
+            hexSizeFile.close();
+            if (binSize > 0) {
+                _flashFileSize = (uint32_t)binSize;
+                DEBUGLOGSWD("startFlash: HEX binary size = %u bytes (file size = %u bytes)\r\n", binSize, hexSizeFile.size());
+            } else {
+                DEBUGLOGSWD("startFlash: WARNING - hexFileGetBinarySize returned %d, will use file size\r\n", binSize);
+            }
+        }
     } else if (binFileIsFormat(path)) {
         _isHexFormat = false;
         DEBUGLOGSWD("startFlash: BIN format detected for %s\r\n", path.c_str());
@@ -237,8 +252,8 @@ void ESP_PROGSWD::flashStep() {
                     break;
                 }
                 
-                // Устанавливаем размер файла для корректного расчёта процентов
-                _flashFileSize = hexFile.size();
+                // _flashFileSize уже установлен в startFlash() как бинарный размер HEX-файла
+                // (см. hexFileGetBinarySize). Не перезаписываем его hexFile.size()!
                 _flashPosi = 0;
                 _flashStartTime = millis();
                 
@@ -294,7 +309,8 @@ void ESP_PROGSWD::flashStep() {
                 }
                 
                 // Успешно записали весь HEX — пересчитываем скорость
-                _speed = (float)((float)(_flashFileSize / (float)(millis() - _flashStartTime)));
+                // Используем _flashPosi (реально записанные бинарные байты), а не _flashFileSize
+                _speed = (float)((float)(_flashPosi / (float)(millis() - _flashStartTime)));
                 DEBUGLOGSWD("Done flashing file, it took %i ms speed: %.4f kbs\r\n",
                     (int)(millis() - _flashStartTime), _speed);
                 
@@ -363,7 +379,8 @@ void ESP_PROGSWD::flashStep() {
             if (remaining == 0) {
                 // Всё записали — завершаем
                 if (!_isHexFormat) binFileClose(_flashFile);
-                _speed = (float)((float)(_flashFileSize / (float)(millis() - _flashStartTime)));
+                // Используем _flashPosi (реально записанные байты) для скорости
+                _speed = (float)((float)(_flashPosi / (float)(millis() - _flashStartTime)));
                 DEBUGLOGSWD("Done flashing file, it took %i ms speed: %.4f kbs\r\n",
                     (int)(millis() - _flashStartTime), _speed);
                 

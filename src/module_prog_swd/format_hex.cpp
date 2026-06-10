@@ -379,6 +379,63 @@ int32_t hexFileParseStreamWrite(File &file, uint32_t flashStartAddr, uint32_t ch
 }
 
 /**
+ * @brief Быстрый подсчёт бинарного размера HEX-файла (без парсинга в буфер).
+ *
+ * Читает файл построчно, подсчитывает суммарное количество бинарных байт
+ * во всех data-записях (тип 00). Не загружает данные в RAM.
+ * Используется для корректного расчёта процента прошивки.
+ *
+ * @param file Открытый File-объект для чтения.
+ * @return Количество бинарных байт в HEX-файле, или -1 при ошибке.
+ */
+int32_t hexFileGetBinarySize(File &file) {
+    if (!file) {
+        return -1;
+    }
+
+    uint32_t totalBins = 0;
+    uint8_t lineBuffer[256];
+    uint16_t pageaddr = 0;
+    uint8_t chsum = 0;
+    uint8_t rtype = 0;
+    uint8_t readedBins = 0;
+
+    // Читаем файл построчно
+    while (file.available()) {
+        String lineStr = file.readStringUntil('\n');
+        lineStr.trim(); // убираем \r и пробелы
+
+        // Пропускаем пустые строки
+        if (lineStr.length() == 0) {
+            continue;
+        }
+
+        // Должна начинаться с ':'
+        if (lineStr[0] != ':') {
+            continue; // пропускаем мусорные строки
+        }
+
+        // Парсим строку
+        if (!hexFileLineParser(lineStr, pageaddr, lineBuffer, chsum, rtype, readedBins)) {
+            return -1; // ошибка парсинга
+        }
+
+        // Если тип 0x01 — конец файла
+        if (rtype == 0x01) {
+            break;
+        }
+
+        // Учитываем только data-записи (тип 00)
+        if (rtype == 0x00) {
+            totalBins += readedBins;
+        }
+        // Записи типа 04 (Extended Linear Address) пропускаем — они не содержат данных прошивки
+    }
+
+    return (int32_t)totalBins;
+}
+
+/**
  * @brief Проверить, является ли файл HEX-форматом (по расширению).
  */
 bool hexFileIsFormat(const String &path) {
