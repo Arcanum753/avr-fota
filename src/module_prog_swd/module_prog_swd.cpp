@@ -427,6 +427,29 @@ void Class_ProgSwd::web_FileDelete(AsyncWebServerRequest *request) {
 	request->send(200, "text/plain", "");
 }
 
+// Таймаут загрузки: если от последнего чанка прошло больше 30 секунд — считаем загрузку прерванной
+#define UPLOAD_TIMEOUT_MS 30000
+
+// Очистка "зависшей" загрузки: закрываем и удаляем недозагруженный файл
+void Class_ProgSwd::_cleanupStaleUpload() {
+	if (_fsUploadFile) {
+		_fsUploadFile.close();
+		_fsUploadFile = File();
+	}
+	if (_uploadFilename.length() > 0) {
+		DEBUGLOGSWD("Cleanup: removing stale upload file %s\r\n", _uploadFilename.c_str());
+		if (_fs && _fs->exists(_uploadFilename)) {
+			_fs->remove(_uploadFilename);
+		}
+		filelist_RemoveEntry(_uploadFilename);
+		_uploadFilename = "";
+	}
+	_fileUploadBytes = 0;
+	_fileUploadError = false;
+	_uploadPercent = 0;
+	_uploadLastChunkTime = 0;
+}
+
 // загрузчик файла из фронтенда с контролем MD5
 int Class_ProgSwd::web_FileUpload2FS( String filename, size_t index, uint8_t *data, size_t len, bool final) {
 	DEBUGLOGSWD(__PRETTY_FUNCTION__);	DEBUGLOGSWD("\r\n");
@@ -437,8 +460,24 @@ int Class_ProgSwd::web_FileUpload2FS( String filename, size_t index, uint8_t *da
 #endif
 	static bool _md5Initialized = false;
 	static size_t _expectedFileSize = 0;  // сохраняем ожидаемый размер локально
+
+	// Проверка таймаута: если загрузка идёт, но чанков давно не было — очищаем
+	if (index > 0 && _fsUploadFile && !final) {
+		if (_uploadLastChunkTime > 0 && (millis() - _uploadLastChunkTime) > UPLOAD_TIMEOUT_MS) {
+			DEBUGLOGSWD("UPLOAD TIMEOUT: no data for %u ms, cleaning up stale upload\r\n", (millis() - _uploadLastChunkTime));
+			_cleanupStaleUpload();
+			// Сбрасываем статические переменные
+			_md5Initialized = false;
+			_expectedFileSize = 0;
+			// Продолжаем как новую загрузку (index всё ещё > 0, но _fsUploadFile уже сброшен)
+		}
+	}
+
 	// Start
 	if (!index) {
+		// Если есть "зависшая" загрузка от предыдущего обрыва — очищаем
+		_cleanupStaleUpload();
+
 		_uploadPercent = 0;
 		_fileUploadBytes = 0;
 		_fileUploadError = false;
@@ -446,6 +485,7 @@ int Class_ProgSwd::web_FileUpload2FS( String filename, size_t index, uint8_t *da
 		// если предыдущий файл не закрыт (например, загрузка прервана) — закрываем
 		if (_fsUploadFile) {
 			_fsUploadFile.close();
+			_fsUploadFile = File();
 			DEBUGLOGSWD("WARN: previous upload file was open, closed.\r\n");
 		}
 		DEBUGLOGSWD("Name: %s\r\n", filename.c_str());
@@ -457,6 +497,7 @@ int Class_ProgSwd::web_FileUpload2FS( String filename, size_t index, uint8_t *da
 		}
 
 		if (!filename.startsWith("/")) {filename = "/" + filename;}
+		_uploadFilename = filename;  // запоминаем имя для очистки при таймауте
 		_fsUploadFile = _fs->open(filename, "w");
 		DEBUGLOGSWD("First upload part.\r\n");
 		
@@ -468,6 +509,7 @@ int Class_ProgSwd::web_FileUpload2FS( String filename, size_t index, uint8_t *da
 	}
 	// Continue
 	if (_fsUploadFile && !_fileUploadError) {
+		_uploadLastChunkTime = millis();  // обновляем время последнего чанка
 		DEBUGLOGSWD("Continue upload part. Size = %u\r\n", len);
 		if (_fsUploadFile.write(data, len) != len) {
 			_fileUploadError = true;
@@ -487,6 +529,11 @@ int Class_ProgSwd::web_FileUpload2FS( String filename, size_t index, uint8_t *da
 #endif
 			}
 		}
+#if defined(ESP32)
+		// Сбрасываем watchdog при каждом чанке, чтобы предотвратить перезагрузку
+		// при загрузке больших файлов
+		esp_task_wdt_reset();
+#endif
 	}
 	// End
 	if (final) {
@@ -494,6 +541,8 @@ int Class_ProgSwd::web_FileUpload2FS( String filename, size_t index, uint8_t *da
 			_fsUploadFile.close();
 			_fsUploadFile = File(); // сбрасываем в "пустой" файл
 		}
+		_uploadFilename = "";  // загрузка завершена, имя больше не нужно для очистки
+		_uploadLastChunkTime = 0;
 		
 		// Проверяем размер файла (используем _expectedFileSize, сохранённый на старте)
 		if (!_fileUploadError && _expectedFileSize > 0 && _fileUploadBytes != _expectedFileSize) {

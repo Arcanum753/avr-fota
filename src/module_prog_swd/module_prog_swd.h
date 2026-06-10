@@ -178,12 +178,17 @@ protected:
 #endif
     File _fsUploadFile;        // открытый файл при загрузке в ФС
     size_t _fileUploadBytes;   // счётчик записанных байт при загрузке
+    uint32_t _uploadLastChunkTime = 0; // millis() последнего чанка загрузки
     
     // MD5 verification
     String _browserFileMD5;    // MD5 переданный от браузера
     uint32_t _browserFileSize; // размер файла от браузера
     String _browserFileName;   // имя файла от браузера
     bool _fileUploadError;     // флаг ошибки загрузки (несовпадение MD5)
+    String _uploadFilename;    // имя текущего загружаемого файла (для очистки при таймауте)
+
+    // Очистка "зависшей" загрузки (обрыв соединения, таймаут)
+    void _cleanupStaleUpload();
 
     // Chip status (SWD connection)
     uint32_t _chipId = 0;
