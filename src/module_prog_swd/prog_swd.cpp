@@ -14,8 +14,8 @@
 #include "prog_swd.h"
 #include "swd.h"
 #include "eertos.h"
-#include "format_bin.h"
-#include "format_hex.h"
+#include "../submodule_prog/format_bin.h"
+#include "../submodule_prog/format_hex.h"
 #include "stm32f1_flash.h"
 #include "stm32f4_flash.h"
 

@@ -14,8 +14,8 @@
 #include "prog_isp.h"
 // #include "debug.h"
 #include "common.h"
-#include "format_hex.h"
-#include "format_bin.h"
+#include "../submodule_prog/format_hex.h"
+#include "../submodule_prog/format_bin.h"
 #include "eertos.h"
 
 

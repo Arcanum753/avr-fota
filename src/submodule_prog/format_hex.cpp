@@ -218,6 +218,7 @@ int32_t hexFileParseStream(File &file, std::vector<char> &binDataBuf,
  * @param file        Открытый File-объект для чтения.
  * @param flashStartAddr Начальный адрес flash-памяти.
  * @param chipMemSize    Размер памяти чипа в байтах.
+ * @param pageSize       Размер страницы flash (chunkBuf будет равен pageSize, но не более 1024).
  * @param writeCallback  Callback для записи чанка данных.
  * @param userData       Произвольный указатель для callback.
  * @return >=0 количество записанных бинарных байт при успехе,
