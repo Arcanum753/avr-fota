@@ -1,0 +1,16 @@
+{
+  "chips": [
+    {
+      "signature": "0x1E950F",
+      "name": "ATmega328P",
+      "flash_size": 32768,
+      "page_size": 128
+    },
+    {
+      "signature": "0x1E940B",
+      "name": "ATmega168P",
+      "flash_size": 16384,
+      "page_size": 128
+    }
+  ]
+}

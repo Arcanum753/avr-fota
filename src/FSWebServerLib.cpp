@@ -7,6 +7,7 @@
 
 #if defined(ESP32)
 #include <SPIFFS.h>
+#include <esp_task_wdt.h>
 #include <esp32-hal-gpio.h>
 #include <ESPmDNS.h>
 #endif
@@ -14,15 +15,6 @@
 #if defined(ESP8266)
 #include <FS.h>
 #include <ESP8266mDNS.h>
-#endif
-
-#if defined(PROGTYPE_ISP)
-#include "module_prog_isp/module_prog_isp.h"
-#endif
-
-#if defined(PROGTYPE_SWD)
-#include "module_prog_swd/module_prog_swd.h"
-#include "module_prog_swd/swd.h"
 #endif
 
 #if defined(MODULE_GPIO)
@@ -35,6 +27,14 @@
 
 #if (MODULE_OTACLIENT == 1)
 #include "module_otaclient/module_otaclient.h"
+#endif
+
+#ifdef PROGTYPE_SWD
+#include "module_prog_swd/module_prog_swd.h"
+#endif
+
+#ifdef PROGTYPE_ISP
+#include "module_prog_isp/module_prog_isp.h"
 #endif
 
 
@@ -159,6 +159,7 @@ void AsyncFSWebServer::html_send_chipinfo(AsyncWebServerRequest *request) {
     
 #if defined(ESP8266)
     // Максимально простая версия для ESP8266 - минимум операций
+    ESP.wdtFeed();
     char buffer[256];
     snprintf(buffer, sizeof(buffer),
         "x_chipid|%08X|div\n"
@@ -172,8 +173,10 @@ void AsyncFSWebServer::html_send_chipinfo(AsyncWebServerRequest *request) {
     );
     request->send(200, "text/plain", buffer);
     
-#else
+#endif
+#if defined(ESP32)
     // Для ESP32 оставляем как было
+    esp_task_wdt_reset();
     String values = "";
     values += "x_chipid|" + (String)ESP.getChipModel() + "|div\n";
     values += "x_mhz|" + (String)ESP.getCpuFreqMHz() + "|div\n";
@@ -187,7 +190,12 @@ void AsyncFSWebServer::restart_esp() {
 	DEBUGLOG(__FUNCTION__);	DEBUGLOG("\r\n");
 	modWifiClass.wifiStatus = FS_STAT_RESET;
 	WiFi.disconnect(true, false);
-	_fs->end();
+	// Only call _fs->end() if it hasn't been already ended by the OTA update process.
+	// OTA already ended the filesystem in html_uploadUpdateFile() before calling Update.begin().
+	// Calling _fs->end() again on an already-ended FS causes corruption and crash (Exception 9).
+	if (!_ota_fsEndCalled) {
+		_fs->end();
+	}
 	delay(1000);
 	ESP.restart();
 }
@@ -272,22 +280,55 @@ bool AsyncFSWebServer:: handleFileRead(String path, AsyncWebServerRequest *reque
 	DEBUGEDIT("handleFileRead: %s\r\n", path.c_str());
 	// CANNOT RUN DELAY() INSIDE CALLBACK
 	// if (CONNECTION_LED >= 0) {	flashLED(CONNECTION_LED, 1, 30); 	}	// Show activity on LED
+#if defined(ESP32)
+	esp_task_wdt_reset();
+#endif
+#if defined(ESP8266)
+	ESP.wdtFeed();
+#endif
 	if (path.endsWith("/")) {	path += HTML_INDEX;	}
 	String contentType = getContentType(path, request);
 	String pathWithGz = path + ".gz";
+	
+	// Сброс watchdog перед операциями SPIFFS (могут быть медленными)
+#if defined(ESP32)
+	esp_task_wdt_reset();
+#endif
+#if defined(ESP8266)
+	ESP.wdtFeed();
+#endif
+	
 	if (_fs->exists(pathWithGz) || _fs->exists(path)) {
 		if (_fs->exists(pathWithGz)) { path += ".gz"; }
 		DEBUGEDIT("Content type: %s\r\n", contentType.c_str());
-		// Используем штатную асинхронную отправку файлов.
-		// Проблема рекурсивного yield() решена добавлением yield() в loop() main.cpp
-
+		
+		// Сброс watchdog после exists() и перед beginResponse()
+#if defined(ESP32)
+	esp_task_wdt_reset();
+#endif
 #if defined(ESP8266)
     	ESP.wdtFeed();
 #endif
 		AsyncWebServerResponse *response = request->beginResponse(*_fs, path, contentType);
 		if (path.endsWith(".gz")) {response->addHeader("Content-Encoding", "gzip");}
+		
+		// Сброс watchdog после beginResponse() и перед send()
+#if defined(ESP32)
+	esp_task_wdt_reset();
+#endif
+#if defined(ESP8266)
+    	ESP.wdtFeed();
+#endif
 		DEBUGEDIT("File %s exist\r\n", path.c_str());
 		request->send(response);
+		
+		// Сброс watchdog после send()
+#if defined(ESP32)
+	esp_task_wdt_reset();
+#endif
+#if defined(ESP8266)
+    	ESP.wdtFeed();
+#endif
 		DEBUGEDIT("File %s Sent\r\n", path.c_str());
 		return true;
 	}
@@ -295,37 +336,6 @@ bool AsyncFSWebServer:: handleFileRead(String path, AsyncWebServerRequest *reque
 		DEBUGEDIT("Cannot find %s\n", path.c_str());
 	return false;
 }
-
-
-// project.html vvv
-void AsyncFSWebServer::send_project_configuration_values_html(AsyncWebServerRequest *request) { // answer for "get" request
-	//DEBUGLOG(__FUNCTION__);	DEBUGLOG("\r\n");
-	String values = "";
-
-	// CfgFile_ProgSwd_t Prog_CfgFile;
-	// int _res = progSwd.cfg_FileStructGet(Prog_CfgFile);
-	// values += "progproj|"	+ 		 Prog_CfgFile.project_name			+ "|input\n";
-	// values += "progmem|"	+(String)Prog_CfgFile.chip_size 	+ "|input\n";
-
-	request->send(200, "text/plain", values);
-}
-
-void AsyncFSWebServer::get_project_configuration_html(AsyncWebServerRequest *request) {
-	// CfgFile_ProgSwd_t Prog_CfgFile;
-	if (request->args() > 0) { // Save Settings
-		// for (uint8_t i = 0; i < request->args(); i++) {
-		// 	DEBUGLOG("Arg %d: %s %s\r\n", i, request->argName(i).c_str() ,request->arg(i).c_str() );
-		// 	// if (request->argName(i) == "devicesign") 		{ AVRISP_HexFiles_Web.avr_signature = urldecode(request->arg(i));	continue; }
-		// 	if (request->argName(i) == "progproj") 		{ Prog_CfgFile.project_name = urldecode(request->arg(i));	continue; }
-		// 	if (request->argName(i) == "progmem")  		{ Prog_CfgFile.chip_size = request->arg(i).toInt();			continue; }
-		// }
-		// request->send_P(200, "text/html", Page_GeneralPrj);
-		// progSwd.cfg_FileSaveFromWeb(Prog_CfgFile);
-	}
-	else {	handleFileRead(request->url(), request);	}
-	DEBUGLOG(__PRETTY_FUNCTION__);	DEBUGLOG("\r\n");
-}
-// project.html ^^^
 
 // system.html vvv
 void AsyncFSWebServer::html_system_Load(AsyncWebServerRequest *request) { // answer for "get" request
@@ -389,6 +399,10 @@ String getContentType(String filename, AsyncWebServerRequest *request) {
 }
 
 void AsyncFSWebServer::serverInit() {
+	// Запрещаем Keep-Alive, чтобы браузер не держал открытые
+	// TCP-соединения - они вызывали сброс ESP при длительном простое
+	DefaultHeaders::Instance().addHeader("Connection", "close");
+
 //system.html vvv	
 	on("/system/restart", HTTP_POST, [this](AsyncWebServerRequest *request) {
 		if (!this->checkAuth(request)) {	return request->requestAuthentication(); };
@@ -425,23 +439,17 @@ void AsyncFSWebServer::serverInit() {
 
 //system.html ^^^
 
-//project.html vvv
-	on("/project/info", HTTP_GET, [this](AsyncWebServerRequest *request) {
-		if (!this->checkAuth(request)) {	return request->requestAuthentication(); };
-		this->send_project_configuration_values_html(request); // show values
-	});
-
-	on("/project.html", HTTP_POST,  [this](AsyncWebServerRequest *request) {
-		if (!this->checkAuth(request)) {	return request->requestAuthentication(); };
-		this->get_project_configuration_html(request); // save values from the page
-	});
-//project.html ^^^
-
 	//called when the url is not defined here
 	//use it to load content from SPIFFS
 	onNotFound([this](AsyncWebServerRequest *request) {
 		DEBUGLOGFH("Not found: %s\r\n", request->url().c_str());
 		if (!this->checkAuth(request)) {	return request->requestAuthentication(); };
+#if defined(ESP32)
+		esp_task_wdt_reset();
+#endif
+#if defined(ESP8266)
+		ESP.wdtFeed();
+#endif
 		// Не создаём response заранее — handleFileRead сам отправит ответ
 		// или мы отправим 404. AsyncWebServer сам управляет памятью response после send().
 		if (!this->handleFileRead(request->url(), request)) {
@@ -548,7 +556,8 @@ void AsyncFSWebServer::serialShowAbout() {
 	Serial.printf("Project env: %s\n\r ", BUILD_ENV);	
 	Serial.printf("git branch: %s\n\r ", GIT_BRANCH);	
 	Serial.printf("ver date: %s\n\r ", BUILD_TIME);	
-	Serial.printf("ver build: %s\n\r ", String(VERSION_BUILD).c_str());
+	Serial.printf("Fiemware ver: %s\n\r ", String(VERSION_BUILD).c_str());
+	Serial.printf("File system ver: %s\n\r ", getFsVersionStr().c_str());
 	
 	Serial.printf("Device serial number: %s\n\r ", _sysConfig.deviceSerial.c_str());	
 	#if defined(ESP32)
@@ -558,7 +567,13 @@ void AsyncFSWebServer::serialShowAbout() {
 	Serial.printf("Flash chip size: %u\r\n", ESP.getFlashChipRealSize());
 	#endif
 	Serial.printf("Scketch size: %u\r\n", 		ESP.getSketchSize());
-	Serial.printf("Free flash space: %u\r\n", 	ESP.getFreeSketchSpace());
+	if (_fs) {
+#if defined(ESP32)
+		Serial.printf("FS total: %u\r\n", 		_fs->totalBytes());
+		Serial.printf("FS used: %u\r\n", 		_fs->usedBytes());
+		Serial.printf("FS free: %u\r\n", 		_fs->totalBytes() - _fs->usedBytes());
+#endif
+	}
 
 	Serial.printf("wifi ssid: %s \n", WiFi.SSID().c_str());
 	Serial.printf("IP Address: %s \n", WiFi.localIP().toString().c_str());

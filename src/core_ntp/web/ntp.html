@@ -10,58 +10,60 @@
 <body>
     <markup>./page_head.html</markup>
     <h2 class="title" style="background: #7D8EE2">  <span id="devicename"></span>NTP Configuration</h2>
-    <form action="" method="post">
-        <table border="0" cellspacing="0" cellpadding="3" align="center">
-            <tr> <td align="right">NTP Server0:</td> <td> <input type="text" id="ntpserver0" name="ntpserver0" maxlength="172" value=""></td> </tr>
-            <tr> <td align="right">NTP Server1:</td> <td> <input type="text" id="ntpserver1" name="ntpserver1" maxlength="172" value=""></td> </tr>
-            <tr> <td align="right">NTP Server2:</td> <td> <input type="text" id="ntpserver2" name="ntpserver2" maxlength="172" value=""></td> </tr>
-			<tr> <td align="right">Update every </td>    <td><input type="number" id="update" name="update"  min="0" max="720" value=""  onkeyup=setMinMax();> minute (0 is off).</td></tr>
-			<tr> <td align="right">Timezone</td>  <td>
-                    <select id="tz" name="tz">
-						<option value="-120">(GMT-12:00)</option>
-						<option value="-110">(GMT-11:00)</option>
-						<option value="-100">(GMT-10:00)</option>
-						<option value="-90">(GMT-09:00)</option>
-						<option value="-80">(GMT-08:00)</option>
-						<option value="-70">(GMT-07:00)</option>
-						<option value="-60">(GMT-06:00)</option>
-						<option value="-50">(GMT-05:00)</option>
-						<option value="-40">(GMT-04:00)</option>
-						<option value="-35">(GMT-03:30)</option>
-						<option value="-30">(GMT-03:00)</option>
-						<option value="-20">(GMT-02:00)</option>
-						<option value="-10">(GMT-01:00)</option>
-						<option value="0">(GMT+00:00)</option>
-						<option value="10">(GMT+01:00)</option>
-						<option value="20">(GMT+02:00)</option>
-						<option value="30">(GMT+03:00)</option>
-						<option value="35">(GMT+03:30)</option>
-						<option value="40">(GMT+04:00)</option>
-						<option value="45">(GMT+04:30)</option>
-						<option value="50">(GMT+05:00)</option>
-						<option value="55">(GMT+05:30)</option>
-						<option value="57">(GMT+05:45)</option>
-						<option value="60">(GMT+06:00)</option>
-						<option value="65">(GMT+06:30)</option>
-						<option value="70">(GMT+07:00)</option>
-						<option value="80">(GMT+08:00)</option>
-						<option value="90">(GMT+09:00)</option>
-						<option value="95">(GMT+09:30)</option>
-						<option value="100">(GMT+10:00)</option>
-						<option value="110">(GMT+11:00)</option>
-						<option value="120">(GMT+12:00)</option>
-						<option value="120">(GMT+12:00)</option>
-						<option value="130">(GMT+13:00)</option>
-					</select> </td> </tr>
-            <tr>  <td align="right">Daylight saving:</td> <td> <input type="checkbox" id="dst" name="dst"></td>  </tr>
-            <tr> <td colspan="2" align="center"> <input type="submit"  value="Save"></td> </tr>
-        </table>
-    </form>
+    <div class="content" style="text-align: center;">
+        <form action="" method="post">
+            <table class="scan" style="width: auto; margin: 0 auto;">
+                <tr><th colspan="2">NTP Settings</th></tr>
+                <tr> <td class="label">NTP Server0:</td> <td> <input type="text" id="ntpserver0" name="ntpserver0" maxlength="172" value=""></td> </tr>
+                <tr> <td class="label">NTP Server1:</td> <td> <input type="text" id="ntpserver1" name="ntpserver1" maxlength="172" value=""></td> </tr>
+                <tr> <td class="label">NTP Server2:</td> <td> <input type="text" id="ntpserver2" name="ntpserver2" maxlength="172" value=""></td> </tr>
+                <tr> <td class="label">Update every </td>    <td><input type="number" id="update" name="update"  min="0" max="720" value=""  onkeyup=setMinMax();> minute (0 is off).</td></tr>
+                <tr> <td class="label">Timezone</td>  <td>
+                        <select id="tz" name="tz">
+                            <option value="-120">(GMT-12:00)</option>
+                            <option value="-110">(GMT-11:00)</option>
+                            <option value="-100">(GMT-10:00)</option>
+                            <option value="-90">(GMT-09:00)</option>
+                            <option value="-80">(GMT-08:00)</option>
+                            <option value="-70">(GMT-07:00)</option>
+                            <option value="-60">(GMT-06:00)</option>
+                            <option value="-50">(GMT-05:00)</option>
+                            <option value="-40">(GMT-04:00)</option>
+                            <option value="-35">(GMT-03:30)</option>
+                            <option value="-30">(GMT-03:00)</option>
+                            <option value="-20">(GMT-02:00)</option>
+                            <option value="-10">(GMT-01:00)</option>
+                            <option value="0">(GMT+00:00)</option>
+                            <option value="10">(GMT+01:00)</option>
+                            <option value="20">(GMT+02:00)</option>
+                            <option value="30">(GMT+03:00)</option>
+                            <option value="35">(GMT+03:30)</option>
+                            <option value="40">(GMT+04:00)</option>
+                            <option value="45">(GMT+04:30)</option>
+                            <option value="50">(GMT+05:00)</option>
+                            <option value="55">(GMT+05:30)</option>
+                            <option value="57">(GMT+05:45)</option>
+                            <option value="60">(GMT+06:00)</option>
+                            <option value="65">(GMT+06:30)</option>
+                            <option value="70">(GMT+07:00)</option>
+                            <option value="80">(GMT+08:00)</option>
+                            <option value="90">(GMT+09:00)</option>
+                            <option value="95">(GMT+09:30)</option>
+                            <option value="100">(GMT+10:00)</option>
+                            <option value="110">(GMT+11:00)</option>
+                            <option value="120">(GMT+12:00)</option>
+                            <option value="120">(GMT+12:00)</option>
+                            <option value="130">(GMT+13:00)</option>
+                        </select> </td> </tr>
+                <tr>  <td class="label">Daylight saving:</td> <td> <input type="checkbox" id="dst" name="dst"></td>  </tr>
+                <tr> <td colspan="2" style="text-align: center; padding: 8px;"> <input type="submit" value="Save" class="button-prog"></td> </tr>
+            </table>
+        </form>
+    </div>
 
 	<markup>./page_bottom.html</markup>
 	<script src="GetJson.js" defer></script>
 	<script src="GetMarkup.js" defer></script>
-	<script src="microajax.js" defer></script>
 	<script>
 		window.onload = function() {
 			setTimeout(() => {

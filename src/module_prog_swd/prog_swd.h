@@ -1,11 +1,23 @@
 
 #ifndef _PROGSWD_h
 #define _PROGSWD_h
- 
+
+#include <Arduino.h>
+#include <FS.h>
+#include <vector>
+
 
 #include "swd.h"
+#include "stm32f1_flash.h"
+#include "stm32f4_flash.h"
 
 
+
+// Размер буфера для записи в flash (в байтах).
+// Должен быть достаточно мал для безопасного размещения на стеке EERTOS-задачи,
+// но достаточно велик для эффективной записи.
+// 256 байт — оптимальный баланс.
+#define WRITE_BUF_SIZE  256
 
 // AD AD
 #define AP_TIMES  50
@@ -26,51 +38,6 @@
 #define DEMCR 0xe000edfc
 #define AIRCR 0xe000ed0c
 
-
-
-// stm32 F1xx
-#define KEY1                    0x45670123
-#define KEY2                    0xcdef89ab
-#define FLASH_BANK1_OFFSET      0x00U
-#define FLASH_BANK2_OFFSET      0x40U
-#define FLASH_BANK_SPLIT        0x08080000U
-
-
-#define SR_ERROR_MASK 0x14U
-#define SR_PROG_ERROR 0x04U
-#define SR_EOP        (1U << 5U)
-
-
-#define WORDSIZE       2 // bytes
-#define PAGESIZE       1024 // bytes
-
-#define SWD_FLASH_BASE_F1     0x40022000
-#define FLASH_ACR             SWD_FLASH_BASE_F1 + 0x00
-#define FLASH_KEYR            SWD_FLASH_BASE_F1 + 0x04
-#define FLASH_OPTKEYR         SWD_FLASH_BASE_F1 + 0x08
-#define FLASH_SR              SWD_FLASH_BASE_F1 + 0x0c
-#define FLASH_CR              SWD_FLASH_BASE_F1 + 0x10
-#define FLASH_OPTCR           SWD_FLASH_BASE_F1 + 0x14
-
-#define STM32F1_FLASH_SR_BSY (1U << 0U)
-#define FLASH_CR_OBL_LAUNCH (1U << 13U)
-#define FLASH_CR_OPTWRE     (1U << 9U)
-#define FLASH_CR_LOCK       (1U << 7U) // don't touch!
-#define FLASH_CR_STRT       (1U << 6U)
-#define FLASH_CR_OPTER      (1U << 5U)
-#define FLASH_CR_OPTPG      (1U << 4U)
-#define FLASH_CR_MER        (1U << 2U)
-#define FLASH_CR_PER        (1U << 1U)
-#define FLASH_CR_PG         (1U << 0U)
-
-
-
-// stm32F4
-#define SWD_FLASH_BASE_F4     0x40023c00  //  0x 4002 3c00
-#define SWD_FLASH_PECR        SWD_FLASH_BASE_F4 + 0x04
-#define SWD_FLASH_PEKEYR      SWD_FLASH_BASE_F4 + 0x0C
-#define SWD_FLASH_PRGKEYR     SWD_FLASH_BASE_F4 + 0x10 // #define FLASH_CR (FLASH_R_BASE + 0x10)
-#define SWD_FLASH_SR          SWD_FLASH_BASE_F4 + 0x18
 
 #define AP_NRF_RESET             0x00
 #define AP_NRF_ERASEALL          0x04
@@ -95,21 +62,49 @@
 
 
 
+// Конечный автомат прошивки STM32 (для EERTOS-кооперативной работы)
+enum FlashState { FLASH_IDLE = 0, FLASH_INIT, FLASH_WRITE, FLASH_DONE };
+
+// Конечный автомат проверки чипа (для EERTOS-кооперативной работы)
+enum ChipCheckState { CHIP_IDLE = 0, CHIP_INIT, CHIP_PROBE, CHIP_DONE };
+
 class ESP_PROGSWD {
 public:
     ESP_PROGSWD();
-#if ESP32
+#if defined(ESP32)
     void setFs(fs::SPIFFSFS* fs);
-#elif defined(ESP8266)
-    void setFs(FS* fs) ;                       // esp8266/esp32 flash file system
 #endif
-
 
     uint32_t stm32Fx_begin();
 
-
-    int stm32_ChipProgrammMain( String &path)  ;
+    // Блокирующая прошивка (старый метод — для совместимости)
+    int stm32_ChipProgrammMain( String &path);
     uint8_t stm32_flash_file(uint32_t offset, String &path);
+
+    // Установка семейства чипа для выбора алгоритма прошивки
+    void setChipFamily(const String &family) { _chipFamily = family; }
+    const String& getChipFamily() const { return _chipFamily; }
+
+    // EERTOS-кооперативная прошивка
+    bool startFlash(uint32_t offset, String &path, uint32_t chipMemSize = 0,
+                    uint32_t pageSize = 1024, uint32_t wordSize = 2, uint32_t cswValue = 0xa2000002);
+
+    void flashStep();
+    void beginFlashStep();  // регистрация задачи в EERTOS
+    void updatePercent();   // вычисляет процент и выводит через DEBUGLOGSWD
+    inline void addToFlashPosi(uint32_t size) { _flashPosi += size; }  // добавляет к счётчику записанных байт
+    bool isFlashBusy() { return _flashState != FLASH_IDLE; }
+    bool isFlashError() { return _flashError; }
+    uint8_t getPercent() { return _percent; }
+    String getFlashErrorString() { return _flashErrorString; }
+    String getFlashErrorStage() { return _flashErrorStage; }
+    uint8_t getFlashErrorPercent() { return _flashErrorPercent; }
+
+    // EERTOS-кооперативная проверка чипа
+    void startChipCheck();
+    void chipCheckStep();
+    bool isChipCheckBusy() { return _chipState != CHIP_IDLE; }
+    uint32_t getChipCheckResult() { return _chipResultId; }
 
     void stm32Fx_abort_all();
     void stm32Fx_rst ();
@@ -126,9 +121,15 @@ public:
 
     /*_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-*/
     bool stm32f4_flash_busy(void);
+    bool stm32f4_wait_busy(uint32_t timeout_ms = 5000);
     void stm32f4_flash_unlock_dap() ;
     void stm32f4_erase_flash_dap();
+    void stm32f4_prog_enable();
+    void stm32f4_prog_disable();
+    void stm32f4_erase_sector(uint8_t sector_num);
+    void stm32f4_mass_erase();
     /*_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-*/
+
     void stm32f1_progEn (void) ;
     void stm32f1_progOff (void) ;
     void stm32f1_clear_eop(uint32_t bank_offset);
@@ -140,20 +141,51 @@ protected:
     uint32_t          _offset = 0;
     uint32_t         _file_size = 0;
     String           _filename = "";
-    volatile uint8_t  _percent = 0;
     volatile float    _speed = 0;
+    volatile uint8_t _percent = 0;
     //fs + hex file
-    #if ESP32
+#if defined(ESP32)
     fs::SPIFFSFS*               _fs;
-    #elif defined(ESP8266)
-    FS*                         _fs;                        // esp8266/esp32 flash file system
-    #endif
+#endif
+
+    // EERTOS state для кооперативной прошивки
+    FlashState       _flashState = FLASH_IDLE;
+    bool             _flashError = false;  // флаг ошибки при записи страницы
+    String           _flashErrorString = "";  // текст ошибки для фронтенда
+    String           _flashErrorStage = "";   // стадия ошибки (FLASH_INIT, FLASH_WRITE)
+    uint8_t          _flashErrorPercent = 0;  // процент на момент ошибки
+
+    File             _flashFile;
+    uint32_t         _flashAddr = 0;
+    uint32_t         _flashPosi = 0;
+    uint32_t         _flashFileSize = 0;
+    uint32_t         _flashStartTime = 0;
+    String           _flashPath;
+    uint32_t         _chipMemSize = 0;  // размер памяти чипа (из конфига)
+    uint32_t         _pageSize = 1024;  // размер страницы (из конфига чипа)
+    uint32_t         _wordSize = 2;     // размер слова (из конфига чипа)
+    uint32_t         _cswValue = 0xa2000002;  // значение CSW (из конфига чипа)
+    uint32_t         _flashStart = 0x08000000;  // стартовый адрес flash (из конфига чипа)
+    bool             _isHexFormat = false;  // true если прошиваем HEX-файл
+
+    // Семейство чипа (stm32f1, stm32f4 и т.д.) — для выбора алгоритма прошивки
+    String           _chipFamily = "stm32f1";
+
+    // EERTOS state для кооперативной проверки чипа
+    ChipCheckState   _chipState = CHIP_IDLE;
+    uint8_t          _chipRetry = 0;
+    uint32_t         _chipResultId = 0;
 
 };
 
+
+// EERTOS-враппер для кооперативной прошивки STM32 (определён в prog_swd.cpp)
+void flash_step_task_wrapper();
+
+// EERTOS-враппер для кооперативной проверки чипа (определён в prog_swd.cpp)
+void chip_check_step_task_wrapper();
 
 extern ESP_PROGSWD swdprog;
 
 
 #endif // _PROGSWD_h
-

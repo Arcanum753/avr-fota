@@ -327,3 +327,129 @@ markup {
 .config-slot a {
     cursor: pointer;
 }
+
+/* ===== Programmer module shared styles (from avr.html) ===== */
+
+/* Подсветка выбранной строки в таблице файлов */
+.selected-row {
+    background-color: #bbdefb !important;
+    outline: 2px solid #1a73e8;
+    outline-offset: -2px;
+}
+
+/* Кнопка Program / Action — зелёная */
+.button-prog {
+    cursor: pointer;
+    display: inline-block;
+    font-weight: bold;
+    text-align: center;
+    text-decoration: none;
+    white-space: nowrap;
+    border-radius: 5px;
+    background-image: linear-gradient(rgba(255, 255, 255, .1), rgba(255, 255, 255, .05) 49%, rgba(0, 0, 0, .05) 51%, rgba(0, 0, 0, .1));
+    background-color: #4CAF50;
+    color: white;
+    border: 1px solid #388E3C;
+    box-shadow: inset 0 0.08em 0 rgba(255, 255, 255, 0.7), inset 0 0 0.08em rgba(255, 255, 255, 0.5);
+    text-shadow: 0 1px 0 rgba(0, 0, 0, 0.2);
+    padding: 6px 20px;
+    font-size: 14px;
+}
+.button-prog:hover {
+    background-color: #66BB6A;
+}
+.button-prog:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* Кнопка Delete / Danger — красная */
+.button-del {
+    cursor: pointer;
+    display: inline-block;
+    font-weight: bold;
+    text-align: center;
+    text-decoration: none;
+    white-space: nowrap;
+    border-radius: 5px;
+    background-image: linear-gradient(rgba(255, 255, 255, .1), rgba(255, 255, 255, .05) 49%, rgba(0, 0, 0, .05) 51%, rgba(0, 0, 0, .1));
+    background-color: #f44336;
+    color: white;
+    border: 1px solid #c62828;
+    box-shadow: inset 0 0.08em 0 rgba(255, 255, 255, 0.7), inset 0 0 0.08em rgba(255, 255, 255, 0.5);
+    text-shadow: 0 1px 0 rgba(0, 0, 0, 0.2);
+    padding: 6px 20px;
+    font-size: 14px;
+}
+.button-del:hover {
+    background-color: #ef5350;
+}
+.button-del:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* Ссылка навигации */
+.nav-link {
+    text-decoration: none;
+    color: #1a73e8;
+    font-size: 14px;
+    font-weight: bold;
+}
+.nav-link:hover {
+    text-decoration: underline;
+}
+
+/* Прогресс-бар */
+.prog-container {
+    text-align: center;
+    margin: 10px 0;
+    padding: 10px;
+    background-color: #f0f0f0;
+    border-radius: 5px;
+    display: none;
+}
+.prog-bar-bg {
+    width: 100%;
+    background-color: #ddd;
+    border-radius: 3px;
+    margin-top: 5px;
+}
+.prog-bar-fill {
+    width: 0%;
+    height: 20px;
+    background-color: #4CAF50;
+    border-radius: 3px;
+    transition: width 0.3s;
+}
+
+/* Диск info */
+.diskinfo-wrap {
+    margin: 10px auto;
+    max-width: 400px;
+}
+.diskinfo-row {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 4px;
+}
+.diskinfo-label {
+    font-size: 13px;
+}
+.diskinfo-bar-bg {
+    width: 100%;
+    background-color: #ddd;
+    border-radius: 4px;
+    height: 22px;
+    overflow: hidden;
+}
+.diskinfo-bar-fill {
+    height: 22px;
+    border-radius: 4px;
+    transition: width 0.5s;
+}
+.diskinfo-text {
+    text-align: center;
+    margin-top: 4px;
+    font-size: 13px;
+}

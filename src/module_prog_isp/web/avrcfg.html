@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>AVR Project and Fuses</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta http-equiv="Content-type" content="text/html; charset=utf-8">
+    <link rel="stylesheet" href="style.css">
+    <style>
+        /* Стили для полей ввода фьюзов — крупный шрифт */
+        .fuse-input {
+            font-size: 18px;
+            width: 55px;
+            text-align: center;
+            padding: 4px;
+            font-weight: bold;
+        }
+        /* Стили для информационных полей (signature, chipname) */
+        .info-value {
+            font-size: 16px;
+            font-weight: bold;
+            padding: 6px;
+            font-family: "Courier New", monospace;
+        }
+        /* Поля ввода конфигурации */
+        .cfg-input {
+            font-size: 15px;
+            width: 250px;
+            padding: 5px;
+        }
+        /* Чекбокс Expand и подпись */
+        .fuse-expand-label {
+            font-weight: normal;
+            font-size: 12px;
+            margin-left: 10px;
+        }
+        /* Ячейка с подписью фьюза */
+        .fuse-label {
+            font-weight: bold;
+            font-size: 15px;
+            padding: 6px 12px;
+            text-align: left;
+        }
+        /* Контейнер для подтверждения записи фьюзов */
+        .fuse-confirm-cell {
+            text-align: center;
+            padding: 6px;
+            font-size: 11px;
+        }
+    </style>
+</head>
+<body>
+    <markup>./page_head.html</markup>
+    <h2 class="title" style="background: #7D8EE2; padding: 8px;"> AVR Project and Fuses</h2>
+    <hr>
+
+    <!-- Конфигурация проекта и информация о чипе -->
+    <div class="content" style="text-align: center;">
+        <form id="cfgForm" action="" method="post">
+            <table class="scan" style="width: auto; margin: 0 auto;">
+                <tr><th colspan="2">AVR Chip Info</th></tr>
+                <tr><td class="label">Programmer project name:</td><td><input type="text" id="projname" name="projname" value="" class="cfg-input"></td></tr>
+                <tr><td class="label">Chip memory size (bytes):</td><td><input type="text" id="chipsize" name="chipsize" value="" class="cfg-input"></td></tr>
+                <tr><td class="label">Connected chip signature:</td><td><div id="signature" class="info-value">N/A</div></td></tr>
+                <tr><td class="label">Connected chip name:</td><td><div id="chipname" class="info-value">N/A</div></td></tr>
+                <tr><td colspan="2" style="text-align: center; padding: 8px;">
+                    <input type="button" value="Save configuration" onclick="saveCfg()" class="button-prog">
+                    &nbsp;
+                    <input type="button" value="Read Signature" onclick="readSignature()" class="button-prog">
+                </td></tr>
+            </table>
+        </form>
+    </div>
+
+    <hr>
+
+    <!-- AVR Fuses -->
+    <div class="content" style="text-align: center;">
+        <table class="scan" style="width: auto; margin: 0 auto;">
+            <tr>
+                <th colspan="2">
+                    AVR Chip Fuses
+                    <span class="fuse-expand-label">
+                        (<input id="expandfuse" name="confirm" type='checkbox' onclick="fusesExpandSection()">
+                        <label for="expandfuse">Expand)</label>
+                    </span>
+                </th>
+            </tr>
+        </table>
+
+        <table id="fuse_bits" class="scan" style="width: auto; margin: 10px auto 0 auto; display: none;">
+            <tr><td class="fuse-label">Fuse HIGH</td><td style="text-align: center;">0x <input type="text" id="avrfusehigh" name="ip_0" class="fuse-input"></td></tr>
+            <tr><td class="fuse-label">Fuse LOW</td><td style="text-align: center;">0x <input type="text" id="avrfuselow" name="ip_1" class="fuse-input"></td></tr>
+            <tr><td class="fuse-label">Fuse PROTECTION</td><td style="text-align: center;">0x <input type="text" id="avrfuseprot" name="ip_2" class="fuse-input"></td></tr>
+            <tr><td class="fuse-label">Fuse EXTENSION</td><td style="text-align: center;">0x <input type="text" id="avrfuseext" name="ip_3" class="fuse-input"></td></tr>
+            <tr><td></td>
+                <td style="text-align: center; padding: 6px;">
+                    <span title="Read fuses and AVR chip signature">
+                        <button onclick="readFuses();" class="button-prog">Read fuses</button>
+                    </span>
+                </td>
+            </tr>
+            <tr>
+                <td class="fuse-confirm-cell">
+                    <span title="Write fuses to AVR chip">
+                        <input id="confirmfuse" name="confirm" type='checkbox' onclick="fusesConfirmWriting()">
+                        <label for="confirmfuse"> I understand how to work <br> with AVR fuses bits <br> and by clicking this checkbox I take full responsibility <br> if avr chip will brake</label>
+                    </span>
+                </td>
+                <td style="text-align: center; padding: 6px;">
+                    <span title="Write fuses"> <button id="writeFusesId" onclick="writeFuses();" class="button-del" disabled>Write fuses</button> </span>
+                </td>
+            </tr>
+        </table>
+    </div>
+
+    <markup>./page_bottom.html</markup>
+    <script src="GetMarkup.js" defer></script>
+    <script src="GetJson.js" defer></script>
+    <script> 
+        window.onload = function () {
+            setTimeout(() => {
+                ApplyCVT("/system/version");
+            }, 250);
+            setTimeout(() => {
+                loadCfgInfo();
+            }, 500);
+        };
+
+        // ========== Load Configuration Info ==========
+        function loadCfgInfo() {
+            const xhr = new XMLHttpRequest();
+            xhr.open('GET', '/avr/info', true);
+            xhr.timeout = 5000;
+            
+            xhr.onload = function() {
+                if (xhr.status === 200) {
+                    const fieldsRows = ParseCVT(xhr.response);
+                    for (let fields of fieldsRows) {
+                        if (fields[0] === "projname") {
+                            document.getElementById('projname').value = fields[1];
+                        }
+                        if (fields[0] === "chipsize") {
+                            document.getElementById('chipsize').value = fields[1];
+                        }
+                        if (fields[0] === "signature") {
+                            document.getElementById('signature').textContent = fields[1];
+                        }
+                        if (fields[0] === "chipname") {
+                            document.getElementById('chipname').textContent = fields[1];
+                        }
+                    }
+                }
+            };
+            xhr.onerror = function() {
+                // silent fail
+            };
+            xhr.send();
+        }
+
+        // ========== Save Configuration ==========
+        function saveCfg() {
+            const projname = document.getElementById('projname').value;
+            const chipsize = document.getElementById('chipsize').value;
+
+            if (!projname) {
+                alert('Project name cannot be empty');
+                return;
+            }
+            if (!chipsize || parseInt(chipsize) <= 0) {
+                alert('Invalid chip memory size');
+                return;
+            }
+
+            const xhr = new XMLHttpRequest();
+            var formData = new FormData();
+            formData.append("projname", projname);
+            formData.append("chipsize", chipsize);
+
+            xhr.open('POST', '/avr/save');
+            xhr.onload = function() {
+                if (xhr.status === 200) {
+                    alert('Configuration saved successfully');
+                } else {
+                    alert('Failed to save configuration: ' + xhr.status);
+                }
+            };
+            xhr.onerror = function() {
+                alert('Network error during save');
+            };
+            xhr.send(formData);
+        }
+
+        // ========== Read Signature Only ==========
+        function readSignature() {
+            const btn = document.querySelector('input[value="Read Signature"]');
+            const sigDiv = document.getElementById('signature');
+            const chipDiv = document.getElementById('chipname');
+            
+            // Блокируем кнопку на время запроса
+            btn.disabled = true;
+            btn.value = "Reading...";
+            sigDiv.textContent = "Reading...";
+            chipDiv.textContent = "Reading...";
+            
+            const xhr = new XMLHttpRequest();
+            xhr.open('GET', '/avr/readsignature', true);
+            xhr.timeout = 20000;
+            
+            xhr.onload = function() {
+                btn.disabled = false;
+                btn.value = "Read Signature";
+                if (xhr.status === 200) {
+                    const fieldsRows = ParseCVT(xhr.response);
+                    for (let fields of fieldsRows) {
+                        if (fields[0] === "signature") {
+                            sigDiv.textContent = fields[1];
+                        }
+                        if (fields[0] === "chipname") {
+                            chipDiv.textContent = fields[1];
+                        }
+                    }
+                } else {
+                    sigDiv.textContent = "Error: " + xhr.status;
+                    console.log("Read signature failed: " + xhr.status);
+                }
+            };
+            xhr.onerror = function() {
+                btn.disabled = false;
+                btn.value = "Read Signature";
+                sigDiv.textContent = "Network error";
+                chipDiv.textContent = "N/A";
+                console.log("Network error during signature read");
+            };
+            xhr.ontimeout = function() {
+                btn.disabled = false;
+                btn.value = "Read Signature";
+                sigDiv.textContent = "Timeout";
+                chipDiv.textContent = "N/A";
+                console.log("Signature read timeout");
+            };
+            xhr.send();
+        }
+
+
+        // ========== AVR Fuses Functions ==========
+        function readFuses() {
+            const xhr = new XMLHttpRequest();
+            xhr.open('GET', '/avr/fuseread', true);
+            xhr.timeout = 10000;
+            
+            xhr.ontimeout = function() {
+                alert('Fuse read timeout — no response from AVR chip');
+            };
+            
+            xhr.onload = function() {
+                if (xhr.status === 200) {
+                    const fieldsRows = ParseCVT(xhr.response);
+                    for (let fields of fieldsRows) {
+                        const el = document.getElementById(fields[0]);
+                        if (el) {
+                            el.value = fields[1];
+                        }
+                    }
+                } else {
+                    alert('Failed to read fuses: ' + xhr.status);
+                }
+            };
+            
+            xhr.onerror = function() {
+                alert('Network error during fuse read');
+            };
+            
+            xhr.send();
+        }
+
+        function writeFuses() {
+            const avrfusehigh = document.getElementById("avrfusehigh");
+            const avrfuselow  = document.getElementById("avrfuselow");
+            const avrfuseprot = document.getElementById("avrfuseprot");
+            const avrfuseext  = document.getElementById("avrfuseext");
+
+            const avrfusehighVal = Math.max(Math.min(parseInt("0x" + avrfusehigh.value), 255), 0);
+            const avrfuselowVal  = Math.max(Math.min(parseInt("0x" + avrfuselow.value), 255), 0);
+            const avrfuseprotVal = Math.max(Math.min(parseInt("0x" + avrfuseprot.value), 255), 0);
+            const avrfuseextVal  = Math.max(Math.min(parseInt("0x" + avrfuseext.value), 255), 0);
+
+            if (isNaN(avrfusehighVal) || isNaN(avrfuselowVal) || isNaN(avrfuseprotVal) || isNaN(avrfuseextVal)) {
+                alert("Values not valid");
+                return;
+            }
+
+            const xhr = new XMLHttpRequest();
+            var formData = new FormData();
+
+            formData.append("avrfusehigh", avrfusehighVal.toString(16));
+            formData.append("avrfuselow",  avrfuselowVal.toString(16));
+            formData.append("avrfuseprot", avrfuseprotVal.toString(16));
+            formData.append("avrfuseext",  avrfuseextVal.toString(16));
+
+            xhr.open('POST', '/avr/fusewrite');
+            xhr.send(formData);
+        }
+
+        function fusesConfirmWriting() {
+            const confirmfuse = document.getElementById("confirmfuse");
+            const writeFusesId = document.getElementById("writeFusesId");
+            writeFusesId.disabled = !confirmfuse.checked;
+        }
+
+        function fusesExpandSection() {
+            const fuse_bits = document.getElementById("fuse_bits");
+            const expandfuse = document.getElementById("expandfuse");
+            fuse_bits.style = expandfuse.checked ? "" : "display: none";
+        }
+    </script> 
+</body>
+</html>

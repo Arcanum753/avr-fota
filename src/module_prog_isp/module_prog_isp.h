@@ -3,8 +3,7 @@
 #define _MODULEPROGISP_h
 
 #include "main.h"
-
-
+#include <ArduinoJson.h>
 
 
 #ifdef DEBUG_ISP
@@ -14,20 +13,8 @@
 #endif
 
 
-#if (DEBUG_SHOWHEXBUF > 1)
-#define DEBUGLOGISPBUF(...)  Serial.printf(__VA_ARGS__)
-#else
-#define DEBUGLOGISPBUF(...)
-#endif
-
-
-const char Page_AvrRefresh[] = R"=====(
-<meta http-equiv="refresh" content="10; URL=/avr.html">
-Please Wait....Configuring.
-)=====";
-
-
 #define CONFIG_PROG_JSON  "/config_prog_isp.json"
+#define AVRISP_CFG_JSON   "/avrisp_cfg.json"
 
 #define  FILE_TYPE_COMMA            '.'
 #define  FILE_TYPE_HEX              "hex"
@@ -35,50 +22,69 @@ Please Wait....Configuring.
 #define  FILE_TYPE_BINARY           "binary"
 
 #define DEFAULT_PROG_PROJNAME       "projname" // дефолтное имя проекта
-#define DEFAULT_chipsize            32768  // размер чипа по дефолту
+#define DEFAULT_CHIP_NAME           ""       // имя чипа по дефолту (пустое — первый из списка)
+#define PROJECT_NAME_MAX_LEN        16       // макс длина имени проекта
+
+#define ISP_FILELIST_JSON       "/isp_filelist.json"
+
+// Время актуальности статуса чипа после проверки (5 минут = 300 секунд)
+#define CHIP_STATUS_TIMEOUT     300
 
 #define JSON_STR_LEN			512
 #define JSON_FILESIZEMAX		1024
 
+// Maximum filename length for upload (30 chars + null terminator = 31 bytes).
+// SPIFFS on ESP32 has a 32-byte limit for filenames (including path separator '/' and null terminator).
+// We use 30 to leave room for the '/' prefix added by the server.
+#define MAX_FILENAME_LEN		30
 
-// TODO навести тут порядок с кодами ошибок
+
+// Коды ошибок программатора ISP
 typedef enum progerr_e  {
-	ERROR_OK = 0 // ошибок нет
-	,ERR_SIGN = -1 // не совпадает сигнатура чипа
-	,ERR_BUSY = -2 // программатор занят
-	,ERR_FLASH = -3 // идёт прошивка
-	,ERR_ERASE = -4 // идёт стирание
-	,ERR_HEX = -5 // что-то с хекс файлом
-	,ERR_CFG = -6 // что-то с конфигфайлом
-	,ERR_RNM = -7 // TODO вспомнить бы год спустя что это
-	,ERR_OPENFILE = -8 // файл прошивки не открывается.
-	,ERR_INCORRECTFILE = -9 // он неправильный
-	,ERR_NOFILE = -10 // наверное его нет
-	,ERR_HEXCRC = -11 // что-то с CRC
-	,ERR_HEXMEMOVER = -12 // FIXME
-	,ERR_HEXADDR = -13 // FIXME
+	ERROR_OK = 0,           // Ошибок нет
+	ERR_SIGN = -1,          // Не совпадает сигнатура чипа
+	ERR_BUSY = -2,          // Программатор занят
+	ERR_FLASH = -3,         // Идёт прошивка
+	ERR_ERASE = -4,         // Идёт стирание
+	ERR_HEX = -5,           // Ошибка в hex-файле
+	ERR_CFG = -6,           // Ошибка конфигурационного файла
+	ERR_OPENFILE = -8,      // Файл прошивки не открывается
+	ERR_INCORRECTFILE = -9, // Неверный формат файла
+	ERR_NOFILE = -10,       // Файл не найден
+	ERR_HEXCRC = -11,       // Ошибка CRC в hex-файле
+	ERR_HEXADDR = -12,      // Нарушение монотонности адресов в HEX-файле
+	ERR_HEXMEMOVER = -13,   // Превышение размера памяти чипа
+	ERR_CHIP_OFFLINE = -14, // Чип не обнаружен (не отвечает)
+	ERR_CHIP_MISMATCH = -15, // Сигнатура чипа не совпадает с выбранной в конфиге
+	ERR_CHIP_NOT_IN_CFG = -16, // Сигнатура чипа не найдена в avrisp_cfg.json
 } progerr_t;
-
 
 
 // главная структура настроек программатора.
 typedef struct {
-    String project_name;	//имя проекта.
-    uint32_t chip_size;		// размер чипа.
-} CfgFile_progIsp_t;
+    String project_name;	// имя проекта (макс 16 символов)
+    String chip_name;		// имя выбранного чипа (из avrisp_cfg.json)
+} CfgFile_ProgIsp_t;
+
+// Структура конфигурации AVR-чипа из avrisp_cfg.json
+typedef struct {
+    String   signature;      // Сигнатура чипа (например, "0x1E950F" для ATmega328P)
+    String   name;           // Название чипа (например, "ATmega328P")
+    uint32_t flash_size;     // Размер flash в байтах
+    uint32_t page_size;      // Размер страницы в байтах
+} ChipConfigAvr_t;
 
 
 class Class_ProgIsp {
 public:
 	Class_ProgIsp( uint8_t in);
     bool begin ();
-#if ESP32
+#if defined(ESP32)
     void setFs(fs::SPIFFSFS* fs);
-#elif defined(ESP8266)
-    void setFs(FS* fs)  ;                       // esp8266/esp32 flash file system
 #endif
 private:
-CfgFile_progIsp_t CfgFile_progIsp; //  структура конфига
+    CfgFile_ProgIsp_t CfgFile_ProgIsp; //  структура конфига
+
 
 public:
     String _hexfileProg;
@@ -86,32 +92,66 @@ public:
     String _hexFileUploadStatus;
 
     // cfg
-    int			cfg_FileStructGet(CfgFile_progIsp_t &_inStruct);
-    int			cfg_FileSaveFromWeb(CfgFile_progIsp_t &_inStruct);
+    int			cfg_FileStructGet(CfgFile_ProgIsp_t &_inStruct);
+    int			cfg_FileSaveFromWeb(CfgFile_ProgIsp_t &_inStruct);
     void		cfg_SetDefault();
     bool		cfg_FileLoad();
     bool		cfg_FileSave();
     bool		web_GetFilesListExe(String &str);
     bool		web_GetDiskInfoExe(String &_str);
-    int			prog_Programm(String _in, String _fwTime);
-
-
-	void avrGetActualFWInfo(AsyncWebServerRequest *request);
-    void avrProg(AsyncWebServerRequest *request);
-    void avrProgStatus(AsyncWebServerRequest *request) ;
-    void avrFusesRead(AsyncWebServerRequest *request) ;
-    void avrWebFusesWrite(AsyncWebServerRequest *request) ;
-
-
     // all about WEB page;
     void    web_Init();
     void    web_GetFilesList (AsyncWebServerRequest *request);
     void    web_GetDiskInfoExe  (AsyncWebServerRequest *request);
     void    web_FileDelete         (AsyncWebServerRequest *request) ;
     int     web_FileUpload2FS( String filename, size_t index, uint8_t *data, size_t len, bool final);
-    // programming
     void    web_FileUpload2FS_Status(AsyncWebServerRequest *request);
+    void    web_FileUploadProgress(AsyncWebServerRequest *request);
+    void    web_FileUploadSize(AsyncWebServerRequest *request);
+    void    web_setMD5(AsyncWebServerRequest *request);
+    void    setUploadPercent(uint8_t p) { _uploadPercent = p; }
+    // filelist management
+    bool    filelist_Load(JsonDocument &doc);
+    bool    filelist_Save(JsonDocument &doc);
+    bool    filelist_AddEntry(const String &filename, const String &upload_date, const String &md5);
+    bool    filelist_RemoveEntry(const String &filename);
+    // check if filename exists in FS filelist
+    bool    filelist_FileExists(const String &filename);
+    // set prog_date and prog_status after programming attempt
+    bool    filelist_SetProgStatus(const String &filename, const String &prog_date, const String &prog_status, const String &prog_error = "", const String &prog_time = "", const String &prog_error_stage = "", const String &prog_error_percent = "");
+    // find the last successfully programmed filename (newest prog_date with "ok" status)
+    String  filelist_GetLastSuccessFilename();
+    // compute md5 for an existing file
+    String  file_ComputeMD5(const String &path);
+    // programming
     void    web_FileUpload2Chip(AsyncWebServerRequest *request) ;
+    // Callback после завершения EERTOS-кооперативной прошивки
+    void    onFlashComplete();
+    // Chip config from avrisp_cfg.json
+    bool    chipCfg_Load();
+    bool    chipCfg_FindBySignature(const String &signature, ChipConfigAvr_t &cfg);
+
+    // AVR config page (avrcfg.html)
+    void    web_AvrCfgInfo(AsyncWebServerRequest *request);
+    void    web_AvrCfgSave(AsyncWebServerRequest *request);
+    void    web_AvrCfgReadSignature(AsyncWebServerRequest *request);
+
+    // AVR-specific (fuses)
+    void    avrFusesRead(AsyncWebServerRequest *request);
+    void    avrWebFusesWrite(AsyncWebServerRequest *request);
+
+    // chip status check
+    void    web_CheckChipStatus(AsyncWebServerRequest *request);
+    bool    chip_IsConnected();
+    // Callback после завершения EERTOS-кооперативной проверки чипа
+    void    onChipCheckComplete(const String &signature);
+
+    // Project config page (project.html)
+    void    web_ProjectInfo(AsyncWebServerRequest *request);
+    void    web_ProjectSave(AsyncWebServerRequest *request);
+    void    web_ProjectChips(AsyncWebServerRequest *request);
+    void    web_ProjectChipInfo(AsyncWebServerRequest *request);
+
 private:
     String getVersionStr();
     String getGeneratedTime();
@@ -119,13 +159,36 @@ private:
     void  html_ver_get(AsyncWebServerRequest *request);
 protected:
     uint8_t _in;
+    uint16_t _uploadPercent = 0;
+    uint32_t _uploadFileSize = 0;
+    // Состояние программирования AVR
+    volatile bool _progRunning = false;
+    int _progResult = -1;
+    uint32_t _progStartTime = 0;
+    String _flashPath;      // путь к файлу прошивки (сохраняем между вызовами EERTOS)
+    String _flashNtpStr;    // строка времени (сохраняем между вызовами EERTOS)
     //fs + hex file
-#if ESP32
+#if defined(ESP32)
     fs::SPIFFSFS*   _fs;
-#elif defined(ESP8266)
-    FS* _fs;    // esp8266/esp32 flash file system
 #endif
+    File _fsUploadFile;        // открытый файл при загрузке в ФС
+    size_t _fileUploadBytes;   // счётчик записанных байт при загрузке
+    uint32_t _uploadLastChunkTime = 0; // millis() последнего чанка загрузки
+    
+    // MD5 verification
+    String _browserFileMD5;    // MD5 переданный от браузера
+    uint32_t _browserFileSize; // размер файла от браузера
+    String _browserFileName;   // имя файла от браузера
+    bool _fileUploadError;     // флаг ошибки загрузки (несовпадение MD5)
+    String _uploadFilename;    // имя текущего загружаемого файла (для очистки при таймауте)
 
+    // Очистка "зависшей" загрузки (обрыв соединения, таймаут)
+    void _cleanupStaleUpload();
+
+    // Chip status (ISP connection)
+    String _chipIdstr;
+    bool     _chipConnected = false;
+    uint32_t _chipStatusTime = 0;  // millis() последней проверки статуса
 };
 
 extern Class_ProgIsp progIsp;
@@ -134,4 +197,3 @@ extern Class_ProgIsp progIsp;
 
 
 #endif //_MODULEPROGISP_h
-

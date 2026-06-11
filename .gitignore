@@ -16,3 +16,6 @@ build_counter.txt
 example
 plans
 log
+__pycache__
+/hex&bin
+task_progress.md

@@ -108,6 +108,14 @@ void CORE_CLASS_WIFI::begin(fs::SPIFFSFS* fs)
 	scanTime *= MINUTES;
 	String hostName = ESPHTTPServer.getHostName();
 	WiFi.hostname(hostName.c_str());
+	// Отключаем энергосбережение WiFi - иначе при длительном
+	// простое вкладки ESP уходит в modem-sleep и сбрасывается (~5 мин)
+#if defined(ESP32)
+	WiFi.setSleep(false);
+#endif
+#if defined(ESP8266)
+	WiFi.setSleepMode(WIFI_NONE_SLEEP);
+#endif
 	if (AP_ENABLE_BUTTON >= 0) {
 		// Set AP mode if AP button was pressed
 		if (_apConfig.APenable) {	configureWifiAP();	}

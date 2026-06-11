@@ -11,36 +11,41 @@
     <markup>./page_head.html</markup>
     <h2 class="title" style="background: #7D8EE2"> <span id="devicename"></span> OTA Client Configuration</h2>
     
-    <form action="" method="post">
-        <table border="0" cellspacing="0" cellpadding="3" align="center">
-            <tr><td align="left">OTA Client check every ... minute (0 is off)</td>    <td><input type="number" id="otaclienttime" name="otaclienttime"  min="0" max="60" value=""  onkeyup=setMinMax();></td></tr>
-            <tr><td align="left">OTA Client update on WiFi connect:</td> <td> <input type="checkbox" id="otaclientpoweron" name="otaclientpoweron"></td>  </tr>
-            <tr><td align="left">OTA Server Address:</td> <td> <input type="text" id="otaclientaddr" name="otaclientaddr" maxlength="172" value=""></td> </tr>
-            <tr><td align="left">OTA Server Port:</td> <td> <input type="number" id="otaclientport" name="otaclientport" min="1" max="65535" value=""></td> </tr>
-            <tr><td align="left">OTA Manifest Path:</td> <td> <input type="text" id="otaclientmanifest" name="otaclientmanifest" maxlength="172" value=""></td> </tr>
-            <tr><td colspan="2" align="center"> <input type="submit" value="Save"></td></tr>
-        </table>
-    </form>
+    <div class="content" style="text-align: center;">
+        <form action="" method="post">
+            <table class="scan" style="width: auto; margin: 0 auto;">
+                <tr><th colspan="2">OTA Client Settings</th></tr>
+                <tr><td class="label">OTA Client check every ... minute (0 is off)</td>    <td><input type="number" id="otaclienttime" name="otaclienttime"  min="0" max="60" value=""  onkeyup=setMinMax();></td></tr>
+                <tr><td class="label">OTA Client update on WiFi connect:</td> <td> <input type="checkbox" id="otaclientpoweron" name="otaclientpoweron"></td>  </tr>
+                <tr><td class="label">OTA Server Address:</td> <td> <input type="text" id="otaclientaddr" name="otaclientaddr" maxlength="172" value=""></td> </tr>
+                <tr><td class="label">OTA Server Port:</td> <td> <input type="number" id="otaclientport" name="otaclientport" min="1" max="65535" value=""></td> </tr>
+                <tr><td class="label">OTA Manifest Path:</td> <td> <input type="text" id="otaclientmanifest" name="otaclientmanifest" maxlength="172" value=""></td> </tr>
+                <tr><td colspan="2" style="text-align: center; padding: 8px;"> <input type="submit" value="Save" class="button-prog"></td></tr>
+            </table>
+        </form>
+    </div>
 
-    <form id="upload" onsubmit="event.preventDefault(); otaClientTest()" enctype="multipart/form-data" autocomplete="off">
-        <table align="center">
-            <tr> <td align="center"> <span title="Test OTA Client check.">
-                    <input id="broadcastTest" type='submit' value='Test OTA Client' >
-                </span> </td></tr>
-        </table>
-    </form>
+    <div class="content" style="text-align: center;">
+        <form id="upload" onsubmit="event.preventDefault(); otaClientTest()" enctype="multipart/form-data" autocomplete="off">
+            <table class="scan" style="width: auto; margin: 0 auto;">
+                <tr><th colspan="2">OTA Test</th></tr>
+                <tr> <td style="text-align: center; padding: 8px;"> <span title="Test OTA Client check.">
+                        <input id="broadcastTest" type='submit' value='Test OTA Client' class="button-prog">
+                    </span> </td></tr>
+            </table>
+        </form>
+    </div>
 
     <!-- Test Result Display -->
     <div id="testResult" style="display:none; text-align:center; margin:10px auto; max-width:500px; padding:10px; border-radius:8px; font-weight:bold;">
     </div>
     <div id="updateButtonDiv" style="display:none; text-align:center; margin:10px auto;">
-        <button onclick="otaClientUpdate()" style="padding:10px 30px; background:#4CAF50; color:white; border:none; border-radius:8px; font-size:16px; cursor:pointer;">Update Now</button>
+        <button onclick="otaClientUpdate()" class="button-prog" style="padding:10px 30px; font-size:16px;">Update Now</button>
     </div>
 
 	<markup>./page_bottom.html</markup>
 	<script src="GetJson.js" defer></script>
 	<script src="GetMarkup.js" defer></script>
-    <script src="microajax.js" defer></script>
 	<script>
 		// Флаг для блокировки множественных одновременных тестов
 		let _otaTestInProgress = false;

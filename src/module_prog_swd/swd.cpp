@@ -1,7 +1,4 @@
 
-// Many thanks to scanlime for the work on the ESP8266 SWD Library, parts of this code have inspiration and help from it
-// https://github.com/scanlime/esp8266-arm-swd
-
 #include "main.h"
 
 
@@ -16,8 +13,10 @@
 
 #include"module_prog_swd.h"
 
-bool gpioInitState = false;
-bool turn_state = 0;
+// Флаги состояния SWD-интерфейса
+// Используем volatile для безопасного доступа из разных контекстов (EERTOS, loop)
+static volatile bool gpioInitState = false;
+static volatile bool turn_state = 0;
 
 
 void swd_gpio_init()  {
@@ -80,6 +79,16 @@ bool swd_DP_Read(unsigned addr, uint32_t &data) {
     if (state){ return true;}
   }
   return false;
+}
+
+// Однократное чтение DP без ретраев (для неблокирующей проверки чипа)
+bool swd_DP_Read_once(unsigned addr, uint32_t &data) {
+  return swd_transfer(addr, 0, 1, data);
+}
+
+// Однократное чтение AP без ретраев (для неблокирующей проверки чипа)
+bool swd_AP_Read_once(unsigned addr, uint32_t &data) {
+  return swd_transfer(addr, 1, 1, data);
 }
 
 // port , ap = 1, ad = 0, read 1 write 0

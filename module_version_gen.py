@@ -71,7 +71,7 @@ def get_commit_date(project_dir, folder_path, str_format=False):
         if str_format:
             # Запрашиваем сразу в нужном формате
             result = subprocess.run(
-                ["git", "log", "-1", f"--format={DATE_FORMAT}", folder_path],
+                ["git", "log", "-1", "--format=%ad", f"--date=format:{DATE_FORMAT}", folder_path],
                 cwd=str(project_dir),
                 capture_output=True,
                 text=True,
@@ -82,7 +82,7 @@ def get_commit_date(project_dir, folder_path, str_format=False):
         else:
             # Стандартный формат для парсинга
             result = subprocess.run(
-                ["git", "log", "-1", "--format=%Y-%m-%d %H:%M", folder_path],
+                ["git", "log", "-1", "--format=%ad", "--date=format:%Y-%m-%d %H:%M", folder_path],
                 cwd=str(project_dir),
                 capture_output=True,
                 text=True,

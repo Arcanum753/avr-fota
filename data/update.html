@@ -5,30 +5,36 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta http-equiv="Content-type" content="text/html; charset=utf-8">
     <link rel="stylesheet" href="style.css">
-    <script src="FSBrowserNG.js"></script>
 </head>
 <body>
     <markup>./page_head.html</markup>
     <h2 class="title" style="background: #7D8EE2; padding: 8px;"> ESP chip firmware &amp filesystem self update page</h2>
     <hr>
     
-    <div id="progressContainer" style="text-align: center; margin: 10px 0; padding: 10px; background-color: #f0f0f0; border-radius: 5px; display: none;">
+    <div id="progressContainer" class="prog-container" style="display: none;">
         <div id="progressText">Upload progress: 0%</div>
-        <div style="width: 100%; background-color: #ddd; border-radius: 3px; margin-top: 5px;">
-            <div id="progressBar" style="width: 0%; height: 20px; background-color: #4CAF50; border-radius: 3px; transition: width 0.3s;"></div>
+        <div class="prog-bar-bg">
+            <div id="progressBar" class="prog-bar-fill" style="width: 0%;"></div>
         </div>
     </div>
     
+    <div class="content">
     <form id="uploadForm" enctype='multipart/form-data'>
-        <table align = "center"> 
-            <tr><th> <input id="fileName" type='file' name='update' onchange="summd5()" style="display: block; margin: 20px auto; padding: 10px; font-size: 16px; width: auto; min-width: 300px;"> </th> </tr>
-            <tr><td id="md5row" >
+        <table class="scan">
+            <thead><tr><th colspan="2">Firmware & Filesystem Update</th></tr></thead>
+            <tr><td colspan="2">
+                <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                    <input id="fileName" type='file' name='update' onchange="summd5()" style="padding: 6px; font-size: 14px; flex: 1; min-width: 200px;">
+                    <input id="updateButton" type='button' value='Update ESP chip firmware.' disabled onclick="uploadFile()" class="button-prog">
+                </div>
+            </td></tr>
+            <tr><td colspan="2" id="md5row" >
                     Calculated file MD5 hash: <span id="clientHash">Select a file</span><br>
                     Size: <span id="fileSize"></span> Bytes <br>
                     Filename: <span id="fileNameLoaded"></span>
                   </td>
             </tr>
-            <tr><td id="VersionDiff" >
+            <tr><td colspan="2" id="VersionDiff" >
                      <span id="updStatus"> </span><br>
                      <span id="updSizeFree"> </span><br>
                      <span id="updSizeMax"> </span><br>
@@ -44,18 +50,18 @@
                      <span id="updFsCurrentFW"> </span><br>
                   </td>
             </tr>
-            <tr><td> 
-                <input id="updateButton" type='button' value='Update ESP chip firmware.' disabled onclick="uploadFile()">
+            <tr><td colspan="2" style="text-align: center;"> 
                 <label>
-                    <input type="checkbox" id="ignoreCheck" onchange="updateButtonState()">Ignore validation and force upload </label>
+                    <input type="checkbox" id="ignoreCheck" onchange="updateButtonState()">Ignore validation and force upload
+                </label>
               </td> </tr>
         </table>
     </form>
+    </div>
 
     <markup>./page_bottom.html</markup>
     <script src="GetMarkup.js" defer></script>
     <script src="GetJson.js" defer></script>
-    <script src="microajax.js" defer></script>
     <script src="spark-md5.js" defer></script>
     <script> 
         let progressTimer = null;
@@ -63,35 +69,37 @@
 
         window.onload = function () {
             setTimeout(() => {
-                    ApplyCVT("/system/infovalues");
-                    ApplyCVT("/system/version");
-            }, 250);
-            
-            // Load current firmware and filesystem versions
-            setTimeout(() => {
-                const xhr = new XMLHttpRequest();
-                xhr.open('GET', '/update/ver', true);
-                xhr.onload = function() {
-                    if (xhr.status === 200) {
-                        const fieldsRows = ParseCVT(xhr.response);
-                        let fwVersion = "";
-                        let fsVersion = "";
-                        for (let fields of fieldsRows) {
-                            if (fields[0] === "fwVersion") {
-                                fwVersion = fields[1];
-                            } else if (fields[0] === "fsVersion") {
-                                fsVersion = fields[1];
-                            }
-                        }
-                        if (fwVersion) {
-                            document.getElementById('updFsCurrentFW').innerHTML = "Current Firmware: " + fwVersion;
-                        }
-                        if (fsVersion) {
-                            document.getElementById('updFsCurrentFS').innerHTML = "Current File System: " + fsVersion;
-                        }
-                    }
-                };
-                xhr.send();
+                ApplyCVT("/system/version")
+                    .then(() => ApplyCVT("/system/infovalues"))
+                    .then(() => {
+                        return new Promise((resolve) => {
+                            const xhr = new XMLHttpRequest();
+                            xhr.open('GET', '/update/ver', true);
+                            xhr.onload = function() {
+                                if (xhr.status === 200) {
+                                    const fieldsRows = ParseCVT(xhr.response);
+                                    let fwVersion = "";
+                                    let fsVersion = "";
+                                    for (let fields of fieldsRows) {
+                                        if (fields[0] === "fwVersion") {
+                                            fwVersion = fields[1];
+                                        } else if (fields[0] === "fsVersion") {
+                                            fsVersion = fields[1];
+                                        }
+                                    }
+                                    if (fwVersion) {
+                                        document.getElementById('updFsCurrentFW').innerHTML = "Current Firmware: " + fwVersion;
+                                    }
+                                    if (fsVersion) {
+                                        document.getElementById('updFsCurrentFS').innerHTML = "Current File System: " + fsVersion;
+                                    }
+                                }
+                                resolve();
+                            };
+                            xhr.onerror = function() { resolve(); };
+                            xhr.send();
+                        });
+                    });
             }, 500);
         };
 
@@ -261,8 +269,9 @@
                 return;
             }
             
+            var file = input.files[0];
+
             var fileReader = new FileReader(),
-                file = input.files[0],
                 time;
             
             fileReader.onload = function (e) {

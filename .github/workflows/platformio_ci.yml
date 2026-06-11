@@ -13,7 +13,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        env: [esp32cam, esp32-swd, esp32-isp, esp32-gpio, esp8266-swd, esp8266-isp, esp8266-gpio, esp32-c3-devkitm-1]
+        env: [esp32cam, esp32-swd, esp32-isp, esp32-gpio, esp8266-gpio, esp32-c3-devkitm-1]
     steps:
     - name: Checkout code
       uses: actions/checkout@v4

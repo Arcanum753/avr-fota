@@ -131,9 +131,12 @@ private:
     void cacheFsVersionInfo();
     bool parseVersionFromJson(const String& jsonStr, int64_t& date, int32_t& build, int32_t& major, int32_t& minor);
 
-
 };
 
 extern CORE_OTA_CLASS modOtaClass;
+
+// Global flag: set to true when FS has been ended by OTA update process
+// Prevents double _fs->end() in restart_esp() which causes crash (LoadStoreAlignmentCause)
+extern bool _ota_fsEndCalled;
 
 #endif // _MODOTA_h

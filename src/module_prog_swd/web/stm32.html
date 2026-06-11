@@ -1,310 +1,931 @@
-<!DOCfiletype html>
-<html>	<head>
-	<title>STM32 OTA</title>
-	<meta http-equiv="Content-filetype" content="text/html; charset=utf-8">
-	<link rel="stylesheet" href="style.css">
+<!DOCTYPE html>
+<html>
+<head>
+    <title>STM32 SWD Programmer</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta http-equiv="Content-type" content="text/html; charset=utf-8">
+    <link rel="stylesheet" href="style.css">
+    <style>
+        /* Анимация пульсации для прогресс-бара во время старта прошивки */
+        @keyframes pulse {
+            0% { opacity: 0.6; }
+            50% { opacity: 1; }
+            100% { opacity: 0.6; }
+        }
+    </style>
 </head>
-
 <body>
-	<markup>./page_head.html</markup>
-	<div class="c">
-		<h2 class="title" style="background: #7D8EE2">  <span id="devicename">  </span> STM32/AVR Firmware  </h2>
-	</div>
-	<div class="c">
+    <markup>./page_head.html</markup>
+    <h2 class="title" style="background: #7D8EE2; padding: 8px;"> STM32 SWD Programmer</h2>
+    <hr>
 
-	<hr>
-		<table border="1" cellspacing="1" align="center">
-				<tr><td>File system all space:</td>		<td><div id="diskall"  class="align-right">N/A</div>	</td></tr>
-				<tr><td>File system used space:</td>	<td><div id="diskused" class="align-right">N/A</div>	</td></tr>
-				<tr><td>File system free space:</td>	<td><div id="diskfree" class="align-right">N/A</div>	</td></tr>
-		</table>
-	<hr>
-	<p style="text-align:center;"><span> <strong>*.hex & *.bin & .binary files list: </strong> </span></p>
+    <!-- Информация о диске -->
+    <div class="content" style="text-align: center;">
+        <div id="diskinfo"></div>
+    </div>
 
-	<form id="upload" onsubmit="event.preventDefault(); uploadFiles()" enctype="multipart/form-data" autocomplete="off">
-		<table border="1" cellspacing="1" align="center">
-			<tr>
-				<td align="center"> <input id="fileHex" name="update" type="file" accept=".hex, .bin, .binary" > </td>
-				<td align="center"> <button id="uploadFWFileBtn" type="submit" >Upload firmware file</button> </td>
-				<tr><td colspan="2" align="center"> <span id="uploadtext"></span> </td> </tr>
-			</tr>
-		</table>
-	</form>
+    <!-- Форма загрузки файла прошивки (кнопка выбора + Upload в одну строку) -->
+    <div class="content" style="text-align: center;">
+        <form id="uploadForm" enctype='multipart/form-data'>
+            <div style="display: flex; align-items: center; justify-content: center; gap: 10px; flex-wrap: wrap;">
+                <input id="fileName" type='file' name='update' style="display: block; margin: 10px auto; padding: 10px; font-size: 16px; width: auto; min-width: 300px;">
+                <input id="uploadButton" type='button' value='Upload firmware file' onclick="uploadFile()" class="button-prog">
+            </div>
+        </form>
+    </div>
 
-	<table border="1" cellspacing="1" align="center">
-		<tr>
-			<tr><td align="center"  > <button onclick="refreshList(); ">Refresh list</button></td></tr>
-			<td>
-				<table  border="1">
+    <!-- Прогресс загрузки/прошивки -->
+    <div id="progressContainer" class="prog-container">
+        <div id="progressText">Upload progress: 0%</div>
+        <div class="prog-bar-bg">
+            <div id="progressBar" class="prog-bar-fill"></div>
+        </div>
+    </div>
 
-					<thead bgcolor='#DDDDDD'>
-						<tr>
-							<th>File</th>
-							<th>Type</th>
-							<th>Size (bytes)</th>
-							<th>Chip</th>
-							<th>Actual<span title="Last date and time when firmware file was uploaded to chip.">(?)</span></th>
-						</tr>
-					</thead>
-					<tbody id="filelist"></tbody>
-				</table>
-			</td>
-		</tr>
+    <!-- Таблица файлов прошивки -->
+    <div class="content" style="text-align: center;">
+        <div style="overflow-x: auto;">
+            <table id="filesTable" class="scan">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Type</th>
+                        <th style="text-align: right;">Size</th>
+                        <th>Upload date</th>
+                        <th>Program date</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody id="filesTableBody">
+                    <tr><td colspan="6" style="text-align: center; padding: 20px;">Loading...</td></tr>
+                </tbody>
+            </table>
+        </div>
 
-	</table>
+        <!-- Кнопки действий (Delete слева, Program справа) -->
+        <div style="text-align: center; margin: 10px auto;">
+            <button onclick="deleteSelectedFile()" class="button-del" style="margin-right: 10px;">🗑️ Delete</button>
+            <button onclick="programSelectedFile()" class="button-prog">💾 Program</button>
+        </div>
+    </div>
 
-	<hr>
-		<table border="1" cellspacing="1" align="center">
-			<tr>
-				<td align="center">Selected file:</td>
-				<td align="center"> <span id="selectedfile"></span> </td>
-			</tr>
-			<tr>
-				<td align="center"> <button onclick="selectedFileProgFirmware();">Programm firmware</button></td>
-				<td align="center"> <button onclick="fileSelectedDelete();">Delete file</button></td>
-			</tr>
-			<tr>
-				<td colspan="2" align="center"> <span id="selectedfileerr"> </span> </td>
-			</tr>
+    <hr>
 
+    <markup>./page_bottom.html</markup>
+    <script src="GetMarkup.js" defer></script>
+    <script src="GetJson.js" defer></script>
+    <script> 
+        let progressTimer = null;
+        let isUploading = false;
+        let isProgramming = false;
+        let _uploadAbort = false;  // флаг для предотвращения гонок при остановке
+        let selectedFile = "";     // выбранный файл для действий внизу таблицы
 
-		</table>
+        window.onload = function () {
+            setTimeout(() => {
+                ApplyCVT("/system/version")
+                    .then(() => loadDiskInfo())
+                    .then(() => loadFilesList())
+                    .then(() => checkProgrammingStatus());
+            }, 250);
+        };
+        // ========== Check Programming Status on Page Load ==========
+        function checkProgrammingStatus() {
+            const xhr = new XMLHttpRequest();
+            xhr.open('GET', '/prog/progress', true);
+            xhr.timeout = 5000;
+            
+            xhr.onload = function() {
+                if (xhr.status === 200) {
+                    const fieldsRows = ParseCVT(xhr.response);
+                    let progStatus = "";
+                    let progPercent = -1;
+                    for (let fields of fieldsRows) {
+                        if (fields[0] === "progStatus")   progStatus = fields[1];
+                        if (fields[0] === "progPercent")  progPercent = parseInt(fields[1]);
+                    }
+                    
+                    if (progStatus === "running") {
+                        // Прошивка уже идёт — переходим в режим опроса
+                        console.log("Programming already in progress, resuming polling...");
+                        startProgPolling();
+                    } else if (progStatus === "done") {
+                        // Прошивка завершена — покажем что было 100%
+                        const container = document.getElementById('progressContainer');
+                        const progressText = document.getElementById('progressText');
+                        const progressBar = document.getElementById('progressBar');
+                        if (container) container.style.display = 'block';
+                        if (progressText) progressText.innerHTML = 'Programming: 100%';
+                        if (progressBar) {
+                            progressBar.style.width = '100%';
+                            progressBar.style.backgroundColor = '#4CAF50';
+                        }
+                        setTimeout(() => {
+                            if (container) container.style.display = 'none';
+                        }, 3000);
+                    }
+                }
+            };
+            xhr.onerror = function() {
+                // Не удалось проверить статус — это нормально, просто не показываем прогресс
+                console.log("Could not check programming status on load");
+            };
+            xhr.send();
+        }
+        // ========== Disk Info with Progress Bar ==========
+        function loadDiskInfo() {
+            return new Promise(function(resolve) {
+                const xhr = new XMLHttpRequest();
+                xhr.open('GET', '/prog/diskinfo', true);
+                xhr.onload = function() {
+                    if (xhr.status === 200) {
+                        const fieldsRows = ParseCVT(xhr.response);
+                        let all = "?", used = "?", free = "?";
+                        for (let fields of fieldsRows) {
+                            if (fields[0] === "diskall")   all = fields[1];
+                            if (fields[0] === "diskused")  used = fields[1];
+                            if (fields[0] === "diskfree")  free = fields[1];
+                        }
+                        // Парсим числа для расчёта процента
+                        const allNum = parseInt(all) || 0;
+                        const usedNum = parseInt(used) || 0;
+                        const percent = allNum > 0 ? Math.round((usedNum / allNum) * 100) : 0;
+                        // Цвет прогресс-бара в зависимости от заполнения
+                        let barColor = '#4CAF50';
+                        if (percent > 90) barColor = '#f44336';
+                        else if (percent > 70) barColor = '#ffaa00';
+                        // Форматируем размеры в человекочитаемый вид
+                        function formatSize(bytes) {
+                            if (bytes >= 1048576) return (bytes / 1048576).toFixed(1) + ' MB';
+                            if (bytes >= 1024) return (bytes / 1024).toFixed(1) + ' KB';
+                            return bytes + ' B';
+                        }
+                        document.getElementById('diskinfo').innerHTML =
+                            '<div class="diskinfo-wrap">' +
+                                '<div class="diskinfo-row">' +
+                                    '<span class="diskinfo-label">Used: <b>' + formatSize(usedNum) + '</b></span>' +
+                                    '<span class="diskinfo-label">Total: <b>' + formatSize(allNum) + '</b></span>' +
+                                '</div>' +
+                                '<div class="diskinfo-bar-bg">' +
+                                    '<div class="diskinfo-bar-fill" style="width: ' + percent + '%; background-color: ' + barColor + ';"></div>' +
+                                '</div>' +
+                                '<div class="diskinfo-text">' +
+                                    percent + '% used (' + formatSize(usedNum) + ' / ' + formatSize(allNum) + ')' +
+                                '</div>' +
+                            '</div>';
+                    }
+                    resolve();
+                };
+                xhr.onerror = function() { resolve(); };
+                xhr.send();
+            });
+        }
 
-	</div>
+        // ========== Files List ==========
+        function loadFilesList() {
+            return new Promise(function(resolve) {
+                const xhr = new XMLHttpRequest();
+                xhr.open('GET', '/prog/fileslist', true);
+                xhr.onload = function() {
+                    if (xhr.status === 200) {
+                        try {
+                            const files = JSON.parse(xhr.response);
+                            renderFilesTable(files);
+                        } catch(e) {
+                            document.getElementById('filesTableBody').innerHTML =
+                                '<tr><td colspan="6" style="text-align: center; padding: 20px; color: red;">Error parsing file list</td></tr>';
+                        }
+                    }
+                    resolve();
+                };
+                xhr.onerror = function() { resolve(); };
+                xhr.send();
+            });
+        }
 
-	<markup>./page_bottom.html</markup>
-	<script src="GetJson.js"   defer></script>
-	<script src="GetMarkup.js" defer></script>
-	<script src="microajax.js" defer></script>
-
-	<script>
-		window.onload = function() {
-			setTimeout(() => {
-				ApplyCVT("/system/version");
-				ApplyCVT("/system/infovalues");
-				fsSpaceSize();
-				refreshList();
-			}, 100);
-
-		};
-	</script>
-
-	<script language="javascript" filetype="text/javascript">
-		function refreshList (){
-			//ApplyCVT("/stm32/refresh");
-			request = new XMLHttpRequest();
-			if (request) {
-				request.open("GET", "/prog/fileslist", true);
-				request.addEventListener("load", refreshFilesList)
-				request.send();
-			}
-		}
-		var selectedfileglob ;
-
-		function refreshListLoc(res) {
-			var array;
-			//var jsonstr =  '[{"progactual":"true","filename":"stm32f103_dirtos500.bin","filetype":".bin","filesizestr":35004,"progchip":"stm32","progdate":""},{"progactual":"","filename":"stm32f103_dirtos500.binary","filetype":".binary","filesizestr":35004,"progchip":"stm32","progdate":""},{"progactual":"","filename":"stm32f103_dirtos1000.bin","filetype":".bin","filesizestr":35004,"progchip":"","progdate":""},{"progactual":"","filename":"stm32f103_dirtos1000.binary","filetype":".binary","filesizestr":35004,"progchip":"","progdate":""},{"progactual":"","filename":"eertos_at328p_ota103.hex","filetype":".hex","filesizestr":3671,"progchip":"avr","progdate":""},{"progactual":"","filename":"eertos_at328p_ota104.hex","filetype":".hex","filesizestr":3841,"progchip":"","progdate":""}]';
-			var jsonstr = '[{"filename":"stm32f103_dirtos500.bin","filetype":".bin","filesizestr":35004,"progchip":"stm32","progdate":""},{"filename":"stm32f103_dirtos500.binary","filetype":".binary","filesizestr":35004,"progchip":"stm32","progdate":""},{"filename":"stm32f103_dirtos1000.bin","filetype":".bin","filesizestr":35004,"progchip":"","progdate":""},{"filename":"stm32f103_dirtos1000.binary","filetype":".binary","filesizestr":35004,"progchip":"","progdate":""},{"filename":"eertos_at328p_ota103.hex","filetype":".hex","filesizestr":3671,"progchip":"avr","progdate":""},{"filename":"eertos_at328p_ota104.hex","filetype":".hex","filesizestr":3841,"progchip":"","progdate":""}]';
-			array = JSON.parse(jsonstr);
-			document.getElementById("filelist").innerHTML = array.length;
-			var table = document.getElementById("filelist");
-			table.innerHTML = "";
-			for (var i = 0; i < array.length; i++) {
-				var row = document.createElement("tr");
-
-				// row.innerHTML += "<td align=\"center\">" + actualStr(array[i].progactual) 	+"</td>";
-				// row.innerHTML += "<td>" + array[i].filename 	+"</td>";
-				row.innerHTML += "<td> <a href='javascript:selfile(\"" + array[i].filename + "\")'>"  + array[i].filename +"</td>";
-				row.innerHTML += "<td>" 						+ array[i].filetype			+"</td>";
-				row.innerHTML += "<td align=\"right\">" 		+ array[i].filesizestr		+"</td>" ;
-				row.innerHTML += "<td align=\"center\">" 		+ array[i].progchip			+"</td>";
-				row.innerHTML += "<td>" 						+ array[i].progdate			+"</td>";
-
-				table.appendChild(row);
-			}
-		}
-
-		function fsSpaceSize() {
-          const xhr = new XMLHttpRequest();
-          xhr.open('get', '/prog/diskinfo');
-          xhr.send();
-          xhr.addEventListener('loadend', () => {
-
-            const _diskall 		= document.getElementById("diskall");
-			const _diskused		= document.getElementById("diskused");
-			const _diskfree		= document.getElementById("diskfree");
-
-			var _vdiskall = 0;
-			var _vdiskused = 0;
-			var _vdiskfree = 0;
-
-            const fieldsRows = ParseCVT(xhr.response).reverse();
-            console.log(fieldsRows);
-
-            for (fields of fieldsRows) {
-				if (fields[0] == "diskall"  )	{ _diskall.innerHTML  = formatBytes(fields[1]);	 }
-				if (fields[0] == "diskused" )	{ _diskused.innerHTML = formatBytes(fields[1]);  }
-				if (fields[0] == "diskfree" )	{ _diskfree.innerHTML = formatBytes(fields[1]);  }
+        function renderFilesTable(files) {
+            const tbody = document.getElementById('filesTableBody');
+            if (!files || files.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 20px;">No firmware files found</td></tr>';
+                return;
             }
-          });
 
-       }
+            let html = "";
+            for (let i = 0; i < files.length; i++) {
+                const f = files[i];
+                const fname = f.filename || "";
+                const ftype = f.filetype || "";
+                const fsize = f.filesizestr || "";
+                const uploaddate = f.upload_date || "";
+                const progdate = f.prog_date || "";
+                const progStatus = f.prog_status || "";
+                const progTime = f.prog_time || "";
+                const progError = f.prog_error || "";
+                const progErrorStage = f.prog_error_stage || "";
+                const progErrorPercent = f.prog_error_percent || "";
+                const isLastSuccess = f.is_last_success === true;
+                const encodedName = encodeURIComponent(fname);
 
-	  function formatBytes( bytes) {
-			if (bytes < 1024)	{
-				return String (bytes) + "B";
-			}
-			else
-			if (bytes < (1024 * 1024))	{
-				var numb = Math.trunc(bytes / 1024.0) ;
-				numb = numb.toFixed(3);
-				return String ( numb ) + "KB";
-			}
-			else
-			if (bytes < (1024 * 1024 * 1024))	{
-				var numb = Math.trunc(bytes / 1024.0 / 1024.0) ;
-				numb = numb.toFixed(3);
-				return String (numb) + "MB";
-			}
-			else	{
-				var numb = Math.trunc(bytes / 1024.0 / 1024.0 / 1024.0) ;
-				numb = numb.toFixed(3);
-				return String (numb) + "GB";
-			}
-		}
+                // Определяем стиль строки по статусу прошивки
+                let rowStyle = '';
+                if (progStatus === 'ok') {
+                    rowStyle = ' style="background-color: #e8f5e9;"';  // зелёный — успешно прошито
+                } else if (progStatus === 'error') {
+                    rowStyle = ' style="background-color: #ffebee;"';  // красный — ошибка прошивки
+                }
+                // Если isLastSuccess — дополнительно выделяем жирным
+                if (isLastSuccess) {
+                    if (rowStyle) {
+                        rowStyle = rowStyle.replace('"', ' font-weight: bold;"');
+                    } else {
+                        rowStyle = ' style="background-color: #e8f5e9; font-weight: bold;"';
+                    }
+                }
 
-		function selfile(value) {
-			const _uploadtext = document.getElementById("selectedfile");
-			_uploadtext.innerHTML =  value;
-			selectedfileglob = value;
+                // Ячейка статуса (отдельный столбец)
+                let statusCell = '<td style="text-align: center;">';
+                if (progStatus === 'ok') {
+                    let okText = 'OK';
+                    if (progTime) {
+                        const secs = Math.floor(parseInt(progTime) / 1000);
+                        okText += ' (' + secs + 's)';
+                    }
+                    statusCell += '<span title="Successfully programmed" style="color: #2e7d32; font-weight: bold;">' + okText + '</span>';
+                } else if (progStatus === 'error') {
+                    let errText = 'Error';
+                    // Добавляем детали ошибки в title
+                    let errTitle = 'Programming error';
+                    if (progErrorStage) errTitle += ' | Stage: ' + progErrorStage;
+                    if (progErrorPercent) errTitle += ' | At: ' + progErrorPercent + '%';
+                    if (progError) errTitle += ' | ' + progError;
+                    if (progTime) {
+                        const secs = Math.floor(parseInt(progTime) / 1000);
+                        errText += ' (' + secs + 's)';
+                    }
+                    statusCell += '<span title="' + escapeHtml(errTitle) + '" style="color: #c62828; font-weight: bold; cursor: help;">' + errText + '</span>';
+                } else {
+                    statusCell += '<span style="color: #999;">—</span>';
+                }
+                statusCell += '</td>';
+
+                html += "<tr" + rowStyle + " onclick='selectFile(\"" + encodedName + "\", this)'>";
+                html += "<td><a style='text-decoration: none; color: #1a73e8; cursor: pointer;'>" + escapeHtml(fname) + "</a></td>";
+                html += "<td>" + escapeHtml(ftype) + "</td>";
+                html += "<td style='text-align: right;'>" + escapeHtml(fsize) + "</td>";
+                html += "<td style='text-align: center;'>" + escapeHtml(uploaddate) + "</td>";
+                html += "<td style='text-align: center;'>" + escapeHtml(progdate) + "</td>";
+                html += statusCell;
+                html += "</tr>";
+            }
+            tbody.innerHTML = html;
         }
 
-		function actualStr(_in) {
-            if (_in == 'true') { return '&#10004'; }
-            else if (_in == '') {   return '';   }
 
+        // ========== Select File (click on row) ==========
+        function selectFile(encodedName, row) {
+            selectedFile = decodeURIComponent(encodedName);
+            // Убираем подсветку со всех строк
+            const rows = document.querySelectorAll('#filesTableBody tr');
+            rows.forEach(function(r) { r.classList.remove('selected-row'); });
+            // Подсвечиваем выбранную строку
+            if (row) row.classList.add('selected-row');
         }
 
-		function refreshFilesList(res) {
-			var array;
+        // ========== Delete Selected File ==========
+        function deleteSelectedFile() {
+            if (!selectedFile) {
+                alert('No file selected. Click on a filename in the table first.');
+                return;
+            }
+            if (!confirm('Delete file "' + selectedFile + '"?')) return;
+            
+            const xhr = new XMLHttpRequest();
+            xhr.open('GET', '/prog/delete?path=' + encodeURIComponent(selectedFile), true);
+            xhr.onload = function() {
+                if (xhr.status === 200) {
+                    selectedFile = "";
+                    loadFilesList();
+                    loadDiskInfo();
+                } else {
+                    alert('Delete failed: ' + xhr.status);
+                }
+            };
+            xhr.onerror = function() {
+                alert('Network error during delete');
+            };
+            xhr.send();
+        }
 
-			array = JSON.parse(res.target.responseText);
-			document.getElementById("filelist").innerHTML = array.length;
-			var table = document.getElementById("filelist");
-			table.innerHTML = "";
-			for (var i = 0; i < array.length; i++) {
-				var row = document.createElement("tr");
-				row.innerHTML += "<td> <a href='javascript:selfile(\"" + array[i].filename + "\")'>"  + array[i].filename +"</td>";
-				row.innerHTML += "<td>" + array[i].filetype 	+"</td>";
-				row.innerHTML += "<td align=\"right\">" + array[i].filesizestr		+"</td>" ;
-				row.innerHTML += "<td align=\"center\">" + array[i].progchip 	+"</td>";
-				row.innerHTML += "<td>" + array[i].progdate 	+"</td>";
-				table.appendChild(row);
-			}
-			clearLabel();
-		}
+        // ========== Program Selected File ==========
+        function programSelectedFile() {
+            if (!selectedFile) {
+                alert('No file selected. Click on a filename in the table first.');
+                return;
+            }
+            flashFile(encodeURIComponent(selectedFile));
+        }
 
+        function escapeHtml(text) {
+            if (!text) return "";
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
 
-		function fileSelectedDelete(res){
-			const _uploadtext = document.getElementById("selectedfileerr");
-			if (selectedfileglob == null ) {
-				_uploadtext.innerHTML = "<b>" + 'Select file to delete first!' + "</b>";
-				return;
-		   }
-			xmlHttp = new XMLHttpRequest();
-			var formData = new FormData();
-			// selectedfileglob = '/' + selectedfileglob;
-			formData.append("path", selectedfileglob);
-			xmlHttp.open("DELETE", '/prog/delete');
-			xmlHttp.send(formData);
+        // ========== Delete File ==========
+        function deleteFile(filename) {
+            const decodedName = decodeURIComponent(filename);
+            if (!confirm('Delete file "' + decodedName + '"?')) return;
+            
+            const xhr = new XMLHttpRequest();
+            xhr.open('GET', '/prog/delete?path=' + encodeURIComponent(decodedName), true);
+            xhr.onload = function() {
+                if (xhr.status === 200) {
+                    loadFilesList();
+                    loadDiskInfo();
+                } else {
+                    alert('Delete failed: ' + xhr.status);
+                }
+            };
+            xhr.onerror = function() {
+                alert('Network error during delete');
+            };
+            xhr.send();
+        }
 
-			clearLabel();
+        // ========== Flash File (Program STM32) ==========
+        function flashFile(filename) {
+            if (!confirm('Program STM32 with "' + decodeURIComponent(filename) + '"?')) return;
+            if (isProgramming) { alert('Programming already in progress...'); return; }
 
-			setTimeout(() => {
-				fsSpaceSize();
-				refreshList();
-			}, 100);
+            const xhr = new XMLHttpRequest();
+            xhr.open('GET', '/prog/flash?path=' + encodeURIComponent(filename), true);
+            xhr.timeout = 10000;
+            
+            xhr.ontimeout = function() {
+                if (isProgramming) { stopProgPolling(); }
+                alert('No response from device — cannot start programming');
+            };
+            
+            xhr.onload = function() {
+                if (xhr.status === 200) {
+                    // Сервер вернул "ok" — переходим в режим ожидания программирования
+                    startProgPolling();
+                } else {
+                    alert('Failed to start programming: ' + xhr.status);
+                }
+            };
+            
+            xhr.onerror = function() {
+                console.error('Network error during programming');
+                alert('Network error during programming');
+            };
+            
+            xhr.send();
+        }
 
-		}
+        // ========== Programming Status Polling ==========
+        function stopProgPolling() {
+            isProgramming = false;
+            // снимаем анимацию пульсации
+            const progressBar = document.getElementById('progressBar');
+            if (progressBar) progressBar.style.animation = '';
+        }
 
+        // Показать ошибку прямо на прогресс-баре (без alert)
+        function showProgError(msg) {
+            const progressText = document.getElementById('progressText');
+            const progressBar = document.getElementById('progressBar');
+            if (progressText) progressText.innerHTML = '<span style="color: #cc0000; font-weight: bold;">' + msg + '</span>';
+            if (progressBar) {
+                progressBar.style.width = '100%';
+                progressBar.style.backgroundColor = '#cc0000';
+            }
+        }
 
+        // Показать успешное завершение на прогресс-баре (без alert)
+        function showProgSuccess() {
+            const progressText = document.getElementById('progressText');
+            const progressBar = document.getElementById('progressBar');
+            if (progressText) progressText.innerHTML = '<span style="color: #2e7d32; font-weight: bold;">Programming completed successfully!</span>';
+            if (progressBar) {
+                progressBar.style.width = '100%';
+                progressBar.style.backgroundColor = '#4CAF50';
+            }
+        }
 
-		function selectedFileProgFirmware(res){
-			const _uploadtext = document.getElementById("selectedfileerr");
-			if (selectedfileglob == null ) {
-				_uploadtext.innerHTML = "<b>" + 'Select file to flash first!' + "</b>";
-				return;
-			}
-		   	const xhr = new XMLHttpRequest();
-		   	var formData = new FormData();
-			//selectedfileglob = '/' + selectedfileglob;
-			formData.append("path", selectedfileglob);
-			xhr.open('POST', '/prog/flash');
-			xhr.send(formData);
-			clearLabel() ;
-			xhr.addEventListener('loadend', () => {
+        function startProgPolling() {
+            isProgramming = true;
+            const container = document.getElementById('progressContainer');
+            const progressText = document.getElementById('progressText');
+            const progressBar = document.getElementById('progressBar');
 
-				for (row of ParseCVT(xhr.response)) {
-					if (row[0] == "prog") { _uploadtext.innerHTML = row[1]; }
-				}
+            container.style.display = 'block';
+            progressText.innerHTML = 'Starting programming...';
+            progressBar.style.width = '0%';
+            progressBar.style.backgroundColor = '#ffaa00';
+            // Пульсация на старте — пока не получим первый реальный процент
+            progressBar.style.animation = 'pulse 1.5s ease-in-out infinite';
 
-			});
-			setTimeout(flashStatus, 3000);
+            let attempts = 0;
+            let pollActive = true;
+            const maxAttempts = 60; // 60 * 2 сек = 120 секунд (2 минуты)
+            let lastPercent = 0;
+            let firstRealPercent = false;  // флаг — получили ли первый реальный процент
 
-		}
+            (function pollProgStatus() {
+                if (!isProgramming) { stopProgPolling(); return; }
 
+                const xhr = new XMLHttpRequest();
+                xhr.open('GET', '/prog/progress', true);
+                xhr.timeout = 5000;
 
+                xhr.ontimeout = function() {
+                    if (!isProgramming) { stopProgPolling(); return; }
+                    attempts++;
+                    if (attempts >= maxAttempts) {
+                        stopProgPolling();
+                        showProgError('Programming timeout — no response from device');
+                    } else {
+                        setTimeout(pollProgStatus, 2000);
+                    }
+                };
 
-		function uploadFiles() {
-			const xhr = new XMLHttpRequest();
-			const form = document.querySelector('#upload');
-			const data = new FormData(form);
-			xhr.open('post', '/prog/uploadfile');
-			xhr.send(data);
-			xhr.addEventListener('loadend', () => {
-				const fieldsRows = ParseCVT(xhr.response);
-				const _uploadtext = document.getElementById("uploadtext");
-				_uploadtext.innerHTML = 'File upload begin...';
-				setTimeout(uploadFilesStat, 1500);
-			});
-		}
+                xhr.onload = function() {
+                    if (!isProgramming) { stopProgPolling(); return; }
 
-		function uploadFilesStat() {
-			const xhr = new XMLHttpRequest();
-			xhr.open('get', '/prog/uploadstat');
-			xhr.send();
-			xhr.addEventListener('loadend', () => {
-				const _statup = document.getElementById("statup");
-				const _uploadtext = document.getElementById("uploadtext");
-				let _filename;
-				let _filesize ;
+                    if (xhr.status === 200) {
+                        const fieldsRows = ParseCVT(xhr.response);
+                        let progStatus = "";
+                        let progPercent = -1;
+                        let progTime = "";
+                        for (let fields of fieldsRows) {
+                            if (fields[0] === "progStatus")   progStatus = fields[1];
+                            if (fields[0] === "progPercent")  progPercent = parseInt(fields[1]);
+                            if (fields[0] === "progTime")     progTime = fields[1];
+                        }
 
-				const fieldsRows = ParseCVT(xhr.response).reverse();
-				console.log(fieldsRows);
-				for (fields of fieldsRows) {
-					if (fields[0] == "file" )       						{	_filename = fields[1];  }
-					if (fields[0] == "fileSize" )							{	_filesize = fields[1];  }
-					if (fields[0] == "status" && fields[1] == "error")		{	_uploadtext.innerHTML = 'File uploaded failed!';	}
-					if (fields[0] == "status" && fields[1] == "ok") 		{	_uploadtext.innerHTML = `File <b> ${_filename} </b> <br> of <b> ${_filesize} </b> bytes uploaded successful!`; }
-				}
-			});
-			fsSpaceSize();
-			refreshList();
+                        if (progStatus === "starting") {
+                            // Старт прошивки — показываем пульсацию
+                            progressText.innerHTML = 'Starting programming...';
+                            progressBar.style.animation = 'pulse 1.5s ease-in-out infinite';
+                            attempts = 0;
+                            setTimeout(pollProgStatus, 1000);  // опрашиваем чаще на старте
+                        } else if (progStatus === "running") {
+                            // Первый реальный процент — убираем пульсацию
+                            if (!firstRealPercent) {
+                                firstRealPercent = true;
+                                progressBar.style.animation = '';
+                            }
+                            // Показываем реальный процент прошивки
+                            if (progPercent >= 0) {
+                                updateProgressDisplay(progPercent);
+                                progressText.innerHTML = 'Programming: ' + progPercent + '%';
+                                lastPercent = progPercent;
+                            }
+                            attempts = 0;  // сбрасываем счётчик при успешном ответе
+                            setTimeout(pollProgStatus, 2000);
+                        } else if (progStatus === "done") {
+                            stopProgPolling();
+                            progressBar.style.animation = '';
+                            updateProgressDisplay(100);
+                            let doneMsg = 'Programming completed successfully!';
+                            if (progTime) {
+                                const secs = Math.floor(parseInt(progTime) / 1000);
+                                doneMsg += ' (' + secs + 's)';
+                            }
+                            progressText.innerHTML = '<span style="color: #2e7d32; font-weight: bold;">' + doneMsg + '</span>';
+                            progressBar.style.backgroundColor = '#4CAF50';
+                            // Принудительно обновляем список файлов и диск
+                            loadFilesList();
+                            loadDiskInfo();
+                            setTimeout(function() {
+                                container.style.display = 'none';
+                            }, 8000);
+                        } else if (progStatus === "error") {
+                            stopProgPolling();
+                            progressBar.style.animation = '';
+                            let errMsg = 'Programming failed!';
+                            if (progTime) {
+                                const secs = Math.floor(parseInt(progTime) / 1000);
+                                errMsg += ' (' + secs + 's)';
+                            }
+                            showProgError(errMsg);
+                            // При ошибке тоже обновляем список — чтобы увидеть статус error
+                            loadFilesList();
+                            loadDiskInfo();
+                        } else {
+                            // progStatus не найден — возможно сервер ещё не в режиме программирования
+                            attempts++;
+                            if (attempts >= maxAttempts) {
+                                stopProgPolling();
+                                showProgError('Programming timeout — status not received');
+                            } else {
+                                setTimeout(pollProgStatus, 2000);
+                            }
+                        }
+                    }
+                };
 
-		}
+                xhr.onerror = function() {
+                    if (!isProgramming) { stopProgPolling(); return; }
+                    attempts++;
+                    if (attempts >= maxAttempts) {
+                        stopProgPolling();
+                        showProgError('Programming timeout — connection lost!');
+                    } else {
+                        setTimeout(pollProgStatus, 2000);
+                    }
+                };
 
-		function clearLabel() {
-			const _uploadtext = document.getElementById("selectedfileerr");
-			_uploadtext.innerHTML = "";
-			selectedfileglob = null ;
+                xhr.send();
+            })();
+        }
 
-		}
+        // ========== Upload File with MD5 Pre-check ==========
+        function uploadFile() {
+            const fileInput = document.getElementById('fileName');
+            const file = fileInput.files[0];
+            
+            if (!file) {
+                alert('Please select a file first');
+                return;
+            }
 
+            // Проверка длины имени файла (SPIFFS ограничение 32 байта)
+            const MAX_FILENAME_LEN = 30;
+            if (file.name.length > MAX_FILENAME_LEN) {
+                alert('Filename too long! Maximum ' + MAX_FILENAME_LEN + ' characters allowed.\n' +
+                      'Current filename length: ' + file.name.length + ' characters.\n\n' +
+                      'Please rename the file and try again.');
+                fileInput.value = "";
+                return;
+            }
 
+            // Показываем прогресс с сообщением "Loading MD5 library..."
+            const progressContainer = document.getElementById('progressContainer');
+            const progressText = document.getElementById('progressText');
+            const progressBar = document.getElementById('progressBar');
+            progressContainer.style.display = 'block';
+            progressText.innerHTML = 'Loading MD5 library...';
+            progressBar.style.width = '0%';
+            progressBar.style.backgroundColor = '#ffaa00';
 
+            // Динамически загружаем spark-md5.js только когда понадобился
+            loadScript('spark-md5.js', function() {
+                // Скрипт загружен — начинаем вычисление MD5
+                computeMD5AndUpload(file, fileInput);
+            }, function() {
+                // Ошибка загрузки скрипта — fallback без MD5
+                progressContainer.style.display = 'none';
+                if (confirm('Failed to load MD5 library. Upload without MD5 verification?')) {
+                    doUpload(file, fileInput);
+                }
+            });
+        }
 
-	</script>
+        // Динамическая загрузка скрипта
+        function loadScript(url, onSuccess, onError) {
+            var script = document.createElement('script');
+            script.src = url;
+            script.onload = onSuccess;
+            script.onerror = onError;
+            document.head.appendChild(script);
+        }
 
+        // Вычисление MD5 и отправка на сервер (вызывается после загрузки spark-md5.js)
+        function computeMD5AndUpload(file, fileInput) {
+            const progressContainer = document.getElementById('progressContainer');
+            const progressText = document.getElementById('progressText');
+            const progressBar = document.getElementById('progressBar');
+            progressText.innerHTML = 'Computing MD5...';
+            progressBar.style.width = '0%';
+            progressBar.style.backgroundColor = '#ffaa00';
+
+            const reader = new FileReader();
+            const spark = new SparkMD5.ArrayBuffer();
+            let chunkSize = 2 * 1024 * 1024; // 2MB chunks
+            let chunks = Math.ceil(file.size / chunkSize);
+            let currentChunk = 0;
+
+            reader.onload = function(e) {
+                spark.append(e.target.result);
+                currentChunk++;
+
+                if (currentChunk < chunks) {
+                    loadNext();
+                } else {
+                    const fileMD5 = spark.end();
+                    progressText.innerHTML = 'MD5: ' + fileMD5 + ' — checking server...';
+
+                    // Отправляем MD5 на сервер для предварительной проверки
+                    const xhrSetMD5 = new XMLHttpRequest();
+                    xhrSetMD5.open('GET', '/prog/setmd5?md5=' + fileMD5 + '&size=' + file.size + '&name=' + encodeURIComponent(file.name), true);
+                    xhrSetMD5.timeout = 10000;
+
+                    xhrSetMD5.ontimeout = function() {
+                        progressContainer.style.display = 'none';
+                        alert('Server did not respond to MD5 check — upload cancelled');
+                    };
+
+                    xhrSetMD5.onload = function() {
+                        if (xhrSetMD5.status === 200) {
+                            const response = xhrSetMD5.responseText.trim();
+                            if (response === "OK") {
+                                // Сервер подтвердил — можно загружать
+                                doUpload(file, fileInput);
+                            } else if (response.startsWith("ERROR|FILENAME_EXISTS")) {
+                                progressContainer.style.display = 'none';
+                                alert('File "' + file.name + '" already exists on device!\n' +
+                                      'Delete it first or rename the file.');
+                                fileInput.value = "";
+                            } else if (response.startsWith("ERROR|NO_SPACE")) {
+                                progressContainer.style.display = 'none';
+                                alert('Not enough free space on device!\n' +
+                                      'Free up space and try again.');
+                                fileInput.value = "";
+                            } else {
+                                progressContainer.style.display = 'none';
+                                alert('Server rejected upload: ' + response);
+                                fileInput.value = "";
+                            }
+                        } else {
+                            progressContainer.style.display = 'none';
+                            alert('MD5 check failed with status: ' + xhrSetMD5.status);
+                        }
+                    };
+
+                    xhrSetMD5.onerror = function() {
+                        progressContainer.style.display = 'none';
+                        alert('Network error during MD5 check');
+                    };
+
+                    xhrSetMD5.send();
+                }
+            };
+
+            function loadNext() {
+                var start = currentChunk * chunkSize;
+                var end = Math.min(start + chunkSize, file.size);
+                reader.readAsArrayBuffer(file.slice(start, end));
+            }
+
+            loadNext();
+        }
+
+        // Внутренняя функция — фактическая загрузка файла после MD5 проверки
+        function doUpload(file, fileInput) {
+            // Сначала передаём размер файла на сервер для прогресс-бара
+            const xhrSize = new XMLHttpRequest();
+            xhrSize.open('GET', '/prog/uploadsize?size=' + file.size, true);
+            xhrSize.onload = function() {
+                // После передачи размера начинаем загрузку файла
+                const formData = new FormData();
+                formData.append('update', file);
+
+                const xhr = new XMLHttpRequest();
+                xhr.open('POST', '/prog/uploadfile', true);
+                
+                xhr.onloadstart = function() {
+                    startProgressPolling();
+                };
+                
+                xhr.onload = function() {
+                    stopProgressPolling();
+                    
+                    if (xhr.status === 200) {
+                        updateProgressDisplay(100);
+                        // Проверяем, что файл действительно загрузился (сверяем размер)
+                        verifyUploadedFile(file, fileInput);
+                    } else {
+                        document.getElementById('progressContainer').style.display = 'none';
+                        alert('Upload failed with status: ' + xhr.status);
+                    }
+                };
+                
+                xhr.onerror = function() {
+                    console.error('Network error during upload');
+                    stopProgressPolling();
+                    document.getElementById('progressContainer').style.display = 'none';
+                    alert('Network error during upload');
+                };
+                
+                xhr.send(formData);
+            };
+            xhrSize.onerror = function() {
+                alert('Failed to set upload size');
+            };
+            xhrSize.send();
+        }
+
+        // ========== Verify Uploaded File (check result after upload) ==========
+        // Сервер сам проверяет размер и MD5, и при ошибке удаляет файл.
+        // Клиент только запрашивает /prog/uploadstat, чтобы узнать результат.
+        function verifyUploadedFile(file, fileInput) {
+            const progressContainer = document.getElementById('progressContainer');
+            const progressText = document.getElementById('progressText');
+            const progressBar = document.getElementById('progressBar');
+
+            // Запрашиваем статус загрузки у сервера
+            const xhr = new XMLHttpRequest();
+            xhr.open('GET', '/prog/uploadstat', true);
+            xhr.timeout = 10000;
+
+            xhr.ontimeout = function() {
+                progressText.innerHTML = 'Upload completed (status check timed out)';
+                progressBar.style.backgroundColor = '#ffaa00';
+                setTimeout(function() {
+                    progressContainer.style.display = 'none';
+                    loadFilesList();
+                    loadDiskInfo();
+                }, 3000);
+                fileInput.value = "";
+            };
+
+            xhr.onload = function() {
+                if (xhr.status === 200) {
+                    const fieldsRows = ParseCVT(xhr.response);
+                    let status = "";
+                    let md5error = "";
+                    let sizeerror = "";
+                    for (let fields of fieldsRows) {
+                        if (fields[0] === "status")      status = fields[1];
+                        if (fields[0] === "md5error")    md5error = fields[1];
+                        if (fields[0] === "sizeerror")   sizeerror = fields[1];
+                    }
+
+                    if (status === "ok") {
+                        // Сервер подтвердил успешную загрузку
+                        progressText.innerHTML = '<span style="color: #2e7d32; font-weight: bold;">Upload completed successfully!</span>';
+                        progressBar.style.width = '100%';
+                        progressBar.style.backgroundColor = '#4CAF50';
+                    } else if (md5error) {
+                        // Ошибка MD5 — сервер уже удалил файл
+                        progressText.innerHTML = '<span style="color: #cc0000; font-weight: bold;">Upload error: ' + escapeHtml(md5error) + '</span>';
+                        progressBar.style.width = '100%';
+                        progressBar.style.backgroundColor = '#cc0000';
+                    } else if (sizeerror) {
+                        // Ошибка размера — сервер уже удалил файл
+                        progressText.innerHTML = '<span style="color: #cc0000; font-weight: bold;">Upload error: ' + escapeHtml(sizeerror) + '</span>';
+                        progressBar.style.width = '100%';
+                        progressBar.style.backgroundColor = '#cc0000';
+                    } else {
+                        // Неизвестный статус
+                        progressText.innerHTML = 'Upload completed (unknown status)';
+                        progressBar.style.backgroundColor = '#ffaa00';
+                    }
+                } else {
+                    progressText.innerHTML = 'Upload completed (status unavailable)';
+                    progressBar.style.backgroundColor = '#ffaa00';
+                }
+                // Обновляем список файлов и диск
+                loadFilesList();
+                loadDiskInfo();
+                // Скрываем прогресс через 5 секунд
+                setTimeout(function() {
+                    progressContainer.style.display = 'none';
+                }, 5000);
+                fileInput.value = "";
+            };
+
+            xhr.onerror = function() {
+                progressText.innerHTML = 'Upload completed (status network error)';
+                progressBar.style.backgroundColor = '#ffaa00';
+                setTimeout(function() {
+                    progressContainer.style.display = 'none';
+                    loadFilesList();
+                    loadDiskInfo();
+                }, 3000);
+                fileInput.value = "";
+            };
+
+            xhr.send();
+        }
+
+        // ========== Progress Bar Polling ==========
+        function stopProgressPolling() {
+            _uploadAbort = true;  // сигнал остановки для in-flight запросов
+            if (progressTimer) {
+                clearTimeout(progressTimer);
+                progressTimer = null;
+            }
+            isUploading = false;
+        }
+
+        function startProgressPolling() {
+            _uploadAbort = false;
+            isUploading = true;
+            // Сбрасываем прогресс-бар на 0% сразу, чтобы не висело 100% от предыдущей загрузки
+            updateProgressDisplay(0);
+            document.getElementById('progressContainer').style.display = 'block';
+            
+            if (progressTimer) {
+                clearTimeout(progressTimer);
+                progressTimer = null;
+            }
+            
+            let attempts = 0;
+            const maxAttempts = 30; // 30 попыток с интервалом ~1 сек = 30 секунд максимум
+            
+            // рекурсивный setTimeout — следующий запрос только после ответа предыдущего
+            (function pollProgress() {
+                if (_uploadAbort || !isUploading) {
+                    stopProgressPolling();
+                    return;
+                }
+                
+                const xhr = new XMLHttpRequest();
+                xhr.open('GET', '/prog/progress', true);
+                xhr.timeout = 15000;
+                
+                xhr.ontimeout = function() {
+                    if (_uploadAbort) { stopProgressPolling(); return; }
+                    attempts++;
+                    console.warn('Upload polling timeout (attempt ' + attempts + '/' + maxAttempts + ')');
+                    if (attempts >= maxAttempts) {
+                        // Исчерпали все попытки — показываем ошибку без alert
+                        stopProgressPolling();
+                        const progressText = document.getElementById('progressText');
+                        const progressBar = document.getElementById('progressBar');
+                        if (progressText) progressText.innerHTML = '<span style="color: #cc0000; font-weight: bold;">Upload timeout — connection lost</span>';
+                        if (progressBar) {
+                            progressBar.style.width = '100%';
+                            progressBar.style.backgroundColor = '#cc0000';
+                        }
+                    } else {
+                        // Продолжаем опрос
+                        if (!_uploadAbort && isUploading) {
+                            progressTimer = setTimeout(pollProgress, 2000);
+                        }
+                    }
+                };
+                
+                xhr.onload = function() {
+                    // проверяем флаг abort — если вызван stop, игнорируем ответ
+                    if (_uploadAbort) { stopProgressPolling(); return; }
+                    
+                    if (xhr.status === 200) {
+                        const fieldsRows = ParseCVT(xhr.response);
+                        for (let fields of fieldsRows) {
+                            if (fields[0] === "percent") {
+                                const percent = parseInt(fields[1]);
+                                updateProgressDisplay(percent);
+                                break;
+                            }
+                        }
+                        // Сбрасываем счётчик попыток при успешном ответе
+                        attempts = 0;
+                    }
+                    // планируем следующий опрос через 1 секунду после ответа
+                    if (!_uploadAbort && isUploading) {
+                        progressTimer = setTimeout(pollProgress, 1000);
+                    }
+                };
+                
+                xhr.onerror = function() { 
+                    if (_uploadAbort) { stopProgressPolling(); return; }
+                    attempts++;
+                    console.error('Error fetching progress (attempt ' + attempts + '/' + maxAttempts + ')');
+                    if (attempts >= maxAttempts) {
+                        stopProgressPolling();
+                        const progressText = document.getElementById('progressText');
+                        const progressBar = document.getElementById('progressBar');
+                        if (progressText) progressText.innerHTML = '<span style="color: #cc0000; font-weight: bold;">Upload failed — connection lost</span>';
+                        if (progressBar) {
+                            progressBar.style.width = '100%';
+                            progressBar.style.backgroundColor = '#cc0000';
+                        }
+                    } else {
+                        if (!_uploadAbort && isUploading) {
+                            progressTimer = setTimeout(pollProgress, 2000);
+                        }
+                    }
+                };
+                
+                xhr.send();
+            })();
+        }
+
+        function updateProgressDisplay(percent) {
+            const progressText = document.getElementById('progressText');
+            const progressBar = document.getElementById('progressBar');
+            
+            if (progressText) {
+                progressText.innerHTML = 'Upload progress: ' + percent + '%';
+            }
+            if (progressBar) {
+                progressBar.style.width = percent + '%';
+                if (percent < 30) {
+                    progressBar.style.backgroundColor = '#ff4444';
+                } else if (percent < 70) {
+                    progressBar.style.backgroundColor = '#ffaa00';
+                } else {
+                    progressBar.style.backgroundColor = '#4CAF50';
+                }
+            }
+        }
+
+    </script>
+    
 </body>
-
 </html>

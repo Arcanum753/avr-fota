@@ -10,51 +10,49 @@
 	<div class="c">
 		<h2 class="title" style="background: #7D8EE2">  <span id="devicename">  </span> main page.  </h2>	
 	</div>
-	<div class="c">
-	  <table border="0" cellspacing="0" cellpadding="3" align="center">
-	  		<tr>	<td>Device name</td>	<td> <span id="devicename">  </span> </td></tr>
-			<tr>	<td>Device ESP firmware version</td>	          <td><span id="versionapp"> </span></td></tr>
-			<tr>	<td>Device serial number</td>	<td> <span id="deviceserial">  </span> </td></tr>
+	<div class="content" style="text-align: center;">
+	  <table class="scan" style="width: auto; margin: 0 auto;">
+	  		<tr><th colspan="2">Device Information</th></tr>
+	  		<tr>	<td class="label">Device name</td>	<td> <span id="devicename">  </span> </td></tr>
+			<tr>	<td class="label">Device ESP firmware version</td>	          <td><span id="versionapp"> </span></td></tr>
+			<tr>	<td class="label">Device serial number</td>	<td> <span id="deviceserial">  </span> </td></tr>
 			<tr>	<td colspan="2"><span><hr></span></td></tr>		
-			<tr>	<td><strong>WiFi Connection state:</strong></td>	<td><div  id="connectionstate">N/A</div></td></tr>
-			<tr>	<td>SSID:</td>										<td><span id="x_ssid">	</span> </td></tr>
-			<tr>	<td>IP:</td>										<td><span id="x_ip">	</span></td></tr>
-			<tr>	<td>Netmask:</td>									<td><span id="x_netmask"></span></td></tr>
-			<tr>	<td>Gateway:</td>									<td><span id="x_gateway"></span></td>	</tr>
-			<tr>	<td>DNS:</td>										<td><span id="x_dns">	</span></td></tr>
+			<tr>	<td class="label"><strong>WiFi Connection state:</strong></td>	<td><div  id="connectionstate">N/A</div></td></tr>
+			<tr>	<td class="label">SSID:</td>										<td><span id="x_ssid">	</span> </td></tr>
+			<tr>	<td class="label">IP:</td>										<td><span id="x_ip">	</span></td></tr>
+			<tr>	<td class="label">Netmask:</td>									<td><span id="x_netmask"></span></td></tr>
+			<tr>	<td class="label">Gateway:</td>									<td><span id="x_gateway"></span></td>	</tr>
+			<tr>	<td class="label">DNS:</td>										<td><span id="x_dns">	</span></td></tr>
 			<tr>	<td colspan="2"><span><hr></span></td></tr>		
-			<tr>	<td><strong>NTP Information:</strong></td></tr>
-			<tr>	<td>NTP Date:</td>									<td><span id="x_ntp_date"></span></td></tr>
-			<tr>	<td>NTP Time:</td>									<td><span id="x_ntp_time"></span></td></tr>
-			<tr>	<td>Last sync:</td>									<td><span id="x_ntp_sync"></span></td></tr>
-			<tr>	<td>NTP Server:</td>								<td><span id="x_ntp_adr"></span></td></tr>
+			<tr>	<td class="label"><strong>NTP Information:</strong></td></tr>
+			<tr>	<td class="label">NTP Date:</td>									<td><span id="x_ntp_date"></span></td></tr>
+			<tr>	<td class="label">NTP Time:</td>									<td><span id="x_ntp_time"></span></td></tr>
+			<tr>	<td class="label">Last sync:</td>									<td><span id="x_ntp_sync"></span></td></tr>
+			<tr>	<td class="label">NTP Server:</td>								<td><span id="x_ntp_adr"></span></td></tr>
 			<tr>	<td colspan="2"><span><hr></span></td></tr>		
-			<tr>	<td>Uptime:</td>									<td><span id="x_uptime"></span></td></tr>
-			<tr>	<td>Last boot:</td>									<td><span id="x_last_boot"></span></td></tr>
-			<tr>	<td>Reset reason:</td>								<td><span id="x_reason"></span></td></tr>
+			<tr>	<td class="label">Uptime:</td>									<td><span id="x_uptime"></span></td></tr>
+			<tr>	<td class="label">Last boot:</td>									<td><span id="x_last_boot"></span></td></tr>
+			<tr>	<td class="label">Reset reason:</td>								<td><span id="x_reason"></span></td></tr>
 			<tr>	<td colspan="2"><span><hr></span>	</td></tr>		
-			<tr>	<td><strong>Chip info:</strong></td></tr>
-			<tr>	<td>ChipID:</td><td><span id="x_chipid"></span></td></tr>
-			<tr>	<td>Mac:</td><td><span id="x_mac"></span></td></tr>
-			<tr>	<td>CPU Freq:</td><td><span id="x_mhz"></span> MHz</td></tr>
-			<tr>	<td>Sdk version:</td><td><span id="x_sdk"></span></td></tr>
+			<tr>	<td class="label"><strong>Chip info:</strong></td></tr>
+			<tr>	<td class="label">ChipID:</td><td><span id="x_chipid"></span></td></tr>
+			<tr>	<td class="label">Mac:</td><td><span id="x_mac"></span></td></tr>
+			<tr>	<td class="label">CPU Freq:</td><td><span id="x_mhz"></span> MHz</td></tr>
+			<tr>	<td class="label">Sdk version:</td><td><span id="x_sdk"></span></td></tr>
 		</table>
 	</div>
 
 	<markup>./page_bottom.html</markup>
 	<script src="GetJson.js" defer></script>
 	<script src="GetMarkup.js" defer></script>
-	<script src="microajax.js" defer></script>
 	<script>
 		window.onload = function() {
 			setTimeout(() => {
-				ApplyCVT("/system/version");
-				ApplyCVT("/system/infovalues");
-				ApplyCVT("/ntp/info");
-				ApplyCVT("/wifi/info");
-				
+				ApplyCVT("/system/version")
+					.then(() => ApplyCVT("/system/infovalues"))
+					.then(() => ApplyCVT("/ntp/info"))
+					.then(() => ApplyCVT("/wifi/info"));
 			}, 250);
-			
 		};
 		</script>
 

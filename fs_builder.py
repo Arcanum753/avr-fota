@@ -15,6 +15,7 @@ Import("env")
 # КОНФИГУРАЦИОННЫЕ КОНСТАНТЫ (все настройки здесь)
 # ============================================================
 
+
 # ------------------- Директории проекта -------------------
 DATA_FOLDER = "data"                     # папка с общими файлами
 SRC_FOLDER = "src"                       # папка с исходниками
@@ -86,6 +87,20 @@ def log_error(msg: str):
 def log_debug(msg: str):
     if os.environ.get("FS_BUILDER_DEBUG") == "1":
         print(f"[FS Builder] DEBUG: {msg}")
+
+# ============================================================
+# ИМПОРТ ГЕНЕРАТОРА page_head.html (с проверкой существования)
+# ============================================================
+try:
+    from gen_page_head import generate_page_head
+    _HAS_PAGE_HEAD_GEN = True
+    log_info("gen_page_head module loaded successfully")
+except ImportError:
+    _HAS_PAGE_HEAD_GEN = False
+    log_warning("gen_page_head module not found — page_head.html will not be dynamically generated")
+except Exception as e:
+    _HAS_PAGE_HEAD_GEN = False
+    log_warning(f"Failed to load gen_page_head module: {e}")
 
 def is_fs_build() -> bool:
     global _FS_BUILD_IN_PROGRESS
@@ -738,6 +753,11 @@ def prepare_fs_image() -> Optional[Path]:
                 if not item.is_file():
                     continue
                 
+                # Пропускаем служебные файлы (начинающиеся с _)
+                if item.name.startswith("_"):
+                    log_debug(f"  - {module_name}/{WEB_FOLDER_NAME}/{item.name} (skipped, service file)")
+                    continue
+                
                 if not validate_module_name(item.name):
                     log_warning(f"Skipping file with invalid name in {module_name}: {item.name}")
                     continue
@@ -761,7 +781,26 @@ def prepare_fs_image() -> Optional[Path]:
     log_info(f"Copied {web_files} web files from modules ({overwritten_files} overwrites)")
     log_info(f"Total unique files: {unique_files}")
     
-    # 8. Генерируем JSON файл с версией ФС (читая из version_builder файлов)
+    # 8. Генерируем динамический page_head.html на основе включённых модулей
+    if _HAS_PAGE_HEAD_GEN:
+        try:
+            # Используем только module_* имена (не core_*) для правой колонки меню
+            module_only_names = [m for m in all_web_modules if m.startswith(MODULE_PREFIX)]
+            
+            page_head_html = generate_page_head(module_only_names, src_dir=str(src_dir))
+            page_head_path = target_web_dir / "page_head.html"
+            
+            with open(page_head_path, 'w', encoding='utf-8') as f:
+                f.write(page_head_html)
+            
+            log_info(f"Generated dynamic page_head.html for modules: {module_only_names}")
+        except Exception as e:
+            log_warning(f"Failed to generate page_head.html: {e}")
+            log_warning("Using static page_head.html from data/ folder")
+    else:
+        log_info("Using static page_head.html from data/ folder (gen_page_head module not available)")
+    
+    # 10. Генерируем JSON файл с версией ФС (читая из version_builder файлов)
     if GENERATE_FS_VERSION_JSON:
         json_file = generate_fs_version_json(
             target_web_dir, 
@@ -770,11 +809,11 @@ def prepare_fs_image() -> Optional[Path]:
             project_dir
         )
     
-    # 9. Информационный файл
+    # 11. Информационный файл
     info_file = target_web_dir / "_build_info.txt"
     write_build_info(info_file, env_name, all_web_modules, unique_files, overwritten_files)
     
-    # 10. Перенаправляем PlatformIO
+    # 12. Перенаправляем PlatformIO
     try:
         env.Replace(PROJECT_DATA_DIR=str(target_web_dir))
         log_info(f"Redirected PROJECT_DATA_DIR to {target_web_dir}")
