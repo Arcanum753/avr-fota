@@ -568,9 +568,11 @@ void AsyncFSWebServer::serialShowAbout() {
 	#endif
 	Serial.printf("Scketch size: %u\r\n", 		ESP.getSketchSize());
 	if (_fs) {
+#if defined(ESP32)
 		Serial.printf("FS total: %u\r\n", 		_fs->totalBytes());
 		Serial.printf("FS used: %u\r\n", 		_fs->usedBytes());
 		Serial.printf("FS free: %u\r\n", 		_fs->totalBytes() - _fs->usedBytes());
+#endif
 	}
 
 	Serial.printf("wifi ssid: %s \n", WiFi.SSID().c_str());
