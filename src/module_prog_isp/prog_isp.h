@@ -88,7 +88,11 @@ typedef struct {
 // Конечный автомат прошивки AVR (для EERTOS-кооперативной работы)
 enum FlashState { FLASH_IDLE = 0, FLASH_INIT, FLASH_WRITE, FLASH_DONE };
 
+// Конечный автомат проверки чипа (для EERTOS-кооперативной работы)
+enum ChipCheckState { CHIP_IDLE = 0, CHIP_INIT, CHIP_PROBE, CHIP_DONE };
+
 class ESP_AVRISP {
+    friend int hex_write_to_flash_cb(uint32_t chunkAddr, const uint8_t *data, uint32_t size, void *userData);
 public:
     ESP_AVRISP(uint8_t reset_pin
     , bool reset_state = false
@@ -110,13 +114,23 @@ public:
     String getFlashErrorString() { return _flashErrorString; }
     String getFlashErrorStage() { return _flashErrorStage; }
     uint8_t getFlashErrorPercent() { return _flashErrorPercent; }
+    void updatePercent();   // вычисляет процент и выводит через DEBUGLOGISP
+    // Обновляем счётчик записанных байт и процент
+    inline void addToFlashPosi(uint32_t size) { _flashPosi += size; }  // добавляет к счётчику записанных байт
 
     void            chipFusesRead(AVRISP_fuses_t &AVRISP_fuses);
     void            chipFusesWrite( uint8_t _high, uint8_t _low, uint8_t _lock, uint8_t _ext);
     String          avrChipSignGet();
     String          chipSignRead();
 
+    // EERTOS-кооперативная проверка чипа
+    void startChipCheck();
+    void chipCheckStep();
+    bool isChipCheckBusy() { return _chipState != CHIP_IDLE; }
+    String getChipCheckResult() { return _chipResultSig; }
+
 protected:
+
     String          chipNow;
     int             chipErase();
     void            chipBusyWaitPolling();
@@ -165,13 +179,23 @@ protected:
     volatile uint8_t _percent = 0;
     bool             _isHexFormat = false;  // true если прошиваем HEX-файл
 
+    // EERTOS state для кооперативной проверки чипа
+    ChipCheckState   _chipState = CHIP_IDLE;
+    uint8_t          _chipRetry = 0;
+    String           _chipResultSig = "";
+
 };
+
 
 
 // EERTOS-враппер для кооперативной прошивки AVR (определён в prog_isp.cpp)
 void flash_step_task_wrapper();
 
+// EERTOS-враппер для кооперативной проверки чипа (определён в prog_isp.cpp)
+void chip_check_step_task_wrapper();
+
 extern ESP_AVRISP avrprog;
+
 
 
 

@@ -10,39 +10,46 @@
 <body>
     <markup>./page_head.html</markup>
     <h2 class="title" style="background: #7D8EE2">System configuration</h2>
+    <div class="content">
     <form action="" method="get">
-        <table border="0" cellspacing="0" cellpadding="3" align="center">
-            <tr><td align="left">Name of device</td>       <td><input type="text" id="name"   name="name" value=""></td></tr>
-            <tr><td align="left">Device serial number</td> <td><input type="text" id="serial" name="serial" value=""></td></tr>
-        </table>
-        <table align="center">
-            <tr> <td align="left">Scan Wifi for </td>    
+        <table class="scan">
+            <thead><tr><th colspan="2">Device Settings</th></tr></thead>
+            <tr><td class="label">Name of device</td>       <td><input type="text" id="name"   name="name" value=""></td></tr>
+            <tr><td class="label">Device serial number</td> <td><input type="text" id="serial" name="serial" value=""></td></tr>
+            <tr><td class="label">Scan Wifi for </td>    
                 <td><input type="number" id="scantime" name="scantime" min="0" max="10" value="1" onkeyup="setMinMax(this);"> minute (0 is off).</td>
             </tr>
-            <tr> <td align="left">WiFi Access point lifetime </td>    
+            <tr><td class="label">WiFi Access point lifetime </td>    
                 <td><input type="number" id="aptime" name="aptime" min="0" max="10" value="5" onkeyup="setMinMax(this);"> minute (0 is off).</td>
             </tr>
-            <tr><td colspan="2" align="center"> <input type="submit" value="Save"></td></tr>
+            <tr><td colspan="2" align="center"> <input type="submit" value="Save" class="button-prog"></td></tr>
         </table>
     </form>
+    </div>
 <hr>
+    <div class="content">
     <form>
-        <table border="0" cellspacing="0" cellpadding="3" style="width:350px" align="center">
-            <tr><td colspan="2" align="center"><input type="button" value="Reset chip" onclick='javascript:restartESP()'></td></tr>
+        <table class="scan">
+            <thead><tr><th colspan="2">Device Control</th></tr></thead>
+            <tr><td colspan="2" align="center"><input type="button" value="Reset chip" class="button-del" onclick='javascript:restartESP()'></td></tr>
         </table>
     </form>
+    </div>
 <hr>
+    <div class="content">
     <form id="wwwAuthForm" onsubmit=" return checkAuth( this ) " method="get">
         <input type="hidden" id="authconf" name="authconf" value="">
-        <table border="0" cellspacing="0" cellpadding="3" style="width:350px" align="center">
-            <tr><td><label for="wwwauth">Use auth:</label><input type="checkbox" id="wwwauth" name="wwwauth" onclick='javascript:enableAuthFields(this);'></td></tr>
-            <tr id="username" style="display: none;"><td><label for="wwwuser">Web User:</label><input type="text" id="wwwuser" name="wwwuser" value=""></td></tr>
-            <tr id="password" style="display: none;"><td><label for="wwwpass">Password:</label><input type="password" id="wwwpass" name="wwwpass" value=""></td></tr>
+        <table class="scan">
+            <thead><tr><th colspan="2">Web Authentication</th></tr></thead>
+            <tr><td class="label"><label for="wwwauth">Use auth:</label></td><td><input type="checkbox" id="wwwauth" name="wwwauth" onclick='javascript:enableAuthFields(this);'></td></tr>
+            <tr id="username" style="display: none;"><td class="label"><label for="wwwuser">Web User:</label></td><td><input type="text" id="wwwuser" name="wwwuser" value=""></td></tr>
+            <tr id="password" style="display: none;"><td class="label"><label for="wwwpass">Password:</label></td><td><input type="password" id="wwwpass" name="wwwpass" value=""></td></tr>
             <tr><td align="center" colspan="2">Notice password is used for<br/>HTTP Auth, AP Mode and OTA</td></tr>
-            <tr><td align="center"><input type="submit" value="Save"></td></tr>
+            <tr><td align="center"><input type="submit" value="Save" class="button-prog"></td></tr>
             <tr><td id="submitResult" align="center"></td></tr>
         </table>
     </form>
+    </div>
     <hr>
 
     <markup>./page_bottom.html</markup>

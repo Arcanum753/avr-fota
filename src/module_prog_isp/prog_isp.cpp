@@ -334,9 +334,57 @@ String ESP_AVRISP::chipFlashVerification() {
 
 }
 
+// ===== Callback для потоковой записи HEX в flash =====
+// Вызывается из hexFileParseStreamWrite() для каждого чанка данных.
+// userData — это указатель на ESP_AVRISP.
+int hex_write_to_flash_cb(uint32_t chunkAddr, const uint8_t *data, uint32_t size, void *userData) {
+    ESP_AVRISP *prog = (ESP_AVRISP *)userData;
+    if (!prog) return -1;
+
+    // AVR использует страничную запись. Пишем чанк постранично.
+    uint32_t pageSize = prog->_pageSize;
+    uint32_t offset = 0;
+    while (offset < size) {
+        uint32_t curLen = (size - offset > pageSize) ? pageSize : (size - offset);
+        
+        // Копируем данные во временный буфер страницы
+        uint8_t pageBuf[pageSize];
+        memset(pageBuf, 0xFF, pageSize);
+        memcpy(pageBuf, data + offset, curLen);
+        
+        // Прошиваем страницу
+        prog->pmode_begin();
+        int ret = prog->chipFlashPage(pageBuf, chunkAddr + offset, pageSize);
+        prog->pmode_end();
+        
+        if (ret != ERROR_OK) {
+            DEBUGLOGISP("hex_write_to_flash_cb: chipFlashPage returned %d at addr 0x%04x\n\r", ret, chunkAddr + offset);
+            return -1;
+        }
+        
+        offset += pageSize;
+    }
+
+    // Обновляем счётчик записанных байт и процент
+    prog->addToFlashPosi(size);
+    prog->updatePercent();
+
+    return 0;
+}
+
+// ===== Реализация updatePercent =====
+void ESP_AVRISP::updatePercent() {
+    if (_flashFileSize > 0) {
+        _percent = (uint8_t)(((float)_flashPosi / (float)_flashFileSize) * 100.0f);
+        DEBUGLOGISP("updatePercent: %u%%\r\n", _percent);
+        progIsp.setUploadPercent(_percent);
+    }
+}
+
 // ===== EERTOS-кооперативная прошивка AVR =====
 
 void ESP_AVRISP::beginFlashStep() {
+
     // Регистрируем задачу в EERTOS (будет вызываться каждый вызов loop())
     SetTask(flash_step_task_wrapper);
 }
@@ -350,6 +398,70 @@ void flash_step_task_wrapper() {
         SetTask(flash_step_task_wrapper);
     }
 }
+
+// ===== EERTOS-кооперативная проверка чипа =====
+
+void ESP_AVRISP::startChipCheck() {
+    if (isChipCheckBusy()) { return; }  // защита от повторного входа
+    _chipState = CHIP_INIT;
+    _chipRetry = 0;
+    _chipResultSig = "";
+    DEBUGLOGISP("startChipCheck: beginning chip probe\r\n");
+    SetTask(chip_check_step_task_wrapper);
+}
+
+// Глобальный враппер для регистрации в EERTOS.
+// Перерегистрирует себя в очереди, пока проверка чипа не завершена.
+void chip_check_step_task_wrapper() {
+    avrprog.chipCheckStep();
+    if (avrprog.isChipCheckBusy()) {
+        SetTask(chip_check_step_task_wrapper);
+    }
+}
+
+void ESP_AVRISP::chipCheckStep() {
+    switch (_chipState) {
+        case CHIP_INIT: {
+            _chipRetry = 0;
+            _chipState = CHIP_PROBE;
+            DEBUGLOGISP("chipCheckStep: CHIP_INIT -> CHIP_PROBE\r\n");
+            break;
+        }
+        
+        case CHIP_PROBE: {
+            // Читаем сигнатуру AVR-чипа через SPI
+            String sig = chipSignRead();
+            if (sig.length() > 0 && sig != "0x000000") {
+                _chipResultSig = sig;
+                _chipState = CHIP_DONE;
+                DEBUGLOGISP("chipCheckStep: chip found, signature=%s\r\n", sig.c_str());
+            } else {
+                _chipRetry++;
+                if (_chipRetry >= 15) {
+                    _chipResultSig = "";
+                    _chipState = CHIP_DONE;
+                    DEBUGLOGISP("chipCheckStep: chip NOT found after 15 attempts\r\n");
+                }
+                // иначе остаёмся в CHIP_PROBE — следующий вызов повторит
+            }
+            break;
+        }
+        
+        case CHIP_DONE: {
+            _chipState = CHIP_IDLE;
+            DEBUGLOGISP("chipCheckStep: CHIP_DONE -> CHIP_IDLE, result='%s'\r\n", _chipResultSig.c_str());
+            // Вызываем callback в module_prog_isp
+            progIsp.onChipCheckComplete(_chipResultSig);
+            break;
+        }
+        
+        case CHIP_IDLE:
+        default:
+            // Ничего не делаем
+            break;
+    }
+}
+
 
 bool ESP_AVRISP::startFlash(uint32_t offset, String &path, uint32_t chipMemSize, uint32_t pageSize) {
     if (isFlashBusy()) { return false; }  // защита от повторного входа
@@ -379,7 +491,23 @@ bool ESP_AVRISP::startFlash(uint32_t offset, String &path, uint32_t chipMemSize,
     if (hexFileIsFormat(path)) {
         _isHexFormat = true;
         DEBUGLOGISP("startFlash: HEX format detected for %s\r\n", path.c_str());
+        
+        // Для HEX-формата сразу определяем реальный бинарный размер файла,
+        // чтобы корректно рассчитывать процент прошивки.
+        // Размер HEX-файла (текстовый) не равен размеру прошивки (бинарному).
+        File hexSizeFile = _fs->open(path, "r");
+        if (hexSizeFile) {
+            int32_t binSize = hexFileGetBinarySize(hexSizeFile);
+            hexSizeFile.close();
+            if (binSize > 0) {
+                _flashFileSize = (uint32_t)binSize;
+                DEBUGLOGISP("startFlash: HEX binary size = %u bytes\r\n", binSize);
+            } else {
+                DEBUGLOGISP("startFlash: WARNING - hexFileGetBinarySize returned %d\r\n", binSize);
+            }
+        }
     } else if (binFileIsFormat(path)) {
+
         _isHexFormat = false;
         DEBUGLOGISP("startFlash: BIN format detected for %s\r\n", path.c_str());
     } else {
@@ -428,10 +556,15 @@ void ESP_AVRISP::flashStep() {
                     break;
                 }
                 
-                _flashFileSize = (uint32_t)parseRet;
+                // _flashFileSize уже мог быть установлен в startFlash() через hexFileGetBinarySize().
+                // Если нет — устанавливаем из результата парсинга.
+                if (_flashFileSize == 0) {
+                    _flashFileSize = (uint32_t)parseRet;
+                }
                 _flashPosi = 0;
                 _flashStartTime = millis();
-                DEBUGLOGISP("flashStep: HEX parsed, %u bytes binary data\r\n", _flashFileSize);
+                DEBUGLOGISP("flashStep: HEX parsed, %u bytes binary data, flashFileSize=%u\r\n", parseRet, _flashFileSize);
+
             } else {
                 // BIN-формат: открываем файл как обычно
                 _flashFile = binFileOpen(*_fs, _flashPath);
@@ -494,10 +627,8 @@ void ESP_AVRISP::flashStep() {
             
             _flashAddr += pagesize;
             
-            // Обновляем процент
-            _percent = (uint8_t)(((float)_flashPosi / (float)_flashFileSize) * 100.0f);
-            DEBUGLOGISP("%i percents \r\n", _percent);
-            progIsp.setUploadPercent(_percent);
+            // Обновляем процент через updatePercent()
+            updatePercent();
             
             // Проверяем, закончили ли
             if (_flashPosi >= _flashFileSize) {
@@ -509,6 +640,11 @@ void ESP_AVRISP::flashStep() {
         }
         
         case FLASH_DONE: {
+            // Если была ошибка — освобождаем SPI и пины (аналог pmode_end)
+            if (_flashError) {
+                DEBUGLOGISP("flashStep: FLASH_DONE with error, releasing SPI\r\n");
+                pmode_end();
+            }
             // Очищаем HEX-буфер
             _hexBinDataBuf.clear();
             // Сообщаем о завершении — вызываем callback в module_prog_isp
@@ -517,6 +653,7 @@ void ESP_AVRISP::flashStep() {
             progIsp.onFlashComplete();
             break;
         }
+
         
         case FLASH_IDLE:
         default:

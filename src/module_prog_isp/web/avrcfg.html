@@ -27,56 +27,6 @@
             width: 250px;
             padding: 5px;
         }
-        /* Кнопка Read fuses — зелёная */
-        .button-green {
-            cursor: pointer;
-            display: inline-block;
-            font-weight: bold;
-            text-align: center;
-            text-decoration: none;
-            white-space: nowrap;
-            border-radius: 5px;
-            background-image: linear-gradient(rgba(255, 255, 255, .1), rgba(255, 255, 255, .05) 49%, rgba(0, 0, 0, .05) 51%, rgba(0, 0, 0, .1));
-            background-color: #4CAF50;
-            color: white;
-            border: 1px solid #388E3C;
-            box-shadow: inset 0 0.08em 0 rgba(255, 255, 255, 0.7), inset 0 0 0.08em rgba(255, 255, 255, 0.5);
-            text-shadow: 0 1px 0 rgba(0, 0, 0, 0.2);
-            padding: 6px 20px;
-            font-size: 14px;
-        }
-        .button-green:hover {
-            background-color: #66BB6A;
-        }
-        .button-green:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-        }
-        /* Кнопка Write fuses — красная */
-        .button-danger {
-            cursor: pointer;
-            display: inline-block;
-            font-weight: bold;
-            text-align: center;
-            text-decoration: none;
-            white-space: nowrap;
-            border-radius: 5px;
-            background-image: linear-gradient(rgba(255, 255, 255, .1), rgba(255, 255, 255, .05) 49%, rgba(0, 0, 0, .05) 51%, rgba(0, 0, 0, .1));
-            background-color: #f44336;
-            color: white;
-            border: 1px solid #c62828;
-            box-shadow: inset 0 0.08em 0 rgba(255, 255, 255, 0.7), inset 0 0 0.08em rgba(255, 255, 255, 0.5);
-            text-shadow: 0 1px 0 rgba(0, 0, 0, 0.2);
-            padding: 6px 20px;
-            font-size: 14px;
-        }
-        .button-danger:hover {
-            background-color: #ef5350;
-        }
-        .button-danger:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-        }
         /* Чекбокс Expand и подпись */
         .fuse-expand-label {
             font-weight: normal;
@@ -113,9 +63,9 @@
                 <tr><td class="label">Connected chip signature:</td><td><div id="signature" class="info-value">N/A</div></td></tr>
                 <tr><td class="label">Connected chip name:</td><td><div id="chipname" class="info-value">N/A</div></td></tr>
                 <tr><td colspan="2" style="text-align: center; padding: 8px;">
-                    <input type="button" value="Save configuration" onclick="saveCfg()" class="button">
+                    <input type="button" value="Save configuration" onclick="saveCfg()" class="button-prog">
                     &nbsp;
-                    <input type="button" value="Read Signature" onclick="readSignature()" class="button">
+                    <input type="button" value="Read Signature" onclick="readSignature()" class="button-prog">
                 </td></tr>
             </table>
         </form>
@@ -145,7 +95,7 @@
             <tr><td></td>
                 <td style="text-align: center; padding: 6px;">
                     <span title="Read fuses and AVR chip signature">
-                        <button onclick="readFuses();" class="button-green">Read fuses</button>
+                        <button onclick="readFuses();" class="button-prog">Read fuses</button>
                     </span>
                 </td>
             </tr>
@@ -157,7 +107,7 @@
                     </span>
                 </td>
                 <td style="text-align: center; padding: 6px;">
-                    <span title="Write fuses"> <button id="writeFusesId" onclick="writeFuses();" class="button-danger" disabled>Write fuses</button> </span>
+                    <span title="Write fuses"> <button id="writeFusesId" onclick="writeFuses();" class="button-del" disabled>Write fuses</button> </span>
                 </td>
             </tr>
         </table>

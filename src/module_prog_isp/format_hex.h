@@ -62,4 +62,16 @@ int32_t hexFileParseStream(File &file, std::vector<char> &binDataBuf,
  */
 bool hexFileIsFormat(const String &path);
 
+/**
+ * @brief Быстрый подсчёт бинарного размера HEX-файла (без парсинга в буфер).
+ *
+ * Читает файл построчно, подсчитывает суммарное количество бинарных байт
+ * во всех data-записях (тип 00). Не загружает данные в RAM.
+ * Используется для корректного расчёта процента прошивки.
+ *
+ * @param file Открытый File-объект для чтения.
+ * @return Количество бинарных байт в HEX-файле, или -1 при ошибке.
+ */
+int32_t hexFileGetBinarySize(File &file);
+
 #endif // _FORMAT_HEX_H

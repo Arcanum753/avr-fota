@@ -10,22 +10,23 @@
     <markup>./page_head.html</markup>
     <h2 class="title" style="background: #7D8EE2">Programmer project configuration</h2>
 
-    <div style="text-align: center;">
-        <table border="0" cellspacing="0" cellpadding="3" align="center">
-            <tr><td align="left">Project name:</td>    <td><input type="text" id="progproj" value=""></td></tr>
-            <tr><td align="left">Chip:</td>            <td><select id="progchip"></select></td></tr>
-            <tr><td colspan="2" align="center"> <input type="button" value="Save" onclick="saveProject()"></td></tr>
+    <div class="content" style="text-align: center;">
+        <table class="scan" style="width: auto; margin: 0 auto;">
+            <tr><th colspan="2">Project Configuration</th></tr>
+            <tr><td class="label">Project name:</td>    <td><input type="text" id="progproj" value=""></td></tr>
+            <tr><td class="label">Chip:</td>            <td><select id="progchip"></select></td></tr>
+            <tr><td colspan="2" style="text-align: center; padding: 8px;"> <input type="button" value="Save" onclick="saveProject()" class="button-prog"></td></tr>
         </table>
     </div>
 
     <div id="chipinfo" style="display:none; margin-top: 10px; text-align: center;">
-        <table border="1" cellspacing="0" cellpadding="3" align="center" style="border-collapse: collapse;">
+        <table class="scan" style="width: auto; margin: 0 auto;">
             <tr><th colspan="2">Chip Information</th></tr>
-            <tr><td align="left">Name:</td>        <td id="chipinfo_name"></td></tr>
-            <tr><td align="left">IDCODE:</td>       <td id="chipinfo_idcode"></td></tr>
-            <tr><td align="left">Family:</td>       <td id="chipinfo_family"></td></tr>
-            <tr><td align="left">Flash size:</td>   <td id="chipinfo_flash"></td></tr>
-            <tr><td align="left">Page size:</td>    <td id="chipinfo_page"></td></tr>
+            <tr><td class="label">Name:</td>        <td id="chipinfo_name"></td></tr>
+            <tr><td class="label">IDCODE:</td>       <td id="chipinfo_idcode"></td></tr>
+            <tr><td class="label">Family:</td>       <td id="chipinfo_family"></td></tr>
+            <tr><td class="label">Flash size:</td>   <td id="chipinfo_flash"></td></tr>
+            <tr><td class="label">Page size:</td>    <td id="chipinfo_page"></td></tr>
         </table>
     </div>
     

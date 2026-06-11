@@ -27,6 +27,9 @@
 
 #define ISP_FILELIST_JSON       "/isp_filelist.json"
 
+// Время актуальности статуса чипа после проверки (5 минут = 300 секунд)
+#define CHIP_STATUS_TIMEOUT     300
+
 #define JSON_STR_LEN			512
 #define JSON_FILESIZEMAX		1024
 
@@ -137,6 +140,12 @@ public:
     void    avrFusesRead(AsyncWebServerRequest *request);
     void    avrWebFusesWrite(AsyncWebServerRequest *request);
 
+    // chip status check
+    void    web_CheckChipStatus(AsyncWebServerRequest *request);
+    bool    chip_IsConnected();
+    // Callback после завершения EERTOS-кооперативной проверки чипа
+    void    onChipCheckComplete(const String &signature);
+
     // Project config page (project.html)
     void    web_ProjectInfo(AsyncWebServerRequest *request);
     void    web_ProjectSave(AsyncWebServerRequest *request);
@@ -164,15 +173,22 @@ protected:
 #endif
     File _fsUploadFile;        // открытый файл при загрузке в ФС
     size_t _fileUploadBytes;   // счётчик записанных байт при загрузке
+    uint32_t _uploadLastChunkTime = 0; // millis() последнего чанка загрузки
     
     // MD5 verification
     String _browserFileMD5;    // MD5 переданный от браузера
     uint32_t _browserFileSize; // размер файла от браузера
     String _browserFileName;   // имя файла от браузера
     bool _fileUploadError;     // флаг ошибки загрузки (несовпадение MD5)
+    String _uploadFilename;    // имя текущего загружаемого файла (для очистки при таймауте)
+
+    // Очистка "зависшей" загрузки (обрыв соединения, таймаут)
+    void _cleanupStaleUpload();
 
     // Chip status (ISP connection)
     String _chipIdstr;
+    bool     _chipConnected = false;
+    uint32_t _chipStatusTime = 0;  // millis() последней проверки статуса
 };
 
 extern Class_ProgIsp progIsp;

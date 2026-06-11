@@ -10,18 +10,19 @@
 	<div class="c">
 		<h2 class="title" style="background: #7D8EE2">  <span id="devicename">  </span> gpio control  </h2>	
 	</div>
-	<div class="c">
-		<table border="0" cellspacing="0" cellpadding="3" align="center" >
-			<tr> <td >UART :</td> 
+	<div class="content" style="text-align: center;">
+		<table class="scan" style="width: auto; margin: 0 auto;">
+			<tr><th colspan="3">GPIO Control</th></tr>
+			<tr> <td class="label">UART :</td> 
 				 <td> <input type="text" id="uart_str" name="uartstr" maxlength="100" value=""></td>
-				 <td> <input type="button" onclick="sendUart()" value="Send to UART">  </td>
+				 <td> <input type="button" onclick="sendUart()" value="Send to UART" class="button-prog">  </td>
 			</tr>
 			<tr>
 				<td><input id="led1" type="checkbox" ></td>
 				<td><input id="led2" type="checkbox" ></td>
 				<td><input id="led3" type="checkbox" ></td>
 				<td><input id="led4" type="checkbox" ></td>
-				<td> <input type="button" onclick="sendLed()" value="Set leds">  </td>
+				<td> <input type="button" onclick="sendLed()" value="Set leds" class="button-prog">  </td>
 			</tr>
 		</table>
 		

@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>STM32 Programmer</title>
+    <title>STM32 SWD Programmer</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta http-equiv="Content-type" content="text/html; charset=utf-8">
     <link rel="stylesheet" href="style.css">
@@ -12,12 +12,6 @@
             50% { opacity: 1; }
             100% { opacity: 0.6; }
         }
-        /* Подсветка выбранной строки в таблице файлов */
-        .selected-row {
-            background-color: #bbdefb !important;
-            outline: 2px solid #1a73e8;
-            outline-offset: -2px;
-        }
     </style>
 </head>
 <body>
@@ -26,59 +20,56 @@
     <hr>
 
     <!-- Информация о диске -->
-    <div id="diskinfo" style="text-align: center; margin: 10px 0;"></div>
+    <div class="content" style="text-align: center;">
+        <div id="diskinfo"></div>
+    </div>
 
-    <!-- Форма загрузки файла прошивки -->
-    <form id="uploadForm" enctype='multipart/form-data'>
-        <table align = "center"> 
-            <tr><th> <input id="fileName" type='file' name='update' style="display: block; margin: 20px auto; padding: 10px; font-size: 16px; width: auto; min-width: 300px;"> </th> </tr>
-            <tr><td> 
-                <input id="uploadButton" type='button' value='Upload firmware file' onclick="uploadFile()">
-              </td> </tr>
-        </table>
-    </form>
+    <!-- Форма загрузки файла прошивки (кнопка выбора + Upload в одну строку) -->
+    <div class="content" style="text-align: center;">
+        <form id="uploadForm" enctype='multipart/form-data'>
+            <div style="display: flex; align-items: center; justify-content: center; gap: 10px; flex-wrap: wrap;">
+                <input id="fileName" type='file' name='update' style="display: block; margin: 10px auto; padding: 10px; font-size: 16px; width: auto; min-width: 300px;">
+                <input id="uploadButton" type='button' value='Upload firmware file' onclick="uploadFile()" class="button-prog">
+            </div>
+        </form>
+    </div>
 
-    <div id="progressContainer" style="text-align: center; margin: 10px 0; padding: 10px; background-color: #f0f0f0; border-radius: 5px; display: none;">
+    <!-- Прогресс загрузки/прошивки -->
+    <div id="progressContainer" class="prog-container">
         <div id="progressText">Upload progress: 0%</div>
-        <div style="width: 100%; background-color: #ddd; border-radius: 3px; margin-top: 5px;">
-            <div id="progressBar" style="width: 0%; height: 20px; background-color: #4CAF50; border-radius: 3px; transition: width 0.3s;"></div>
+        <div class="prog-bar-bg">
+            <div id="progressBar" class="prog-bar-fill"></div>
+        </div>
+    </div>
+
+    <!-- Таблица файлов прошивки -->
+    <div class="content" style="text-align: center;">
+        <div style="overflow-x: auto;">
+            <table id="filesTable" class="scan">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Type</th>
+                        <th style="text-align: right;">Size</th>
+                        <th>Upload date</th>
+                        <th>Program date</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody id="filesTableBody">
+                    <tr><td colspan="6" style="text-align: center; padding: 20px;">Loading...</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Кнопки действий (Delete слева, Program справа) -->
+        <div style="text-align: center; margin: 10px auto;">
+            <button onclick="deleteSelectedFile()" class="button-del" style="margin-right: 10px;">🗑️ Delete</button>
+            <button onclick="programSelectedFile()" class="button-prog">💾 Program</button>
         </div>
     </div>
 
     <hr>
-
-    <!-- Таблица файлов прошивки -->
-    <div style="overflow-x: auto;">
-        <table id="filesTable" align="center" style="width: 100%; max-width: 1000px; border-collapse: collapse;">
-            <thead>
-                <tr style="background-color: #f2f2f2;">
-                    <th style="padding: 8px; text-align: left; border-bottom: 2px solid #ddd;">Name</th>
-                    <th style="padding: 8px; text-align: left; border-bottom: 2px solid #ddd;">Type</th>
-                    <th style="padding: 8px; text-align: right; border-bottom: 2px solid #ddd;">Size</th>
-                    <th style="padding: 8px; text-align: center; border-bottom: 2px solid #ddd;">Upload date</th>
-                    <th style="padding: 8px; text-align: center; border-bottom: 2px solid #ddd;">Program date</th>
-                    <th style="padding: 8px; text-align: center; border-bottom: 2px solid #ddd;">Status</th>
-                </tr>
-            </thead>
-            <tbody id="filesTableBody">
-                <tr><td colspan="6" style="text-align: center; padding: 20px;">Loading...</td></tr>
-            </tbody>
-        </table>
-    </div>
-
-    <!-- Кнопки действий (уменьшены на 50%, Delete слева, Program справа) -->
-    <div style="text-align: center; margin: 15px auto; max-width: 400px;">
-        <table align="center" style="border-collapse: collapse;">
-            <tr>
-                <td style="padding: 4px; text-align: center;">
-                    <button onclick="deleteSelectedFile()" style="padding: 4px 10px; cursor: pointer; border: 1px solid #f44336; border-radius: 4px; background: #f44336; color: white; font-size: 11px; font-weight: bold;">🗑️ Delete</button>
-                </td>
-                <td style="padding: 4px; text-align: center;">
-                    <button onclick="programSelectedFile()" style="padding: 4px 10px; cursor: pointer; border: 1px solid #4CAF50; border-radius: 4px; background: #4CAF50; color: white; font-size: 11px; font-weight: bold;">💾 Program</button>
-                </td>
-            </tr>
-        </table>
-    </div>
 
     <markup>./page_bottom.html</markup>
     <script src="GetMarkup.js" defer></script>
@@ -170,15 +161,15 @@
                             return bytes + ' B';
                         }
                         document.getElementById('diskinfo').innerHTML =
-                            '<div style="margin: 10px auto; max-width: 400px;">' +
-                                '<div style="display: flex; justify-content: space-between; margin-bottom: 4px;">' +
-                                    '<span style="font-size: 13px;">Used: <b>' + formatSize(usedNum) + '</b></span>' +
-                                    '<span style="font-size: 13px;">Total: <b>' + formatSize(allNum) + '</b></span>' +
+                            '<div class="diskinfo-wrap">' +
+                                '<div class="diskinfo-row">' +
+                                    '<span class="diskinfo-label">Used: <b>' + formatSize(usedNum) + '</b></span>' +
+                                    '<span class="diskinfo-label">Total: <b>' + formatSize(allNum) + '</b></span>' +
                                 '</div>' +
-                                '<div style="width: 100%; background-color: #ddd; border-radius: 4px; height: 22px; overflow: hidden;">' +
-                                    '<div style="width: ' + percent + '%; height: 22px; background-color: ' + barColor + '; border-radius: 4px; transition: width 0.5s;"></div>' +
+                                '<div class="diskinfo-bar-bg">' +
+                                    '<div class="diskinfo-bar-fill" style="width: ' + percent + '%; background-color: ' + barColor + ';"></div>' +
                                 '</div>' +
-                                '<div style="text-align: center; margin-top: 4px; font-size: 13px;">' +
+                                '<div class="diskinfo-text">' +
                                     percent + '% used (' + formatSize(usedNum) + ' / ' + formatSize(allNum) + ')' +
                                 '</div>' +
                             '</div>';
@@ -252,7 +243,7 @@
                 }
 
                 // Ячейка статуса (отдельный столбец)
-                let statusCell = '<td style="padding: 6px; border-bottom: 1px solid #ddd; text-align: center;">';
+                let statusCell = '<td style="text-align: center;">';
                 if (progStatus === 'ok') {
                     let okText = 'OK';
                     if (progTime) {
@@ -278,16 +269,17 @@
                 statusCell += '</td>';
 
                 html += "<tr" + rowStyle + " onclick='selectFile(\"" + encodedName + "\", this)'>";
-                html += "<td style='padding: 6px; border-bottom: 1px solid #ddd;'><a style='text-decoration: none; color: #1a73e8; cursor: pointer;'>" + escapeHtml(fname) + "</a></td>";
-                html += "<td style='padding: 6px; border-bottom: 1px solid #ddd;'>" + escapeHtml(ftype) + "</td>";
-                html += "<td style='padding: 6px; border-bottom: 1px solid #ddd; text-align: right;'>" + escapeHtml(fsize) + "</td>";
-                html += "<td style='padding: 6px; border-bottom: 1px solid #ddd; text-align: center;'>" + escapeHtml(uploaddate) + "</td>";
-                html += "<td style='padding: 6px; border-bottom: 1px solid #ddd; text-align: center;'>" + escapeHtml(progdate) + "</td>";
+                html += "<td><a style='text-decoration: none; color: #1a73e8; cursor: pointer;'>" + escapeHtml(fname) + "</a></td>";
+                html += "<td>" + escapeHtml(ftype) + "</td>";
+                html += "<td style='text-align: right;'>" + escapeHtml(fsize) + "</td>";
+                html += "<td style='text-align: center;'>" + escapeHtml(uploaddate) + "</td>";
+                html += "<td style='text-align: center;'>" + escapeHtml(progdate) + "</td>";
                 html += statusCell;
                 html += "</tr>";
             }
             tbody.innerHTML = html;
         }
+
 
         // ========== Select File (click on row) ==========
         function selectFile(encodedName, row) {
@@ -934,6 +926,6 @@
         }
 
     </script>
-   
+    
 </body>
 </html>

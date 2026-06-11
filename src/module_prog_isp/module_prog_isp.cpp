@@ -393,6 +393,61 @@ void Class_ProgIsp::onFlashComplete() {
 
 
 
+// ========== Chip Status Check (с кешированием) ==========
+
+// Проверка, подключён ли чип (с кешированием на CHIP_STATUS_TIMEOUT секунд)
+bool Class_ProgIsp::chip_IsConnected() {
+    // Если с последней проверки прошло меньше CHIP_STATUS_TIMEOUT секунд — возвращаем кешированный результат
+    if (_chipStatusTime > 0 && (millis() - _chipStatusTime) < (CHIP_STATUS_TIMEOUT * 1000)) {
+        return _chipConnected;
+    }
+    // Иначе делаем реальную проверку — читаем сигнатуру
+    String sig = avrprog.chipSignRead();
+    _chipStatusTime = millis();
+    if (sig.length() > 0 && sig != "0x000000") {
+        _chipConnected = true;
+        _chipIdstr = sig;
+    } else {
+        _chipConnected = false;
+        _chipIdstr = "";
+    }
+    DEBUGLOGISP("chip_IsConnected: %s (sig=%s)\r\n", _chipConnected ? "YES" : "NO", _chipIdstr.c_str());
+    return _chipConnected;
+}
+
+// Веб-обработчик для проверки статуса чипа (запускает EERTOS-проверку)
+void Class_ProgIsp::web_CheckChipStatus(AsyncWebServerRequest *request) {
+    DEBUGLOGISP("%s\n\r", __FUNCTION__);
+    
+    // Если прошивка идёт — не проверяем
+    if (_progRunning || avrprog.isFlashBusy()) {
+        request->send(200, "text/plain", "chipstatus|busy|div\n");
+        return;
+    }
+    
+    // Запускаем EERTOS-проверку чипа
+    avrprog.startChipCheck();
+    
+    // Отвечаем сразу — проверка идёт в фоне
+    request->send(200, "text/plain", "chipstatus|checking|div\n");
+}
+
+// Callback после завершения EERTOS-проверки чипа
+void Class_ProgIsp::onChipCheckComplete(const String &signature) {
+    DEBUGLOGISP("onChipCheckComplete: signature=%s\r\n", signature.c_str());
+    
+    _chipStatusTime = millis();
+    if (signature.length() > 0 && signature != "0x000000") {
+        _chipConnected = true;
+        _chipIdstr = signature;
+        DEBUGLOGISP("onChipCheckComplete: chip CONNECTED (sig=%s)\r\n", signature.c_str());
+    } else {
+        _chipConnected = false;
+        _chipIdstr = "";
+        DEBUGLOGISP("onChipCheckComplete: chip NOT CONNECTED\r\n");
+    }
+}
+
 // avr.html vvv
 void Class_ProgIsp::web_GetFilesList (AsyncWebServerRequest *request) {
 	DEBUGLOGISP(__PRETTY_FUNCTION__);	DEBUGLOGISP("\r\n");
@@ -437,6 +492,29 @@ void Class_ProgIsp::web_FileDelete(AsyncWebServerRequest *request) {
 	request->send(200, "text/plain", "");
 }
 
+// Таймаут загрузки: если от последнего чанка прошло больше 30 секунд — считаем загрузку прерванной
+#define UPLOAD_TIMEOUT_MS 30000
+
+// Очистка "зависшей" загрузки: закрываем и удаляем недозагруженный файл
+void Class_ProgIsp::_cleanupStaleUpload() {
+	if (_fsUploadFile) {
+		_fsUploadFile.close();
+		_fsUploadFile = File();
+	}
+	if (_uploadFilename.length() > 0) {
+		DEBUGLOGISP("Cleanup: removing stale upload file %s\r\n", _uploadFilename.c_str());
+		if (_fs && _fs->exists(_uploadFilename)) {
+			_fs->remove(_uploadFilename);
+		}
+		filelist_RemoveEntry(_uploadFilename);
+		_uploadFilename = "";
+	}
+	_fileUploadBytes = 0;
+	_fileUploadError = false;
+	_uploadPercent = 0;
+	_uploadLastChunkTime = 0;
+}
+
 // загрузчик файла из фронтенда с контролем MD5
 int Class_ProgIsp::web_FileUpload2FS( String filename, size_t index, uint8_t *data, size_t len, bool final) {
 	DEBUGLOGISP(__PRETTY_FUNCTION__);	DEBUGLOGISP("\r\n");
@@ -447,8 +525,24 @@ int Class_ProgIsp::web_FileUpload2FS( String filename, size_t index, uint8_t *da
 #endif
 	static bool _md5Initialized = false;
 	static size_t _expectedFileSize = 0;  // сохраняем ожидаемый размер локально
+
+	// Проверка таймаута: если загрузка идёт, но чанков давно не было — очищаем
+	if (index > 0 && _fsUploadFile && !final) {
+		if (_uploadLastChunkTime > 0 && (millis() - _uploadLastChunkTime) > UPLOAD_TIMEOUT_MS) {
+			DEBUGLOGISP("UPLOAD TIMEOUT: no data for %u ms, cleaning up stale upload\r\n", (millis() - _uploadLastChunkTime));
+			_cleanupStaleUpload();
+			// Сбрасываем статические переменные
+			_md5Initialized = false;
+			_expectedFileSize = 0;
+			// Продолжаем как новую загрузку (index всё ещё > 0, но _fsUploadFile уже сброшен)
+		}
+	}
+
 	// Start
 	if (!index) {
+		// Если есть "зависшая" загрузка от предыдущего обрыва — очищаем
+		_cleanupStaleUpload();
+
 		_uploadPercent = 0;
 		_fileUploadBytes = 0;
 		_fileUploadError = false;
@@ -456,6 +550,7 @@ int Class_ProgIsp::web_FileUpload2FS( String filename, size_t index, uint8_t *da
 		// если предыдущий файл не закрыт (например, загрузка прервана) — закрываем
 		if (_fsUploadFile) {
 			_fsUploadFile.close();
+			_fsUploadFile = File();
 			DEBUGLOGISP("WARN: previous upload file was open, closed.\r\n");
 		}
 		DEBUGLOGISP("Name: %s\r\n", filename.c_str());
@@ -467,6 +562,7 @@ int Class_ProgIsp::web_FileUpload2FS( String filename, size_t index, uint8_t *da
 		}
 
 		if (!filename.startsWith("/")) {filename = "/" + filename;}
+		_uploadFilename = filename;  // запоминаем имя для очистки при таймауте
 		_fsUploadFile = _fs->open(filename, "w");
 		DEBUGLOGISP("First upload part.\r\n");
 		
@@ -478,6 +574,7 @@ int Class_ProgIsp::web_FileUpload2FS( String filename, size_t index, uint8_t *da
 	}
 	// Continue
 	if (_fsUploadFile && !_fileUploadError) {
+		_uploadLastChunkTime = millis();  // обновляем время последнего чанка
 		DEBUGLOGISP("Continue upload part. Size = %u\r\n", len);
 		if (_fsUploadFile.write(data, len) != len) {
 			_fileUploadError = true;
@@ -497,6 +594,11 @@ int Class_ProgIsp::web_FileUpload2FS( String filename, size_t index, uint8_t *da
 #endif
 			}
 		}
+#if defined(ESP32)
+		// Сбрасываем watchdog при каждом чанке, чтобы предотвратить перезагрузку
+		// при загрузке больших файлов
+		esp_task_wdt_reset();
+#endif
 	}
 	// End
 	if (final) {
@@ -504,6 +606,8 @@ int Class_ProgIsp::web_FileUpload2FS( String filename, size_t index, uint8_t *da
 			_fsUploadFile.close();
 			_fsUploadFile = File(); // сбрасываем в "пустой" файл
 		}
+		_uploadFilename = "";  // загрузка завершена, имя больше не нужно для очистки
+		_uploadLastChunkTime = 0;
 		
 		// Проверяем размер файла (используем _expectedFileSize, сохранённый на старте)
 		if (!_fileUploadError && _expectedFileSize > 0 && _fileUploadBytes != _expectedFileSize) {
@@ -1008,21 +1112,8 @@ void Class_ProgIsp::web_FileUploadProgress(AsyncWebServerRequest *request) {
 	DEBUGLOGISP(__FUNCTION__);	DEBUGLOGISP("\r\n");
 	String values = "";
 	
-	// Если идёт программирование AVR — отдаём статус и процент
-	if (_progRunning || avrprog.isFlashBusy()) {
-		uint8_t pct = avrprog.getPercent();
-		_uploadPercent = pct;
-		
-		// Если процент 0 и прошивка только началась — отдаём "starting"
-		if (pct == 0 && avrprog.isFlashBusy()) {
-			values += "progStatus|starting|div\n";
-		} else {
-			values += "progStatus|running|div\n";
-		}
-		values += "progPercent|" + (String)pct + "|div\n";
-		request->send(200, "text/plain", values);
-		return;
-	}
+	// Сначала проверяем результат прошивки (done/error), чтобы не пропустить
+	// финальный статус из-за race condition с isFlashBusy()
 	if (_progResult == 0) {
 		values += "progStatus|done|div\n";
 		values += "progPercent|100|div\n";
@@ -1067,6 +1158,22 @@ void Class_ProgIsp::web_FileUploadProgress(AsyncWebServerRequest *request) {
 		}
 		_progResult = -1;  // сброс
 		_uploadPercent = 0;
+		request->send(200, "text/plain", values);
+		return;
+	}
+	
+	// Если результат ещё не установлен — проверяем, идёт ли процесс
+	if (_progRunning || avrprog.isFlashBusy()) {
+		uint8_t pct = avrprog.getPercent();
+		_uploadPercent = pct;
+		
+		// Если процент 0 и прошивка только началась — отдаём "starting"
+		if (pct == 0 && avrprog.isFlashBusy()) {
+			values += "progStatus|starting|div\n";
+		} else {
+			values += "progStatus|running|div\n";
+		}
+		values += "progPercent|" + (String)pct + "|div\n";
 		request->send(200, "text/plain", values);
 		return;
 	}
