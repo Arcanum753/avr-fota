@@ -4,8 +4,14 @@
 .vscode/launch.json
 .vscode/ipch
 *.bak
-# Firmware binaries
+/web_debug
 /proj_fwbins/
+<<<<<<< HEAD
+/plans/
+/log/
+/__pycache__/
+/hex&bin/
+=======
 *.bin
 # Web debug folders
 /web_debug/
@@ -19,3 +25,4 @@ log
 __pycache__
 /hex&bin
 task_progress.md
+>>>>>>> 802813ab38b21ed02d2c48ed8040220a71185746
