@@ -453,10 +453,13 @@ void AsyncFSWebServer::serverInit() {
 		// Не создаём response заранее — handleFileRead сам отправит ответ
 		// или мы отправим 404. AsyncWebServer сам управляет памятью response после send().
 		if (!this->handleFileRead(request->url(), request)) {
-			AsyncWebServerResponse *response = request->beginResponse(404, "text/plain", "FileNotFound");
-			response->addHeader("Connection", "close");
-			response->addHeader("Access-Control-Allow-Origin", "*");
-			request->send(response);
+			// Сначала пробуем отдать кастомную 404.html из файловой системы
+			if (!this->handleFileRead("/404.html", request)) {
+				AsyncWebServerResponse *response = request->beginResponse(404, "text/plain", "FileNotFound");
+				response->addHeader("Connection", "close");
+				response->addHeader("Access-Control-Allow-Origin", "*");
+				request->send(response);
+			}
 			// НЕ удаляем response — AsyncWebServer сам освободит память после отправки
 		}
 	});

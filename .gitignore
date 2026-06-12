@@ -17,3 +17,5 @@ build_counter.txt
 .module_versions
 .module_hashes
 task_progress.md
+*version.h
+/.kilo

@@ -151,12 +151,16 @@ void CORE_CLASS_NTP::send_NTP_info_html(AsyncWebServerRequest *request) {
 	DEBUGNTP(__FUNCTION__);	DEBUGNTP("\r\n");
 	String values = "";
 
-	values += "x_ntp_sync|" + (String)NTP.getTimeDateString(NTP.getLastNTPSync()) + "|div\n";
-	values += "x_ntp_time|" + (String)NTP.getTimeStr() + "|div\n";
-	values += "x_ntp_date|" + (String)NTP.getDateStr() + "|div\n";
+	bool ntpSynced = NTP.SyncStatus();
+
+	values += "x_ntp_sync|" + (ntpSynced ? (String)NTP.getTimeDateString(NTP.getLastNTPSync()) : "—") + "|div\n";
+	values += "x_ntp_time|" + (ntpSynced ? (String)NTP.getTimeStr() : "—") + "|div\n";
+	values += "x_ntp_date|" + (ntpSynced ? (String)NTP.getDateStr() : "—") + "|div\n";
 	values += "x_ntp_adr|" 	+ (String)NTP.getNtpServerName() + "|div\n";
 	values += "x_uptime|" 	+ (String)NTP.getUptimeString() + "|div\n";
-	values += "x_last_boot|" + NTP.getTimeDateString(NTP.getLastBootTime()) + "|div\n";
+
+	time_t lastBoot = NTP.getLastBootTime();
+	values += "x_last_boot|" + (lastBoot > 0 ? NTP.getTimeDateString(lastBoot) : "—") + "|div\n";
 
 	request->send(200, "text/plain", values);
 }
