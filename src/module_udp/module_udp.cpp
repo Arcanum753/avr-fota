@@ -251,7 +251,7 @@ String UDPBROADCAST_CLASS::udpJsonGet() {
 
     
     jsonDoc["espVer"]       = FIRMWARE_VERSION;
-    jsonDoc["webVer"]       = VERSION_WEB;
+
 	
 	serializeJsonPretty(jsonDoc, ret);
     return ret;

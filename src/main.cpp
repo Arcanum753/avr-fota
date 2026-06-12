@@ -103,10 +103,7 @@ void printGitInfo() {
 
     
     #if defined(ESP32)
-    Serial.println(" ESP32 WebPages version: "+ String(VERSION_WEB));
-	#endif
-    #if defined(ESP8266)
-    Serial.println(" ESP8266 WebPages version: "+ String(VERSION_WEB));
+
 	#endif  
     
 }

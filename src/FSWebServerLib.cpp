@@ -601,7 +601,6 @@ void AsyncFSWebServer::html_version_info(AsyncWebServerRequest *request) { // an
 	values += "devicename|"  	+ _sysConfig.deviceName  		+ "|div\n";
 	values += "deviceserial|" 	+ _sysConfig.deviceSerial 		+ "|div\n";
 	values += "versionapp|" 	+ String(FIRMWARE_VERSION) + "|div\n";
-	values += "versionweb|" 	+ String(VERSION_WEB) + "|div\n";
 	values += "versionfs|" 		+ getFsVersionStr() + "|div\n";
 	
 	values += "gitbranch|" ;values += GIT_BRANCH ;values += "|div\n";

@@ -855,7 +855,7 @@ void CORE_OTA_CLASS::html_ver_get(AsyncWebServerRequest *request) {
     values += "otagendate|"     + getCommitDateStr() + "|dev\n";
     
     // Current firmware version (from version.h macros)
-    values += "fwVersion|"      + String(VERSION_MAJOR) + "." + String(VERSION_MINOR) + "." + String(VERSION_DATE) + "." + String(VERSION_BUILD) + "|dev\n";
+    values += "fwVersion|"      + String(FIRMWARE_VERSION) + "|dev\n";
     
     // Current filesystem version (from cache or version_fs.json)
     if (!_fsVersionCached) {

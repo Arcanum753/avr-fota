@@ -1,5 +1,4 @@
 // #define VERSION_APP "1.5.30"
-#define VERSION_WEB "1.10.30" // TODO do version control
 #define DEVMODULE_GPIO "gpio"
 #define APP_BUILDDATE  __DATE__
 #define APP_BUILDTIME  __TIME__

@@ -405,7 +405,7 @@ String MODULE_CLASS_OTACLIENT::jsonGet() {
     jsonDoc["rstreason"]    =  ESPHTTPServer.getResetReason();
 
     jsonDoc["espVer"]       = FIRMWARE_VERSION;
-    jsonDoc["webVer"]       = VERSION_WEB;
+
 	
 	serializeJsonPretty(jsonDoc, ret);
     return ret;
