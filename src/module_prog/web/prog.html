@@ -25,8 +25,8 @@
     <div class="content" style="text-align: center;">
         <form id="uploadForm" enctype='multipart/form-data'>
             <div style="display: flex; align-items: center; justify-content: center; gap: 10px; flex-wrap: wrap;">
-                <input id="fileName" type='file' name='update' style="display: block; margin: 10px auto; padding: 10px; font-size: 16px; width: auto; min-width: 300px;">
-                <input id="uploadButton" type='button' value='Upload firmware file' onclick="uploadFile()" class="button-prog">
+                <input id="fileName" type='file' name='update' disabled style="display: block; margin: 10px auto; padding: 10px; font-size: 16px; width: auto; min-width: 300px;">
+                <input id="uploadButton" type='button' value='Upload firmware file' onclick="uploadFile()" disabled class="button-prog">
             </div>
         </form>
     </div>
@@ -76,12 +76,22 @@
         let _uploadAbort = false;
         let selectedFile = "";
 
+        function disableUploadControls() {
+            document.getElementById('fileName').disabled = true;
+            document.getElementById('uploadButton').disabled = true;
+        }
+        function enableUploadControls() {
+            document.getElementById('fileName').disabled = false;
+            document.getElementById('uploadButton').disabled = false;
+        }
+
         window.onload = function () {
             setTimeout(() => {
                 ApplyCVT("/system/version")
                     .then(() => loadDiskInfo())
                     .then(() => loadFilesList())
-                    .then(() => checkProgrammingStatus());
+                    .then(() => checkProgrammingStatus())
+                    .then(() => enableUploadControls());
             }, 250);
         };
         function checkProgrammingStatus() {
@@ -551,12 +561,15 @@
                 return;
             }
 
+            disableUploadControls();
+
             const MAX_FILENAME_LEN = 30;
             if (file.name.length > MAX_FILENAME_LEN) {
                 alert('Filename too long! Maximum ' + MAX_FILENAME_LEN + ' characters allowed.\n' +
                       'Current filename length: ' + file.name.length + ' characters.\n\n' +
                       'Please rename the file and try again.');
                 fileInput.value = "";
+                enableUploadControls();
                 return;
             }
 
@@ -574,6 +587,8 @@
                 progressContainer.style.display = 'none';
                 if (confirm('Failed to load MD5 library. Upload without MD5 verification?')) {
                     doUpload(file, fileInput);
+                } else {
+                    enableUploadControls();
                 }
             });
         }
@@ -617,6 +632,7 @@
                     xhrSetMD5.ontimeout = function() {
                         progressContainer.style.display = 'none';
                         alert('Server did not respond to MD5 check — upload cancelled');
+                        enableUploadControls();
                     };
 
                     xhrSetMD5.onload = function() {
@@ -629,25 +645,30 @@
                                 alert('File "' + file.name + '" already exists on device!\n' +
                                       'Delete it first or rename the file.');
                                 fileInput.value = "";
+                                enableUploadControls();
                             } else if (response.startsWith("ERROR|NO_SPACE")) {
                                 progressContainer.style.display = 'none';
                                 alert('Not enough free space on device!\n' +
                                       'Free up space and try again.');
                                 fileInput.value = "";
+                                enableUploadControls();
                             } else {
                                 progressContainer.style.display = 'none';
                                 alert('Server rejected upload: ' + response);
                                 fileInput.value = "";
+                                enableUploadControls();
                             }
                         } else {
                             progressContainer.style.display = 'none';
                             alert('MD5 check failed with status: ' + xhrSetMD5.status);
+                            enableUploadControls();
                         }
                     };
 
                     xhrSetMD5.onerror = function() {
                         progressContainer.style.display = 'none';
                         alert('Network error during MD5 check');
+                        enableUploadControls();
                     };
 
                     xhrSetMD5.send();
@@ -686,6 +707,7 @@
                     } else {
                         document.getElementById('progressContainer').style.display = 'none';
                         alert('Upload failed with status: ' + xhr.status);
+                        enableUploadControls();
                     }
                 };
                 
@@ -694,12 +716,14 @@
                     stopProgressPolling();
                     document.getElementById('progressContainer').style.display = 'none';
                     alert('Network error during upload');
+                    enableUploadControls();
                 };
                 
                 xhr.send(formData);
             };
             xhrSize.onerror = function() {
                 alert('Failed to set upload size');
+                enableUploadControls();
             };
             xhrSize.send();
         }
@@ -722,6 +746,7 @@
                     loadDiskInfo();
                 }, 3000);
                 fileInput.value = "";
+                enableUploadControls();
             };
 
             xhr.onload = function() {
@@ -762,6 +787,7 @@
                     progressContainer.style.display = 'none';
                 }, 5000);
                 fileInput.value = "";
+                enableUploadControls();
             };
 
             xhr.onerror = function() {
@@ -773,6 +799,7 @@
                     loadDiskInfo();
                 }, 3000);
                 fileInput.value = "";
+                enableUploadControls();
             };
 
             xhr.send();
@@ -824,6 +851,7 @@
                             progressBar.style.width = '100%';
                             progressBar.style.backgroundColor = '#cc0000';
                         }
+                        enableUploadControls();
                     } else {
                         if (!_uploadAbort && isUploading) {
                             progressTimer = setTimeout(pollProgress, 2000);
@@ -863,6 +891,7 @@
                             progressBar.style.width = '100%';
                             progressBar.style.backgroundColor = '#cc0000';
                         }
+                        enableUploadControls();
                     } else {
                         if (!_uploadAbort && isUploading) {
                             progressTimer = setTimeout(pollProgress, 2000);
