@@ -10,12 +10,12 @@
 
 #include "core_json/core_json.h"
 
-#include "module_prog_isp.h"
+#include "submodule_isp.h"
 #include "prog_isp.h"
 // #include "debug.h"
 #include "common.h"
-#include "../submodule_prog/format_hex.h"
-#include "../submodule_prog/format_bin.h"
+#include "../module_prog/format_hex.h"
+#include "../module_prog/format_bin.h"
 #include "eertos.h"
 
 

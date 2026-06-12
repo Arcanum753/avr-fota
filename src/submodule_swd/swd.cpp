@@ -11,7 +11,7 @@
 // #include "debug.h"
 #include "debug_cm.h"
 
-#include"module_prog_swd.h"
+#include"submodule_swd.h"
 
 // Флаги состояния SWD-интерфейса
 // Используем volatile для безопасного доступа из разных контекстов (EERTOS, loop)

@@ -30,11 +30,11 @@
 #endif
 
 #ifdef PROGTYPE_SWD
-#include "module_prog_swd/module_prog_swd.h"
+#include "submodule_swd/submodule_swd.h"
 #endif
 
 #ifdef PROGTYPE_ISP
-#include "module_prog_isp/module_prog_isp.h"
+#include "submodule_isp/submodule_isp.h"
 #endif
 
 

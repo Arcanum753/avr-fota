@@ -1,7 +1,7 @@
 #include "main.h"
 #include "Arduino.h"
 #include "debug_cm.h"
-#include "module_prog_swd.h"
+#include "submodule_swd.h"
 #include "prog_swd.h"
 #include "stm32f4_flash.h"
 

@@ -22,7 +22,7 @@
 #endif
 
 #if defined(PROGTYPE_SWD)
-#include "module_prog_swd/swd.h"
+#include "submodule_swd/swd.h"
 #endif
 
 
