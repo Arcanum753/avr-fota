@@ -459,6 +459,7 @@ void ESP_PROGSWD::stm32Fx_write_port(bool APorDP, uint8_t address, uint32_t valu
   bool state = false;
   if (APorDP)     {state = swd_AP_Write(address, value);}
   else            {state = swd_DP_Write(address, value);}
+  swd_DP_Read(DP_RDBUFF, temp);
   if (!muted) { DEBUGLOGSWD("%i %s Write reg: 0x%02x : 0x%08x r: 0x%08x \r\n", state, APorDP ? "AP" : "DP",  address, value, temp);  }
 }
 
@@ -608,9 +609,6 @@ uint8_t ESP_PROGSWD::stm32fX_write_bank(uint32_t addr, uint8_t buffer[], uint32_
   if (size > _pageSize) {    return 2;  }
   uint8_t _ret = 0;
 
-  // CSW устанавливаем один раз на весь банк
-  // Для 16-битного доступа (F1) очищаем биты размера и устанавливаем CSW_SIZE16
-  // Для 32-битного доступа (F4) используем _cswValue как есть
   if (_wordSize == 2) {
     uint32_t csw16 = (_cswValue & ~CSW_SIZE) | CSW_SIZE16;
     swd_AP_Write(AP_CSW, csw16);
@@ -641,6 +639,8 @@ uint8_t ESP_PROGSWD::stm32fX_write_bank(uint32_t addr, uint8_t buffer[], uint32_
       if (millis() - timeout > 500) { break; }
       delayMicroseconds(50);
     }
+    // Очистить EOP/PGERR флаги после BSY-цикла для следующего банка
+    stm32f1_clear_eop(FLASH_BANK1_OFFSET);
   }
   return 0;
 }

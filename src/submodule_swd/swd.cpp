@@ -174,13 +174,24 @@ bool swd_calculate_parity(uint32_t in_data) {
 
 void swd_write(uint32_t in_data, uint8_t bits) {
     if (turn_state == 0) {	swd_turn(1);	}
-    while (bits--)  {
+    if (swdDelay == 0) {
+      while (bits--)  {
+        digitalWrite(SWDPIN_DATA, in_data & 1);
+        digitalWrite(SWDPIN_CLK, LOW);
+        __asm__ __volatile__ ("nop" ::: "memory");
+        in_data >>= 1;
+        digitalWrite(SWDPIN_CLK, HIGH);
+        __asm__ __volatile__ ("nop" ::: "memory");
+      }
+    } else {
+      while (bits--)  {
         digitalWrite(SWDPIN_DATA, in_data & 1);
         digitalWrite(SWDPIN_CLK, LOW);
         delayMicroseconds(swdDelay);
         in_data >>= 1;
         digitalWrite(SWDPIN_CLK, HIGH);
         delayMicroseconds(swdDelay);
+      }
     }
 }
 
@@ -189,13 +200,24 @@ uint32_t swd_read(uint8_t bits) {
   uint32_t out_data = 0;
   uint32_t input_bit = 1;
   if (turn_state == 1)  { swd_turn(0);  }
-  while (bits--)  {
-    if (digitalRead(SWDPIN_DATA))    { out_data |= input_bit;  }
-    digitalWrite(SWDPIN_CLK, LOW);
-    delayMicroseconds(swdDelay);
-    input_bit <<= 1;
-    digitalWrite(SWDPIN_CLK, HIGH);
-    delayMicroseconds(swdDelay);
+  if (swdDelay == 0) {
+    while (bits--)  {
+      if (digitalRead(SWDPIN_DATA))    { out_data |= input_bit;  }
+      digitalWrite(SWDPIN_CLK, LOW);
+      __asm__ __volatile__ ("nop" ::: "memory");
+      input_bit <<= 1;
+      digitalWrite(SWDPIN_CLK, HIGH);
+      __asm__ __volatile__ ("nop" ::: "memory");
+    }
+  } else {
+    while (bits--)  {
+      if (digitalRead(SWDPIN_DATA))    { out_data |= input_bit;  }
+      digitalWrite(SWDPIN_CLK, LOW);
+      delayMicroseconds(swdDelay);
+      input_bit <<= 1;
+      digitalWrite(SWDPIN_CLK, HIGH);
+      delayMicroseconds(swdDelay);
+    }
   }
   return out_data;
 }
@@ -205,9 +227,15 @@ void swd_turn(bool WorR)  {
   digitalWrite(SWDPIN_DATA, HIGH);
   pinMode(SWDPIN_DATA, INPUT_PULLUP);
   digitalWrite(SWDPIN_CLK, LOW);
-  delayMicroseconds(swdDelay);
-  digitalWrite(SWDPIN_CLK, HIGH);
-  delayMicroseconds(swdDelay);
+  if (swdDelay == 0) {
+    __asm__ __volatile__ ("nop" ::: "memory");
+    digitalWrite(SWDPIN_CLK, HIGH);
+    __asm__ __volatile__ ("nop" ::: "memory");
+  } else {
+    delayMicroseconds(swdDelay);
+    digitalWrite(SWDPIN_CLK, HIGH);
+    delayMicroseconds(swdDelay);
+  }
   if (WorR) { pinMode(SWDPIN_DATA, OUTPUT);  }
   turn_state = WorR;
 }
@@ -224,13 +252,24 @@ bool swd_calculate_parity16(uint16_t in_data) {
 
 void swd_write16 (uint16_t in_data, uint8_t bits) {
   if (turn_state == 0) {    swd_turn(1);  }
-  while (bits--)  {
-    digitalWrite(SWDPIN_DATA, in_data & 1);
-    digitalWrite(SWDPIN_CLK, LOW);
-    delayMicroseconds(swdDelay);
-    in_data >>= 1;
-    digitalWrite(SWDPIN_CLK, HIGH);
-    delayMicroseconds(swdDelay);
+  if (swdDelay == 0) {
+    while (bits--)  {
+      digitalWrite(SWDPIN_DATA, in_data & 1);
+      digitalWrite(SWDPIN_CLK, LOW);
+      __asm__ __volatile__ ("nop" ::: "memory");
+      in_data >>= 1;
+      digitalWrite(SWDPIN_CLK, HIGH);
+      __asm__ __volatile__ ("nop" ::: "memory");
+    }
+  } else {
+    while (bits--)  {
+      digitalWrite(SWDPIN_DATA, in_data & 1);
+      digitalWrite(SWDPIN_CLK, LOW);
+      delayMicroseconds(swdDelay);
+      in_data >>= 1;
+      digitalWrite(SWDPIN_CLK, HIGH);
+      delayMicroseconds(swdDelay);
+    }
   }
 }
 
@@ -238,13 +277,24 @@ uint16_t swd_read16(uint8_t bits) {
   uint16_t out_data = 0;
   uint16_t input_bit = 1;
   if (turn_state == 1) {swd_turn(0);}
-  while (bits--)  {
-    if (digitalRead(SWDPIN_DATA))    {      out_data |= input_bit;    }
-    digitalWrite(SWDPIN_CLK, LOW);
-    delayMicroseconds(swdDelay);
-    input_bit <<= 1;
-    digitalWrite(SWDPIN_CLK, HIGH);
-    delayMicroseconds(swdDelay);
+  if (swdDelay == 0) {
+    while (bits--)  {
+      if (digitalRead(SWDPIN_DATA))    {      out_data |= input_bit;    }
+      digitalWrite(SWDPIN_CLK, LOW);
+      __asm__ __volatile__ ("nop" ::: "memory");
+      input_bit <<= 1;
+      digitalWrite(SWDPIN_CLK, HIGH);
+      __asm__ __volatile__ ("nop" ::: "memory");
+    }
+  } else {
+    while (bits--)  {
+      if (digitalRead(SWDPIN_DATA))    {      out_data |= input_bit;    }
+      digitalWrite(SWDPIN_CLK, LOW);
+      delayMicroseconds(swdDelay);
+      input_bit <<= 1;
+      digitalWrite(SWDPIN_CLK, HIGH);
+      delayMicroseconds(swdDelay);
+    }
   }
   return out_data;
 }
