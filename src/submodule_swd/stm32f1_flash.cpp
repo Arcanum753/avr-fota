@@ -42,7 +42,7 @@ void ESP_PROGSWD::stm32f1_unlock_erase_flash() {
 
   while (stm32f1_flash_busy())  {
     if( millis() - timeout > 2000 )  { return ; }
-    delay(1);
+    delayMicroseconds(50);
   }
 }
 

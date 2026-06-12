@@ -116,7 +116,7 @@ public:
 	bool	filelist_AddEntry(const String &filename, const String &upload_date, const String &md5);
 	bool	filelist_RemoveEntry(const String &filename);
 	bool	filelist_FileExists(const String &filename);
-	bool	filelist_SetProgStatus(const String &filename, const String &prog_date, const String &prog_status, const String &prog_error = "", const String &prog_time = "", const String &prog_error_stage = "", const String &prog_error_percent = "");
+	bool	filelist_SetProgStatus(const String &filename, const String &prog_date, const String &prog_status, const String &prog_error = "", const String &prog_time = "", const String &prog_error_stage = "", const String &prog_error_percent = "", const String &prog_speed = "");
 	String	filelist_GetLastSuccessFilename();
 	String	file_ComputeMD5(const String &path);
 

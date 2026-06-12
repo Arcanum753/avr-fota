@@ -47,9 +47,16 @@ void Class_SubSwd::onFlashComplete() {
 			elapsedStr = (String)elapsed;
 		}
 
-		filelist_SetProgStatus(_flashPath, _flashNtpStr, "ok", "", elapsedStr);
+		// Скорость в KB/s: _speed = байты/мс → переводим в КБ/с
+		float speed = swdprog.getSpeed();
+		String speedStr = "";
+		if (speed > 0.0f) {
+			speedStr = String(speed, 2);
+		}
 
-		DEBUGLOGSWD("Programming success, saved prog date to filelist: %s, time=%sms\r\n", _flashNtpStr.c_str(), elapsedStr.c_str());
+		filelist_SetProgStatus(_flashPath, _flashNtpStr, "ok", "", elapsedStr, "", "", speedStr);
+
+		DEBUGLOGSWD("Programming success, saved prog date to filelist: %s, time=%sms, speed=%s KB/s\r\n", _flashNtpStr.c_str(), elapsedStr.c_str(), speedStr.c_str());
 
 		_progResult = 0;
 		_progRunning = false;

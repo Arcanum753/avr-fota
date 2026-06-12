@@ -46,7 +46,7 @@ bool ESP_PROGSWD::stm32f4_wait_busy(uint32_t timeout_ms) {
       DEBUGLOGSWD("stm32f4_wait_busy: TIMEOUT!\r\n");
       return false; // таймаут
     }
-    delay(1);
+    delayMicroseconds(50);
   }
   // Проверяем ошибки после ожидания
   uint32_t err = stm32f4_flash_check_error(*this);

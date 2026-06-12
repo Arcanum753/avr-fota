@@ -13,6 +13,33 @@
 
 #include"submodule_swd.h"
 
+// Runtime-переменные для SWD
+uint8_t swdDelay = SWD_DELAY_DEFAULT;
+uint8_t swdRetryCount = 5;
+
+void swd_set_delay(uint8_t delay) {
+    swdDelay = delay;
+}
+
+void swd_reset_retry_count() {
+    swdRetryCount = 5;
+}
+
+void swd_update_retry(bool success) {
+    if (success) {
+        if (swdRetryCount > 2) {
+            swdRetryCount = swdRetryCount - 1;
+        }
+    } else {
+        if (swdRetryCount < 15) {
+            swdRetryCount += 2;
+            if (swdRetryCount > 15) {
+                swdRetryCount = 15;
+            }
+        }
+    }
+}
+
 // Флаги состояния SWD-интерфейса
 // Используем volatile для безопасного доступа из разных контекстов (EERTOS, loop)
 static volatile bool gpioInitState = false;
@@ -44,10 +71,14 @@ uint32_t swd_init() { //Returns the ID
 // write is 0 before data // AP is 1 before data
 // Access Port
 bool swd_AP_Write(unsigned addr, uint32_t data) {
-  uint8_t retry = 15;
+  uint8_t retry = swdRetryCount;
   while (retry--)   {
     bool state = swd_transfer(addr, 1, 0, data);
-    if (state)  {  return true; }
+    if (state)  {
+      swd_update_retry(true);
+      return true;
+    }
+    swd_update_retry(false);
   }
   return false;
 }
@@ -55,28 +86,40 @@ bool swd_AP_Write(unsigned addr, uint32_t data) {
 // read is 1 before data // AP is 1 before data
 // Access Port
 bool swd_AP_Read(unsigned addr, uint32_t &data) {
-  uint8_t retry = 15;
+  uint8_t retry = swdRetryCount;
   while (retry--)  {
     bool state = swd_transfer(addr, 1, 1, data);
-    if (state) {  return true;}
+    if (state) {
+      swd_update_retry(true);
+      return true;
+    }
+    swd_update_retry(false);
   }
   return false;
 }
 // write is 0 before data // DP is 0 before data
 bool swd_DP_Write(unsigned addr, uint32_t data) {
-  uint8_t retry = 15;
+  uint8_t retry = swdRetryCount;
   while (retry--)  {
     bool state = swd_transfer(addr, 0, 0, data);
-    if (state) {  return true; }
+    if (state) {
+      swd_update_retry(true);
+      return true;
+    }
+    swd_update_retry(false);
   }
   return false;
 }
 // read is 1 before data // DP is 0 before data
 bool swd_DP_Read(unsigned addr, uint32_t &data) {
-  uint8_t retry = 15;
+  uint8_t retry = swdRetryCount;
   while (retry--)   {
     bool state = swd_transfer(addr, 0, 1, data);
-    if (state){ return true;}
+    if (state) {
+      swd_update_retry(true);
+      return true;
+    }
+    swd_update_retry(false);
   }
   return false;
 }
@@ -134,10 +177,10 @@ void swd_write(uint32_t in_data, uint8_t bits) {
     while (bits--)  {
         digitalWrite(SWDPIN_DATA, in_data & 1);
         digitalWrite(SWDPIN_CLK, LOW);
-        delayMicroseconds(SWD_DELAY);
+        delayMicroseconds(swdDelay);
         in_data >>= 1;
         digitalWrite(SWDPIN_CLK, HIGH);
-        delayMicroseconds(SWD_DELAY);
+        delayMicroseconds(swdDelay);
     }
 }
 
@@ -149,10 +192,10 @@ uint32_t swd_read(uint8_t bits) {
   while (bits--)  {
     if (digitalRead(SWDPIN_DATA))    { out_data |= input_bit;  }
     digitalWrite(SWDPIN_CLK, LOW);
-    delayMicroseconds(SWD_DELAY);
+    delayMicroseconds(swdDelay);
     input_bit <<= 1;
     digitalWrite(SWDPIN_CLK, HIGH);
-    delayMicroseconds(SWD_DELAY);
+    delayMicroseconds(swdDelay);
   }
   return out_data;
 }
@@ -162,9 +205,9 @@ void swd_turn(bool WorR)  {
   digitalWrite(SWDPIN_DATA, HIGH);
   pinMode(SWDPIN_DATA, INPUT_PULLUP);
   digitalWrite(SWDPIN_CLK, LOW);
-  delayMicroseconds(SWD_DELAY);
+  delayMicroseconds(swdDelay);
   digitalWrite(SWDPIN_CLK, HIGH);
-  delayMicroseconds(SWD_DELAY);
+  delayMicroseconds(swdDelay);
   if (WorR) { pinMode(SWDPIN_DATA, OUTPUT);  }
   turn_state = WorR;
 }
@@ -184,10 +227,10 @@ void swd_write16 (uint16_t in_data, uint8_t bits) {
   while (bits--)  {
     digitalWrite(SWDPIN_DATA, in_data & 1);
     digitalWrite(SWDPIN_CLK, LOW);
-    delayMicroseconds(SWD_DELAY);
+    delayMicroseconds(swdDelay);
     in_data >>= 1;
     digitalWrite(SWDPIN_CLK, HIGH);
-    delayMicroseconds(SWD_DELAY);
+    delayMicroseconds(swdDelay);
   }
 }
 
@@ -198,10 +241,10 @@ uint16_t swd_read16(uint8_t bits) {
   while (bits--)  {
     if (digitalRead(SWDPIN_DATA))    {      out_data |= input_bit;    }
     digitalWrite(SWDPIN_CLK, LOW);
-    delayMicroseconds(SWD_DELAY);
+    delayMicroseconds(swdDelay);
     input_bit <<= 1;
     digitalWrite(SWDPIN_CLK, HIGH);
-    delayMicroseconds(SWD_DELAY);
+    delayMicroseconds(swdDelay);
   }
   return out_data;
 }
@@ -229,30 +272,41 @@ bool swd_transfer16(unsigned port_address, bool APorDP, bool RorW, uint16_t &dat
    swd_write(0, 32);
   return false;
 }
-#define RETTY_16BIT 15
 // write is 0  // DP is 0  // 16 bit data
 bool swd_DP_Write16(unsigned addr, uint16_t data) {
-  uint8_t retry = RETTY_16BIT;
+  uint8_t retry = swdRetryCount;
   while (retry--)  {
     bool state = swd_transfer16(addr, 0, 0, data);
-    if (state) {  return true; }
+    if (state) {
+      swd_update_retry(true);
+      return true;
+    }
+    swd_update_retry(false);
   }
   return false;
 }
 bool swd_DP_Read16(unsigned addr, uint16_t &data) {
-  uint8_t retry = RETTY_16BIT;
+  uint8_t retry = swdRetryCount;
   while (retry--)   {
     bool state = swd_transfer16(addr, 0, 1, data);
-    if (state){ return true;}
+    if (state) {
+      swd_update_retry(true);
+      return true;
+    }
+    swd_update_retry(false);
   }
   return false;
 }
 
 bool swd_AP_Write16(unsigned addr, uint16_t data) {
-  uint8_t retry = RETTY_16BIT;
+  uint8_t retry = swdRetryCount;
   while (retry--)   {
     bool state = swd_transfer16(addr, 1, 0, data);
-    if (state)  {  return true; }
+    if (state) {
+      swd_update_retry(true);
+      return true;
+    }
+    swd_update_retry(false);
   }
   return false;
 }

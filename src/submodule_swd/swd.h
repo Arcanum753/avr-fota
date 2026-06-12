@@ -11,7 +11,14 @@
 
 
 
-#define SWD_DELAY       3
+#define SWD_DELAY_DEFAULT  3
+
+extern uint8_t swdDelay;
+void swd_set_delay(uint8_t delay);
+
+extern uint8_t swdRetryCount;
+void swd_reset_retry_count();
+void swd_update_retry(bool success);
 
 #if defined(ESP32)
 

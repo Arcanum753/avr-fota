@@ -150,6 +150,7 @@ bool Class_ProgBase::web_GetFilesListExe(String &_str)	{
 		String progError = "";
 		String progErrorStage = "";
 		String progErrorPercent = "";
+		String progSpeed = "";
 		if (listLoaded) {
 			for (JsonObject entry : arr) {
 				if (strcmp(entry["filename"].as<const char*>(), fname.c_str()) == 0) {
@@ -165,6 +166,8 @@ bool Class_ProgBase::web_GetFilesListExe(String &_str)	{
 					if (pes) progErrorStage = String(pes);
 					const char* pep = entry["prog_error_percent"].as<const char*>();
 					if (pep) progErrorPercent = String(pep);
+					const char* ps = entry["prog_speed"].as<const char*>();
+					if (ps) progSpeed = String(ps);
 					break;
 				}
 			}
@@ -187,6 +190,7 @@ bool Class_ProgBase::web_GetFilesListExe(String &_str)	{
 		json += ",\"prog_error\":\"";	json += progError;			json += "\"";
 		json += ",\"prog_error_stage\":\"";	json += progErrorStage;		json += "\"";
 		json += ",\"prog_error_percent\":\""; json += progErrorPercent;	json += "\"";
+		json += ",\"prog_speed\":\"";		json += progSpeed;			json += "\"";
 		json += ",\"md5\":\"";			json += fileMD5;			json += "\"";
 		json += ",\"is_last_success\":"; json += (isLastSuccess ? "true" : "false");
 		json += "}";
@@ -525,7 +529,7 @@ bool Class_ProgBase::filelist_AddEntry(const String &filename, const String &upl
 	return filelist_Save(doc);
 }
 
-bool Class_ProgBase::filelist_SetProgStatus(const String &filename, const String &prog_date, const String &prog_status, const String &prog_error, const String &prog_time, const String &prog_error_stage, const String &prog_error_percent) {
+bool Class_ProgBase::filelist_SetProgStatus(const String &filename, const String &prog_date, const String &prog_status, const String &prog_error, const String &prog_time, const String &prog_error_stage, const String &prog_error_percent, const String &prog_speed) {
 	JsonDocument doc;
 	filelist_Load(doc);
 	JsonArray arr = doc.as<JsonArray>();
@@ -539,11 +543,16 @@ bool Class_ProgBase::filelist_SetProgStatus(const String &filename, const String
 		if (strcmp(entry["filename"].as<const char*>(), normalizedName.c_str()) == 0) {
 			entry["prog_date"] = prog_date;
 			entry["prog_status"] = prog_status;
-			if (prog_time.length() > 0) {
-				entry["prog_time"] = prog_time;
-			} else {
-				entry.remove("prog_time");
-			}
+		if (prog_time.length() > 0) {
+			entry["prog_time"] = prog_time;
+		} else {
+			entry.remove("prog_time");
+		}
+		if (prog_speed.length() > 0) {
+			entry["prog_speed"] = prog_speed;
+		} else {
+			entry.remove("prog_speed");
+		}
 			if (prog_error.length() > 0) {
 				entry["prog_error"] = prog_error;
 			} else {
@@ -578,6 +587,9 @@ bool Class_ProgBase::filelist_SetProgStatus(const String &filename, const String
 	}
 	if (prog_error_percent.length() > 0) {
 		newEntry["prog_error_percent"] = prog_error_percent;
+	}
+	if (prog_speed.length() > 0) {
+		newEntry["prog_speed"] = prog_speed;
 	}
 	DEBUGLOGPROG("filelist_SetProgStatus: created new entry for %s (was not in filelist)\r\n", normalizedName.c_str());
 	return filelist_Save(doc);
@@ -694,6 +706,24 @@ void Class_ProgBase::web_FileUploadProgress(AsyncWebServerRequest *request) {
 		if (_progStartTime > 0) {
 			uint32_t elapsed = millis() - _progStartTime;
 			values += "progTime|" + (String)elapsed + "|div\n";
+		}
+		// Скорость из filelist (свежая запись уже сохранена)
+		JsonDocument speedDoc;
+		String speedStr = "";
+		if (filelist_Load(speedDoc)) {
+			JsonArray arr = speedDoc.as<JsonArray>();
+			String normalizedName = _flashPath;
+			if (normalizedName.startsWith("/")) normalizedName = normalizedName.substring(1);
+			for (JsonObject entry : arr) {
+				if (strcmp(entry["filename"].as<const char*>(), normalizedName.c_str()) == 0) {
+					const char* ps = entry["prog_speed"].as<const char*>();
+					if (ps) speedStr = String(ps);
+					break;
+				}
+			}
+		}
+		if (speedStr.length() > 0) {
+			values += "progSpeed|" + speedStr + "|div\n";
 		}
 		_progResult = -1;
 		_uploadPercent = 0;

@@ -199,7 +199,11 @@ bool ESP_PROGSWD::startFlash(uint32_t offset, String &path, uint32_t chipMemSize
     _isHexFormat = false;
     
     // Сохраняем параметры прошивки из конфига чипа
+    // pageSize: не больше 1024, не меньше 256; если 0 — ставим 256
     _pageSize = pageSize;
+    if (_pageSize == 0 || _pageSize > 1024) {
+        _pageSize = (_pageSize > 1024) ? 1024 : 256;
+    }
     _wordSize = wordSize;
     _cswValue = cswValue;
     _flashStart = offset;
@@ -373,8 +377,8 @@ void ESP_PROGSWD::flashStep() {
                 }
             }
             
-            // Пишем буфером WRITE_BUF_SIZE, пока не закончатся данные
-            uint8_t buffer[WRITE_BUF_SIZE];
+          // Пишем буфером _pageSize, но не более 1024 байт за раз
+          uint8_t buffer[1024];
             uint32_t remaining = _flashFileSize - _flashPosi;
             if (remaining == 0) {
                 // Всё записали — завершаем
@@ -392,11 +396,13 @@ void ESP_PROGSWD::flashStep() {
                 break;
             }
             
-            // Определяем размер текущего чанка (не больше WRITE_BUF_SIZE)
-            uint32_t cur_len = (remaining > WRITE_BUF_SIZE) ? WRITE_BUF_SIZE : remaining;
+          // Определяем размер текущего чанка (не больше _pageSize и не больше 1024)
+          uint32_t cur_len = remaining;
+          if (cur_len > _pageSize) cur_len = _pageSize;
+          if (cur_len > 1024) cur_len = 1024;
             
             // Читаем данные в буфер
-            memset(buffer, 0x00, WRITE_BUF_SIZE);
+            memset(buffer, 0x00, sizeof(buffer));
             binFileReadPage(_flashFile, buffer, cur_len);
             
             // Пишем чанк в flash
@@ -453,8 +459,6 @@ void ESP_PROGSWD::stm32Fx_write_port(bool APorDP, uint8_t address, uint32_t valu
   bool state = false;
   if (APorDP)     {state = swd_AP_Write(address, value);}
   else            {state = swd_DP_Write(address, value);}
-  swd_DP_Read(DP_RDBUFF, temp);
-  swd_DP_Read(DP_RDBUFF, temp);
   if (!muted) { DEBUGLOGSWD("%i %s Write reg: 0x%02x : 0x%08x r: 0x%08x \r\n", state, APorDP ? "AP" : "DP",  address, value, temp);  }
 }
 
@@ -553,11 +557,12 @@ uint8_t ESP_PROGSWD::stm32_flash_file(uint32_t offset, String &path) {
 		file_size = binFileGetSize(file);
 		DEBUGLOGSWD("Going to write %i bytes from BIN to flash\r\n", file_size);
 		
-		uint8_t buffer[PAGESIZE] = {0x00};
+		uint8_t buffer[1024] = {0x00};
 		long millis_start = millis();
 
-		for (uint32_t posi = 0; posi < file_size; posi += PAGESIZE)  {
-			uint32_t cur_len = (file_size - posi >= PAGESIZE) ? PAGESIZE : file_size - posi;
+		for (uint32_t posi = 0; posi < file_size; posi += _pageSize)  {
+			uint32_t cur_len = (file_size - posi >= _pageSize) ? _pageSize : file_size - posi;
+			if (cur_len > 1024) cur_len = 1024;
 			binFileReadPage(file, buffer, cur_len);
 			stm32fX_write_bank(addr, buffer, cur_len);
 			addr += cur_len;
@@ -576,11 +581,12 @@ uint8_t ESP_PROGSWD::stm32_flash_file(uint32_t offset, String &path) {
 	}
 	
 	// HEX: прошиваем из буфера
-	uint8_t buffer[PAGESIZE] = {0x00};
+	uint8_t buffer[1024] = {0x00};
 	long millis_start = millis();
 	
-	for (uint32_t posi = 0; posi < file_size; posi += PAGESIZE)  {
-		uint32_t cur_len = (file_size - posi >= PAGESIZE) ? PAGESIZE : file_size - posi;
+	for (uint32_t posi = 0; posi < file_size; posi += _pageSize)  {
+		uint32_t cur_len = (file_size - posi >= _pageSize) ? _pageSize : file_size - posi;
+		if (cur_len > 1024) cur_len = 1024;
 		memcpy(buffer, hexBinBuf.data() + posi, cur_len);
 		stm32fX_write_bank(addr, buffer, cur_len);
 		addr += cur_len;
@@ -599,26 +605,41 @@ uint8_t ESP_PROGSWD::stm32_flash_file(uint32_t offset, String &path) {
 
 
 uint8_t ESP_PROGSWD::stm32fX_write_bank(uint32_t addr, uint8_t buffer[], uint32_t size) {
-  if (size > _pageSize) {    return 2;  }  // buffer bigger then a bank
+  if (size > _pageSize) {    return 2;  }
   uint8_t _ret = 0;
+
+  // CSW устанавливаем один раз на весь банк
+  // Для 16-битного доступа (F1) очищаем биты размера и устанавливаем CSW_SIZE16
+  // Для 32-битного доступа (F4) используем _cswValue как есть
+  if (_wordSize == 2) {
+    uint32_t csw16 = (_cswValue & ~CSW_SIZE) | CSW_SIZE16;
+    swd_AP_Write(AP_CSW, csw16);
+  } else {
+    swd_AP_Write(AP_CSW, _cswValue);
+  }
 
   for (int posi = 0; posi < size; posi += _wordSize)   {
     if (_wordSize == 4) {
-      // 32-bit запись для STM32F4
       uint32_t data32 = ((uint32_t)buffer[posi + 3] << 24) |
                         ((uint32_t)buffer[posi + 2] << 16) |
                         ((uint32_t)buffer[posi + 1] << 8)  |
                         ((uint32_t)buffer[posi + 0]);
       _ret = stm32Fx_write_flash_32bit(addr + posi, data32);
       if ( _ret != 1 ) {return 1;}
-      delay(1);
     } else {
-      // 16-bit запись для STM32F1 (и других с wordSize == 2)
       uint16_t data16b0 = (buffer[posi + 1] << 8) | (buffer[posi + 0]);
       uint32_t tmp = (uint32_t)data16b0 << (8U *((addr + posi) & 2U) );
       _ret = stm32Fx_write_flash_16bit(addr + posi, tmp);
       if ( _ret != 1 ) {return 1;}
-      delay(1);
+    }
+  }
+  // После цикла записи: восстановить CSW в 32-битный режим, подождать BSY
+  if (_wordSize == 2) {
+    swd_AP_Write(AP_CSW, _cswValue);
+    uint32_t timeout = millis();
+    while (stm32f1_flash_busy()) {
+      if (millis() - timeout > 500) { break; }
+      delayMicroseconds(50);
     }
   }
   return 0;
@@ -630,8 +651,6 @@ bool ESP_PROGSWD::stm32Fx_write_flash_32bit(uint32_t address, uint32_t value, bo
   uint32_t temp = 0;
   bool ret = false;
 
-  // Устанавливаем CSW для 32-битного доступа (как в 16-bit версии, но с CSW_SIZE32)
-  swd_AP_Write(AP_CSW, _cswValue);
   bool state1 = swd_AP_Write(AP_TAR, address);
   bool state2 = swd_AP_Write(AP_DRW, value);
   bool state3 = swd_DP_Read(DP_RDBUFF, temp);
@@ -639,7 +658,7 @@ bool ESP_PROGSWD::stm32Fx_write_flash_32bit(uint32_t address, uint32_t value, bo
   
   // Для STM32F4 ожидаем завершения программирования слова
   if (_chipFamily == "stm32f4") {
-    stm32f4_wait_busy(100);  // таймаут 100ms на одно слово
+    stm32f4_wait_busy(100);
   }
   
   if (muted == false) {
@@ -652,15 +671,13 @@ bool ESP_PROGSWD::stm32Fx_write_flash_32bit(uint32_t address, uint32_t value, bo
 // for stm32f1
 bool ESP_PROGSWD::stm32Fx_write_flash_16bit(uint32_t address, uint32_t value, bool muted) {
   uint32_t temp = 0;
-  bool ret = false;
-
-  // Формируем CSW для 16-битного доступа: берём _cswValue, очищаем биты размера [2:0], устанавливаем CSW_SIZE16
-  uint32_t csw16 = (_cswValue & ~CSW_SIZE) | CSW_SIZE16;
-                swd_AP_Write(AP_CSW, csw16);
   bool state1 = swd_AP_Write(AP_TAR, address);
   bool state2 = swd_AP_Write(AP_DRW, value);
   bool state3 = swd_DP_Read(DP_RDBUFF, temp);
        state3 = swd_DP_Read(DP_RDBUFF, temp);
-  if (muted == false)   { DEBUGLOGSWD("%i %i %i Write 0x%08x : 0x%08x  read 0x%08x \r\n", state1, state2, state3, address, value, temp );}
-  return ret = state1 * state2 * state3;
+  
+  if (muted == false) {
+    DEBUGLOGSWD("%i %i %i Write 0x%08x : 0x%08x  read 0x%08x \r\n", state1, state2, state3, address, value, temp);
+  }
+  return state1 && state2 && state3;
 }

@@ -47,7 +47,7 @@ public:
 	String getCommitDateStr() override { return String(SUBMODULE_SWD_COMMIT_DATE_STR); }
 
 	// SWD-specific
-	void _chipInfoAppendFields(String &values, JsonObject &chip) override;
+	void _chipInfoAppendFields(JsonObject &out, JsonObject &chip) override;
 	void onChipCheckComplete(uint32_t chipId);
 	void web_CheckChipStatus(AsyncWebServerRequest *request) override;
 	bool chip_IsConnected() override;

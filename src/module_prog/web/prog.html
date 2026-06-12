@@ -48,6 +48,7 @@
                         <th style="text-align: right;">Size</th>
                         <th>Upload date</th>
                         <th>Program date</th>
+                        <th>Speed</th>
                         <th>Status</th>
                     </tr>
                 </thead>
@@ -208,6 +209,7 @@
                 const progError = f.prog_error || "";
                 const progErrorStage = f.prog_error_stage || "";
                 const progErrorPercent = f.prog_error_percent || "";
+                const progSpeed = f.prog_speed || "";
                 const isLastSuccess = f.is_last_success === true;
                 const encodedName = encodeURIComponent(fname);
 
@@ -255,6 +257,24 @@
                 html += "<td style='text-align: right;'>" + escapeHtml(fsize) + "</td>";
                 html += "<td style='text-align: center;'>" + escapeHtml(uploaddate) + "</td>";
                 html += "<td style='text-align: center;'>" + escapeHtml(progdate) + "</td>";
+                html += "<td style='text-align: center;'>";
+                if (progStatus === 'ok' && progSpeed) {
+                    const speedNum = parseFloat(progSpeed);
+                    if (!isNaN(speedNum)) {
+                        let speedText;
+                        if (speedNum >= 1024) {
+                            speedText = (speedNum / 1024).toFixed(2) + ' MB/s';
+                        } else {
+                            speedText = speedNum.toFixed(2) + ' KB/s';
+                        }
+                        html += '<span title="Programming speed">' + speedText + '</span>';
+                    } else {
+                        html += '<span style="color: #999;">—</span>';
+                    }
+                } else {
+                    html += '<span style="color: #999;">—</span>';
+                }
+                html += '</td>';
                 html += statusCell;
                 html += "</tr>";
             }
@@ -450,14 +470,32 @@
                             }
                             attempts = 0;
                             setTimeout(pollProgStatus, 2000);
-                        } else if (progStatus === "done") {
+                        } else                         if (progStatus === "done") {
                             stopProgPolling();
                             progressBar.style.animation = '';
                             updateProgressDisplay(100);
                             let doneMsg = 'Programming completed successfully!';
-                            if (progTime) {
-                                const secs = Math.floor(parseInt(progTime) / 1000);
-                                doneMsg += ' (' + secs + 's)';
+                            let speedVal = "";
+                            for (let fields of fieldsRows) {
+                                if (fields[0] === "progTime") {
+                                    const secs = Math.floor(parseInt(fields[1]) / 1000);
+                                    doneMsg += ' (' + secs + 's';
+                                }
+                                if (fields[0] === "progSpeed") {
+                                    speedVal = fields[1];
+                                }
+                            }
+                            if (speedVal) {
+                                const speedNum = parseFloat(speedVal);
+                                if (!isNaN(speedNum)) {
+                                    if (speedNum >= 1024) {
+                                        doneMsg += ', ' + (speedNum / 1024).toFixed(2) + ' MB/s)';
+                                    } else {
+                                        doneMsg += ', ' + speedNum.toFixed(2) + ' KB/s)';
+                                    }
+                                }
+                            } else {
+                                doneMsg += ')';
                             }
                             progressText.innerHTML = '<span style="color: #2e7d32; font-weight: bold;">' + doneMsg + '</span>';
                             progressBar.style.backgroundColor = '#4CAF50';

@@ -13,11 +13,9 @@
 
 
 
-// Размер буфера для записи в flash (в байтах).
-// Должен быть достаточно мал для безопасного размещения на стеке EERTOS-задачи,
-// но достаточно велик для эффективной записи.
-// 256 байт — оптимальный баланс.
-#define WRITE_BUF_SIZE  256
+// Размер буфера для записи в flash теперь вычисляется динамически из _pageSize
+// (макс 1024 байт) через startFlash(). Здесь оставлено как константа для fallback.
+#define WRITE_BUF_SIZE_DEFAULT  256
 
 // AD AD
 #define AP_TIMES  50
@@ -96,6 +94,7 @@ public:
     bool isFlashBusy() { return _flashState != FLASH_IDLE; }
     bool isFlashError() { return _flashError; }
     uint8_t getPercent() { return _percent; }
+    float getSpeed() { return _speed; }
     String getFlashErrorString() { return _flashErrorString; }
     String getFlashErrorStage() { return _flashErrorStage; }
     uint8_t getFlashErrorPercent() { return _flashErrorPercent; }
