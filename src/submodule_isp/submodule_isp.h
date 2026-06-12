@@ -39,7 +39,7 @@ public:
 	String getCommitDateStr() override { return String(SUBMODULE_ISP_COMMIT_DATE_STR); }
 
 	// ISP-specific
-	void _chipInfoAppendFields(String &values, JsonObject &chip) override;
+	void _chipInfoAppendFields(JsonObject &out, JsonObject &chip) override;
 	void onChipCheckComplete(const String &signature) override;
 	void web_CheckChipStatus(AsyncWebServerRequest *request) override;
 	bool chip_IsConnected() override;

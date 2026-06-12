@@ -198,6 +198,15 @@ void NTPClient::s_dnsFound (const char *name, const ip_addr_t *ipaddr, void *cal
     reinterpret_cast<NTPClient*>(callback_arg)->dnsFound (ipaddr);
 }
 
+boolean NTPClient::SyncStatus(){
+
+	if (status==syncd) {
+		return true;
+	}
+	return false;
+
+}
+
 #if NETWORK_TYPE == NETWORK_ESP8266
 IPAddress getIPClass (const ip_addr_t *ipaddr) {
 
@@ -214,15 +223,6 @@ IPAddress getIPClass (const ip_addr_t *ipaddr) {
 #endif
     DEBUGLOG ("%s - IPAddress: %s\n", __FUNCTION__, ip.toString ().c_str ());
     return ip;
-}
-
-boolean NTPClient::SyncStatus(){
-	
-	if (status==syncd) {
-		return true;
-	}
-	return false;
-	
 }
 
 void NTPClient::dnsFound (const ip_addr_t *ipaddr) {
@@ -426,9 +426,7 @@ void NTPClient::processRequestTimeout () {
         onSyncEvent (noResponse);
 }
 
-void ntpResponseTimeoutTask() {
-    NTP.processRequestTimeout();
-}
+void ntpResponseTimeoutTask(void) { NTP.processRequestTimeout(); }
 #endif
 
 int8_t NTPClient::getTimeZone () {

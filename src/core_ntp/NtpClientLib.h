@@ -544,6 +544,10 @@ private:
 //#endif
 };
 
+// Forward declarations for eertos timer task functions
+void ntpResponseTimeoutTask();
+void ntpDnsTimeoutTask();
+
 extern NTPClient NTP;
 
 #endif // _NtpClientLib_h
