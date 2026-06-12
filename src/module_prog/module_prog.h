@@ -125,7 +125,7 @@ public:
 	void	web_ProjectSave(AsyncWebServerRequest *request);
 	void	web_ProjectChips(AsyncWebServerRequest *request);
 	void	web_ProjectChipInfo(AsyncWebServerRequest *request);
-	virtual void _chipInfoAppendFields(String &values, JsonObject &chip);
+	virtual void _chipInfoAppendFields(JsonObject &out, JsonObject &chip);
 
 	// Version — virtual, submodules override
 	virtual String getVersionStr() { return String(""); }

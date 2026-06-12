@@ -977,24 +977,27 @@ void Class_ProgBase::web_ProjectChipInfo(AsyncWebServerRequest *request) {
 		return;
 	}
 
-	String values = "";
+	JsonDocument resp;
+	JsonObject out = resp.to<JsonObject>();
 	for (JsonObject chip : chips) {
 		if (strcmp(chip["name"].as<const char*>(), chipName.c_str()) == 0) {
-			values += "chipinfo_name|" + String(chip["name"].as<const char*>()) + "|div\n";
-			_chipInfoAppendFields(values, chip);
+			out["name"] = chip["name"].as<const char*>();
+			_chipInfoAppendFields(out, chip);
 			break;
 		}
 	}
 
-	if (values.length() == 0) {
-		values += "chipinfo_name|Unknown|div\n";
+	if (out.size() == 0) {
+		out["name"] = "Unknown";
 	}
 
-	request->send(200, "text/plain", values);
+	String jsonResp;
+	serializeJson(out, jsonResp);
+	request->send(200, "application/json", jsonResp);
 }
 
-// Переопределяется в субмодулях для добавления специфичных полей (signature, idcode, family...)
-void Class_ProgBase::_chipInfoAppendFields(String &values, JsonObject &chip) {
+// Переопределяется в субмодулях для добавления специфичных полей (signature, family, ...)
+void Class_ProgBase::_chipInfoAppendFields(JsonObject &out, JsonObject &chip) {
 }
 
 // ========== Web Init ==========
@@ -1080,6 +1083,11 @@ void Class_ProgBase::registerCommonRoutes() {
 	ESPHTTPServer.on("/project", HTTP_GET, [this](AsyncWebServerRequest *request) {
 		if (!ESPHTTPServer.checkAuth(request)) { return request->requestAuthentication(); };
 		ESPHTTPServer.handleFileRead("/web/project.html", request);
+	});
+
+	ESPHTTPServer.on("/prog", HTTP_GET, [this](AsyncWebServerRequest *request) {
+		if (!ESPHTTPServer.checkAuth(request)) { return request->requestAuthentication(); };
+		ESPHTTPServer.handleFileRead("/web/prog.html", request);
 	});
 
 	registerCustomRoutes();

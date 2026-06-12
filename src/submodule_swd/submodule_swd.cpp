@@ -299,11 +299,14 @@ bool Class_SubSwd::chipCfg_FindById(uint32_t idcode, ChipConfig_t &cfg) {
 	return false;
 }
 
-void Class_SubSwd::_chipInfoAppendFields(String &values, JsonObject &chip) {
-	values += "chipinfo_idcode|" + String(chip["idcode"].as<const char*>()) + "|div\n";
-	values += "chipinfo_family|" + String(chip["family"].as<const char*>()) + "|div\n";
-	values += "chipinfo_flash|" + String(chip["flash_size"].as<uint32_t>()) + "|div\n";
-	values += "chipinfo_page|" + String(chip["page_size"].as<uint32_t>()) + "|div\n";
+void Class_SubSwd::_chipInfoAppendFields(JsonObject &out, JsonObject &chip) {
+	out["signature"] = chip["idcode"].as<const char*>();
+	out["family"] = chip["family"].as<const char*>();
+	out["flash"] = chip["flash_size"].as<uint32_t>();
+	out["page"] = chip["page_size"].as<uint32_t>();
+	out["flash_start"] = chip["flash_start"].as<const char*>();
+	out["word_size"] = chip["word_size"].as<uint32_t>();
+	out["csw_value"] = chip["csw_value"].as<const char*>();
 }
 
 void Class_SubSwd::registerCustomRoutes() {

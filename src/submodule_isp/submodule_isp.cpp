@@ -394,8 +394,8 @@ void Class_SubIsp::registerCustomRoutes() {
 	});
 }
 
-void Class_SubIsp::_chipInfoAppendFields(String &values, JsonObject &chip) {
-	values += "chipinfo_signature|" + String(chip["signature"].as<const char*>()) + "|div\n";
-	values += "chipinfo_flash|" + String(chip["flash_size"].as<uint32_t>()) + "|div\n";
-	values += "chipinfo_page|" + String(chip["page_size"].as<uint32_t>()) + "|div\n";
+void Class_SubIsp::_chipInfoAppendFields(JsonObject &out, JsonObject &chip) {
+	out["signature"] = chip["signature"].as<const char*>();
+	out["flash"] = chip["flash_size"].as<uint32_t>();
+	out["page"] = chip["page_size"].as<uint32_t>();
 }

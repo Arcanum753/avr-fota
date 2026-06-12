@@ -22,10 +22,7 @@
     <div id="chipinfo" style="display:none; margin-top: 10px; text-align: center;">
         <table class="scan" style="width: auto; margin: 0 auto;">
             <tr><th colspan="2">Chip Information</th></tr>
-            <tr><td class="label">Name:</td>        <td id="chipinfo_name"></td></tr>
-            <tr><td class="label">Signature:</td>    <td id="chipinfo_signature"></td></tr>
-            <tr><td class="label">Flash size:</td>   <td id="chipinfo_flash"></td></tr>
-            <tr><td class="label">Page size:</td>    <td id="chipinfo_page"></td></tr>
+            <tbody id="chipinfo_body"></tbody>
         </table>
     </div>
     
@@ -33,6 +30,17 @@
 	<script src="GetJson.js" defer></script>
 	<script src="GetMarkup.js" defer></script>
 	<script>
+		const CHIP_FIELD_LABELS = {
+			"name": "Name",
+			"signature": "Signature",
+			"family": "Family",
+			"flash": "Flash size",
+			"page": "Page size",
+			"flash_start": "Flash start",
+			"word_size": "Word size",
+			"csw_value": "CSW value"
+		};
+
 		function loadChips(selectedChip) {
 			return fetch('/project/chips')
 				.then(response => response.json())
@@ -57,7 +65,6 @@
 
 		window.onload = function() {
 			setTimeout(() => {
-				// Сначала загружаем список чипов (создаём option-ы в select)
 				ApplyCVT("/system/version")
 					.then(() => loadChips(''))
 					.then(() => ApplyCVT("/project/info"))
@@ -65,7 +72,6 @@
 			}, 500);
 		};
 
-		// При изменении выбора чипа — загружаем информацию о нём
 		document.addEventListener('change', function(e) {
 			if (e.target && e.target.id == 'progchip') {
 				showChipInfo();
@@ -78,19 +84,16 @@
 				document.getElementById('chipinfo').style.display = 'none';
 				return;
 			}
-			// Загружаем информацию о выбранном чипе
 			fetch('/project/chipinfo?name=' + encodeURIComponent(sel.value))
-				.then(response => response.text())
+				.then(response => response.json())
 				.then(data => {
-					// Парсим CVT-ответ
-					const lines = data.split('\n');
-					for (let line of lines) {
-						if (!line.trim()) continue;
-						const parts = line.split('|');
-						if (parts.length >= 2) {
-							const el = document.getElementById(parts[0]);
-							if (el) el.textContent = parts[1];
-						}
+					const tbody = document.getElementById('chipinfo_body');
+					tbody.innerHTML = '';
+					for (const [key, value] of Object.entries(data)) {
+						const label = CHIP_FIELD_LABELS[key] || key;
+						const tr = document.createElement('tr');
+						tr.innerHTML = '<td class="label">' + label + ':</td><td>' + escapeHtml(String(value)) + '</td>';
+						tbody.appendChild(tr);
 					}
 					document.getElementById('chipinfo').style.display = 'block';
 				})
@@ -100,7 +103,13 @@
 				});
 		}
 
-		// Сохранение конфигурации через XHR GET
+		function escapeHtml(text) {
+			if (!text) return "";
+			const div = document.createElement('div');
+			div.textContent = text;
+			return div.innerHTML;
+		}
+
 		function saveProject() {
 			const progproj = document.getElementById('progproj').value;
 			const progchip = document.getElementById('progchip').value;

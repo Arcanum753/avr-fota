@@ -25,6 +25,7 @@ WEB_PREFIX = "web_"                     # префикс для папок ко�
 
 # ------------------- Имена модулей и папок -------------------
 MODULE_PREFIX = "module_"                # префикс модулей
+SUBMODULE_PREFIX = "submodule_"          # префикс субмодулей
 CORE_PREFIX = "core_"                    # префикс ядерных модулей
 WEB_FOLDER_NAME = "web"                  # имя папки с веб-файлами внутри модуля
 
@@ -168,16 +169,19 @@ def parse_src_filter(src_filter: str) -> List[str]:
     
     modules: Set[str] = set()
     
-    patterns = [
-        r'\+<' + MODULE_PREFIX + r'([^>/]+)',
-        r'\+' + MODULE_PREFIX + r'([^/\s]+)',
-    ]
+    prefixes = [MODULE_PREFIX, SUBMODULE_PREFIX]
     
-    for pattern in patterns:
+    pattern_prefix_pairs = []
+    for prefix in prefixes:
+        pattern_prefix_pairs.append((r'\+<' + prefix + r'([^>/]+)', prefix))
+        pattern_prefix_pairs.append((r'\+' + prefix + r'([^/\s]+)', prefix))
+    
+    for pattern, prefix in pattern_prefix_pairs:
         matches = re.findall(pattern, src_filter)
         for match in matches:
-            if validate_module_name(match):
-                modules.add(f"{MODULE_PREFIX}{match}")
+            module_name = f"{prefix}{match}"
+            if validate_module_name(module_name):
+                modules.add(module_name)
     
     result = sorted(list(modules))
     
@@ -784,8 +788,9 @@ def prepare_fs_image() -> Optional[Path]:
     # 8. Генерируем динамический page_head.html на основе включённых модулей
     if _HAS_PAGE_HEAD_GEN:
         try:
-            # Используем только module_* имена (не core_*) для правой колонки меню
-            module_only_names = [m for m in all_web_modules if m.startswith(MODULE_PREFIX)]
+            # Используем module_* и submodule_* имена (не core_*) для правой колонки меню
+            module_only_names = [m for m in all_web_modules 
+                                 if m.startswith(MODULE_PREFIX) or m.startswith(SUBMODULE_PREFIX)]
             
             page_head_html = generate_page_head(module_only_names, src_dir=str(src_dir))
             page_head_path = target_web_dir / "page_head.html"
