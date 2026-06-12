@@ -20,7 +20,7 @@
 
 
 #if defined(ESP32)
-#include <SPIFFS.h>
+#include <LittleFS.h>
 #endif
 
 
@@ -46,7 +46,7 @@ void ESP_AVRISP::setReset(bool rst) {
 }
 
 #if defined(ESP32)
-    void ESP_AVRISP::setFs(fs::SPIFFSFS* fs)
+    void ESP_AVRISP::setFs(fs::LittleFSFS* fs)
 {   _fs = fs;   }
 
 bool ESP_AVRISP::begin (){
@@ -204,7 +204,7 @@ void ESP_AVRISP::chipFlashWord (uint8_t hilo, uint16_t addr, uint8_t data) {
 // read *.hex file to buf (использует format_hex)
 int ESP_AVRISP::hexFileOpen(String _in){
     if (_in.isEmpty()) {return ERR_NOFILE;}
-    if (!_fs){  _fs->begin(); }// If SPIFFS is not started
+    if (!_fs){  _fs->begin(); }// If LittleFS is not started
 
     // Открываем файл для потокового парсинга
     String fullPath = _in;

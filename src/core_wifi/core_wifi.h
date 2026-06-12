@@ -79,12 +79,12 @@ class  CORE_CLASS_WIFI    {
     public:
     CORE_CLASS_WIFI (bool _in);
     #if ESP32
-    fs::SPIFFSFS*               _fs;
+    fs::LittleFSFS*               _fs;
     #elif defined(ESP8266)
     FS*                         _fs;                        // esp8266/esp32 flash file system
     #endif
     #if defined(ESP32)  
-    void begin(fs::SPIFFSFS* fs);
+    void begin(fs::LittleFSFS* fs);
     #elif defined(ESP8266)
     void begin(FS* fs) ;                        // esp8266/esp32 flash file system
     #endif

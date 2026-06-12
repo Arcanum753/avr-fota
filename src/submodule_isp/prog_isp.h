@@ -100,7 +100,7 @@ public:
 
     void setReset(bool);
 #if defined(ESP32)
-    void setFs(fs::SPIFFSFS* fs);
+    void setFs(fs::LittleFSFS* fs);
 #endif
     bool begin ();
 
@@ -140,7 +140,7 @@ protected:
 
 //fs + hex file
 #if defined(ESP32)
-    fs::SPIFFSFS*               _fs;
+    fs::LittleFSFS*               _fs;
 #endif
     int                         hexFileOpen(String _in);
     std::vector<char>           _hexBinDataBuf;

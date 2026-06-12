@@ -6,14 +6,14 @@
 
 
 #if defined(ESP32)
-#include <SPIFFS.h>
+#include <LittleFS.h>
 #include <esp_task_wdt.h>
 #include <esp32-hal-gpio.h>
 #include <ESPmDNS.h>
 #endif
 
 #if defined(ESP8266)
-#include <FS.h>
+#include <LittleFS.h>
 #include <ESP8266mDNS.h>
 #endif
 
@@ -59,7 +59,7 @@ AsyncFSWebServer ESPHTTPServer(80);
 AsyncFSWebServer::AsyncFSWebServer(uint16_t port) : AsyncWebServer(port) {}
 // esp8266/esp32 flash file system
 #if defined(ESP32)
-    void AsyncFSWebServer::begin(fs::SPIFFSFS* fs)
+    void AsyncFSWebServer::begin(fs::LittleFSFS* fs)
 #endif
 #if defined(ESP8266)
     void AsyncFSWebServer::begin(FS* fs)                         
@@ -79,15 +79,15 @@ AsyncFSWebServer::AsyncFSWebServer(uint16_t port) : AsyncWebServer(port) {}
 		DEBUGLOG("AP Enable = %d\n", modWifiClass._apConfig.APenable);
 	}
 
-    if (!_fs) { _fs->begin();  }// If SPIFFS is not started
+    if (!_fs) { _fs->begin();  }// If LittleFS is not started
 
-	ModClassJson.setFs(&SPIFFS); // !!!MUST!!! be set as first as possible!
+	ModClassJson.setFs(&LittleFS); // !!!MUST!!! be set as first as possible!
 
 	loadHTTPAuth();
 	defaultConfigSys();
 	if (load_config_Sys() == false) {  save_configSys(); 	}
 
-	modWifiClass.begin(&SPIFFS); // wifi load cfg and set callback hooks
+	modWifiClass.begin(&LittleFS); // wifi load cfg and set callback hooks
 	
 	serialShowAbout();
 	AsyncWebServer::begin();
@@ -102,15 +102,15 @@ AsyncFSWebServer::AsyncFSWebServer(uint16_t port) : AsyncWebServer(port) {}
 	MDNS.begin(mdnsName.c_str()); // I've not got this to work. Need some investigation. // TODO
 	MDNS.addService("http", "tcp", 80);
 	
-	modOtaClass.setFs(&SPIFFS);
+	modOtaClass.setFs(&LittleFS);
 	modOtaClass.begin(getHostName(), _httpAuth.wwwPassword ); 
 	modOtaClass.webInit();
 	
-	ModClassEdit.setFs(&SPIFFS);
+	ModClassEdit.setFs(&LittleFS);
 	ModClassEdit.webInit();
 
 #if defined(MODULE_GPIO)
-	ModClassGpio.setFs(&SPIFFS);
+	ModClassGpio.setFs(&LittleFS);
 	ModClassGpio.webInit();
 #endif
 
@@ -120,13 +120,13 @@ AsyncFSWebServer::AsyncFSWebServer(uint16_t port) : AsyncWebServer(port) {}
 #endif
 	
 #ifdef PROGTYPE_SWD
-	progSwd.setFs(&SPIFFS);
+	progSwd.setFs(&LittleFS);
 	progSwd.begin();
 	progSwd.web_Init();
 #endif
 
 #ifdef PROGTYPE_ISP
-	progIsp.setFs(&SPIFFS);
+	progIsp.setFs(&LittleFS);
 	progIsp.begin();
 	progIsp.web_Init();
 #endif
@@ -290,7 +290,7 @@ bool AsyncFSWebServer:: handleFileRead(String path, AsyncWebServerRequest *reque
 	String contentType = getContentType(path, request);
 	String pathWithGz = path + ".gz";
 	
-	// Сброс watchdog перед операциями SPIFFS (могут быть медленными)
+	// Сброс watchdog перед операциями LittleFS (могут быть медленными)
 #if defined(ESP32)
 	esp_task_wdt_reset();
 #endif
@@ -440,7 +440,7 @@ void AsyncFSWebServer::serverInit() {
 //system.html ^^^
 
 	//called when the url is not defined here
-	//use it to load content from SPIFFS
+	//use it to load content from LittleFS
 	onNotFound([this](AsyncWebServerRequest *request) {
 		DEBUGLOGFH("Not found: %s\r\n", request->url().c_str());
 		if (!this->checkAuth(request)) {	return request->requestAuthentication(); };

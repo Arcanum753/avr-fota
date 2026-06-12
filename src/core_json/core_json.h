@@ -12,9 +12,9 @@
 
 
 #if defined(ESP32)
-#include <SPIFFS.h>
+#include <LittleFS.h>
 #elif defined(ESP8266)
-#include <FS.h>
+#include <LittleFS.h>
 #endif
 
 
@@ -30,14 +30,14 @@ private:
     void  html_ver_get(AsyncWebServerRequest *request);
 protected: 
     #if ESP32
-    fs::SPIFFSFS*               _fs;
+    fs::LittleFSFS*               _fs;
     #elif defined(ESP8266)
     FS*                         _fs;                        // esp8266/esp32 flash file system
     #endif
     
 public:
 #if ESP32
-    void setFs(fs::SPIFFSFS* fs);
+    void setFs(fs::LittleFSFS* fs);
 #elif defined(ESP8266)
     void setFs(FS* fs)  ;                       // esp8266/esp32 flash file system
 #endif

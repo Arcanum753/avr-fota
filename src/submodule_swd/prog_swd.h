@@ -70,7 +70,7 @@ class ESP_PROGSWD {
 public:
     ESP_PROGSWD();
 #if defined(ESP32)
-    void setFs(fs::SPIFFSFS* fs);
+    void setFs(fs::LittleFSFS* fs);
 #endif
 
     uint32_t stm32Fx_begin();
@@ -144,7 +144,7 @@ protected:
     volatile uint8_t _percent = 0;
     //fs + hex file
 #if defined(ESP32)
-    fs::SPIFFSFS*               _fs;
+    fs::LittleFSFS*               _fs;
 #endif
 
     // EERTOS state для кооперативной прошивки

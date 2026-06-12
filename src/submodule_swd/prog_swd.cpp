@@ -5,7 +5,7 @@
 #include "debug_cm.h"
 
 #if defined(ESP32)
-#include <SPIFFS.h>
+#include <LittleFS.h>
 #include <esp_task_wdt.h>
 #endif
 
@@ -54,7 +54,7 @@ ESP_PROGSWD swdprog;
 ESP_PROGSWD::ESP_PROGSWD(){}
 
 #if defined(ESP32)
-void ESP_PROGSWD::setFs(fs::SPIFFSFS* fs) { _fs = fs; }
+void ESP_PROGSWD::setFs(fs::LittleFSFS* fs) { _fs = fs; }
 #endif
 
 int ESP_PROGSWD::stm32_ChipProgrammMain( String &path)  {

@@ -1,10 +1,10 @@
 #include "main.h"
 #if defined(ESP32)
-#include <SPIFFS.h>
+#include <LittleFS.h>
 #include <esp32-hal-gpio.h>
 #endif
 #if defined(ESP8266)
-#include <FS.h>
+#include <LittleFS.h>
 #endif
 
 #include <DNSServer.h>
@@ -95,14 +95,14 @@ void CORE_CLASS_WIFI::s_secondTick(void* arg) {
 }
 
 #if defined(ESP32)
-void CORE_CLASS_WIFI::begin(fs::SPIFFSFS* fs)
+void CORE_CLASS_WIFI::begin(fs::LittleFSFS* fs)
 #endif
 #if defined(ESP8266)
     void CORE_CLASS_WIFI::begin(FS* fs)                         // esp8266/esp32 flash file system
 #endif
 {
 	_fs = fs;
-	if (!_fs) { _fs->begin();  }// If SPIFFS is not started
+	if (!_fs) { _fs->begin();  }// If LittleFS is not started
 	connectionTimout = 0;
 	scanTime = ESPHTTPServer.configSys_ScanTimeGet();
 	scanTime *= MINUTES;

@@ -7,7 +7,7 @@
 #if defined(ESP32)
 #include <esp_task_wdt.h>
 #include <esp32-hal-gpio.h>
-#include <SPIFFS.h>
+#include <LittleFS.h>
 #include "esp_rom_md5.h"
 #endif
 
@@ -17,7 +17,7 @@
 Class_ProgBase::Class_ProgBase(uint8_t in): _in(in){ }
 
 #if defined(ESP32)
-void Class_ProgBase::setFs(fs::SPIFFSFS* fs)
+void Class_ProgBase::setFs(fs::LittleFSFS* fs)
 {	_fs = fs;	}
 #endif
 

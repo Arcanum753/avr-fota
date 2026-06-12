@@ -11,7 +11,7 @@ CORE_CLASS_EDITOR :: CORE_CLASS_EDITOR (bool _in) {
 }
 
 #if defined(ESP32)
-void CORE_CLASS_EDITOR::setFs(fs::SPIFFSFS* fs) //esp32 flash file system
+void CORE_CLASS_EDITOR::setFs(fs::LittleFSFS* fs) //esp32 flash file system
 #elif defined(ESP8266)
 void CORE_CLASS_EDITOR::setFs(FS* fs)	// esp8266 flash file system
 #endif

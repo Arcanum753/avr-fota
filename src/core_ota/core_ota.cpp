@@ -1,8 +1,8 @@
 #if defined(ESP32)
-#include <SPIFFS.h>
+#include <LittleFS.h>
 #include <esp32-hal-gpio.h>
 #elif defined(ESP8266)
-#include <FS.h>
+#include <LittleFS.h>
 #endif
 
 #include"version.h"
@@ -23,7 +23,7 @@ CORE_OTA_CLASS :: CORE_OTA_CLASS (bool _in) {
  }
  
 #if ESP32
-    void CORE_OTA_CLASS::setFs(fs::SPIFFSFS* fs)
+    void CORE_OTA_CLASS::setFs(fs::LittleFSFS* fs)
 #elif defined(ESP8266)
     void CORE_OTA_CLASS::setFs(FS* fs)
 #endif
@@ -63,7 +63,7 @@ bool  CORE_OTA_CLASS::ConfigureOTA( String _hostname, String _password) {
 	});
 
 #if defined(ESP32)
-	ArduinoOTA.onEnd(std::bind([](fs::SPIFFSFS* fs)
+	ArduinoOTA.onEnd(std::bind([](fs::LittleFSFS* fs)
 #elif defined(ESP8266)
 	ArduinoOTA.onEnd(std::bind([](FS* fs)
 #endif

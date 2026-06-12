@@ -18,7 +18,7 @@
 
 
 #define OTA_STR_FILENAME_FIRMWARE           "firmware.bin"
-#define OTA_STR_FILENAME_FILESYSTEM         "spiffs.bin"
+#define OTA_STR_FILENAME_FILESYSTEM         "littlefs.bin"
 #define OTA_STR_FILESYSTEM                  "FILESYSTEM"
 #define OTA_STR_FIRMWARE                    "FIRMWARE"
 #define OTA_STR_UNSUPPORTED                 "UNSUPPORTED"
@@ -64,13 +64,13 @@ public:
     CORE_OTA_CLASS (bool _in);
 
 #if ESP32
-    fs::SPIFFSFS*               _fs;
+    fs::LittleFSFS*               _fs;
 #elif defined(ESP8266)
     FS*                         _fs;                        // esp8266/esp32 flash file system
 #endif
 
 #if ESP32
-    void setFs(fs::SPIFFSFS* fs);
+    void setFs(fs::LittleFSFS* fs);
 #elif defined(ESP8266)
     void setFs(FS* fs);
 #endif

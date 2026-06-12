@@ -5,7 +5,7 @@
 
 #if defined(ESP32)
 #include <esp_task_wdt.h>
-#include <SPIFFS.h>
+#include <LittleFS.h>
 #endif
 
 #include "../module_prog/module_prog.h"

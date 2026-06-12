@@ -65,7 +65,7 @@ public:
 	Class_ProgBase(uint8_t in);
 	virtual bool begin();
 #if defined(ESP32)
-	void setFs(fs::SPIFFSFS* fs);
+	void setFs(fs::LittleFSFS* fs);
 #endif
 
 	// Чисто виртуальные — субмодуль ОБЯЗАН реализовать
@@ -146,7 +146,7 @@ public:
 	String _flashPath;
 	String _flashNtpStr;
 #if defined(ESP32)
-	fs::SPIFFSFS*   _fs = nullptr;
+	fs::LittleFSFS*   _fs = nullptr;
 #endif
 	File _fsUploadFile;
 	size_t _fileUploadBytes = 0;

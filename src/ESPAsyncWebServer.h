@@ -25,7 +25,7 @@
 
 #include <functional>
 #if defined(ESP32)
-#include <SPIFFS.h>
+#include <LittleFS.h>
 #include <WiFi.h>
 #include <AsyncTCP.h>
 #elif defined(ESP8266)
