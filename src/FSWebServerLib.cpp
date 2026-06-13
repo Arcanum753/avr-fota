@@ -343,8 +343,6 @@ void AsyncFSWebServer::html_system_Load(AsyncWebServerRequest *request) { // ans
 	String values = "";
 	values += "name|"		+ _sysConfig.deviceName		+ "|input\n";
 	values += "serial|" 	+ _sysConfig.deviceSerial 	+ "|input\n";
-	values += "scantime|" 	+ String(_sysConfig.wifiScanTime )	+ "|input\n";
-	values += "aptime|" 	+ String(_sysConfig.wifiAPLifeTime) 	+ "|input\n";
 	request->send(200, "text/plain", values);
 }
 
@@ -356,21 +354,6 @@ void AsyncFSWebServer::html_system_Save(AsyncWebServerRequest *request) {
 			DEBUGLOG("Arg %d: %s %s\r\n", i, request->argName(i).c_str() ,request->arg(i).c_str() );
 			if (request->argName(i) == "name") 		{ _sysConfig.deviceName 	= urldecode(request->arg(i));	continue; }
 			if (request->argName(i) == "serial") 	{ _sysConfig.deviceSerial 	= urldecode(request->arg(i));	continue; }
-
-			if (request->argName(i) == "scantime") { 
-				int val = request->arg(i).toInt();
-				// Проверка min/max
-				if (val < -1) val = -1;
-				if (val > 4) val = 4;
-				_sysConfig.wifiScanTime = val; 
-			}
-            if (request->argName(i) == "aptime") { 
-				int val = request->arg(i).toInt();
-				// Проверка min/max
-				if (val < 0) val = 0;
-				if (val > 10) val = 10;
-				_sysConfig.wifiAPLifeTime = val; 
-			}
 		}
 		request->send_P(200, "text/html", Page_GeneralSys);
 		save_configSys();
@@ -656,16 +639,11 @@ bool AsyncFSWebServer::load_config_Sys() {
 	_sysConfig.deviceName 			= jsonDoc["deviceName"].as<const char *>();
 	_sysConfig.deviceSerial 		= jsonDoc["deviceSerial"].as<const char *>();
 
-	_sysConfig.wifiScanTime 		= jsonDoc["wifiScanTime"].as<int>();
-	_sysConfig.wifiAPLifeTime 		= jsonDoc["wifiAPLifeTime"].as<int>();
-
 	return true;
 }
 
 void AsyncFSWebServer::defaultConfigSys() {
 	// DEFAULT CONFIG SYSTEM
-	_sysConfig.wifiScanTime 	= 1;
-	_sysConfig.wifiAPLifeTime	= 10;
 	#ifdef ESP32
 	_sysConfig.deviceName 		= "esp32";    
 	_sysConfig.deviceSerial 	=   (String)ESP.getChipModel() ;
@@ -682,10 +660,5 @@ bool AsyncFSWebServer::save_configSys() {
 	JsonDocument jsonDoc;
 	jsonDoc["deviceName"] 		= _sysConfig.deviceName;
 	jsonDoc["deviceSerial"] 	= _sysConfig.deviceSerial;
-	jsonDoc["wifiScanTime"]		= _sysConfig.wifiScanTime;
-	jsonDoc["wifiAPLifeTime"] 	= _sysConfig.wifiAPLifeTime;
 	return ModClassJson.save_jsonDoc(jsonDoc, CONFIG_FILE_SYS);
 }
-
-uint16_t AsyncFSWebServer::configSys_ApTimeGet() {	return _sysConfig.wifiAPLifeTime;}
-int16_t AsyncFSWebServer::configSys_ScanTimeGet() {	return _sysConfig.wifiScanTime;}

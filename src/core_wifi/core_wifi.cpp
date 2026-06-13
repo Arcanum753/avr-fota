@@ -49,7 +49,6 @@ void CORE_CLASS_WIFI::s_secondTick(void* arg) {
 	if (self->wifiStatus == FS_STAT_APMODE) {	dnsServer.processNextRequest();	}
 	
 	// Периодический сброс счётчиков неудачных попыток (каждые 60 секунд)
-	// чтобы дать шанс на повторное подключение к SSID, которые были временно заблокированы
 	if (self->connectionTimout % 60 == 0 && self->connectionTimout > 0) {
 		bool anyBlocked = false;
 		for (int i = 0; i < 4; i++) {
@@ -68,7 +67,6 @@ void CORE_CLASS_WIFI::s_secondTick(void* arg) {
 				DEBUGLOGWIFI("Connection Timeout. Switching to AP Mode.\r\n");
 				self->WifiScan = WF_SCAN_NO_NEED;
 				self->configureWifiAP();
-				
 				ledMacrosWifiAP();
 			}
 		}
@@ -92,6 +90,39 @@ void CORE_CLASS_WIFI::s_secondTick(void* arg) {
 		if (self->wifiStatus == FS_STAT_CONNECTED && (CONNECTION_LED >= 0) ) {  flashLEDOnConnected(); }
 	}
 
+// AP mode — scantime timeout and rescan logic
+	if (self->wifiStatus == FS_STAT_APMODE && self->scanTime > 0) {
+		if (++self->_apUptime >= self->scanTime) {
+			if (WiFi.softAPgetStationNum() == 0) {
+				DEBUGLOGWIFI("AP timeout, no clients. Re-scanning.\r\n");
+				self->_apUptime = 0;
+				self->WifiScan = WF_STAT_SCANING;
+				self->configureWifi();
+				ledMacrosWifiScan();
+			} else {
+				self->_apUptime = 0;
+			}
+		}
+	}
+
+// AP mode — client idle timeout
+	if (self->wifiStatus == FS_STAT_APMODE && self->_wifiAPLifeTime > 0) {
+		if (WiFi.softAPgetStationNum() > 0) {
+			if (self->_apClientActivity) {
+				self->_apClientIdleSec = 0;
+				self->_apClientActivity = false;
+			} else {
+				if (++self->_apClientIdleSec >= self->_wifiAPLifeTime * 60) {
+					DEBUGLOGWIFI("AP client idle timeout, disconnecting client.\r\n");
+					WiFi.softAPdisconnect(true);
+					self->_apClientIdleSec = 0;
+				}
+			}
+		} else {
+			self->_apClientIdleSec = 0;
+		}
+	}
+
 }
 
 #if defined(ESP32)
@@ -104,8 +135,6 @@ void CORE_CLASS_WIFI::begin(fs::LittleFSFS* fs)
 	_fs = fs;
 	if (!_fs) { _fs->begin();  }// If LittleFS is not started
 	connectionTimout = 0;
-	scanTime = ESPHTTPServer.configSys_ScanTimeGet();
-	scanTime *= MINUTES;
 	String hostName = ESPHTTPServer.getHostName();
 	WiFi.hostname(hostName.c_str());
 	// Отключаем энергосбережение WiFi - иначе при длительном
@@ -130,7 +159,9 @@ void CORE_CLASS_WIFI::begin(fs::LittleFSFS* fs)
 	if (!load_configWifi(3)) { defaultConfigWifi(3); _apConfig.APenable = true; 	}
 	if (!load_configWifi(2)) { defaultConfigWifi(2); _apConfig.APenable = true; 	}
 	if (!load_configWifi(1)) { defaultConfigWifi(1); _apConfig.APenable = true; 	}
-	if (!load_configWifi(0)) { defaultConfigWifi(0); _apConfig.APenable = true;		} 
+	if (!load_configWifi(0)) { defaultConfigWifi(0); _apConfig.APenable = true;		}
+	if (!load_configWifiSys()) { defaultConfigWifiSys(); }
+	scanTime = _wifiScanTime * MINUTES;
 	DEBUGLOGWIFI("_strWifis[0] %s\r\n", _strWifi0);
 	DEBUGLOGWIFI("_strWifis[1] %s\r\n", _strWifi1);
 	DEBUGLOGWIFI("_strWifis[2] %s\r\n", _strWifi2);
@@ -274,6 +305,9 @@ void CORE_CLASS_WIFI::configureWifiAP() {
 	// if (CONNECTION_LED >= 0) {	flashLED(CONNECTION_LED, 5, 250);	}
 	DEBUGLOGWIFI("AP Mode enabled. SSID: %s IP: %s\r\n", WiFi.softAPSSID().c_str(), WiFi.softAPIP().toString().c_str());
 	connectionTimout = 0;
+	_apUptime = 0;
+	_apClientIdleSec = 0;
+	_apClientActivity = false;
 }
 
 int CORE_CLASS_WIFI::scanWifi() {
@@ -328,6 +362,9 @@ void CORE_CLASS_WIFI::configureWifi() { // set esp8266 as wifi client
 	wifiStatus = FS_STAT_CONNECTING;
 //Only use wait waitForConnectResult if the timeout is not enabled to not mess with the timeout
 	if (scanTime <= 0) { WiFi.waitForConnectResult(); }
+	_apUptime = 0;
+	_apClientIdleSec = 0;
+	_apClientActivity = false;
 
 }
 
@@ -632,20 +669,36 @@ void CORE_CLASS_WIFI::webInit () {
 
     //captive
     ESPHTTPServer.on("/generate_204", HTTP_GET, [](AsyncWebServerRequest *request) {
+        modWifiClass.notifyApClientActivity();
         request->redirect("http://" + WiFi.softAPIP().toString());
     });
 
     ESPHTTPServer.on("/hotspot-detect.html", HTTP_GET, [](AsyncWebServerRequest *request) {
+        modWifiClass.notifyApClientActivity();
         request->redirect("http://" + WiFi.softAPIP().toString());
     });
 
     ESPHTTPServer.on("/ncsi.txt", HTTP_GET, [](AsyncWebServerRequest *request) {
+        modWifiClass.notifyApClientActivity();
         request->send(200, "text/plain", "Microsoft NCSI");
     });
 
     ESPHTTPServer.on("/wifi/ver", [this](AsyncWebServerRequest *request) {
         html_ver_get(request);
     });
+
+    ESPHTTPServer.on("/wifi/sysconf", HTTP_GET, [this](AsyncWebServerRequest *request) {
+        if (!ESPHTTPServer.checkAuth(request)) { return request->requestAuthentication(); }
+        send_wifi_sysconf_json(request);
+    });
+
+    ESPHTTPServer.on("/wifi/sysconf", HTTP_POST,
+        [this](AsyncWebServerRequest *request) { handle_wifi_sysconf_post(request); },
+        NULL,
+        [this](AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total) {
+            handle_slot_upload(request, data, len, index, total);
+        }
+    );
 }
 
 void CORE_CLASS_WIFI::send_slot_json(AsyncWebServerRequest *request, int slot) {
@@ -788,5 +841,78 @@ void CORE_CLASS_WIFI::html_ver_get(AsyncWebServerRequest *request) {
     values += "wifigentime|"     + getGeneratedTime() + "|dev\n";
     values += "wifigendate|"     + getCommitDateStr() + "|dev\n";
     request->send(200, "text/plain", values);
+}
+
+bool CORE_CLASS_WIFI::load_configWifiSys() {
+    DEBUGLOGWIFI("Loading WiFi sys config\n");
+    JsonDocument jsonDoc;
+    if (ModClassJson.load_jsonDoc(WIFI_CONFIG_SYS, jsonDoc) == false) { return false; }
+
+    _wifiScanTime = jsonDoc["scantime"].as<int16_t>();
+    _wifiAPLifeTime = jsonDoc["aptime"].as<uint16_t>();
+
+    return true;
+}
+
+bool CORE_CLASS_WIFI::save_configWifiSys() {
+    DEBUGLOGWIFI("Saving WiFi sys config\n");
+    JsonDocument jsonDoc;
+    jsonDoc["scantime"] = _wifiScanTime;
+    jsonDoc["aptime"] = _wifiAPLifeTime;
+    return ModClassJson.save_jsonDoc(jsonDoc, WIFI_CONFIG_SYS);
+}
+
+void CORE_CLASS_WIFI::defaultConfigWifiSys() {
+    DEBUGLOGWIFI("defaultConfigWifiSys\n");
+    _wifiScanTime = 1;
+    _wifiAPLifeTime = 10;
+}
+
+void CORE_CLASS_WIFI::send_wifi_sysconf_json(AsyncWebServerRequest *request) {
+    DEBUGLOGWIFI("send_wifi_sysconf_json\n");
+    String values = "";
+    values += "scantime_hours|" + String(_wifiScanTime / 60) + "|input\n";
+    values += "scantime_mins|" + String(_wifiScanTime % 60) + "|input\n";
+    values += "aptime|" + String(_wifiAPLifeTime) + "|input\n";
+    request->send(200, "text/plain", values);
+}
+
+void CORE_CLASS_WIFI::handle_wifi_sysconf_post(AsyncWebServerRequest *request) {
+    DEBUGLOGWIFI("handle_wifi_sysconf_post\n");
+    if (!ESPHTTPServer.checkAuth(request)) {
+        if (request->_tempObject) { free(request->_tempObject); request->_tempObject = NULL; }
+        return request->requestAuthentication();
+    }
+
+    if (!request->_tempObject) { request->send(400, "application/json", "{\"success\":false}"); return; }
+
+    String body = String((char*)request->_tempObject);
+    free(request->_tempObject);
+    request->_tempObject = NULL;
+
+    JsonDocument jsonDoc;
+    DeserializationError error = deserializeJson(jsonDoc, body);
+    if (error) { request->send(400, "application/json", "{\"success\":false,\"error\":\"JSON parse error\"}"); return; }
+
+    if (jsonDoc.containsKey("scantime")) {
+        int val = jsonDoc["scantime"].as<int>();
+        if (val < 0) val = 0;
+        if (val > 720) val = 720;
+        _wifiScanTime = val;
+    }
+    if (jsonDoc.containsKey("aptime")) {
+        int val = jsonDoc["aptime"].as<int>();
+        if (val < 0) val = 0;
+        if (val > 10) val = 10;
+        _wifiAPLifeTime = val;
+    }
+
+    if (save_configWifiSys()) {
+        scanTime = _wifiScanTime * MINUTES;
+        request->send(200, "application/json", "{\"success\":true}");
+        DEBUGLOGWIFI("WiFi sys config saved: scantime=%d, aptime=%d\n", _wifiScanTime, _wifiAPLifeTime);
+    } else {
+        request->send(500, "application/json", "{\"success\":false,\"error\":\"Save failed\"}");
+    }
 }
 

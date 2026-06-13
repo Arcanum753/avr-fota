@@ -47,8 +47,6 @@ typedef struct {
     String deviceName;
     String deviceSerial;
     String fsVersion;
-    int16_t wifiScanTime;
-    uint16_t wifiAPLifeTime;
 } strSysConfig;
 
 
@@ -117,8 +115,6 @@ private:
 public:
     bool checkAuth(AsyncWebServerRequest *request);
     bool handleFileRead(String path, AsyncWebServerRequest *request);
-    uint16_t configSys_ApTimeGet()   ;
-    int16_t  configSys_ScanTimeGet() ;
 
     
 private:
