@@ -1,5 +1,4 @@
 #include <Arduino.h>
-#include <ArduinoJson.h>
 #include "version.h"
 #include "main.h"
 
@@ -387,27 +386,21 @@ void MODULE_CLASS_OTACLIENT::get_configuration_html(AsyncWebServerRequest *reque
 // ========== JSON GET ==========
 String MODULE_CLASS_OTACLIENT::jsonGet() {
     String ret = "";
-    JsonDocument jsonDoc;
-    
-    jsonDoc["deviceName"]   = ESPHTTPServer._sysConfig.deviceName;
-    jsonDoc["deviceSerial"] = ESPHTTPServer._sysConfig.deviceSerial;
-    
-    jsonDoc["ip"]           = WiFi.localIP().toString();
-    jsonDoc["mac"]          = WiFi.macAddress();
-    jsonDoc["timeOut"]   = _config.timeOut;
-    jsonDoc["serverPort"] = _config.serverPort;
-
-    jsonDoc["target"]       = BUILD_ENV;
-    jsonDoc["buildtime"]    = BUILD_TIME;
-    jsonDoc["gitbranch"]    = GIT_BRANCH;
-    jsonDoc["gitcommit"]    = GIT_COMMIT;
-    jsonDoc["uptime"]       = (String)NTP.getUptimeString();
-    jsonDoc["rstreason"]    =  ESPHTTPServer.getResetReason();
-
-    jsonDoc["espVer"]       = FIRMWARE_VERSION;
-
-	
-	serializeJsonPretty(jsonDoc, ret);
+    ret += "{\n";
+    ret += "  \"deviceName\": \"" + ESPHTTPServer._sysConfig.deviceName + "\",\n";
+    ret += "  \"deviceSerial\": \"" + ESPHTTPServer._sysConfig.deviceSerial + "\",\n";
+    ret += "  \"ip\": \"" + WiFi.localIP().toString() + "\",\n";
+    ret += "  \"mac\": \"" + WiFi.macAddress() + "\",\n";
+    ret += "  \"timeOut\": " + String(_config.timeOut) + ",\n";
+    ret += "  \"serverPort\": " + String(_config.serverPort) + ",\n";
+    ret += "  \"target\": \"" + String(BUILD_ENV) + "\",\n";
+    ret += "  \"buildtime\": \"" + String(BUILD_TIME) + "\",\n";
+    ret += "  \"gitbranch\": \"" + String(GIT_BRANCH) + "\",\n";
+    ret += "  \"gitcommit\": \"" + String(GIT_COMMIT) + "\",\n";
+    ret += "  \"uptime\": \"" + String(NTP.getUptimeString()) + "\",\n";
+    ret += "  \"rstreason\": \"" + ESPHTTPServer.getResetReason() + "\",\n";
+    ret += "  \"espVer\": \"" + String(FIRMWARE_VERSION) + "\"\n";
+    ret += "}\n";
     return ret;
 }
 
@@ -423,26 +416,23 @@ void MODULE_CLASS_OTACLIENT::defaultConfig() {
 // ========== SAVE CONFIG ==========
 bool MODULE_CLASS_OTACLIENT::save_config() {
     DEBUGOTACLIENT("%s\n\r", __PRETTY_FUNCTION__);
-    JsonDocument jsonDoc;
-    jsonDoc["timeOut"]        = _config.timeOut;
-    jsonDoc["powerOn"]        = _config.powerOn;
-    jsonDoc["serverAddress"]  = _config.serverAddress;
-    jsonDoc["serverPort"]     = _config.serverPort;
-    jsonDoc["manifestPath"]   = _config.manifestPath;
-    return ModClassJson.save_jsonDoc(jsonDoc, CONFIG_FILE_OTACLIENT);
+    if (!ModClassJson.jsonFileWriteInt(CONFIG_FILE_OTACLIENT, "timeOut", _config.timeOut)) return false;
+    if (!ModClassJson.jsonFileWriteBool(CONFIG_FILE_OTACLIENT, "powerOn", _config.powerOn)) return false;
+    if (!ModClassJson.jsonFileWriteStr(CONFIG_FILE_OTACLIENT, "serverAddress", _config.serverAddress)) return false;
+    if (!ModClassJson.jsonFileWriteInt(CONFIG_FILE_OTACLIENT, "serverPort", _config.serverPort)) return false;
+    if (!ModClassJson.jsonFileWriteStr(CONFIG_FILE_OTACLIENT, "manifestPath", _config.manifestPath)) return false;
+    return true;
 }
 
 // ========== LOAD CONFIG ==========
 bool MODULE_CLASS_OTACLIENT::load_config() {
     DEBUGOTACLIENT("%s\n\r", __PRETTY_FUNCTION__);
-    JsonDocument jsonDoc;
-    if (ModClassJson.load_jsonDoc(CONFIG_FILE_OTACLIENT, jsonDoc) == false) { return false; }
-    
-    _config.timeOut        = jsonDoc["timeOut"].as<int>();
-    _config.powerOn        = jsonDoc["powerOn"].as<bool>();
-    _config.serverAddress  = jsonDoc["serverAddress"].as<const char *>();
-    _config.serverPort     = jsonDoc["serverPort"].as<uint16_t>();
-    _config.manifestPath   = jsonDoc["manifestPath"].as<const char *>();
+    if (!ModClassJson.jsonFileReadInt(CONFIG_FILE_OTACLIENT, "timeOut", _config.timeOut)) return false;
+    ModClassJson.jsonFileReadBool(CONFIG_FILE_OTACLIENT, "powerOn", _config.powerOn);
+    ModClassJson.jsonFileReadStr(CONFIG_FILE_OTACLIENT, "serverAddress", _config.serverAddress);
+    uint32_t portVal = 0;
+    if (ModClassJson.jsonFileReadUint(CONFIG_FILE_OTACLIENT, "serverPort", portVal)) _config.serverPort = (uint16_t)portVal;
+    ModClassJson.jsonFileReadStr(CONFIG_FILE_OTACLIENT, "manifestPath", _config.manifestPath);
     
     DEBUGOTACLIENT("timeOut: %d\n\r", _config.timeOut);
     DEBUGOTACLIENT("powerOn: %d\n\r", _config.powerOn);
@@ -567,34 +557,26 @@ bool MODULE_CLASS_OTACLIENT::fetchManifest(ManifestEntry* entries, int& count) {
 #endif
     
     // Parse JSON
-    JsonDocument doc;
-    DeserializationError error = deserializeJson(doc, payload);
-    if (error) {
-        DEBUGOTACLIENT("fetchManifest: JSON parse error: %s\n", error.c_str());
-        return false;
-    }
-    
-    // Проверяем, есть ли файлы для нашего target на сервере
-    bool hasFiles = doc["has_files"].as<bool>() || false;
-    if (!hasFiles) {
+    bool hasFiles = false;
+    if (!ModClassJson.jsonParseNestedBool(payload, "has_files", hasFiles) || !hasFiles) {
         DEBUGOTACLIENT("fetchManifest: no files for target %s on server\n", BUILD_ENV);
         return false;
     }
     
-    JsonArray files = doc["files"].as<JsonArray>();
-    if (files.isNull()) {
+    int numFiles = ModClassJson.jsonGetArraySize(payload, "files");
+    if (numFiles <= 0) {
         DEBUGOTACLIENT("fetchManifest: no 'files' array in manifest\n");
         return false;
     }
     
     int idx = 0;
-    for (JsonObject file : files) {
-        if (idx >= OTACLIENT_MAX_MANIFEST_ENTRIES) break;
-        
-        entries[idx].name = file["name"].as<const char *>();
-        entries[idx].type = file["type"].as<const char *>();
-        entries[idx].size = file["size"].as<size_t>();
-        entries[idx].md5  = file["md5"].as<const char *>();
+    for (int i = 0; i < numFiles && idx < OTACLIENT_MAX_MANIFEST_ENTRIES; i++) {
+        String path = "files";
+        ModClassJson.jsonGetArrayStr(payload, "files", i, "name", entries[idx].name);
+        ModClassJson.jsonGetArrayStr(payload, "files", i, "type", entries[idx].type);
+        int32_t sizeVal = 0;
+        if (ModClassJson.jsonGetArrayInt(payload, "files", i, "size", sizeVal)) entries[idx].size = (size_t)sizeVal;
+        ModClassJson.jsonGetArrayStr(payload, "files", i, "md5", entries[idx].md5);
         
         DEBUGOTACLIENT("  [%d] %s (%s) %u bytes MD5:%s\n",
             idx, entries[idx].name.c_str(), entries[idx].type.c_str(),

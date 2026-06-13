@@ -2,7 +2,6 @@
 #define _MODULE_PROG_BASE_H
 
 #include "main.h"
-#include <ArduinoJson.h>
 #include <FS.h>
 #include "ESPAsyncWebServer.h"
 #include "FSWebServerLib.h"
@@ -111,8 +110,9 @@ public:
 	void	setUploadPercent(uint8_t p) { _uploadPercent = p; }
 
 	// filelist management
-	bool	filelist_Load(JsonDocument &doc);
-	bool	filelist_Save(JsonDocument &doc);
+	bool	filelist_Load();
+	bool	filelist_Save();
+	void	filelist_Clear();
 	bool	filelist_AddEntry(const String &filename, const String &upload_date, const String &md5);
 	bool	filelist_RemoveEntry(const String &filename);
 	bool	filelist_FileExists(const String &filename);
@@ -125,7 +125,7 @@ public:
 	void	web_ProjectSave(AsyncWebServerRequest *request);
 	void	web_ProjectChips(AsyncWebServerRequest *request);
 	void	web_ProjectChipInfo(AsyncWebServerRequest *request);
-	virtual void _chipInfoAppendFields(JsonObject &out, JsonObject &chip);
+	virtual void _chipInfoAppendFields(class JsonObject &out, class JsonObject &chip);
 
 	// Version — virtual, submodules override
 	virtual String getVersionStr() { return String(""); }

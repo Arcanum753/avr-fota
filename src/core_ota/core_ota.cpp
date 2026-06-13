@@ -6,12 +6,12 @@
 #endif
 
 #include"version.h"
-#include <ArduinoJson.h>
 #include <ArduinoOTA.h>
 #include "FSWebServerLib.h"
 #include "common.h"
 #include "core_ota.h"
 #include "core_ota_version.h"
+#include "core_json/core_json.h"
 
 CORE_OTA_CLASS modOtaClass(false);
 
@@ -202,27 +202,16 @@ void CORE_OTA_CLASS::cacheFsVersionInfo() {
 }
 
 bool CORE_OTA_CLASS::parseVersionFromJson(const String& jsonStr, int64_t& date, int32_t& build, int32_t& major, int32_t& minor) {
-    DynamicJsonDocument doc(4096);
-    DeserializationError error = deserializeJson(doc, jsonStr);
+    if (!ModClassJson.jsonParseNestedInt(jsonStr, "filesystem|version|major", major)) return false;
+    if (!ModClassJson.jsonParseNestedInt(jsonStr, "filesystem|version|minor", minor)) return false;
     
-    if (error) {
-        DEBUGOTA("parseVersionFromJson: JSON parse error: %s\n", error.c_str());
-        return false;
-    }
+    int32_t dateVal = 0;
+    if (!ModClassJson.jsonParseNestedInt(jsonStr, "filesystem|version|date", dateVal)) return false;
+    date = dateVal;
     
-    JsonObject version = doc["filesystem"]["version"];
+    if (!ModClassJson.jsonParseNestedInt(jsonStr, "filesystem|version|build", build)) return false;
     
-    if (version.isNull()) {
-        DEBUGOTA("parseVersionFromJson: No filesystem.version object\n");
-        return false;
-    }
-    
-    major = version["major"] | 0;
-    minor = version["minor"] | 0;
-    date = version["date"] | 0LL;
-    build = version["build"] | 0;
-    
-    _cachedFsVersionStr = version["full_string"] | "";
+    ModClassJson.jsonParseNestedStr(jsonStr, "filesystem|version|full_string", _cachedFsVersionStr);
     
     DEBUGOTA("parseVersionFromJson: FS version %d.%d.%lld.%d (%s)\n", 
              major, minor, date, build, _cachedFsVersionStr.c_str());

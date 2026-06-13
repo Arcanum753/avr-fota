@@ -8,7 +8,6 @@
 #endif
 
 #include <DNSServer.h>
-#include <ArduinoJson.h>
 
 #include "FSWebServerLib.h"
 #include "main.h"
@@ -186,21 +185,14 @@ bool CORE_CLASS_WIFI::load_configWifi(int _in) {
 	if (_in < 0){ return false; }
 	char filename[40];
 	sprintf(filename, "/%s%d.json", WIFI_CONFIG_FILE_NAME, _in);
-	JsonDocument jsonDoc;
-	if (ModClassJson.load_jsonDoc(filename, jsonDoc) == false){ return false; }
-
-	_wifiConfig.ssid = jsonDoc["ssid"].as<const char *>();
+	if (!ModClassJson.jsonFileLoadSlot(filename, _wifiConfig.ssid, _wifiConfig.password, _wifiConfig.dhcp,
+	                                   _wifiConfig.ip, _wifiConfig.netmask, _wifiConfig.gateway, _wifiConfig.dns)) {
+	    return false;
+	}
 	if (_in == 0)  sprintf(_strWifi0, "%s", _wifiConfig.ssid.c_str());
 	if (_in == 1)  sprintf(_strWifi1, "%s", _wifiConfig.ssid.c_str());
 	if (_in == 2)  sprintf(_strWifi2, "%s", _wifiConfig.ssid.c_str());
 	if (_in == 3)  sprintf(_strWifi3, "%s", _wifiConfig.ssid.c_str());
-
-	_wifiConfig.password = jsonDoc["pass"].as<const char *>();
-	_wifiConfig.ip = IPAddress(jsonDoc["ip"][0], jsonDoc["ip"][1], jsonDoc["ip"][2], jsonDoc["ip"][3]);
-	_wifiConfig.netmask = IPAddress(jsonDoc["netmask"][0], jsonDoc["netmask"][1], jsonDoc["netmask"][2], jsonDoc["netmask"][3]);
-	_wifiConfig.gateway = IPAddress(jsonDoc["gateway"][0], jsonDoc["gateway"][1], jsonDoc["gateway"][2], jsonDoc["gateway"][3]);
-	_wifiConfig.dns = IPAddress(jsonDoc["dns"][0], jsonDoc["dns"][1], jsonDoc["dns"][2], jsonDoc["dns"][3]);
-	_wifiConfig.dhcp = jsonDoc["dhcp"].as<bool>();
 
 	return true;
 }
@@ -209,55 +201,10 @@ bool CORE_CLASS_WIFI::load_configWifi(int _in) {
 bool CORE_CLASS_WIFI::save_configWifi(int _in) {
 	//flag_config = false;
 	DEBUGLOGWIFI("Save config\r\n");
-	JsonDocument jsonDoc;
-
-	jsonDoc["ssid"] = _wifiConfig.ssid;
-	jsonDoc["pass"] = _wifiConfig.password;
-	jsonDoc["dhcp"] = _wifiConfig.dhcp;
-	JsonArray jsonip = jsonDoc["ip"].to<JsonArray>();
-	jsonip.add(_wifiConfig.ip[0]);
-	jsonip.add(_wifiConfig.ip[1]);
-	jsonip.add(_wifiConfig.ip[2]);
-	jsonip.add(_wifiConfig.ip[3]);
-
-	JsonArray jsonNM = jsonDoc["netmask"].to<JsonArray>();
-	jsonNM.add(_wifiConfig.netmask[0]);
-	jsonNM.add(_wifiConfig.netmask[1]);
-	jsonNM.add(_wifiConfig.netmask[2]);
-	jsonNM.add(_wifiConfig.netmask[3]);
-
-	JsonArray jsonGateway = jsonDoc["gateway"].to<JsonArray>();
-	jsonGateway.add(_wifiConfig.gateway[0]);
-	jsonGateway.add(_wifiConfig.gateway[1]);
-	jsonGateway.add(_wifiConfig.gateway[2]);
-	jsonGateway.add(_wifiConfig.gateway[3]);
-
-	JsonArray jsondns = jsonDoc["dns"].to<JsonArray>();
-	jsondns.add(_wifiConfig.dns[0]);
-	jsondns.add(_wifiConfig.dns[1]);
-	jsondns.add(_wifiConfig.dns[2]);
-	jsondns.add(_wifiConfig.dns[3]);
-
-	//jsonDoc["led"] = config.connectionLed;
-
-	//TODO add AP data to html
-	File configFile ;
-
-	if (_in == 0) {		 configFile = _fs->open(WIFI_CONFIG_FILE0, "w");	}
-	if (_in == 1) {		 configFile = _fs->open(WIFI_CONFIG_FILE1, "w");	}
-	if (_in == 2) {		 configFile = _fs->open(WIFI_CONFIG_FILE2, "w");	}
-	if (_in == 3) {		 configFile = _fs->open(WIFI_CONFIG_FILE3, "w");	}
-
-	if (!configFile) {
-		DEBUGLOGWIFI("Failed to open config file for writing\r\n");
-		configFile.close();
-		return false;
-	}
-
-	serializeJson(jsonDoc, configFile);
-	configFile.flush();
-	configFile.close();
-	return true;
+	char filename[40];
+	sprintf(filename, "/%s%d.json", WIFI_CONFIG_FILE_NAME, _in);
+	return ModClassJson.jsonFileSaveSlot(filename, _wifiConfig.ssid, _wifiConfig.password, _wifiConfig.dhcp,
+	                                      _wifiConfig.ip, _wifiConfig.netmask, _wifiConfig.gateway, _wifiConfig.dns);
 }
 
 
@@ -704,38 +651,11 @@ void CORE_CLASS_WIFI::webInit () {
 void CORE_CLASS_WIFI::send_slot_json(AsyncWebServerRequest *request, int slot) {
     DEBUGLOGWIFI("Sending slot %d data as JSON\n", slot);
     load_configWifi(slot);
-    
-    JsonDocument jsonDoc;
-    jsonDoc["ssid"] = _wifiConfig.ssid;
-    jsonDoc["password"] = _wifiConfig.password;
-    jsonDoc["dhcp"] = _wifiConfig.dhcp;
-    
-    JsonArray ip = jsonDoc["ip"].to<JsonArray>();
-    ip.add(_wifiConfig.ip[0]);
-    ip.add(_wifiConfig.ip[1]);
-    ip.add(_wifiConfig.ip[2]);
-    ip.add(_wifiConfig.ip[3]);
-    
-    JsonArray netmask = jsonDoc["netmask"].to<JsonArray>();
-    netmask.add(_wifiConfig.netmask[0]);
-    netmask.add(_wifiConfig.netmask[1]);
-    netmask.add(_wifiConfig.netmask[2]);
-    netmask.add(_wifiConfig.netmask[3]);
-    
-    JsonArray gateway = jsonDoc["gateway"].to<JsonArray>();
-    gateway.add(_wifiConfig.gateway[0]);
-    gateway.add(_wifiConfig.gateway[1]);
-    gateway.add(_wifiConfig.gateway[2]);
-    gateway.add(_wifiConfig.gateway[3]);
-    
-    JsonArray dns = jsonDoc["dns"].to<JsonArray>();
-    dns.add(_wifiConfig.dns[0]);
-    dns.add(_wifiConfig.dns[1]);
-    dns.add(_wifiConfig.dns[2]);
-    dns.add(_wifiConfig.dns[3]);
-    
-    String response;
-    serializeJson(jsonDoc, response);
+
+    String response = ModClassJson.jsonBuildSlotConfig(
+        _wifiConfig.ssid, _wifiConfig.password, _wifiConfig.dhcp,
+        _wifiConfig.ip, _wifiConfig.netmask, _wifiConfig.gateway, _wifiConfig.dns
+    );
     request->send(200, "application/json", response);
 }
 void CORE_CLASS_WIFI::handle_slot_post(AsyncWebServerRequest *request, int slot) {
@@ -752,50 +672,41 @@ void CORE_CLASS_WIFI::handle_slot_post(AsyncWebServerRequest *request, int slot)
         String body = String((char*)request->_tempObject);
         DEBUGLOGWIFI("Received body for slot %d: %s\n", slot, body.c_str());
         
-        JsonDocument jsonDoc;
-        DeserializationError error = deserializeJson(jsonDoc, body);
+        String ssid, password;
+        bool dhcp = false;
+        IPAddress ip, netmask, gateway, dns;
         
-        if (error) {
-            DEBUGLOGWIFI("JSON parse error: %s\n", error.c_str());
+        this->load_configWifi(slot);
+        ssid = this->_wifiConfig.ssid;
+        password = this->_wifiConfig.password;
+        dhcp = this->_wifiConfig.dhcp;
+        ip = this->_wifiConfig.ip;
+        netmask = this->_wifiConfig.netmask;
+        gateway = this->_wifiConfig.gateway;
+        dns = this->_wifiConfig.dns;
+        
+        int parsed = ModClassJson.jsonParseSlotConfig(body, ssid, password, dhcp,
+                                                        ip, netmask, gateway, dns);
+        
+        // Освобождаем память
+        free(request->_tempObject);
+        request->_tempObject = NULL;
+        
+        if (parsed == 0) {
+            DEBUGLOGWIFI("JSON parse error\n");
             request->send(400, "application/json", "{\"success\":false,\"error\":\"JSON parse error\"}");
-            
-            // Освобождаем память
-            free(request->_tempObject);
-            request->_tempObject = NULL;
             return;
         }
         
-        this->load_configWifi(slot);
-        
-        if (jsonDoc.containsKey("ssid")) this->_wifiConfig.ssid = jsonDoc["ssid"].as<String>();
-        if (jsonDoc.containsKey("password")) this->_wifiConfig.password = jsonDoc["password"].as<String>();
-        if (jsonDoc.containsKey("dhcp")) this->_wifiConfig.dhcp = jsonDoc["dhcp"].as<bool>();
-        
-        if (jsonDoc["ip"].is<JsonArray>()) {
-            JsonArray ip = jsonDoc["ip"].as<JsonArray>();
-            this->_wifiConfig.ip = IPAddress(ip[0], ip[1], ip[2], ip[3]);
-        }
-        
-        if (jsonDoc["netmask"].is<JsonArray>()) {
-            JsonArray nm = jsonDoc["netmask"].as<JsonArray>();
-            this->_wifiConfig.netmask = IPAddress(nm[0], nm[1], nm[2], nm[3]);
-        }
-        
-        if (jsonDoc["gateway"].is<JsonArray>()) {
-            JsonArray gw = jsonDoc["gateway"].as<JsonArray>();
-            this->_wifiConfig.gateway = IPAddress(gw[0], gw[1], gw[2], gw[3]);
-        }
-        
-        if (jsonDoc["dns"].is<JsonArray>()) {
-            JsonArray dns = jsonDoc["dns"].as<JsonArray>();
-            this->_wifiConfig.dns = IPAddress(dns[0], dns[1], dns[2], dns[3]);
-        }
+        this->_wifiConfig.ssid = ssid;
+        this->_wifiConfig.password = password;
+        this->_wifiConfig.dhcp = dhcp;
+        this->_wifiConfig.ip = ip;
+        this->_wifiConfig.netmask = netmask;
+        this->_wifiConfig.gateway = gateway;
+        this->_wifiConfig.dns = dns;
         
         bool saveResult = this->save_configWifi(slot);
-        
-        // Освобождаем память после использования
-        free(request->_tempObject);
-        request->_tempObject = NULL;
         
         if (saveResult) {
             request->send(200, "application/json", "{\"success\":true}");
@@ -845,21 +756,19 @@ void CORE_CLASS_WIFI::html_ver_get(AsyncWebServerRequest *request) {
 
 bool CORE_CLASS_WIFI::load_configWifiSys() {
     DEBUGLOGWIFI("Loading WiFi sys config\n");
-    JsonDocument jsonDoc;
-    if (ModClassJson.load_jsonDoc(WIFI_CONFIG_SYS, jsonDoc) == false) { return false; }
-
-    _wifiScanTime = jsonDoc["scantime"].as<int16_t>();
-    _wifiAPLifeTime = jsonDoc["aptime"].as<uint16_t>();
-
+    uint32_t scanTimeVal = 0, apLifeTimeVal = 0;
+    if (!ModClassJson.jsonFileReadUint(WIFI_CONFIG_SYS, "scantime", scanTimeVal)) return false;
+    if (!ModClassJson.jsonFileReadUint(WIFI_CONFIG_SYS, "aptime", apLifeTimeVal)) return false;
+    _wifiScanTime = (uint16_t)scanTimeVal;
+    _wifiAPLifeTime = (uint16_t)apLifeTimeVal;
     return true;
 }
 
 bool CORE_CLASS_WIFI::save_configWifiSys() {
     DEBUGLOGWIFI("Saving WiFi sys config\n");
-    JsonDocument jsonDoc;
-    jsonDoc["scantime"] = _wifiScanTime;
-    jsonDoc["aptime"] = _wifiAPLifeTime;
-    return ModClassJson.save_jsonDoc(jsonDoc, WIFI_CONFIG_SYS);
+    if (!ModClassJson.jsonFileWriteInt(WIFI_CONFIG_SYS, "scantime", _wifiScanTime)) return false;
+    if (!ModClassJson.jsonFileWriteInt(WIFI_CONFIG_SYS, "aptime", _wifiAPLifeTime)) return false;
+    return true;
 }
 
 void CORE_CLASS_WIFI::defaultConfigWifiSys() {
@@ -890,22 +799,19 @@ void CORE_CLASS_WIFI::handle_wifi_sysconf_post(AsyncWebServerRequest *request) {
     free(request->_tempObject);
     request->_tempObject = NULL;
 
-    JsonDocument jsonDoc;
-    DeserializationError error = deserializeJson(jsonDoc, body);
-    if (error) { request->send(400, "application/json", "{\"success\":false,\"error\":\"JSON parse error\"}"); return; }
+    int32_t scantimeVal = 0, aptimeVal = 0;
+    if (!ModClassJson.jsonParseInt(body, "scantime", scantimeVal)) {
+        request->send(400, "application/json", "{\"success\":false,\"error\":\"JSON parse error\"}");
+        return;
+    }
+    if (scantimeVal < 0) scantimeVal = 0;
+    if (scantimeVal > 720) scantimeVal = 720;
+    _wifiScanTime = (uint16_t)scantimeVal;
 
-    if (jsonDoc.containsKey("scantime")) {
-        int val = jsonDoc["scantime"].as<int>();
-        if (val < 0) val = 0;
-        if (val > 720) val = 720;
-        _wifiScanTime = val;
-    }
-    if (jsonDoc.containsKey("aptime")) {
-        int val = jsonDoc["aptime"].as<int>();
-        if (val < 0) val = 0;
-        if (val > 10) val = 10;
-        _wifiAPLifeTime = val;
-    }
+    ModClassJson.jsonParseInt(body, "aptime", aptimeVal);
+    if (aptimeVal < 0) aptimeVal = 0;
+    if (aptimeVal > 60) aptimeVal = 60;
+    _wifiAPLifeTime = (uint16_t)aptimeVal;
 
     if (save_configWifiSys()) {
         scanTime = _wifiScanTime * MINUTES;

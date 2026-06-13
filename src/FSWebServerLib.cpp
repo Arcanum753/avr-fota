@@ -1,7 +1,6 @@
 
 #include "main.h"
 #include "version.h"
-#include <ArduinoJson.h>
 #include "FSWebServerLib.h"
 
 
@@ -134,17 +133,15 @@ AsyncFSWebServer::AsyncFSWebServer(uint16_t port) : AsyncWebServer(port) {}
 
 bool AsyncFSWebServer::loadHTTPAuth() {
 	DEBUGLOG(__PRETTY_FUNCTION__);	DEBUGLOG("\r\n");
-	JsonDocument jsonDoc;
-	if (ModClassJson.load_jsonDoc(SECRET_FILE, jsonDoc) == false){
+	if (!ModClassJson.jsonFileReadBool(SECRET_FILE, "auth", _httpAuth.auth)) {
 		_httpAuth.auth = false;
 		_httpAuth.wwwUsername = "";
 		_httpAuth.wwwPassword = "";
 		DEBUGLOG("Huh\n\r");
 		return false;
 	}
-	_httpAuth.auth = jsonDoc["auth"];
-	_httpAuth.wwwUsername = jsonDoc["user"].as<String>();
-	_httpAuth.wwwPassword = jsonDoc["pass"].as<String>();
+	ModClassJson.jsonFileReadStr(SECRET_FILE, "user", _httpAuth.wwwUsername);
+	ModClassJson.jsonFileReadStr(SECRET_FILE, "pass", _httpAuth.wwwPassword);
 	DEBUGLOG(_httpAuth.auth ? "Secret initialized.\r\n" : "Auth disabled.\r\n");
 	if (_httpAuth.auth) {
 		DEBUGLOG("User: %s\r\n", _httpAuth.wwwUsername.c_str());
@@ -250,28 +247,9 @@ void AsyncFSWebServer::set_wwwauth_configuration(AsyncWebServerRequest *request)
 bool AsyncFSWebServer::saveHTTPAuth() {
 	//flag_config = false;
 	DEBUGLOG("Save secret\r\n");
-	JsonDocument jsonDoc;
-
-	jsonDoc["auth"] = _httpAuth.auth;
-	jsonDoc["user"] = _httpAuth.wwwUsername;
-	jsonDoc["pass"] = _httpAuth.wwwPassword;
-
-	//TODO add AP data to html Sam Arcanum
-	File configFile = _fs->open(SECRET_FILE, "w");
-	if (!configFile) {
-		DEBUGLOG("Failed to open secret file for writing\r\n");
-		configFile.close();
-		return false;
-	}
-
-#ifndef RELEASE
-	String temp;
-	serializeJsonPretty(jsonDoc, temp);
-	Serial.println(temp.c_str());
-#endif // RELEASE
-	serializeJson(jsonDoc, configFile);
-	configFile.flush();
-	configFile.close();
+	if (!ModClassJson.jsonFileWriteBool(SECRET_FILE, "auth", _httpAuth.auth)) return false;
+	if (!ModClassJson.jsonFileWriteStr(SECRET_FILE, "user", _httpAuth.wwwUsername)) return false;
+	if (!ModClassJson.jsonFileWriteStr(SECRET_FILE, "pass", _httpAuth.wwwPassword)) return false;
 	return true;
 }
 
@@ -615,16 +593,9 @@ String AsyncFSWebServer::getFsVersionStr() {
     while (jsonFile.available()) { jsonStr += (char)jsonFile.read(); }
     jsonFile.close();
     
-    JsonDocument jsonDoc;
-    DeserializationError error = deserializeJson(jsonDoc, jsonStr);
-    if (error) {
-        DEBUGLOG("getFsVersionStr: JSON parse error: %s\n", error.c_str());
-        return "";
-    }
-    
-    const char* fullString = jsonDoc["filesystem"]["version"]["full_string"];
-    if (fullString) {
-        _sysConfig.fsVersion = String(fullString);
+    String fullString;
+    if (ModClassJson.jsonParseNestedStr(jsonStr, "filesystem|version|full_string", fullString)) {
+        _sysConfig.fsVersion = fullString;
         DEBUGLOG("getFsVersionStr: FS version = %s\n", _sysConfig.fsVersion.c_str());
         return _sysConfig.fsVersion;
     }
@@ -634,11 +605,8 @@ String AsyncFSWebServer::getFsVersionStr() {
 }
 
 bool AsyncFSWebServer::load_config_Sys() {
-	JsonDocument jsonDoc;
-	if (ModClassJson.load_jsonDoc(CONFIG_FILE_SYS, jsonDoc) == false){	return false;	}
-	_sysConfig.deviceName 			= jsonDoc["deviceName"].as<const char *>();
-	_sysConfig.deviceSerial 		= jsonDoc["deviceSerial"].as<const char *>();
-
+	if (!ModClassJson.jsonFileReadStr(CONFIG_FILE_SYS, "deviceName", _sysConfig.deviceName)) return false;
+	if (!ModClassJson.jsonFileReadStr(CONFIG_FILE_SYS, "deviceSerial", _sysConfig.deviceSerial)) return false;
 	return true;
 }
 
@@ -657,8 +625,7 @@ void AsyncFSWebServer::defaultConfigSys() {
 
 bool AsyncFSWebServer::save_configSys() {
 	DEBUGLOG("Save config SYSTEM\r\n");
-	JsonDocument jsonDoc;
-	jsonDoc["deviceName"] 		= _sysConfig.deviceName;
-	jsonDoc["deviceSerial"] 	= _sysConfig.deviceSerial;
-	return ModClassJson.save_jsonDoc(jsonDoc, CONFIG_FILE_SYS);
+	if (!ModClassJson.jsonFileWriteStr(CONFIG_FILE_SYS, "deviceName", _sysConfig.deviceName)) return false;
+	if (!ModClassJson.jsonFileWriteStr(CONFIG_FILE_SYS, "deviceSerial", _sysConfig.deviceSerial)) return false;
+	return true;
 }

@@ -2,7 +2,6 @@
 
 #include <cstddef>
 #include <Arduino.h>
-#include <ArduinoJson.h>
 #include <SPI.h>
 
 
