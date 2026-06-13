@@ -101,9 +101,15 @@ AsyncFSWebServer::AsyncFSWebServer(uint16_t port) : AsyncWebServer(port) {}
 	MDNS.begin(mdnsName.c_str()); // I've not got this to work. Need some investigation. // TODO
 	MDNS.addService("http", "tcp", 80);
 	
+#if (MODULE_OTACLIENT == 1)
+	otaClient.setFs(&LittleFS);
+	otaClient.begin(getHostName(), _httpAuth.wwwPassword );
+	otaClient.webInit();
+#else
 	modOtaClass.setFs(&LittleFS);
-	modOtaClass.begin(getHostName(), _httpAuth.wwwPassword ); 
+	modOtaClass.begin(getHostName(), _httpAuth.wwwPassword );
 	modOtaClass.webInit();
+#endif
 	
 	ModClassEdit.setFs(&LittleFS);
 	ModClassEdit.webInit();
@@ -111,11 +117,6 @@ AsyncFSWebServer::AsyncFSWebServer(uint16_t port) : AsyncWebServer(port) {}
 #if defined(MODULE_GPIO)
 	ModClassGpio.setFs(&LittleFS);
 	ModClassGpio.webInit();
-#endif
-
-#if (MODULE_OTACLIENT == 1)
-	otaClient.begin();
-	otaClient.webInit();
 #endif
 	
 #ifdef PROGTYPE_SWD
@@ -133,15 +134,17 @@ AsyncFSWebServer::AsyncFSWebServer(uint16_t port) : AsyncWebServer(port) {}
 
 bool AsyncFSWebServer::loadHTTPAuth() {
 	DEBUGLOG(__PRETTY_FUNCTION__);	DEBUGLOG("\r\n");
-	if (!ModClassJson.jsonFileReadBool(SECRET_FILE, "auth", _httpAuth.auth)) {
+	JsonDocument doc;
+	if (!ModClassJson.jsonFileLoadDoc(SECRET_FILE, doc)) {
 		_httpAuth.auth = false;
 		_httpAuth.wwwUsername = "";
 		_httpAuth.wwwPassword = "";
 		DEBUGLOG("Huh\n\r");
 		return false;
 	}
-	ModClassJson.jsonFileReadStr(SECRET_FILE, "user", _httpAuth.wwwUsername);
-	ModClassJson.jsonFileReadStr(SECRET_FILE, "pass", _httpAuth.wwwPassword);
+	_httpAuth.auth = doc["auth"].as<bool>();
+	_httpAuth.wwwUsername = doc["user"].as<String>();
+	_httpAuth.wwwPassword = doc["pass"].as<String>();
 	DEBUGLOG(_httpAuth.auth ? "Secret initialized.\r\n" : "Auth disabled.\r\n");
 	if (_httpAuth.auth) {
 		DEBUGLOG("User: %s\r\n", _httpAuth.wwwUsername.c_str());
@@ -247,10 +250,12 @@ void AsyncFSWebServer::set_wwwauth_configuration(AsyncWebServerRequest *request)
 bool AsyncFSWebServer::saveHTTPAuth() {
 	//flag_config = false;
 	DEBUGLOG("Save secret\r\n");
-	if (!ModClassJson.jsonFileWriteBool(SECRET_FILE, "auth", _httpAuth.auth)) return false;
-	if (!ModClassJson.jsonFileWriteStr(SECRET_FILE, "user", _httpAuth.wwwUsername)) return false;
-	if (!ModClassJson.jsonFileWriteStr(SECRET_FILE, "pass", _httpAuth.wwwPassword)) return false;
-	return true;
+	JsonDocument doc;
+	ModClassJson.jsonFileLoadDoc(SECRET_FILE, doc);
+	doc["auth"] = _httpAuth.auth;
+	doc["user"] = _httpAuth.wwwUsername;
+	doc["pass"] = _httpAuth.wwwPassword;
+	return ModClassJson.jsonFileSaveDoc(SECRET_FILE, doc);
 }
 
 
@@ -605,8 +610,10 @@ String AsyncFSWebServer::getFsVersionStr() {
 }
 
 bool AsyncFSWebServer::load_config_Sys() {
-	if (!ModClassJson.jsonFileReadStr(CONFIG_FILE_SYS, "deviceName", _sysConfig.deviceName)) return false;
-	if (!ModClassJson.jsonFileReadStr(CONFIG_FILE_SYS, "deviceSerial", _sysConfig.deviceSerial)) return false;
+	JsonDocument doc;
+	if (!ModClassJson.jsonFileLoadDoc(CONFIG_FILE_SYS, doc)) return false;
+	_sysConfig.deviceName = doc["deviceName"].as<String>();
+	_sysConfig.deviceSerial = doc["deviceSerial"].as<String>();
 	return true;
 }
 
@@ -625,7 +632,9 @@ void AsyncFSWebServer::defaultConfigSys() {
 
 bool AsyncFSWebServer::save_configSys() {
 	DEBUGLOG("Save config SYSTEM\r\n");
-	if (!ModClassJson.jsonFileWriteStr(CONFIG_FILE_SYS, "deviceName", _sysConfig.deviceName)) return false;
-	if (!ModClassJson.jsonFileWriteStr(CONFIG_FILE_SYS, "deviceSerial", _sysConfig.deviceSerial)) return false;
-	return true;
+	JsonDocument doc;
+	ModClassJson.jsonFileLoadDoc(CONFIG_FILE_SYS, doc);
+	doc["deviceName"] = _sysConfig.deviceName;
+	doc["deviceSerial"] = _sysConfig.deviceSerial;
+	return ModClassJson.jsonFileSaveDoc(CONFIG_FILE_SYS, doc);
 }

@@ -8,6 +8,8 @@
 #define DEBUGJSON(...)
 #endif
 
+#include <ArduinoJson.h>
+
 #include "FSWebServerLib.h"
 
 
@@ -94,10 +96,10 @@ public:
 
 public:
     // Internal: used by module_prog which includes ArduinoJson directly
-    bool save_jsonDoc(const class JsonDocument& jsonDoc, const String& file);
-    bool load_jsonDoc(const String& file, class JsonDocument& jsonDoc);
-    bool jsonFileLoadDoc(const String& file, class JsonDocument& doc);
-    bool jsonFileSaveDoc(const String& file, class JsonDocument& doc);
+    bool save_jsonDoc(const JsonDocument& jsonDoc, const String& file);
+    bool load_jsonDoc(const String& file, JsonDocument& jsonDoc);
+    bool jsonFileLoadDoc(const String& file, JsonDocument& doc);
+    bool jsonFileSaveDoc(const String& file, JsonDocument& doc);
     
 protected:
     bool  dumb = false;

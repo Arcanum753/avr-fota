@@ -288,7 +288,6 @@ def _generate_fallback(modules: List[str], src_dir: Path) -> str:
         <a href="wifi.html">WiFi Configuration</a>
         <a target=_tab href="edit.html">SPIFFS File editor</a>
         <a href="update.html">Firmware & FS OTA self</a>
-        <a href="project.html">Programmer configuration</a>
     </div>
 {right}
 </div>

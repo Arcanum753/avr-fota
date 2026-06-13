@@ -3,17 +3,13 @@
 
 #include "main.h"
 #include "FSWebServerLib.h"
+#include "core_ota/core_ota.h"
 
 #ifdef DEBUG_OTACLIENT
 #define DEBUGOTACLIENT(...) Serial.printf(__VA_ARGS__)
 #else
 #define DEBUGOTACLIENT(...)
 #endif
-
-const char Page_GeneralOtaClient[] = R"=====(
-<meta http-equiv="refresh" content="10; URL=/otaclient.html">
-Please Wait....Configuring.
-)=====";
 
 #define CONFIG_FILE_OTACLIENT     "/config_otaclient.json"
 #define HTML_FILE_OTACLIENT       "/otaclient.html"
@@ -64,12 +60,12 @@ struct ManifestEntry {
 void otaclientTimer(void);
 void otaclientLoopTask(void);
 
-class MODULE_CLASS_OTACLIENT {
+class MODULE_CLASS_OTACLIENT : public CORE_OTA_CLASS {
 public:
     MODULE_CLASS_OTACLIENT();
     
-    void webInit(void);
-    void begin();
+    void webInit() override;
+    void begin(String _hostname, String _password);
     void test(AsyncWebServerRequest *request);
     void loop();
     
@@ -106,10 +102,18 @@ private:
     // Perform actual update from stream
     bool performUpdateFromStream(WiFiClient& stream, size_t size, const String& expectedMd5, int fileType);
     
-    String getVersionStr();
-    String getGeneratedTime();
-    String getCommitDateStr();
-    void  html_ver_get(AsyncWebServerRequest *request);
+    // Unified manifest entry checking (used by test() and checkForUpdates())
+    void checkManifestEntries(ManifestEntry* entries, int count,
+                              fileCompareResult& fwResult, fileCompareResult& fsResult,
+                              bool& fwValid, bool& fsValid,
+                              int8_t& fwCompareResult, int8_t& fsCompareResult,
+                              ManifestEntry*& fwEntryOut, ManifestEntry*& fsEntryOut);
+    
+    String getVersionStr() override;
+    String getGeneratedTime() override;
+    String getCommitDateStr() override;
+    void  html_ver_get(AsyncWebServerRequest *request) override;
+    void registerCustomRoutes() override;
     
     uint8_t _isStarted;
     bool _updateInProgress;

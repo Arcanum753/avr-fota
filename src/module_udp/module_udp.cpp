@@ -262,28 +262,28 @@ void UDPBROADCAST_CLASS::defaultConfigUDP() {
 // ========== SAVE CONFIG ==========
 bool UDPBROADCAST_CLASS::save_configUDP() {
     DEBUGUDP("%s\n\r", __PRETTY_FUNCTION__);
-    if (!ModClassJson.jsonFileWriteInt(CONFIG_FILE_UDP, "udpPortTx", _udpConfig.udpPortTx)) return false;
-    if (!ModClassJson.jsonFileWriteInt(CONFIG_FILE_UDP, "udpPortRx", _udpConfig.udpPortRx)) return false;
-    if (!ModClassJson.jsonFileWriteInt(CONFIG_FILE_UDP, "udpTimeOut", _udpConfig.udpTimeOut)) return false;
-    if (!ModClassJson.jsonFileWriteStr(CONFIG_FILE_UDP, "udpkeyword", _udpConfig.keyword)) return false;
-    if (!ModClassJson.jsonFileWriteBool(CONFIG_FILE_UDP, "udpPowerOn", _udpConfig.udpPowerOn)) return false;
-    if (!ModClassJson.jsonFileWriteBool(CONFIG_FILE_UDP, "udpResponse", _udpConfig.udpResponse)) return false;
-    return true;
+    JsonDocument doc;
+    ModClassJson.jsonFileLoadDoc(CONFIG_FILE_UDP, doc);
+    doc["udpPortTx"] = _udpConfig.udpPortTx;
+    doc["udpPortRx"] = _udpConfig.udpPortRx;
+    doc["udpTimeOut"] = _udpConfig.udpTimeOut;
+    doc["udpkeyword"] = _udpConfig.keyword;
+    doc["udpPowerOn"] = _udpConfig.udpPowerOn;
+    doc["udpResponse"] = _udpConfig.udpResponse;
+    return ModClassJson.jsonFileSaveDoc(CONFIG_FILE_UDP, doc);
 }
 
 // ========== LOAD CONFIG ==========
 bool UDPBROADCAST_CLASS::load_config_UDP() {
     DEBUGUDP("%s\n\r", __PRETTY_FUNCTION__);
-    int32_t portTx = 0, portRx = 0, timeout = 0;
-    if (!ModClassJson.jsonFileReadInt(CONFIG_FILE_UDP, "udpPortTx", portTx)) return false;
-    ModClassJson.jsonFileReadInt(CONFIG_FILE_UDP, "udpPortRx", portRx);
-    ModClassJson.jsonFileReadInt(CONFIG_FILE_UDP, "udpTimeOut", timeout);
-    _udpConfig.udpPortTx = (int)portTx;
-    _udpConfig.udpPortRx = (int)portRx;
-    _udpConfig.udpTimeOut = (int)timeout;
-    ModClassJson.jsonFileReadStr(CONFIG_FILE_UDP, "udpkeyword", _udpConfig.keyword);
-    ModClassJson.jsonFileReadBool(CONFIG_FILE_UDP, "udpPowerOn", _udpConfig.udpPowerOn);
-    ModClassJson.jsonFileReadBool(CONFIG_FILE_UDP, "udpResponse", _udpConfig.udpResponse);
+    JsonDocument doc;
+    if (!ModClassJson.jsonFileLoadDoc(CONFIG_FILE_UDP, doc)) return false;
+    _udpConfig.udpPortTx = doc["udpPortTx"].as<int>();
+    _udpConfig.udpPortRx = doc["udpPortRx"].as<int>();
+    _udpConfig.udpTimeOut = doc["udpTimeOut"].as<int>();
+    _udpConfig.keyword = doc["udpkeyword"].as<String>();
+    _udpConfig.udpPowerOn = doc["udpPowerOn"].as<bool>();
+    _udpConfig.udpResponse = doc["udpResponse"].as<bool>();
     
     DEBUGUDP("updPortTx: %d\n\r", _udpConfig.udpPortTx);
     DEBUGUDP("updPortRx: %d\n\r", _udpConfig.udpPortRx);

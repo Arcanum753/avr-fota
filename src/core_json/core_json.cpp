@@ -29,7 +29,7 @@ void CORE_CLASS_JSON::webInit(void) {
 }
 
 bool CORE_CLASS_JSON::load_jsonDoc(const String& file, JsonDocument& jsonDoc){
-	if (!_fs) { _fs->begin();  }// If LittleFS is not started
+	if (!_fs) return false;
 	File configFile = _fs->open(file, "r");
 
 	if (configFile == false) {
@@ -58,7 +58,7 @@ bool CORE_CLASS_JSON::load_jsonDoc(const String& file, JsonDocument& jsonDoc){
 
 
 bool CORE_CLASS_JSON::save_jsonDoc(const JsonDocument& jsonDoc,	const String& file) {
-	if (!_fs) { _fs->begin();  }// If LittleFS is not started
+	if (!_fs) return false;
 	File configFile  = _fs->open(file, "w");
 	if (configFile == false) {
 		DEBUGJSON("Failed to open config file for writing\r\n");

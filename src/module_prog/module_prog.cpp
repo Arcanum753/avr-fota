@@ -58,16 +58,20 @@ void Class_ProgBase::cfg_SetDefault() {
 
 bool Class_ProgBase::cfg_FileLoad() {
 	DEBUGLOGPROG(__PRETTY_FUNCTION__); DEBUGLOGPROG("\r\n");
-	if (!ModClassJson.jsonFileReadStr(CONFIG_PROG_JSON, "project", CfgFile_Prog.project_name)) return false;
-	ModClassJson.jsonFileReadStr(CONFIG_PROG_JSON, "chip_name", CfgFile_Prog.chip_name);
+	JsonDocument doc;
+	if (!ModClassJson.jsonFileLoadDoc(CONFIG_PROG_JSON, doc)) return false;
+	CfgFile_Prog.project_name = doc["project"].as<String>();
+	CfgFile_Prog.chip_name = doc["chip_name"].as<String>();
 	return true;
 }
 
 bool Class_ProgBase::cfg_FileSave(){
 	DEBUGLOGPROG("Save config PROJ\r\n");
-	if (!ModClassJson.jsonFileWriteStr(CONFIG_PROG_JSON, "project", CfgFile_Prog.project_name)) return false;
-	if (!ModClassJson.jsonFileWriteStr(CONFIG_PROG_JSON, "chip_name", CfgFile_Prog.chip_name)) return false;
-	return true;
+	JsonDocument doc;
+	ModClassJson.jsonFileLoadDoc(CONFIG_PROG_JSON, doc);
+	doc["project"] = CfgFile_Prog.project_name;
+	doc["chip_name"] = CfgFile_Prog.chip_name;
+	return ModClassJson.jsonFileSaveDoc(CONFIG_PROG_JSON, doc);
 }
 
 bool Class_ProgBase::web_GetDiskInfoExe(String &_str)	{

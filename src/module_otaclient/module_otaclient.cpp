@@ -13,18 +13,17 @@
 #include <core_ntp/NtpClientLib.h>
 #include "core_json/core_json.h"
 #include "module_otaclient/module_otaclient.h"
-#include "core_ota/core_ota.h"
 #include "eertos.h"
 #include "common.h"
 #include "module_otaclient_version.h"
 
 // Single global object - the class itself
-MODULE_CLASS_OTACLIENT otaClient;
+MODULE_CLASS_OTACLIENT otaClient; 
 
 // Static manifest entries buffer (avoid stack allocation)
 ManifestEntry MODULE_CLASS_OTACLIENT::_manifestEntries[OTACLIENT_MAX_MANIFEST_ENTRIES];
 
-MODULE_CLASS_OTACLIENT::MODULE_CLASS_OTACLIENT() {
+MODULE_CLASS_OTACLIENT::MODULE_CLASS_OTACLIENT() : CORE_OTA_CLASS(true) {
     _isStarted = false;
     _updateInProgress = false;
     _updateRetries = 0;
@@ -43,7 +42,8 @@ uint16_t MODULE_CLASS_OTACLIENT::serverPortGet()       { return _config.serverPo
 String MODULE_CLASS_OTACLIENT::manifestPathGet()       { return _config.manifestPath; }
 uint8_t MODULE_CLASS_OTACLIENT::isStart()              { return _isStarted; }
 
-void MODULE_CLASS_OTACLIENT::begin() {
+void MODULE_CLASS_OTACLIENT::begin(String _hostname, String _password) {
+    CORE_OTA_CLASS::begin(_hostname, _password);
     defaultConfig();
     if ( load_config() == false) {save_config();}
     DEBUGOTACLIENT("%s\r\n", __FUNCTION__);
@@ -148,47 +148,17 @@ void MODULE_CLASS_OTACLIENT::loop() {
         
         DEBUGOTACLIENT("Test: manifest has %d entries\n", entryCount);
         
-        // Find our files (matching BUILD_ENV)
+        fileCompareResult fwResult, fsResult;
+        bool fwValid, fsValid;
+        _testCompareResult = 0;
+        _testFwCompareResult = 0;
+        _testFsCompareResult = 0;
+        
         ManifestEntry* firmwareEntry = NULL;
         ManifestEntry* fsEntry = NULL;
-        
-        for (int i = 0; i < entryCount; i++) {
-            if (_manifestEntries[i].type == "filesystem") {
-                fsEntry = &_manifestEntries[i];
-                DEBUGOTACLIENT("  Found FS file: %s\n", _manifestEntries[i].name.c_str());
-            } else if (_manifestEntries[i].type == "firmware") {
-                firmwareEntry = &_manifestEntries[i];
-                DEBUGOTACLIENT("  Found firmware file: %s\n", _manifestEntries[i].name.c_str());
-            }
-        }
-        
-        // Check versions using core_ota's fileNameCheck + compareWithCurrentFsVersion
-        fileCompareResult fwResult, fsResult;
-        bool fwValid = false;
-        bool fsValid = false;
-        _testCompareResult = 0;     // default: same/missing
-        _testFwCompareResult = 0;   // default: same
-        _testFsCompareResult = 0;   // default: same
-        
-        if (firmwareEntry) {
-            int8_t ret = modOtaClass.fileNameCheck(firmwareEntry->name, &fwResult);
-            // Use compareWithCurrentFsVersion to check if server version is NEWER
-            int8_t fwCompare = modOtaClass.compareWithCurrentFsVersion(&fwResult, firmwareEntry->name);
-            fwValid = (ret == 1 && fwCompare == 1);  // only valid if truly NEWER
-            _testFwCompareResult = fwCompare;
-            DEBUGOTACLIENT("Firmware version check: %s (nameMatch=%d, fsCompare=%d, valid=%d)\n",
-                           fwResult.nameMatch == 1 ? "MATCH" : "NO MATCH", fwResult.nameMatch, fwCompare, fwValid);
-        }
-        
-        if (fsEntry) {
-            int8_t ret = modOtaClass.fileNameCheck(fsEntry->name, &fsResult);
-            // Use compareWithCurrentFsVersion to check if server version is NEWER
-            int8_t fsCompare = modOtaClass.compareWithCurrentFsVersion(&fsResult, fsEntry->name);
-            fsValid = (ret == 1 && fsCompare == 1);  // only valid if truly NEWER
-            _testFsCompareResult = fsCompare;
-            DEBUGOTACLIENT("FS version check: %s (nameMatch=%d, fsCompare=%d, valid=%d)\n",
-                           fsResult.nameMatch == 1 ? "MATCH" : "NO MATCH", fsResult.nameMatch, fsCompare, fsValid);
-        }
+        checkManifestEntries(_manifestEntries, entryCount, fwResult, fsResult, fwValid, fsValid,
+                             _testFwCompareResult, _testFsCompareResult,
+                             firmwareEntry, fsEntry);
         
         // Combine compare results for display:
         // - If any is NEWER (1) -> combined = 1
@@ -296,7 +266,11 @@ void MODULE_CLASS_OTACLIENT::loop() {
 
 // ========== WEB INIT ==========
 void MODULE_CLASS_OTACLIENT::webInit(void) {
+    registerCommonRoutes();
+    registerCustomRoutes();
+}
 
+void MODULE_CLASS_OTACLIENT::registerCustomRoutes() {
     ESPHTTPServer.on(HTML_FILE_OTACLIENT, HTTP_POST, [this](AsyncWebServerRequest *request) {
         if (!ESPHTTPServer.checkAuth(request)) {return request->requestAuthentication(); }
         get_configuration_html(request);
@@ -374,9 +348,8 @@ void MODULE_CLASS_OTACLIENT::get_configuration_html(AsyncWebServerRequest *reque
             if (request->argName(i) == "otaclientmanifest") { _config.manifestPath = urldecode(request->arg(i)); }
         }
         
-        request->send_P(200, "text/html", Page_GeneralOtaClient);
         save_config();
-        otaclientTimer();
+        request->send(200, "application/json", "{\"success\":true}");
     }
     else {
         ESPHTTPServer.handleFileRead(request->url(), request);
@@ -416,23 +389,26 @@ void MODULE_CLASS_OTACLIENT::defaultConfig() {
 // ========== SAVE CONFIG ==========
 bool MODULE_CLASS_OTACLIENT::save_config() {
     DEBUGOTACLIENT("%s\n\r", __PRETTY_FUNCTION__);
-    if (!ModClassJson.jsonFileWriteInt(CONFIG_FILE_OTACLIENT, "timeOut", _config.timeOut)) return false;
-    if (!ModClassJson.jsonFileWriteBool(CONFIG_FILE_OTACLIENT, "powerOn", _config.powerOn)) return false;
-    if (!ModClassJson.jsonFileWriteStr(CONFIG_FILE_OTACLIENT, "serverAddress", _config.serverAddress)) return false;
-    if (!ModClassJson.jsonFileWriteInt(CONFIG_FILE_OTACLIENT, "serverPort", _config.serverPort)) return false;
-    if (!ModClassJson.jsonFileWriteStr(CONFIG_FILE_OTACLIENT, "manifestPath", _config.manifestPath)) return false;
-    return true;
+    JsonDocument doc;
+    ModClassJson.jsonFileLoadDoc(CONFIG_FILE_OTACLIENT, doc);
+    doc["timeOut"] = _config.timeOut;
+    doc["powerOn"] = _config.powerOn;
+    doc["serverAddress"] = _config.serverAddress;
+    doc["serverPort"] = _config.serverPort;
+    doc["manifestPath"] = _config.manifestPath;
+    return ModClassJson.jsonFileSaveDoc(CONFIG_FILE_OTACLIENT, doc);
 }
 
 // ========== LOAD CONFIG ==========
 bool MODULE_CLASS_OTACLIENT::load_config() {
     DEBUGOTACLIENT("%s\n\r", __PRETTY_FUNCTION__);
-    if (!ModClassJson.jsonFileReadInt(CONFIG_FILE_OTACLIENT, "timeOut", _config.timeOut)) return false;
-    ModClassJson.jsonFileReadBool(CONFIG_FILE_OTACLIENT, "powerOn", _config.powerOn);
-    ModClassJson.jsonFileReadStr(CONFIG_FILE_OTACLIENT, "serverAddress", _config.serverAddress);
-    uint32_t portVal = 0;
-    if (ModClassJson.jsonFileReadUint(CONFIG_FILE_OTACLIENT, "serverPort", portVal)) _config.serverPort = (uint16_t)portVal;
-    ModClassJson.jsonFileReadStr(CONFIG_FILE_OTACLIENT, "manifestPath", _config.manifestPath);
+    JsonDocument doc;
+    if (!ModClassJson.jsonFileLoadDoc(CONFIG_FILE_OTACLIENT, doc)) return false;
+    _config.timeOut = doc["timeOut"].as<uint16_t>();
+    _config.powerOn = doc["powerOn"].as<bool>();
+    _config.serverAddress = doc["serverAddress"].as<String>();
+    _config.serverPort = doc["serverPort"].as<uint16_t>();
+    _config.manifestPath = doc["manifestPath"].as<String>();
     
     DEBUGOTACLIENT("timeOut: %d\n\r", _config.timeOut);
     DEBUGOTACLIENT("powerOn: %d\n\r", _config.powerOn);
@@ -590,6 +566,55 @@ bool MODULE_CLASS_OTACLIENT::fetchManifest(ManifestEntry* entries, int& count) {
 }
 
 // ============================================================
+// UNIFIED MANIFEST ENTRY CHECKING
+// ============================================================
+void MODULE_CLASS_OTACLIENT::checkManifestEntries(ManifestEntry* entries, int count,
+                                                    fileCompareResult& fwResult, fileCompareResult& fsResult,
+                                                    bool& fwValid, bool& fsValid,
+                                                    int8_t& fwCompareResult, int8_t& fsCompareResult,
+                                                    ManifestEntry*& fwEntryOut, ManifestEntry*& fsEntryOut) {
+    ManifestEntry* firmwareEntry = NULL;
+    ManifestEntry* fsEntry = NULL;
+    
+    for (int i = 0; i < count; i++) {
+        if (entries[i].type == "filesystem") {
+            fsEntry = &entries[i];
+            DEBUGOTACLIENT("  Found FS file: %s\n", entries[i].name.c_str());
+        } else if (entries[i].type == "firmware") {
+            firmwareEntry = &entries[i];
+            DEBUGOTACLIENT("  Found firmware file: %s\n", entries[i].name.c_str());
+        }
+    }
+    
+    fwValid = false;
+    fsValid = false;
+    fwCompareResult = 0;
+    fsCompareResult = 0;
+    
+    if (firmwareEntry) {
+        int8_t ret = fileNameCheck(firmwareEntry->name, &fwResult);
+        int8_t fwCompare = compareWithCurrentFsVersion(&fwResult, firmwareEntry->name);
+        fwValid = (ret == 1 && fwCompare == 1);
+        fwCompareResult = fwCompare;
+        DEBUGOTACLIENT("Firmware version check: %s (nameMatch=%d, fsCompare=%d, valid=%d)\n",
+                       fwResult.nameMatch == 1 ? "MATCH" : "NO MATCH", fwResult.nameMatch, fwCompare, fwValid);
+    }
+    
+    if (fsEntry) {
+        int8_t ret = fileNameCheck(fsEntry->name, &fsResult);
+        int8_t fsCompare = compareWithCurrentFsVersion(&fsResult, fsEntry->name);
+        fsValid = (ret == 1 && fsCompare == 1);
+        fsCompareResult = fsCompare;
+        
+        DEBUGOTACLIENT("FS version check: %s (nameMatch=%d, fsCompare=%d, valid=%d)\n",
+                       fsResult.nameMatch == 1 ? "MATCH" : "NO MATCH", fsResult.nameMatch, fsCompare, fsValid);
+    }
+    
+    fwEntryOut = firmwareEntry;
+    fsEntryOut = fsEntry;
+}
+
+// ============================================================
 // PERFORM UPDATE FROM STREAM
 // ============================================================
 bool MODULE_CLASS_OTACLIENT::performUpdateFromStream(WiFiClient& stream, size_t size, const String& expectedMd5, int fileType) {
@@ -609,12 +634,8 @@ bool MODULE_CLASS_OTACLIENT::performUpdateFromStream(WiFiClient& stream, size_t 
 #endif
     
     // End filesystem before update
-    if (modOtaClass._fs) {
-        DEBUGOTACLIENT("Ending filesystem...\n");
-        modOtaClass._fs->end();
-        _fsEnded = true;
-        delay(100);
-    }
+    fsEnd();
+    _fsEnded = true;
     
 #if defined(ESP8266)
     Update.runAsync(true);
@@ -626,14 +647,8 @@ bool MODULE_CLASS_OTACLIENT::performUpdateFromStream(WiFiClient& stream, size_t 
         Update.printError(Serial);
 #endif
         // Remount filesystem
-        if (modOtaClass._fs) {
-#if defined(ESP32)
-            modOtaClass._fs->begin(true);
-#elif defined(ESP8266)
-            modOtaClass._fs->begin();
-#endif
-            _fsEnded = false;
-        }
+        fsRemount();
+        _fsEnded = false;
         return false;
     }
     
@@ -658,14 +673,8 @@ bool MODULE_CLASS_OTACLIENT::performUpdateFromStream(WiFiClient& stream, size_t 
 #if defined(ESP8266)
             Update.end();
 #endif
-            if (modOtaClass._fs) {
-#if defined(ESP32)
-                modOtaClass._fs->begin(true);
-#elif defined(ESP8266)
-                modOtaClass._fs->begin();
-#endif
-                _fsEnded = false;
-            }
+            fsRemount();
+            _fsEnded = false;
             return false;
         }
         
@@ -678,14 +687,8 @@ bool MODULE_CLASS_OTACLIENT::performUpdateFromStream(WiFiClient& stream, size_t 
 #if defined(ESP8266)
             Update.end();
 #endif
-            if (modOtaClass._fs) {
-#if defined(ESP32)
-                modOtaClass._fs->begin(true);
-#elif defined(ESP8266)
-                modOtaClass._fs->begin();
-#endif
-                _fsEnded = false;
-            }
+            fsRemount();
+            _fsEnded = false;
             return false;
         }
         
@@ -706,14 +709,8 @@ bool MODULE_CLASS_OTACLIENT::performUpdateFromStream(WiFiClient& stream, size_t 
 #ifdef DEBUG_OTA
         Update.printError(Serial);
 #endif
-        if (modOtaClass._fs) {
-#if defined(ESP32)
-            modOtaClass._fs->begin(true);
-#elif defined(ESP8266)
-            modOtaClass._fs->begin();
-#endif
-            _fsEnded = false;
-        }
+        fsRemount();
+        _fsEnded = false;
         return false;
     }
     
@@ -790,67 +787,15 @@ void MODULE_CLASS_OTACLIENT::checkForUpdates() {
     
     DEBUGOTACLIENT("Manifest has %d entries\n", entryCount);
     
-    // Find our files (matching BUILD_ENV)
+    fileCompareResult fwResult, fsResult;
+    bool fwValid, fsValid;
+    int8_t fwCompareResult, fsCompareResult;
     ManifestEntry* firmwareEntry = NULL;
     ManifestEntry* fsEntry = NULL;
     
-    for (int i = 0; i < entryCount; i++) {
-        if (_manifestEntries[i].type == "filesystem") {
-            fsEntry = &_manifestEntries[i];
-            DEBUGOTACLIENT("  Found FS file: %s\n", _manifestEntries[i].name.c_str());
-        } else if (_manifestEntries[i].type == "firmware") {
-            firmwareEntry = &_manifestEntries[i];
-            DEBUGOTACLIENT("  Found firmware file: %s\n", _manifestEntries[i].name.c_str());
-        }
-    }
-    
-    // Check versions using core_ota's fileNameCheck + compareWithCurrentFsVersion
-    fileCompareResult fwResult, fsResult;
-    bool fwValid = false;
-    bool fsValid = false;
-    
-    if (firmwareEntry) {
-        int8_t ret = modOtaClass.fileNameCheck(firmwareEntry->name, &fwResult);
-        // Only update if server version is NEWER than current
-        int8_t fwCompare = modOtaClass.compareWithCurrentFsVersion(&fwResult, firmwareEntry->name);
-        fwValid = (ret == 1 && fwCompare == 1);
-        DEBUGOTACLIENT("Firmware version check: %s (nameMatch=%d, fsCompare=%d, valid=%d)\n",
-                       fwResult.nameMatch == 1 ? "MATCH" : "NO MATCH", fwResult.nameMatch, fwCompare, fwValid);
-    }
-    
-    if (fsEntry) {
-        int8_t ret = modOtaClass.fileNameCheck(fsEntry->name, &fsResult);
-        // Only update if server version is NEWER than current
-        int8_t fsCompare = modOtaClass.compareWithCurrentFsVersion(&fsResult, fsEntry->name);
-        fsValid = (ret == 1 && fsCompare == 1);
-        
-        // Дополнительная проверка: если версия FS-файла совпадает с кэшированной версией FS — не обновляем
-        // (защита от случая, когда compareWithCurrentFsVersion даёт неверный результат)
-        if (fsValid) {
-            int64_t cachedDate = modOtaClass.getCachedFsDate();
-            int32_t cachedBuild = modOtaClass.getCachedFsBuild();
-            int32_t cachedMajor = modOtaClass.getCachedFsMajor();
-            int32_t cachedMinor = modOtaClass.getCachedFsMinor();
-            
-            if (cachedDate != 0 || cachedBuild != 0 || cachedMajor != 0 || cachedMinor != 0) {
-                // Восстанавливаем версию файла из fsResult.*Diff (которые посчитаны относительно FW)
-                // fileVersion = diff + VERSION_*, т.к. fsResult.dateDiff = fileDate - VERSION_DATE
-                int64_t fileDate = fsResult.dateDiff + VERSION_DATE;
-                int32_t fileBuild = fsResult.isDebug ? (fsResult.buildDiff + VERSION_BUILD) : 0;
-                int32_t fileMajor = fsResult.majorDiff + VERSION_MAJOR;
-                int32_t fileMinor = fsResult.minorDiff + VERSION_MINOR;
-                
-                if (fileDate == cachedDate && fileBuild == cachedBuild &&
-                    fileMajor == cachedMajor && fileMinor == cachedMinor) {
-                    fsValid = false;
-                    DEBUGOTACLIENT("FS version matches cached version, skipping\n");
-                }
-            }
-        }
-        
-        DEBUGOTACLIENT("FS version check: %s (nameMatch=%d, fsCompare=%d, valid=%d)\n",
-                       fsResult.nameMatch == 1 ? "MATCH" : "NO MATCH", fsResult.nameMatch, fsCompare, fsValid);
-    }
+    checkManifestEntries(_manifestEntries, entryCount, fwResult, fsResult, fwValid, fsValid,
+                         fwCompareResult, fsCompareResult,
+                         firmwareEntry, fsEntry);
     
     // Decision logic:
     // If both are valid and have the same version -> update FS first, then firmware
@@ -901,13 +846,8 @@ void MODULE_CLASS_OTACLIENT::checkForUpdates() {
     SetTimerTask(otaclientLoopTask, 50);
     
     // If FS was ended during update attempt, try to remount it
-    if (_fsEnded && modOtaClass._fs) {
-        DEBUGOTACLIENT("Remounting filesystem after update attempt...\n");
-#if defined(ESP32)
-        modOtaClass._fs->begin(true);
-#elif defined(ESP8266)
-        modOtaClass._fs->begin();
-#endif
+    if (_fsEnded) {
+        fsRemount();
         _fsEnded = false;
     }
     

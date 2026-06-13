@@ -756,19 +756,20 @@ void CORE_CLASS_WIFI::html_ver_get(AsyncWebServerRequest *request) {
 
 bool CORE_CLASS_WIFI::load_configWifiSys() {
     DEBUGLOGWIFI("Loading WiFi sys config\n");
-    uint32_t scanTimeVal = 0, apLifeTimeVal = 0;
-    if (!ModClassJson.jsonFileReadUint(WIFI_CONFIG_SYS, "scantime", scanTimeVal)) return false;
-    if (!ModClassJson.jsonFileReadUint(WIFI_CONFIG_SYS, "aptime", apLifeTimeVal)) return false;
-    _wifiScanTime = (uint16_t)scanTimeVal;
-    _wifiAPLifeTime = (uint16_t)apLifeTimeVal;
+    JsonDocument doc;
+    if (!ModClassJson.jsonFileLoadDoc(WIFI_CONFIG_SYS, doc)) return false;
+    _wifiScanTime = doc["scantime"].as<uint16_t>();
+    _wifiAPLifeTime = doc["aptime"].as<uint16_t>();
     return true;
 }
 
 bool CORE_CLASS_WIFI::save_configWifiSys() {
     DEBUGLOGWIFI("Saving WiFi sys config\n");
-    if (!ModClassJson.jsonFileWriteInt(WIFI_CONFIG_SYS, "scantime", _wifiScanTime)) return false;
-    if (!ModClassJson.jsonFileWriteInt(WIFI_CONFIG_SYS, "aptime", _wifiAPLifeTime)) return false;
-    return true;
+    JsonDocument doc;
+    ModClassJson.jsonFileLoadDoc(WIFI_CONFIG_SYS, doc);
+    doc["scantime"] = _wifiScanTime;
+    doc["aptime"] = _wifiAPLifeTime;
+    return ModClassJson.jsonFileSaveDoc(WIFI_CONFIG_SYS, doc);
 }
 
 void CORE_CLASS_WIFI::defaultConfigWifiSys() {

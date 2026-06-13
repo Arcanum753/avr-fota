@@ -76,7 +76,7 @@ public:
 #endif
 
     void begin(String _hostname, String _password);
-    void webInit() ;
+    virtual void webInit();
     void loopHandler() ;
     
     void html_md5_set(AsyncWebServerRequest *request);
@@ -93,17 +93,27 @@ public:
     int32_t getCachedFsMajor() { return _cachedFsMajor; }
     int32_t getCachedFsMinor() { return _cachedFsMinor; }
     
+    // FS management helpers (reduces code duplication with module_otaclient)
+    void fsEnd();
+    void fsRemount();
+    
+    // Version comparison helper: compares diffs and returns -1, 0, or 1
+    static int8_t compareVersionDiffs(int32_t majorDiff, int32_t minorDiff, int64_t dateDiff, int32_t buildDiff);
+    
     void html_uploadUpdateFile(AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final);
     void html_fileuploadProgress(AsyncWebServerRequest *request);
     
     void updateFileExecute (AsyncWebServerRequest *request) ;
     
-private:
-    String getVersionStr();
-    String getGeneratedTime();
-    String getCommitDateStr();
-    void  html_ver_get(AsyncWebServerRequest *request);
-    
+    // Common routes registration (split from webInit for submodule override)
+    void registerCommonRoutes();
+    virtual void registerCustomRoutes() {}
+
+    virtual String getVersionStr();
+    virtual String getGeneratedTime();
+    virtual String getCommitDateStr();
+    virtual void  html_ver_get(AsyncWebServerRequest *request);
+
 protected: 
     uint16_t fileUpadedpercent = 0;
     bool  dumb = false;
@@ -111,7 +121,6 @@ protected:
     uint32_t _updateFileSize = 0;
     String _updateFileName = "";
 
-private:
     bool isValidFilename(const String& filename);
     bool ConfigureOTA( String _hostname, String _password) ;
     uint16_t percentLoadedPrev ;

@@ -87,13 +87,14 @@ void CORE_CLASS_NTP::ntpSwitchReserv (){
 
 
 bool CORE_CLASS_NTP::load_config_NTP() {
-	if (!ModClassJson.jsonFileReadStr(CONFIG_FILE_NTP, "ntp0", _ntpConfig.ntpServerName0)) return false;
-	ModClassJson.jsonFileReadStr(CONFIG_FILE_NTP, "ntp1", _ntpConfig.ntpServerName1);
-	ModClassJson.jsonFileReadStr(CONFIG_FILE_NTP, "ntp2", _ntpConfig.ntpServerName2);
-	int32_t periodVal = 0, tzVal = 0, dlVal = 0;
-	if (ModClassJson.jsonFileReadInt(CONFIG_FILE_NTP, "NTPperiod", periodVal)) _ntpConfig.updateNTPTimeEvery = periodVal;
-	if (ModClassJson.jsonFileReadInt(CONFIG_FILE_NTP, "timeZone", tzVal)) _ntpConfig.timezone = tzVal;
-	if (ModClassJson.jsonFileReadInt(CONFIG_FILE_NTP, "daylight", dlVal)) _ntpConfig.daylight = dlVal;
+	JsonDocument doc;
+	if (!ModClassJson.jsonFileLoadDoc(CONFIG_FILE_NTP, doc)) return false;
+	_ntpConfig.ntpServerName0 = doc["ntp0"].as<String>();
+	_ntpConfig.ntpServerName1 = doc["ntp1"].as<String>();
+	_ntpConfig.ntpServerName2 = doc["ntp2"].as<String>();
+	_ntpConfig.updateNTPTimeEvery = doc["NTPperiod"].as<int32_t>();
+	_ntpConfig.timezone = doc["timeZone"].as<int32_t>();
+	_ntpConfig.daylight = doc["daylight"].as<int32_t>();
 
 	DEBUGNTP("NTP Server0: %s\r\n", _ntpConfig.ntpServerName0.c_str());
 	DEBUGNTP("NTP Server1: %s\r\n", _ntpConfig.ntpServerName1.c_str());
@@ -103,13 +104,15 @@ bool CORE_CLASS_NTP::load_config_NTP() {
 
 bool CORE_CLASS_NTP::save_configNTP() {
 	DEBUGNTP("Save config NTP \r\n");
-	if (!ModClassJson.jsonFileWriteStr(CONFIG_FILE_NTP, "ntp0", _ntpConfig.ntpServerName0)) return false;
-	if (!ModClassJson.jsonFileWriteStr(CONFIG_FILE_NTP, "ntp1", _ntpConfig.ntpServerName1)) return false;
-	if (!ModClassJson.jsonFileWriteStr(CONFIG_FILE_NTP, "ntp2", _ntpConfig.ntpServerName2)) return false;
-	if (!ModClassJson.jsonFileWriteInt(CONFIG_FILE_NTP, "NTPperiod", _ntpConfig.updateNTPTimeEvery)) return false;
-	if (!ModClassJson.jsonFileWriteInt(CONFIG_FILE_NTP, "timeZone", _ntpConfig.timezone)) return false;
-	if (!ModClassJson.jsonFileWriteInt(CONFIG_FILE_NTP, "daylight", _ntpConfig.daylight)) return false;
-	return true;
+	JsonDocument doc;
+	ModClassJson.jsonFileLoadDoc(CONFIG_FILE_NTP, doc);
+	doc["ntp0"] = _ntpConfig.ntpServerName0;
+	doc["ntp1"] = _ntpConfig.ntpServerName1;
+	doc["ntp2"] = _ntpConfig.ntpServerName2;
+	doc["NTPperiod"] = _ntpConfig.updateNTPTimeEvery;
+	doc["timeZone"] = _ntpConfig.timezone;
+	doc["daylight"] = _ntpConfig.daylight;
+	return ModClassJson.jsonFileSaveDoc(CONFIG_FILE_NTP, doc);
 }
 
 void CORE_CLASS_NTP::defaultConfigNTP() {

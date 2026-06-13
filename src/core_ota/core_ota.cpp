@@ -90,12 +90,44 @@ bool  CORE_OTA_CLASS::ConfigureOTA( String _hostname, String _password) {
 }
 
 
+void CORE_OTA_CLASS::fsEnd() {
+    if (_fs) {
+        DEBUGOTA("Ending filesystem...\n");
+        _fs->end();
+        _ota_fsEndCalled = true;
+        delay(100);
+    }
+}
+
+void CORE_OTA_CLASS::fsRemount() {
+    if (_fs) {
+        DEBUGOTA("Remounting filesystem...\n");
+#if defined(ESP32)
+        _fs->begin(true);
+#elif defined(ESP8266)
+        _fs->begin();
+#endif
+    }
+}
+
+int8_t CORE_OTA_CLASS::compareVersionDiffs(int32_t majorDiff, int32_t minorDiff, int64_t dateDiff, int32_t buildDiff) {
+    if (majorDiff > 0) return 1;
+    if (majorDiff < 0) return -1;
+    if (minorDiff > 0) return 1;
+    if (minorDiff < 0) return -1;
+    if (dateDiff > 0) return 1;
+    if (dateDiff < 0) return -1;
+    if (buildDiff > 0) return 1;
+    if (buildDiff < 0) return -1;
+    return 0;
+}
+
  void CORE_OTA_CLASS::loopHandler(){
 	 ArduinoOTA.handle();
  }
 
 
- void CORE_OTA_CLASS::webInit() {
+ void CORE_OTA_CLASS::registerCommonRoutes() {
 	DEBUGOTA(__FUNCTION__);	DEBUGOTA("\r\n");
 
     ESPHTTPServer.on("/update/setmd5", [this](AsyncWebServerRequest *request) {
@@ -131,6 +163,11 @@ bool  CORE_OTA_CLASS::ConfigureOTA( String _hostname, String _password) {
         html_ver_get(request);
     });
 
+ }
+
+ void CORE_OTA_CLASS::webInit() {
+    registerCommonRoutes();
+    registerCustomRoutes();
  }
 
 void CORE_OTA_CLASS::html_fileuploadProgress(AsyncWebServerRequest *request) {
@@ -224,117 +261,34 @@ bool CORE_OTA_CLASS::parseVersionFromJson(const String& jsonStr, int64_t& date, 
 // ============================================================
 
 int8_t CORE_OTA_CLASS::compareWithCurrentFsVersion(fileCompareResult* result, const String& filename) {
-    // For firmware files, compare with firmware version
     if (result->fileType == FILE_TYPE_FIRMWARE) {
         result->fsCurrentMajor = VERSION_MAJOR;
         result->fsCurrentMinor = VERSION_MINOR;
         result->fsCurrentDate = VERSION_DATE;
         result->fsCurrentBuild = VERSION_BUILD;
-        
-        // Compare versions
-        if (result->majorDiff > 0) {
-            result->fsVersionCompare = 1;  // NEWER
-        } else if (result->majorDiff < 0) {
-            result->fsVersionCompare = -1; // OLDER
-        } else if (result->minorDiff > 0) {
-            result->fsVersionCompare = 1;
-        } else if (result->minorDiff < 0) {
-            result->fsVersionCompare = -1;
-        } else if (result->dateDiff > 0) {
-            result->fsVersionCompare = 1;
-        } else if (result->dateDiff < 0) {
-            result->fsVersionCompare = -1;
-        } else if (result->buildDiff > 0) {
-            result->fsVersionCompare = 1;
-        } else if (result->buildDiff < 0) {
-            result->fsVersionCompare = -1;
-        } else {
-            result->fsVersionCompare = 0;  // SAME
-        }
-        
-        DEBUGOTA("compareWithCurrentFsVersion (Firmware): current %d.%d.%lld.%d, diff %d\n",
-                 VERSION_MAJOR, VERSION_MINOR, (long long)VERSION_DATE, VERSION_BUILD, result->fsVersionCompare);
-        
-        return result->fsVersionCompare;
-    }
-    
-    // For filesystem files, try to read version_fs.json from current FS
-    if (!_fsVersionCached) {
-        cacheFsVersionInfo();
-    }
-    
-    result->fsCurrentMajor = _cachedFsMajor;
-    result->fsCurrentMinor = _cachedFsMinor;
-    result->fsCurrentDate = _cachedFsDate;
-    result->fsCurrentBuild = _cachedFsBuild;
-    
-    // If no version_fs.json exists, compare with firmware version instead
-    if (_cachedFsDate == 0 && _cachedFsBuild == 0 && _cachedFsMajor == 0 && _cachedFsMinor == 0) {
-        DEBUGOTA("compareWithCurrentFsVersion: No version_fs.json, using firmware version\n");
-        
-        result->fsCurrentMajor = VERSION_MAJOR;
-        result->fsCurrentMinor = VERSION_MINOR;
-        result->fsCurrentDate = VERSION_DATE;
-        result->fsCurrentBuild = VERSION_BUILD;
-        result->fsVersionCompare = -2;  // NO_JSON - compare with firmware
-        
-        // Compare with firmware
-        if (result->majorDiff > 0) {
-            return 1;   // NEWER than firmware
-        } else if (result->majorDiff < 0) {
-            return -1;  // OLDER than firmware
-        } else if (result->minorDiff > 0) {
-            return 1;
-        } else if (result->minorDiff < 0) {
-            return -1;
-        } else if (result->dateDiff > 0) {
-            return 1;
-        } else if (result->dateDiff < 0) {
-            return -1;
-        } else if (result->buildDiff > 0) {
-            return 1;
-        } else if (result->buildDiff < 0) {
-            return -1;
-        }
-        return 0;  // SAME
-    }
-    
-    // Compare file version with current FS version
-    // Восстанавливаем версию файла из result->*Diff (которые посчитаны относительно FW)
-    // fileVersion = diff + VERSION_*, т.к. result->dateDiff = fileDate - VERSION_DATE
-    int64_t fileDate = result->dateDiff + VERSION_DATE;
-    int32_t fileBuild = result->isDebug ? (result->buildDiff + VERSION_BUILD) : 0;
-    int32_t fileMajor = result->majorDiff + VERSION_MAJOR;
-    int32_t fileMinor = result->minorDiff + VERSION_MINOR;
-    
-    // Сравниваем версию файла с кэшированной версией FS
-    int32_t fsMajorDiff = fileMajor - _cachedFsMajor;
-    int32_t fsMinorDiff = fileMinor - _cachedFsMinor;
-    int64_t fsDateDiff = fileDate - _cachedFsDate;
-    int32_t fsBuildDiff = (result->isDebug) ? (fileBuild - _cachedFsBuild) : 0;
-    
-    if (fsMajorDiff > 0) {
-        result->fsVersionCompare = 1;
-    } else if (fsMajorDiff < 0) {
-        result->fsVersionCompare = -1;
-    } else if (fsMinorDiff > 0) {
-        result->fsVersionCompare = 1;
-    } else if (fsMinorDiff < 0) {
-        result->fsVersionCompare = -1;
-    } else if (fsDateDiff > 0) {
-        result->fsVersionCompare = 1;
-    } else if (fsDateDiff < 0) {
-        result->fsVersionCompare = -1;
-    } else if (fsBuildDiff > 0) {
-        result->fsVersionCompare = 1;
-    } else if (fsBuildDiff < 0) {
-        result->fsVersionCompare = -1;
     } else {
-        result->fsVersionCompare = 0;
+        if (!_fsVersionCached) {
+            cacheFsVersionInfo();
+        }
+        result->fsCurrentMajor = _cachedFsMajor;
+        result->fsCurrentMinor = _cachedFsMinor;
+        result->fsCurrentDate = _cachedFsDate;
+        result->fsCurrentBuild = _cachedFsBuild;
+        
+        if (_cachedFsDate == 0 && _cachedFsBuild == 0 && _cachedFsMajor == 0 && _cachedFsMinor == 0) {
+            result->fsVersionCompare = -2;
+            DEBUGOTA("compareWithCurrentFsVersion: No version_fs.json, using firmware version\n");
+            return result->fsVersionCompare;
+        }
     }
     
-    DEBUGOTA("compareWithCurrentFsVersion (FS): current %d.%d.%lld.%d, diff %d\n",
-             _cachedFsMajor, _cachedFsMinor, (long long)_cachedFsDate, _cachedFsBuild, result->fsVersionCompare);
+    result->fsVersionCompare = compareVersionDiffs(result->majorDiff, result->minorDiff, result->dateDiff, result->buildDiff);
+    
+    DEBUGOTA("compareWithCurrentFsVersion (%s): current %d.%d.%lld.%d, diff %d\n",
+             (result->fileType == FILE_TYPE_FIRMWARE) ? "Firmware" : "FS",
+             result->fsCurrentMajor, result->fsCurrentMinor,
+             (long long)result->fsCurrentDate, result->fsCurrentBuild,
+             result->fsVersionCompare);
     
     return result->fsVersionCompare;
 }
@@ -594,13 +548,28 @@ int8_t CORE_OTA_CLASS::fileNameCheck(String filename, fileCompareResult* result)
     DEBUGOTA("\t Parsed: major=%d, minor=%d, date=%lld, build=%d\r\n", 
              fileMajor, fileMinor, fileDate, fileBuild);
     
-    int32_t currentMajor = VERSION_MAJOR;
-    int32_t currentMinor = VERSION_MINOR;
-    int64_t currentDate = VERSION_DATE;
-    int32_t currentBuild = VERSION_BUILD;
+    int32_t currentMajor, currentMinor;
+    int64_t currentDate;
+    int32_t currentBuild;
     
-    DEBUGOTA("\t Current: major=%d, minor=%d, date=%lld, build=%d\r\n", 
-             currentMajor, currentMinor, currentDate, currentBuild);
+    if (result->fileType == FILE_TYPE_FILESYSTEM) {
+        if (!_fsVersionCached) {
+            cacheFsVersionInfo();
+        }
+        currentMajor = _cachedFsMajor;
+        currentMinor = _cachedFsMinor;
+        currentDate = _cachedFsDate;
+        currentBuild = _cachedFsBuild;
+        DEBUGOTA("\t Current (FS): major=%d, minor=%d, date=%lld, build=%d\r\n", 
+                 currentMajor, currentMinor, currentDate, currentBuild);
+    } else {
+        currentMajor = VERSION_MAJOR;
+        currentMinor = VERSION_MINOR;
+        currentDate = VERSION_DATE;
+        currentBuild = VERSION_BUILD;
+        DEBUGOTA("\t Current (FW): major=%d, minor=%d, date=%lld, build=%d\r\n", 
+                 currentMajor, currentMinor, currentDate, currentBuild);
+    }
     
     result->majorDiff = fileMajor - currentMajor;
     result->minorDiff = fileMinor - currentMinor;
@@ -611,12 +580,17 @@ int8_t CORE_OTA_CLASS::fileNameCheck(String filename, fileCompareResult* result)
              result->majorDiff, result->minorDiff, result->dateDiff, result->buildDiff);
     
     bool canUpdate = (result->majorDiff >= 0) && (result->minorDiff >= 0);
+    if (canUpdate && result->isDebug) {
+        canUpdate = (result->buildDiff >= 0) && (result->buildDiff > 0);
+    } else if (canUpdate) {
+        canUpdate = (result->dateDiff >= 0) && (result->dateDiff > 0);
+    }
     
     if (canUpdate) {
         _ret = 1;
         DEBUGOTA("\t File is valid for update\r\n");
     } else {
-        DEBUGOTA("\t File is NOT valid for update (older major/minor)\r\n");
+        DEBUGOTA("\t File is NOT valid for update (older version)\r\n");
     }
     
     return _ret;
@@ -705,12 +679,7 @@ void CORE_OTA_CLASS::html_uploadUpdateFile(AsyncWebServerRequest *request, Strin
         
         DEBUGOTA("Update partition: %d\r\n", updatePartition);
         
-        if (_fs) { 
-            DEBUGOTA("Ending filesystem...\n");
-            _fs->end(); 
-            _ota_fsEndCalled = true;
-            delay(100);
-        }
+        fsEnd();
         
 #if defined(ESP8266)
         DEBUGOTA("Enabling async mode for ESP8266\n");
@@ -726,14 +695,7 @@ void CORE_OTA_CLASS::html_uploadUpdateFile(AsyncWebServerRequest *request, Strin
             request->send(500, "text/plain", values);
             errorOccurred = true;
             
-            if (_fs) {
-                DEBUGOTA("Remounting filesystem after error...\n");
-#if defined(ESP32)
-                _fs->begin(true);
-#elif defined(ESP8266)
-                _fs->begin();
-#endif
-            }
+            fsRemount();
             return;
         }
         
@@ -769,14 +731,7 @@ void CORE_OTA_CLASS::html_uploadUpdateFile(AsyncWebServerRequest *request, Strin
         Update.end();
 #endif
         
-        if (_fs) {
-            DEBUGOTA("Remounting filesystem...\n");
-#if defined(ESP32)
-            _fs->begin(true);
-#elif defined(ESP8266)
-            _fs->begin();
-#endif
-        }
+        fsRemount();
         return;
     }
     
@@ -808,14 +763,7 @@ void CORE_OTA_CLASS::html_uploadUpdateFile(AsyncWebServerRequest *request, Strin
 #ifdef DEBUG_OTA
             Update.printError(DEBUGOTASER);
 #endif
-            if (_fs) {
-                DEBUGOTA("Remounting filesystem after failure...\n");
-#if defined(ESP32)
-                _fs->begin(true);
-#elif defined(ESP8266)
-                _fs->begin();
-#endif
-            }
+            fsRemount();
         }
     }
 }
