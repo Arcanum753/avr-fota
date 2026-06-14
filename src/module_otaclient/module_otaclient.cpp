@@ -458,8 +458,8 @@ bool MODULE_CLASS_OTACLIENT::fetchManifest(ManifestEntry* entries, int& count) {
         return false;
     }
     
-    // Отправляем HTTP GET запрос вручную
-    client.print(String("GET ") + _config.manifestPath + " HTTP/1.1\r\n" +
+    // Отправляем HTTP GET запрос вручную с query-параметрами
+    client.print(String("GET ") + _config.manifestPath + "?target=" + BUILD_ENV + "&ver=" + FIRMWARE_VERSION + " HTTP/1.1\r\n" +
                  "Host: " + _config.serverAddress + ":" + String(_config.serverPort) + "\r\n" +
                  "Connection: close\r\n\r\n");
     
@@ -486,7 +486,7 @@ bool MODULE_CLASS_OTACLIENT::fetchManifest(ManifestEntry* entries, int& count) {
                 int c = client.read();
                 if (c == -1) break;
                 payload += (char)c;
-                if (payload.length() > 2048) {  // Жёсткий лимит: 2048 байт
+                if (payload.length() > 4096) {  // Жёсткий лимит: 4096 байт
                     DEBUGOTACLIENT("fetchManifest: payload too large\n");
                     client.stop();
                     return false;

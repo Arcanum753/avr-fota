@@ -579,11 +579,15 @@ int8_t CORE_OTA_CLASS::fileNameCheck(String filename, fileCompareResult* result)
     DEBUGOTA("\t Diffs: major=%d, minor=%d, date=%lld, build=%d\r\n", 
              result->majorDiff, result->minorDiff, result->dateDiff, result->buildDiff);
     
-    bool canUpdate = (result->majorDiff >= 0) && (result->minorDiff >= 0);
-    if (canUpdate && result->isDebug) {
-        canUpdate = (result->buildDiff >= 0) && (result->buildDiff > 0);
-    } else if (canUpdate) {
-        canUpdate = (result->dateDiff >= 0) && (result->dateDiff > 0);
+    // Если major или minor строго больше — всегда разрешаем обновление
+    bool canUpdate = (result->majorDiff > 0) || (result->minorDiff > 0);
+    // Если major и minor совпадают — проверяем build/date
+    if (!canUpdate && result->majorDiff >= 0 && result->minorDiff >= 0) {
+        if (result->isDebug) {
+            canUpdate = (result->buildDiff > 0);
+        } else {
+            canUpdate = (result->dateDiff > 0);
+        }
     }
     
     if (canUpdate) {
