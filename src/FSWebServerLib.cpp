@@ -164,24 +164,21 @@ void AsyncFSWebServer::html_send_chipinfo(AsyncWebServerRequest *request) {
     DEBUGLOG(__FUNCTION__); DEBUGLOG("\r\n");
     
 #if defined(ESP8266)
-    // Максимально простая версия для ESP8266 - минимум операций
     ESP.wdtFeed();
     char buffer[256];
     snprintf(buffer, sizeof(buffer),
-        "x_chipid|%08X|div\n"
+        "x_chipid|%s|div\n"
         "x_mhz|%d|div\n"
         "x_sdk|%s|div\n"
         "x_reason|%s|div\n",
-        ESP.getChipId(),
+        String(ESP.getChipId(), HEX).c_str(),
         ESP.getCpuFreqMHz(),
         ESP.getSdkVersion(),
-        getResetReason().c_str()  // .c_str() вместо создания новой String
+        getResetReason().c_str()
     );
     request->send(200, "text/plain", buffer);
-    
 #endif
 #if defined(ESP32)
-    // Для ESP32 оставляем как было
     esp_task_wdt_reset();
     String values = "";
     values += "x_chipid|" + (String)ESP.getChipModel() + "|div\n";
@@ -553,6 +550,14 @@ void AsyncFSWebServer::serialShowAbout() {
 		Serial.printf("FS total: %u\r\n", 		_fs->totalBytes());
 		Serial.printf("FS used: %u\r\n", 		_fs->usedBytes());
 		Serial.printf("FS free: %u\r\n", 		_fs->totalBytes() - _fs->usedBytes());
+#endif
+#if defined(ESP8266)
+		FSInfo fs_info;
+		if (_fs->info(fs_info)) {
+			Serial.printf("FS total: %u\r\n", 		fs_info.totalBytes);
+			Serial.printf("FS used: %u\r\n", 		fs_info.usedBytes);
+			Serial.printf("FS free: %u\r\n", 		fs_info.totalBytes - fs_info.usedBytes);
+		}
 #endif
 	}
 
