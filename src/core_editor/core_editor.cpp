@@ -4,185 +4,203 @@
 #include "main.h"
 #include "core_editor_version.h"
 
-CORE_CLASS_EDITOR ModClassEdit(false);
+CORE_CLASS_EDITOR ModClassEdit;
 
-CORE_CLASS_EDITOR :: CORE_CLASS_EDITOR (bool _in) {
-	dumb = _in;
-}
+CORE_CLASS_EDITOR::CORE_CLASS_EDITOR() {}
 
 #if defined(ESP32)
-void CORE_CLASS_EDITOR::setFs(fs::LittleFSFS* fs) //esp32 flash file system
+void CORE_CLASS_EDITOR::setFs(fs::LittleFSFS* fs)
 #elif defined(ESP8266)
-void CORE_CLASS_EDITOR::setFs(FS* fs)	// esp8266 flash file system
+void CORE_CLASS_EDITOR::setFs(FS* fs)
 #endif
-{	_fs = fs;	}
-
-
-void  CORE_CLASS_EDITOR::begin(){
-	DEBUGEDIT(__FUNCTION__);	DEBUGEDIT("\r\n");
+{
+    _fs = fs;
 }
 
+void CORE_CLASS_EDITOR::begin() {
+    DEBUGEDIT(__FUNCTION__); DEBUGEDIT("\r\n");
+}
 
-void  CORE_CLASS_EDITOR::webInit(){
-    DEBUGEDIT(__FUNCTION__);	DEBUGEDIT("\r\n");
-//edit.html vvv
+String CORE_CLASS_EDITOR::escapeJsonStr(const String& s) {
+    String out;
+    out.reserve(s.length());
+    for (size_t i = 0; i < s.length(); i++) {
+        char c = s.charAt(i);
+        switch (c) {
+            case '"':  out += "\\\""; break;
+            case '\\': out += "\\\\"; break;
+            case '\b': out += "\\b";  break;
+            case '\f': out += "\\f";  break;
+            case '\n': out += "\\n";  break;
+            case '\r': out += "\\r";  break;
+            case '\t': out += "\\t";  break;
+            default:
+                if ((unsigned char)c < 0x20) {
+                    char buf[8];
+                    snprintf(buf, sizeof(buf), "\\u%04x", (unsigned char)c);
+                    out += buf;
+                } else {
+                    out += c;
+                }
+        }
+    }
+    return out;
+}
 
-    //list directory
+void CORE_CLASS_EDITOR::webInit() {
+    DEBUGEDIT(__FUNCTION__); DEBUGEDIT("\r\n");
+
     ESPHTTPServer.on("/list", HTTP_GET, [this](AsyncWebServerRequest *request) {
-        if (!ESPHTTPServer.checkAuth(request)) {    return request->requestAuthentication(); }
+        if (!ESPHTTPServer.checkAuth(request)) { return request->requestAuthentication(); }
         this->handleFileList(request);
     });
 
-    //load editor
     ESPHTTPServer.on("/edit", HTTP_GET, [this](AsyncWebServerRequest *request) {
-        if (!ESPHTTPServer.checkAuth(request)) {    return request->requestAuthentication(); }
-        if (!ESPHTTPServer.handleFileRead("/edit.html", request))
-            {   request->send(404, "text/plain", "FileNotFound");   }
+        if (!ESPHTTPServer.checkAuth(request)) { return request->requestAuthentication(); }
+        if (!ESPHTTPServer.handleFileRead("/edit.html", request)) {
+            request->send(404, "text/plain", "FileNotFound");
+        }
     });
 
-    //create file
     ESPHTTPServer.on("/edit", HTTP_PUT, [this](AsyncWebServerRequest *request) {
-        if (!ESPHTTPServer.checkAuth(request)) {    return request->requestAuthentication(); }
+        if (!ESPHTTPServer.checkAuth(request)) { return request->requestAuthentication(); }
         this->handleFileCreate(request);
-    });	
+    });
 
-    //delete file
     ESPHTTPServer.on("/edit", HTTP_DELETE, [this](AsyncWebServerRequest *request) {
-        if (!ESPHTTPServer.checkAuth(request)) {		return request->requestAuthentication(); }
+        if (!ESPHTTPServer.checkAuth(request)) { return request->requestAuthentication(); }
         this->handleFileDelete(request);
     });
 
-    //first callback is called after the request has ended with all parsed arguments
-    //second callback handles file uploads at that location
-    ESPHTTPServer.on("/edit", HTTP_POST, [](AsyncWebServerRequest *request) { request->send(200, "text/plain", ""); },
+    ESPHTTPServer.on("/edit", HTTP_POST,
+        [](AsyncWebServerRequest *request) { request->send(200, "text/plain", ""); },
         [this](AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final) {
             this->handleFileUpload(request, filename, index, data, len, final);
-    });
+        });
 
-	ESPHTTPServer.on("/edit/ver", [this](AsyncWebServerRequest *request) {
+    ESPHTTPServer.on("/edit/ver", [this](AsyncWebServerRequest *request) {
         html_ver_get(request);
     });
-//edit.html ^^^
-
 }
 
 void CORE_CLASS_EDITOR::handleFileUpload(AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final) {
-	static File fsUploadFile;
-	static size_t fileSize = 0;
+    static File fsUploadFile;
+    static size_t fileSize = 0;
 
-	if (!index) { // Start
-		DEBUGEDIT("handleFileUpload Name: %s\r\n", filename.c_str());
-		if (!filename.startsWith("/")) filename = "/" + filename;
-		fsUploadFile = _fs->open(filename, "w");
-		DEBUGEDIT("First upload part.\r\n");
-	}
-	// Continue
-	if (fsUploadFile) {
-		DEBUGEDIT("Continue upload part. Size = %u\r\n", len);
-		if (fsUploadFile.write(data, len) != len) {	DEBUGEDIT("Write error during upload. \r\n");	}
-		else {	fileSize += len;	}
-	}
-	//da fack?!
-	/*for (size_t i = 0; i < len; i++) {
-	if (fsUploadFile)
-	fsUploadFile.write(data[i]);
-	}*/
-	if (final) { // End
-		if (fsUploadFile) {	fsUploadFile.close();	}
-		DEBUGEDIT("handleFileUpload Size: %u\n", fileSize);
-		fileSize = 0;
-	}
+    if (!index) {
+        fileSize = 0;
+        DEBUGEDIT("handleFileUpload Name: %s\r\n", filename.c_str());
+        if (!filename.startsWith("/")) filename = "/" + filename;
+        if (filename.indexOf("..") >= 0) {
+            request->send(403, "text/plain", "FORBIDDEN");
+            return;
+        }
+        fsUploadFile = _fs->open(filename, "w");
+        DEBUGEDIT("First upload part.\r\n");
+    }
+
+    if (fsUploadFile) {
+        if (fileSize + len > MAX_UPLOAD_SIZE) {
+            DEBUGEDIT("Upload exceeds max size. Aborting.\r\n");
+            fsUploadFile.close();
+            _fs->remove(filename);
+            fileSize = 0;
+            return;
+        }
+        if (fsUploadFile.write(data, len) != len) {
+            DEBUGEDIT("Write error during upload.\r\n");
+        } else {
+            fileSize += len;
+        }
+    }
+
+    if (final) {
+        if (fsUploadFile) { fsUploadFile.close(); }
+        DEBUGEDIT("handleFileUpload Size: %u\n", fileSize);
+        fileSize = 0;
+    }
 }
-
 
 void CORE_CLASS_EDITOR::handleFileList(AsyncWebServerRequest *request) {
-	if (!request->hasArg("dir")) { request->send(500, "text/plain", "BAD ARGS"); return; }
-	String path = request->arg("dir");
-	DEBUGEDIT("handleFileList: %s\r\n", path.c_str());
-	String output = "[";
+    if (!request->hasArg("dir")) { request->send(500, "text/plain", "BAD ARGS"); return; }
+    String path = request->arg("dir");
+    DEBUGEDIT("handleFileList: %s\r\n", path.c_str());
+    String output = "[";
 
 #ifdef ESP32
-	File root =  _fs->open(path);
-	File file = root.openNextFile();
-	while (file) {
-		if (output != "[")	{output += ',';}
-		bool isDir = false;
-		output += "{\"type\":\"";
-		isDir = file.isDirectory();
-		output += (isDir) ? "dir" : "file";
-		output += "\",\"name\":\"";
-		output += String(file.name());
-		output += "\"}";
-		file = root.openNextFile();
-	}
-	#else
-	Dir dir = _fs->openDir(path);
-	while (dir.next()) {
-		File entry = dir.openFile("r");
-		if (true)//entry.name()!="secret.json") // Do not show secrets
-		{
-			if (output != "[")	{output += ',';}
-			bool isDir = false;
-			output += "{\"type\":\"";
-			output += (isDir) ? "dir" : "file";
-			output += "\",\"name\":\"";
-			output += String(entry.name()).substring(1);
-			output += "\"}";
-		}
-		entry.close();
-		}
+    File root = _fs->open(path);
+    File file = root.openNextFile();
+    while (file) {
+        if (output != "[") { output += ','; }
+        bool isDir = file.isDirectory();
+        output += "{\"type\":\"";
+        output += (isDir) ? "dir" : "file";
+        output += "\",\"name\":\"";
+        output += escapeJsonStr(String(file.name()));
+        output += "\"}";
+        file = root.openNextFile();
+    }
+#else
+    Dir dir = _fs->openDir(path);
+    while (dir.next()) {
+        File entry = dir.openFile("r");
+        if (output != "[") { output += ','; }
+        bool isDir = false;
+        output += "{\"type\":\"";
+        output += (isDir) ? "dir" : "file";
+        output += "\",\"name\":\"";
+        output += escapeJsonStr(String(entry.name()).substring(1));
+        output += "\"}";
+        entry.close();
+    }
 #endif
 
-	output += "]";
-	DEBUGEDIT("%s\r\n", output.c_str());
-	request->send(200, "text/json", output);
+    output += "]";
+    DEBUGEDIT("%s\r\n", output.c_str());
+    request->send(200, "text/json", output);
 }
-
-
 
 void CORE_CLASS_EDITOR::handleFileCreate(AsyncWebServerRequest *request) {
-	if (request->args() == 0)		{	return request->send(500, "text/plain", "BAD ARGS");}
-	String path = request->arg(0U);
-	DEBUGEDIT("handleFileCreate: %s\r\n", path.c_str());
-	if (path == "/")			{	return request->send(500, "text/plain", "BAD PATH");	}
-	if (_fs->exists(path))		{	return request->send(500, "text/plain", "FILE EXISTS");	}
-	File file = _fs->open(path, "w");
-	if (file)	{	file.close();	}
-	else		{	return request->send(500, "text/plain", "CREATE FAILED");	}
-	request->send(200, "text/plain", "");
-	path = String(); // Remove? Useless statement?
+    if (request->args() == 0) { return request->send(500, "text/plain", "BAD ARGS"); }
+    String path = request->arg(0U);
+    DEBUGEDIT("handleFileCreate: %s\r\n", path.c_str());
+    if (path == "/")             { return request->send(500, "text/plain", "BAD PATH"); }
+    if (path.indexOf("..") >= 0) { return request->send(403, "text/plain", "FORBIDDEN"); }
+    if (_fs->exists(path))       { return request->send(500, "text/plain", "FILE EXISTS"); }
+    File file = _fs->open(path, "w");
+    if (file) { file.close(); }
+    else      { return request->send(500, "text/plain", "CREATE FAILED"); }
+    request->send(200, "text/plain", "");
 }
-
-
-// удаление файла
 
 void CORE_CLASS_EDITOR::handleFileDelete(AsyncWebServerRequest *request) {
-	if (request->args() == 0) 	{	return request->send(500, "text/plain", "BAD ARGS");	}
-	String path = request->arg(0U);
-	DEBUGEDIT("handleFileDelete: %s\r\n", path.c_str());
-	if (path == "/") 		{	return request->send(500, "text/plain", "BAD PATH");	}
-	if (!_fs->exists(path)) {	return request->send(404, "text/plain", "FileNotFound");	}
-	_fs->remove(path);
-	request->send(200, "text/plain", "");
+    if (request->args() == 0) { return request->send(500, "text/plain", "BAD ARGS"); }
+    String path = request->arg(0U);
+    DEBUGEDIT("handleFileDelete: %s\r\n", path.c_str());
+    if (path == "/")             { return request->send(500, "text/plain", "BAD PATH"); }
+    if (path.indexOf("..") >= 0) { return request->send(403, "text/plain", "FORBIDDEN"); }
+    if (!_fs->exists(path))      { return request->send(404, "text/plain", "FileNotFound"); }
+    _fs->remove(path);
+    request->send(200, "text/plain", "");
 }
 
-String CORE_CLASS_EDITOR::getVersionStr(){
+String CORE_CLASS_EDITOR::getVersionStr() {
     return String(CORE_EDITOR_VERSION);
 }
 
-String CORE_CLASS_EDITOR::getGeneratedTime(){
+String CORE_CLASS_EDITOR::getGeneratedTime() {
     return String(CORE_EDITOR_GENERATED_TIME);
 }
 
-String CORE_CLASS_EDITOR::getCommitDateStr(){
+String CORE_CLASS_EDITOR::getCommitDateStr() {
     return String(CORE_EDITOR_COMMIT_DATE_STR);
 }
 
 void CORE_CLASS_EDITOR::html_ver_get(AsyncWebServerRequest *request) {
     DEBUGEDIT("%s\n\r", __FUNCTION__);
     String values = "";
-    values += "edtversion|"     + getVersionStr()    + "|dev\n";
-    values += "edtgentime|"     + getGeneratedTime() + "|dev\n";
-    values += "edtgendate|"     + getCommitDateStr() + "|dev\n";
+    values += "edtversion|" + getVersionStr()    + "|dev\n";
+    values += "edtgentime|" + getGeneratedTime() + "|dev\n";
+    values += "edtgendate|" + getCommitDateStr() + "|dev\n";
     request->send(200, "text/plain", values);
 }
