@@ -409,27 +409,24 @@ void CORE_OTA_CLASS::updateFileExecute (AsyncWebServerRequest *request) {
 #if defined(ESP32)
 		if (typeOTAfile == FILE_TYPE_FILESYSTEM) {
 			needReboot = true;
-			message = "FS updated successfully. Restarting...";
+			message = "UPDATE_COMPLETE_REBOOT";
 			DEBUGOTA("FS update on ESP32: reboot needed\n");
 			_fsVersionCached = false;
 		}
 #endif
 	}
 	
-	if (needReboot) {
-		if (Update.hasError()) {
-			message = "FAIL";
-		} else {
-			message = "<META http-equiv=\"refresh\" content=\"15;URL=/update\">Update correct. Restarting...";
-		}
-		// FS already ended in html_uploadUpdateFile() - do NOT call _fs->end() again!
-		ESPHTTPServer.restart_esp();
-	}
-	
-	AsyncWebServerResponse *response = request->beginResponse(200, "text/html", message);
+	AsyncWebServerResponse *response = request->beginResponse(200, "text/plain", "UPDATE_COMPLETE_REBOOT");
 	response->addHeader("Connection", "close");
 	response->addHeader("Access-Control-Allow-Origin", "*");
 	request->send(response);
+	
+	delay(100);
+	
+	if (needReboot && !Update.hasError()) {
+		_fsVersionCached = false;
+		ESPHTTPServer.restart_esp();
+	}
 }
 
 

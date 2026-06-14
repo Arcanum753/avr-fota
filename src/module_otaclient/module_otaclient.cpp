@@ -590,14 +590,29 @@ void MODULE_CLASS_OTACLIENT::checkManifestEntries(ManifestEntry* entries, int co
                                                     ManifestEntry*& fwEntryOut, ManifestEntry*& fsEntryOut) {
     ManifestEntry* firmwareEntry = NULL;
     ManifestEntry* fsEntry = NULL;
+    int bestFwBuild = -1, bestFsBuild = -1;
     
     for (int i = 0; i < count; i++) {
+        int build = -1;
+        int lastDot = entries[i].name.lastIndexOf('.');
+        int prevDot = (lastDot > 0) ? entries[i].name.lastIndexOf('.', lastDot - 1) : -1;
+        if (prevDot > 0) {
+            String buildStr = entries[i].name.substring(prevDot + 1, lastDot);
+            build = buildStr.toInt();
+        }
+        
         if (entries[i].type == "filesystem") {
-            fsEntry = &entries[i];
-            DEBUGOTACLIENT("  Found FS file: %s\n", entries[i].name.c_str());
+            if (build > bestFsBuild) {
+                bestFsBuild = build;
+                fsEntry = &entries[i];
+            }
+            DEBUGOTACLIENT("  Found FS file: %s (build=%d)\n", entries[i].name.c_str(), build);
         } else if (entries[i].type == "firmware") {
-            firmwareEntry = &entries[i];
-            DEBUGOTACLIENT("  Found firmware file: %s\n", entries[i].name.c_str());
+            if (build > bestFwBuild) {
+                bestFwBuild = build;
+                firmwareEntry = &entries[i];
+            }
+            DEBUGOTACLIENT("  Found firmware file: %s (build=%d)\n", entries[i].name.c_str(), build);
         }
     }
     

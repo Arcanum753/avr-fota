@@ -23,10 +23,9 @@
         <table class="scan">
             <thead><tr><th colspan="2">Firmware & Filesystem Update</th></tr></thead>
             <tr><td colspan="2">
-                <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
-                    <input id="fileName" type='file' name='update' onchange="summd5()" style="padding: 6px; font-size: 14px; flex: 1; min-width: 200px;">
-                    <input id="updateButton" type='button' value='Update ESP chip firmware.' disabled onclick="uploadFile()" class="button-prog">
-                </div>
+                 <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                     <input id="fileName" type='file' name='update' onchange="summd5()" style="padding: 6px; font-size: 14px; flex: 1; min-width: 200px;">
+                 </div>
             </td></tr>
             <tr><td colspan="2" id="md5row" >
                     Calculated file MD5 hash: <span id="clientHash">Select a file</span><br>
@@ -34,27 +33,42 @@
                     Filename: <span id="fileNameLoaded"></span>
                   </td>
             </tr>
-            <tr><td colspan="2" id="VersionDiff" >
-                     <span id="updStatus"> </span><br>
-                     <span id="updSizeFree"> </span><br>
-                     <span id="updSizeMax"> </span><br>
-                     <span id="updFileType"> </span><br>
-                     <span id="updVerDiffName"> </span><br>
-                     <span id="updVerDiffMaj"> </span><br>
-                     <span id="updVerDiffMinor"> </span><br>
-                     <span id="updVerDiffDate"> </span><br>
-                     <span id="updVerDiffBuild"> </span><br>
-                     <span id="updIsDebug"> </span><br>
-                     <span id="updFsCompare"> </span><br>
-                     <span id="updFsCurrentFS"> </span><br>
-                     <span id="updFsCurrentFW"> </span><br>
-                  </td>
-            </tr>
-            <tr><td colspan="2" style="text-align: center;"> 
-                <label>
-                    <input type="checkbox" id="ignoreCheck" onchange="updateButtonState()">Ignore validation and force upload
-                </label>
-              </td> </tr>
+             <tr><td id="versionInfoSection" style="padding: 0;">
+                 <table style="width: 100%; border: none; border-collapse: collapse;">
+                     <!-- Current versions -->
+                     <tr><td style="border: none; padding: 2px 4px;">
+                         <div class="diff-block-label">Current device versions</div>
+                         <span id="updFsCurrentFW" class="ver-abs-row"> </span><br>
+                         <span id="updFsCurrentFS" class="ver-abs-row"> </span><br>
+                     </td></tr>
+                     <!-- File info & diffs -->
+                     <tr><td style="border: none; padding: 2px 4px;">
+                         <div class="diff-block-label">File check results</div>
+                         <span id="updStatus"> </span><br>
+                         <span id="updSizeFree"> </span><br>
+                         <span id="updSizeMax"> </span><br>
+                         <span id="updFileType"> </span><br>
+                         <span id="updVerDiffName"> </span><br>
+                         <span id="updVerFileVersion" class="ver-abs-row"> </span><br>
+                         <span id="updVerCurrentVersion" class="ver-abs-row"> </span><br>
+                         <span id="updVerDiffMaj"> </span><br>
+                         <span id="updVerDiffMinor"> </span><br>
+                         <span id="updVerDiffDate"> </span><br>
+                         <span id="updVerDiffBuild"> </span><br>
+                         <span id="updIsDebug"> </span><br>
+                         <span id="updFsCompare"> </span><br>
+                         <span id="updBlockReason" class="block-reason" style="display: none;"> </span>
+                     </td></tr>
+                  </table>
+              </td></tr>
+             <tr><td colspan="2" style="text-align: center;">
+                 <div style="display: flex; align-items: center; justify-content: center; gap: 12px; flex-wrap: wrap;">
+                     <input id="updateButton" type='button' value='Update ESP chip firmware.' disabled onclick="uploadFile()" class="button-prog" style="padding: 8px 24px; font-size: 15px;">
+                     <label>
+                         <input type="checkbox" id="ignoreCheck" onchange="updateButtonState()">Ignore validation and force upload
+                     </label>
+                 </div>
+               </td> </tr>
         </table>
     </form>
     </div>
@@ -146,6 +160,10 @@
                 xhr.open('GET', '/update/progress', true);
                 
                 xhr.onload = function() {
+                    if (!isUploading) {
+                        stopProgressPolling();
+                        return;
+                    }
                     if (xhr.status === 200) {
                         const fieldsRows = ParseCVT(xhr.response);
                         for (let fields of fieldsRows) {
@@ -166,7 +184,7 @@
                 };
                 
                 xhr.onerror = function() { 
-                    console.error('Error fetching progress');
+                    console.error('Progress poll error — device may be rebooting');
                     stopProgressPolling();
                     hideProgressBar();
                 };
@@ -194,8 +212,24 @@
             }
         }
 
-        function formatDateDiff(diffSeconds) {
-            if (diffSeconds === 0) return "0 (same)";
+        function formatFsCompare(value) {
+            switch(value) {
+                case "SAME": return "✓ Same version (OK)";
+                case "NEWER": return "↑ Newer than current (OK)";
+                case "OLDER": return "↓ Older than current (WARNING)";
+                case "NO_JSON": return "⚠ No version_fs.json, comparing with firmware";
+                default: return "Unknown: " + value;
+            }
+        }
+
+        function formatDiffSpan(diff) {
+            if (diff > 0) return '<span class="diff-newer">+' + diff + ' (newer)</span>';
+            if (diff < 0) return '<span class="diff-older">' + diff + ' (older)</span>';
+            return '<span class="diff-same">0 (same)</span>';
+        }
+
+        function formatDateDiffSpan(diffSeconds) {
+            if (diffSeconds === 0) return '<span class="diff-same">0 (same)</span>';
             
             let absDiff = Math.abs(diffSeconds);
             let isOlder = diffSeconds < 0;
@@ -232,33 +266,12 @@
             }
             
             result = result.trim();
-            if (isOlder) {
-                return result + " (older)";
-            } else {
-                return "+" + result + " (newer)";
+            let cls = isOlder ? 'diff-older' : 'diff-newer';
+            let label = isOlder ? " (older)" : " (newer)";
+            if (!isOlder) {
+                result = "+" + result;
             }
-        }
-
-        function formatBuildDiff(diff) {
-            if (diff > 0) return "+" + diff + " (newer)";
-            if (diff < 0) return diff + " (older)";
-            return "0 (same)";
-        }
-
-        function formatVersionDiff(diff) {
-            if (diff > 0) return "+" + diff + " (newer)";
-            if (diff < 0) return diff + " (older)";
-            return "0 (same)";
-        }
-
-        function formatFsCompare(value) {
-            switch(value) {
-                case "SAME": return "✓ Same version (OK)";
-                case "NEWER": return "↑ Newer than current (OK)";
-                case "OLDER": return "↓ Older than current (WARNING)";
-                case "NO_JSON": return "⚠ No version_fs.json, comparing with firmware";
-                default: return "Unknown: " + value;
-            }
+            return '<span class="' + cls + '">' + result + label + '</span>';
         }
 
         function summd5() {
@@ -330,6 +343,8 @@
             const updSizeMax = document.getElementById('updSizeMax');
             const updFileType = document.getElementById('updFileType');
             const updVerDiffName = document.getElementById('updVerDiffName');
+            const updVerFileVersion = document.getElementById('updVerFileVersion');
+            const updVerCurrentVersion = document.getElementById('updVerCurrentVersion');
             const updVerDiffMaj = document.getElementById('updVerDiffMaj');
             const updVerDiffMinor = document.getElementById('updVerDiffMinor');
             const updVerDiffDate = document.getElementById('updVerDiffDate');
@@ -338,6 +353,7 @@
             const updFsCompare = document.getElementById('updFsCompare');
             const updFsCurrentFS = document.getElementById('updFsCurrentFS');
             const updFsCurrentFW = document.getElementById('updFsCurrentFW');
+            const updBlockReason = document.getElementById('updBlockReason');
             
             const xhr = new XMLHttpRequest();
             xhr.open('get', "/update/firmwarefilecheck");
@@ -351,6 +367,7 @@
                 let majorDiff = 0, minorDiff = 0, dateDiff = 0, buildDiff = 0, isDebug = 0;
                 let status = "", sizeFree = "", sizeMax = "";
                 let fsCompare = "", fsCurrentMajor = 0, fsCurrentMinor = 0, fsCurrentDate = 0, fsCurrentBuild = 0;
+                let fileAbsoluteMajor = 0, fileAbsoluteMinor = 0, fileAbsoluteDate = 0, fileAbsoluteBuild = 0;
                 
                 for (let fields of fieldsRows) {
                     const key = fields[0];
@@ -371,31 +388,35 @@
                             break;
                         case "updFileType": 
                             fileType = value;
-                            updFileType.innerHTML = "File type: " + value;
+                            updFileType.innerHTML = 'File type: <span style="font-weight: bold; color: #4CAF50;">' + value + '</span>';
                             break;
                         case "updVerDiffName": 
                             nameMatch = value;
-                            updVerDiffName.innerHTML = "Device: " + value;
+                            if (value === "MATCHED") {
+                                updVerDiffName.innerHTML = 'Device: <span class="diff-matched">MATCHED</span>';
+                            } else {
+                                updVerDiffName.innerHTML = 'Device: <span class="diff-unmatched">' + value + '</span>';
+                            }
                             break;
                         case "updVerDiffMaj": 
                             majorDiff = parseInt(value);
-                            updVerDiffMaj.innerHTML = "Major diff: " + formatVersionDiff(majorDiff);
                             break;
                         case "updVerDiffMinor": 
                             minorDiff = parseInt(value);
-                            updVerDiffMinor.innerHTML = "Minor diff: " + formatVersionDiff(minorDiff);
                             break;
                         case "updVerDiffDate": 
                             dateDiff = parseInt(value);
-                            updVerDiffDate.innerHTML = "Date diff: " + formatDateDiff(dateDiff);
                             break;
                         case "updVerDiffBuild": 
                             buildDiff = parseInt(value);
-                            updVerDiffBuild.innerHTML = "Build diff: " + formatBuildDiff(buildDiff);
                             break;
                         case "updIsDebug": 
                             isDebug = parseInt(value);
-                            updIsDebug.innerHTML = "Debug build: " + (isDebug ? "Yes" : "No");
+                            if (isDebug) {
+                                updIsDebug.innerHTML = 'Debug build: <span class="diff-debug-yes">Yes</span>';
+                            } else {
+                                updIsDebug.innerHTML = 'Debug build: <span class="diff-debug-no">No</span>';
+                            }
                             break;
                         case "updFsCompare":
                             fsCompare = value;
@@ -412,38 +433,69 @@
                             break;
                         case "updFsCurrentBuild":
                             fsCurrentBuild = parseInt(value);
-                            // Versions are now shown from /update/ver on page load
                             break;
                     }
                 }
                 
-                let canUpdate = true;
-                let buttonText = "";
+                // Compute absolute file version = current + diff
+                fileAbsoluteMajor = fsCurrentMajor + majorDiff;
+                fileAbsoluteMinor = fsCurrentMinor + minorDiff;
+                fileAbsoluteDate = fsCurrentDate + dateDiff;
+                fileAbsoluteBuild = fsCurrentBuild + buildDiff;
                 
-                if (nameMatch != "MATCHED") {
-                    canUpdate = false;
-                    buttonText = "WRONG DEVICE!";
-                } else if (fileType == "UNSUPPORTED") {
-                    canUpdate = false;
-                    buttonText = "UNSUPPORTED FILE!";
-                } else if (status != "OK") {
-                    canUpdate = false;
-                    buttonText = "INSUFFICIENT SPACE!";
-                } else {
-                    if (majorDiff < 0) {
-                        canUpdate = false;
-                        buttonText = "MAJOR IS OLDER!";
-                    } else if (minorDiff < 0) {
-                        canUpdate = false;
-                        buttonText = "MINOR IS OLDER!";
-                    } else {
-                        // For filesystem, also check if OLDER than current FS
-                        if (fileType == "FILESYSTEM" && fsCompare == "OLDER") {
-                            canUpdate = false;
-                            buttonText = "FS IS OLDER!";
+                // Display absolute versions
+                if (updVerFileVersion) {
+                    updVerFileVersion.innerHTML = "File version: " + fileAbsoluteMajor + "." + fileAbsoluteMinor + "." + fileAbsoluteDate + "." + fileAbsoluteBuild;
+                }
+                if (updVerCurrentVersion) {
+                    updVerCurrentVersion.innerHTML = "Current version: " + fsCurrentMajor + "." + fsCurrentMinor + "." + fsCurrentDate + "." + fsCurrentBuild;
+                }
+                
+                // Display diffs with colored styling
+                updVerDiffMaj.innerHTML = "Major diff: " + formatDiffSpan(majorDiff);
+                updVerDiffMinor.innerHTML = "Minor diff: " + formatDiffSpan(minorDiff);
+                updVerDiffDate.innerHTML = "Date diff: " + formatDateDiffSpan(dateDiff);
+                updVerDiffBuild.innerHTML = "Build diff: " + formatDiffSpan(buildDiff);
+                
+                // Compute canUpdate: must match server logic from fileNameCheck (core_ota.cpp)
+                let canUpdate = false;
+                let blockReason = "";
+                let buttonText = "Update ESP chip firmware.";
+
+                if (status === "OK" && nameMatch === "MATCHED") {
+                    if (fsCompare === "NEWER") {
+                        let majorOk = majorDiff >= 0;
+                        let minorOk = minorDiff >= 0;
+                        if (majorOk && minorOk && isDebug) {
+                            canUpdate = buildDiff >= 0 && buildDiff > 0;
+                            if (!canUpdate) blockReason = "Build is not newer (debug build requires buildDiff > 0)";
+                        } else if (majorOk && minorOk) {
+                            canUpdate = dateDiff >= 0 && dateDiff > 0;
+                            if (!canUpdate) blockReason = "Date is not newer (release build requires dateDiff > 0)";
                         } else {
-                            buttonText = "Update " + fileType;
+                            blockReason = "Major/minor version is not newer";
                         }
+                    } else if (fsCompare === "SAME") {
+                        blockReason = "Version is identical to current";
+                    } else if (fsCompare === "OLDER") {
+                        blockReason = "File version is older than current";
+                    } else {
+                        blockReason = "Unknown FS version comparison: " + fsCompare;
+                    }
+                    if (canUpdate) {
+                        buttonText = "Update " + fileType + ".";
+                    }
+                } else {
+                    if (status !== "OK") blockReason = "Server rejected file (status: " + status + ")";
+                    else if (nameMatch !== "MATCHED") blockReason = "Device name mismatch";
+                }
+                
+                if (updBlockReason) {
+                    if (blockReason) {
+                        updBlockReason.style.display = "block";
+                        updBlockReason.innerHTML = "⛔ " + blockReason;
+                    } else {
+                        updBlockReason.style.display = "none";
                     }
                 }
                 
@@ -492,34 +544,29 @@
                 stopProgressPolling();
                 
                 if (xhr.status === 200) {
-                    console.log('Upload successful');
+                    const text = xhr.responseText;
                     
-                    updateProgressDisplay(100);
-                    
-                    if (xhr.responseText.includes('no reboot')) {
-                        // FS update on ESP32: no reboot needed, refresh version info
-                        console.log('FS update: no reboot needed, refreshing version info');
-                        document.getElementById('progressText').innerHTML = 'FS updated successfully! Refreshing version info...';
+                    if (text.includes('UPDATE_COMPLETE_REBOOT')) {
+                        updateProgressDisplay(100);
+                        document.getElementById('progressText').innerHTML = 'Update complete! Device is rebooting...';
+                        document.getElementById('progressBar').style.backgroundColor = '#4CAF50';
                         
-                        setTimeout(() => {
+                        setTimeout(function() {
+                            window.location.href = '/index.html';
+                        }, 15000);
+                    } else {
+                        console.log('Upload response:', text);
+                        updateProgressDisplay(100);
+                        document.getElementById('progressText').innerHTML = 'Update complete!';
+                        
+                        setTimeout(function() {
                             hideProgressBar();
-                            // Refresh version info on the page
                             ApplyCVT("/system/infovalues");
                             ApplyCVT("/system/version");
-                            // Re-check the current file if still selected
-                            const fileInput = document.getElementById('fileName');
-                            if (fileInput.files.length > 0) {
+                            const fi = document.getElementById('fileName');
+                            if (fi.files.length > 0) {
                                 setTimeout(fileChechInfoGet, 500);
                             }
-                        }, 2000);
-                    } else if (xhr.responseText.includes('refresh') || xhr.responseText.includes('Restarting')) {
-                        setTimeout(() => {
-                            window.location.href = '/index.html';
-                        }, 3000);
-                    } else {
-                        alert('Update successful! Device will restart.');
-                        setTimeout(() => {
-                            hideProgressBar();
                         }, 2000);
                     }
                 } else {
@@ -530,8 +577,7 @@
             };
             
             xhr.onerror = function() {
-                console.error('Network error during upload');
-                alert('Network error during upload');
+                console.error('Network error during upload (device may be rebooting)');
                 stopProgressPolling();
                 hideProgressBar();
             };
