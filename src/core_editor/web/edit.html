@@ -3,10 +3,48 @@
   <head>
     <title>SPIFFS Editor</title>
     <style type="text/css" media="screen">
+      :root {
+        --bg: #fff;
+        --text: #000;
+        --panel-bg: #f5f5f5;
+        --panel-border: #ccc;
+        --tree-link: #00f;
+        --tree-active-bg: #e0e0ff;
+        --tree-active-text: #000;
+        --uploader-bg: #444;
+        --uploader-text: #EEE;
+        --hotkeys-text: #888;
+        --context-bg: #F5F5F5;
+        --context-text: #444;
+        --context-hover-bg: #444;
+        --context-hover-text: #EEE;
+        --property-text: #000;
+        --scrollbar: #ccc;
+      }
+      body.dark {
+        --bg: #1e1e1e;
+        --text: #d4d4d4;
+        --panel-bg: #252526;
+        --panel-border: #3c3c3c;
+        --tree-link: #569cd6;
+        --tree-active-bg: #264f78;
+        --tree-active-text: #fff;
+        --uploader-bg: #333;
+        --uploader-text: #ccc;
+        --hotkeys-text: #666;
+        --context-bg: #252526;
+        --context-text: #d4d4d4;
+        --context-hover-bg: #094771;
+        --context-hover-text: #fff;
+        --property-text: #d4d4d4;
+        --scrollbar: #555;
+      }
       body {
         margin: 0;
         overflow: hidden;
         font: normal 11px Verdana, Arial, Sans-serif;
+        background: var(--bg);
+        color: var(--text);
       }
       #left-panel {
         position: absolute;
@@ -21,18 +59,24 @@
         flex: 1;
         overflow: auto;
         padding: 4px;
+        background: var(--bg);
+        color: var(--text);
       }
+      #tree::-webkit-scrollbar { width: 8px; }
+      #tree::-webkit-scrollbar-thumb { background: var(--scrollbar); border-radius: 4px; }
       #properties {
         height: 188px;
         min-height: 188px;
         padding: 4px;
         overflow: auto;
-        border-top: 1px solid #ccc;
+        border-top: 1px solid var(--panel-border);
         font-size: 11px;
+        background: var(--panel-bg);
+        color: var(--property-text);
       }
       #properties .fs-info { margin-bottom: 6px; }
       #properties .open-file { font-weight: bold; word-break: break-all; }
-      #properties .hotkeys { color: #888; font-size: 10px; margin-top: 4px; }
+      #properties .hotkeys { color: var(--hotkeys-text); font-size: 10px; margin-top: 4px; }
       #status-bar {
         position: absolute;
         right: 8px;
@@ -53,11 +97,24 @@
         height: 28px;
         line-height: 24px;
         padding-left: 10px;
-        background-color: #444;
-        color: #EEE;
+        background-color: var(--uploader-bg);
+        color: var(--uploader-text);
         white-space: nowrap;
         overflow-x: auto;
         overflow-y: hidden;
+      }
+      #uploader button, #uploader select {
+        background: var(--uploader-bg);
+        color: var(--uploader-text);
+        border: 1px solid #666;
+        padding: 1px 4px;
+        cursor: pointer;
+      }
+      #uploader input[type="text"] {
+        background: #555;
+        color: #EEE;
+        border: 1px solid #666;
+        width: 80px;
       }
       #editor, #preview {
         position: absolute;
@@ -67,15 +124,15 @@
         left: 200px;
       }
       #preview {
-        background-color: #EEE;
+        background-color: var(--panel-bg);
         padding: 5px;
       }
       .contextMenu {
         z-index: 300;
         position: absolute;
         left: 5px;
-        border: 1px solid #444;
-        background-color: #F5F5F5;
+        border: 1px solid var(--panel-border);
+        background-color: var(--context-bg);
         display: none;
         box-shadow: 0 0 10px rgba(0,0,0,.4);
         font-size: 12px;
@@ -95,12 +152,12 @@
         cursor: pointer;
       }
       .contextMenu span {
-        color: #444;
+        color: var(--context-text);
         display: inline-block;
         padding: 6px;
       }
-      .contextMenu li:hover { background: #444; }
-      .contextMenu li:hover span { color: #EEE; }
+      .contextMenu li:hover { background: var(--context-hover-bg); }
+      .contextMenu li:hover span { color: var(--context-hover-text); }
 
       .css-treeview ul, .css-treeview li {
         padding: 0;
@@ -118,7 +175,7 @@
         user-select: none;
       }
       .css-treeview li > span {
-        color: #00f;
+        color: var(--tree-link);
         cursor: pointer;
         display: inline-block;
         max-width: 100%;
@@ -132,8 +189,8 @@
       }
       .css-treeview li.active > span {
         font-weight: bold;
-        color: #000;
-        background: #e0e0ff;
+        color: var(--tree-active-text);
+        background: var(--tree-active-bg);
         border-radius: 2px;
       }
       .css-treeview input + label + ul {
@@ -227,7 +284,7 @@
             } catch(e) {}
           }
         };
-        xhr.open('GET', '/edit/fsinfo', true);
+        xhr.open('GET', '/fsinfo', true);
         xhr.send(null);
       }
 
@@ -316,13 +373,14 @@
           var value = themeCombobox.value;
           var theme;
           if (value == 'Dark theme') {
-            theme =  'tomorrow_night_bright';
+            theme = 'tomorrow_night_bright';
+            document.body.classList.add('dark');
           }
           if (value == 'Light theme') {
             theme = 'github_light_default';
+            document.body.classList.remove('dark');
           }
           editor.setTheme("ace/theme/" + theme);
-          
         };
 
         btnHome. onclick = function (e) {
@@ -751,7 +809,6 @@
           if(lang === "c_cpp") type = "text/plain";
         }
 
-        ace.config.set("workerPath", "");
         var editor = ace.edit(element);
 
         function httpPost(filename, data, contentType){
@@ -843,8 +900,9 @@
       };
     </script>
     <script src="ace.js" type="text/javascript" charset="utf-8"></script>
+    <script>ace.config.set("workerPath", "");</script>
   </head>
-  <body onload="onBodyLoad();">
+  <body class="dark" onload="onBodyLoad();">
     <div id="uploader"><span id="status-bar"></span></div>
     <div id="left-panel">
       <div id="tree"></div>

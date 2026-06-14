@@ -78,11 +78,11 @@ void CORE_CLASS_EDITOR::webInit() {
             this->handleFileUpload(request, filename, index, data, len, final);
         });
 
-    ESPHTTPServer.on("/edit/ver", [this](AsyncWebServerRequest *request) {
+    ESPHTTPServer.on("/ver", [this](AsyncWebServerRequest *request) {
         html_ver_get(request);
     });
 
-    ESPHTTPServer.on("/edit/fsinfo", HTTP_GET, [this](AsyncWebServerRequest *request) {
+    ESPHTTPServer.on("/fsinfo", HTTP_GET, [this](AsyncWebServerRequest *request) {
         if (!ESPHTTPServer.checkAuth(request)) { return request->requestAuthentication(); }
         this->handleFsInfo(request);
     });
