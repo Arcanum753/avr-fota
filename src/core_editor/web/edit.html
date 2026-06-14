@@ -28,7 +28,23 @@
         padding: 4px;
         overflow: auto;
         border-top: 1px solid #ccc;
+        font-size: 11px;
       }
+      #properties .fs-info { margin-bottom: 6px; }
+      #properties .open-file { font-weight: bold; word-break: break-all; }
+      #properties .hotkeys { color: #888; font-size: 10px; margin-top: 4px; }
+      #status-bar {
+        position: absolute;
+        right: 8px;
+        top: 4px;
+        font-size: 11px;
+        font-weight: bold;
+        pointer-events: none;
+      }
+      .status-ok { color: #8f8; }
+      .status-error { color: #f88; }
+      .status-info { color: #8cf; }
+
       #uploader {
         position: absolute;
         top: 0;
@@ -114,6 +130,12 @@
       .css-treeview li > span:hover {
         text-decoration: underline;
       }
+      .css-treeview li.active > span {
+        font-weight: bold;
+        color: #000;
+        background: #e0e0ff;
+        border-radius: 2px;
+      }
       .css-treeview input + label + ul {
         margin: 0 0 0 22px;
       }
@@ -163,6 +185,52 @@
       }
     </style>
     <script>
+      function showStatus(msg, type, duration) {
+        var bar = document.getElementById('status-bar');
+        if (!bar) return;
+        bar.textContent = msg;
+        bar.className = 'status-' + type;
+        if (duration > 0) {
+          if (bar._statusTimer) clearTimeout(bar._statusTimer);
+          bar._statusTimer = setTimeout(function() {
+            bar.textContent = '';
+            bar.className = '';
+          }, duration);
+        }
+      }
+
+      function formatSize(bytes) {
+        if (typeof bytes !== 'number') return '';
+        if (bytes < 1024) return bytes + ' B';
+        if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+        return (bytes / 1048576).toFixed(1) + ' MB';
+      }
+
+      var _openFileLabel = null;
+
+      function updateOpenFileLabel(path) {
+        var el = document.getElementById('open-file-label');
+        if (el) el.textContent = path || '(none)';
+      }
+
+      function fetchFsInfo() {
+        var xhr = new XMLHttpRequest();
+        xhr.onreadystatechange = function() {
+          if (xhr.readyState == 4 && xhr.status == 200) {
+            try {
+              var info = JSON.parse(xhr.responseText);
+              var el = document.getElementById('fs-info');
+              if (el) {
+                var usedPct = info.total > 0 ? (info.used / info.total * 100).toFixed(1) : '0.0';
+                el.innerHTML = 'FS: ' + formatSize(info.used) + ' / ' + formatSize(info.total) + ' (' + usedPct + '%)';
+              }
+            } catch(e) {}
+          }
+        };
+        xhr.open('GET', '/edit/fsinfo', true);
+        xhr.send(null);
+      }
+
       function createFileUploader(element, tree, editor){
         var btnHome = document.createElement("button");
         btnHome.innerHTML = 'Main page';
@@ -221,19 +289,23 @@
         
         
   
-        function httpPostProcessRequest(xhr, cbPath){
+        function httpPostProcessRequest(xhr, cbPath, statusOk, statusErr){
           return function(){
             if (xhr.readyState == 4){
-              if(xhr.status != 200) alert("ERROR["+xhr.status+"]: "+xhr.responseText);
-              else {
+              if(xhr.status != 200) {
+                showStatus(statusErr || 'Operation failed', 'error', 3000);
+                alert("ERROR["+xhr.status+"]: "+xhr.responseText);
+              } else {
+                showStatus(statusOk || 'Done', 'ok', 2000);
                 tree.refreshPath(cbPath);
+                if (typeof fetchFsInfo === 'function') fetchFsInfo();
               }
             }
           };
         }
         function createPath(p){
           var xhr = new XMLHttpRequest();
-          xhr.onreadystatechange = httpPostProcessRequest(xhr, p);
+          xhr.onreadystatechange = httpPostProcessRequest(xhr, p, 'Created', 'Create failed');
           var formData = new FormData();
           formData.append("path", p);
           xhr.open("PUT", "/edit");
@@ -281,8 +353,9 @@
         };
         uploadButton.onclick = function(e){
           if(input.files.length === 0) return;
+          showStatus('Uploading...', 'info', 0);
           var xhr = new XMLHttpRequest();
-          xhr.onreadystatechange = httpPostProcessRequest(xhr, path.value);
+          xhr.onreadystatechange = httpPostProcessRequest(xhr, path.value, 'Upload OK', 'Upload failed');
           var formData = new FormData();
           formData.append("data", input.files[0], path.value);
           xhr.open("POST", "/edit");
@@ -389,12 +462,20 @@
           if(isTextFile(path)){
             action.innerHTML = "<span>Edit</span>";
             action.onclick = function(e){
+              var allActive = document.querySelectorAll('.css-treeview li.active');
+              for (var i = 0; i < allActive.length; i++) allActive[i].classList.remove('active');
+              var target = document.getElementById(path);
+              if (target) target.classList.add('active');
               editor.loadUrl(path);
               if(document.body.getElementsByClassName('contextMenu').length > 0) document.body.removeChild(el);
             };
           } else if(isImageFile(path)){
             action.innerHTML = "<span>Preview</span>";
             action.onclick = function(e){
+              var allActive = document.querySelectorAll('.css-treeview li.active');
+              for (var i = 0; i < allActive.length; i++) allActive[i].classList.remove('active');
+              var target = document.getElementById(path);
+              if (target) target.classList.add('active');
               loadPreview(path);
               if(document.body.getElementsByClassName('contextMenu').length > 0) document.body.removeChild(el);
             };
@@ -415,6 +496,14 @@
           };
         }
   
+        function closeContextMenu(divContext) {
+          if (divContext && divContext.parentNode) {
+            divContext.parentNode.removeChild(divContext);
+          }
+          document.removeEventListener('click', closeContextMenu._clickHandler);
+          document.removeEventListener('keydown', closeContextMenu._keyHandler);
+        }
+
         function showContextMenu(e, path, isfile){
           var divContext = document.createElement("div");
           var scrollTop = document.body.scrollTop ? document.body.scrollTop : document.documentElement.scrollTop;
@@ -428,22 +517,37 @@
           if(isfile) fillFileMenu(divContext, path);
           else fillFolderMenu(divContext, path);
           document.body.appendChild(divContext);
-          var width = divContext.offsetWidth;
-          var height = divContext.offsetHeight;
-          divContext.onmouseout = function(e){
-            if(e.clientX < left || e.clientX > (left + width) || e.clientY < top || e.clientY > (top + height)){
-              if(document.body.getElementsByClassName('contextMenu').length > 0) document.body.removeChild(divContext);
+
+          closeContextMenu._clickHandler = function(ev) {
+            if (!divContext.contains(ev.target)) {
+              closeContextMenu(divContext);
             }
           };
+          closeContextMenu._keyHandler = function(ev) {
+            if (ev.key === 'Escape') {
+              closeContextMenu(divContext);
+            }
+          };
+          setTimeout(function() {
+            document.addEventListener('click', closeContextMenu._clickHandler);
+            document.addEventListener('keydown', closeContextMenu._keyHandler);
+          }, 0);
         }
   
         function createTreeLeaf(path, name, size){
           var leaf = document.createElement("li");
           leaf.id = (((path == "/")?"":path)+"/"+name);//.toLowerCase();
           var label = document.createElement("span");
-          label.textContent = name;//.toLowerCase();
+          var sz = (typeof size === 'number') ? size : Number(size);
+          label.textContent = name + (sz > 0 ? ' (' + formatSize(sz) + ')' : '');//.toLowerCase();
           leaf.appendChild(label);
           leaf.onclick = function(e){
+            var allActive = document.querySelectorAll('.css-treeview li.active');
+            for (var i = 0; i < allActive.length; i++) {
+              allActive[i].classList.remove('active');
+            }
+            leaf.classList.add('active');
+            updateOpenFileLabel(leaf.id);
             if(isTextFile(leaf.id)){
               editor.loadUrl(leaf.id);
             } else if(isImageFile(leaf.id)){
@@ -560,8 +664,11 @@
           return function(){
             if (xhr.readyState == 4){
               if(xhr.status != 200){
+                showStatus('Delete failed', 'error', 3000);
                 alert("ERROR["+xhr.status+"]: "+xhr.responseText);
               } else {
+                showStatus('Deleted', 'ok', 2000);
+                if (typeof fetchFsInfo === 'function') fetchFsInfo();
                 if(path.lastIndexOf('/') < 1){
                   path = '/';
                   treeRoot.removeChild(treeRoot.childNodes[0]);
@@ -644,12 +751,20 @@
           if(lang === "c_cpp") type = "text/plain";
         }
 
+        ace.config.set("workerPath", "");
         var editor = ace.edit(element);
 
         function httpPost(filename, data, contentType){
+          showStatus('Saving...', 'info', 0);
           var xhr = new XMLHttpRequest();
           xhr.onreadystatechange = function(){
-            if (xhr.readyState == 4 && xhr.status != 200) alert("ERROR["+xhr.status+"]: "+xhr.responseText);
+            if (xhr.readyState == 4) {
+              if (xhr.status == 200) showStatus('Saved!', 'ok', 1500);
+              else {
+                showStatus('Save failed', 'error', 3000);
+                alert("ERROR["+xhr.status+"]: "+xhr.responseText);
+              }
+            }
           };
           var formData = new FormData();
           formData.append("data", new Blob([data], { type: contentType }), filename);
@@ -710,6 +825,7 @@
         httpGet(file);
         editor.loadUrl = function(filename){
           file = filename;
+          updateOpenFileLabel(file);
           lang = getLangFromFilename(file);
           type = "text/"+lang;
           if(lang !== "plain") editor.getSession().setMode("ace/mode/"+lang);
@@ -723,15 +839,20 @@
         var editor = createEditor("editor", vars.file, vars.lang, vars.theme);
         var tree = createTree("tree", editor);
         createFileUploader("uploader", tree, editor);
+        fetchFsInfo();
       };
     </script>
     <script src="ace.js" type="text/javascript" charset="utf-8"></script>
   </head>
   <body onload="onBodyLoad();">
-    <div id="uploader"></div>
+    <div id="uploader"><span id="status-bar"></span></div>
     <div id="left-panel">
       <div id="tree"></div>
-      <div id="properties"></div>
+      <div id="properties">
+        <div id="fs-info" class="fs-info">FS: --</div>
+        <div class="open-file">Editing: <span id="open-file-label">(none)</span></div>
+        <div class="hotkeys">Ctrl+S: Save | Ctrl+Z: Undo | Ctrl+Shift+Z: Redo</div>
+      </div>
     </div>
     <div id="editor"></div>
     <div id="preview" style="display:none;"></div>

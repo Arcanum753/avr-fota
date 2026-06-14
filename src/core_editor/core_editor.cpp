@@ -81,6 +81,11 @@ void CORE_CLASS_EDITOR::webInit() {
     ESPHTTPServer.on("/edit/ver", [this](AsyncWebServerRequest *request) {
         html_ver_get(request);
     });
+
+    ESPHTTPServer.on("/edit/fsinfo", HTTP_GET, [this](AsyncWebServerRequest *request) {
+        if (!ESPHTTPServer.checkAuth(request)) { return request->requestAuthentication(); }
+        this->handleFsInfo(request);
+    });
 }
 
 void CORE_CLASS_EDITOR::handleFileUpload(AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final) {
@@ -137,7 +142,9 @@ void CORE_CLASS_EDITOR::handleFileList(AsyncWebServerRequest *request) {
         output += (isDir) ? "dir" : "file";
         output += "\",\"name\":\"";
         output += escapeJsonStr(String(file.name()));
-        output += "\"}";
+        output += "\",\"size\":";
+        output += isDir ? "0" : String(file.size());
+        output += "}";
         file = root.openNextFile();
     }
 #else
@@ -150,7 +157,9 @@ void CORE_CLASS_EDITOR::handleFileList(AsyncWebServerRequest *request) {
         output += (isDir) ? "dir" : "file";
         output += "\",\"name\":\"";
         output += escapeJsonStr(String(entry.name()).substring(1));
-        output += "\"}";
+        output += "\",\"size\":";
+        output += String(entry.size());
+        output += "}";
         entry.close();
     }
 #endif
@@ -203,4 +212,29 @@ void CORE_CLASS_EDITOR::html_ver_get(AsyncWebServerRequest *request) {
     values += "edtgentime|" + getGeneratedTime() + "|dev\n";
     values += "edtgendate|" + getCommitDateStr() + "|dev\n";
     request->send(200, "text/plain", values);
+}
+
+void CORE_CLASS_EDITOR::handleFsInfo(AsyncWebServerRequest *request) {
+    DEBUGEDIT("%s\n\r", __FUNCTION__);
+    size_t totalBytes = 0;
+    size_t usedBytes = 0;
+#if defined(ESP32)
+    totalBytes = _fs->totalBytes();
+    usedBytes = _fs->usedBytes();
+#elif defined(ESP8266)
+    FSInfo fi;
+    if (_fs->info(fi)) {
+        totalBytes = fi.totalBytes;
+        usedBytes = fi.usedBytes;
+    }
+#endif
+    size_t freeBytes = (totalBytes > usedBytes) ? (totalBytes - usedBytes) : 0;
+    String json = "{\"total\":";
+    json += String(totalBytes);
+    json += ",\"used\":";
+    json += String(usedBytes);
+    json += ",\"free\":";
+    json += String(freeBytes);
+    json += "}";
+    request->send(200, "application/json", json);
 }

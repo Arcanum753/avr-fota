@@ -36,6 +36,7 @@ private:
     void handleFileList(AsyncWebServerRequest *request);
     void handleFileCreate(AsyncWebServerRequest *request);
     void handleFileDelete(AsyncWebServerRequest *request);
+    void handleFsInfo(AsyncWebServerRequest *request);
     String getVersionStr();
     String getGeneratedTime();
     String getCommitDateStr();
