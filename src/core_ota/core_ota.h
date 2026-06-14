@@ -131,6 +131,7 @@ protected:
     
     // Cached FS version info
     bool _fsVersionCached = false;
+    bool _fsVersionValid = false;
     int64_t _cachedFsDate = 0;
     int32_t _cachedFsBuild = 0;
     int32_t _cachedFsMajor = 0;

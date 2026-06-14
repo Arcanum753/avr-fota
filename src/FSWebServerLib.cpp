@@ -38,6 +38,12 @@
 
 
 
+// GZIP_ENABLED — включает поддержку .gz версий статических файлов.
+// При включении сервер ищет и отдаёт файлы с расширением .gz (например index.html.gz),
+// что позволяет хранить упакованные файлы в littlefs для экономии места.
+// Требует предварительной gzip-упаковки всех файлов из data/ перед сборкой littlefs.
+// Раскомментируйте, если ваши файлы в littlefs предварительно сжаты gzip.
+//#define GZIP_ENABLED
 
 #include "debug.h"
 
@@ -271,7 +277,6 @@ bool AsyncFSWebServer:: handleFileRead(String path, AsyncWebServerRequest *reque
 #endif
 	if (path.endsWith("/")) {	path += HTML_INDEX;	}
 	String contentType = getContentType(path, request);
-	String pathWithGz = path + ".gz";
 	
 	// Сброс watchdog перед операциями LittleFS (могут быть медленными)
 #if defined(ESP32)
@@ -280,9 +285,14 @@ bool AsyncFSWebServer:: handleFileRead(String path, AsyncWebServerRequest *reque
 #if defined(ESP8266)
 	ESP.wdtFeed();
 #endif
-	
+
+#if GZIP_ENABLED
+	String pathWithGz = path + ".gz";
 	if (_fs->exists(pathWithGz) || _fs->exists(path)) {
 		if (_fs->exists(pathWithGz)) { path += ".gz"; }
+#else
+	if (_fs->exists(path)) {
+#endif
 		DEBUGEDIT("Content type: %s\r\n", contentType.c_str());
 		
 		// Сброс watchdog после exists() и перед beginResponse()
@@ -293,7 +303,9 @@ bool AsyncFSWebServer:: handleFileRead(String path, AsyncWebServerRequest *reque
     	ESP.wdtFeed();
 #endif
 		AsyncWebServerResponse *response = request->beginResponse(*_fs, path, contentType);
+#if GZIP_ENABLED
 		if (path.endsWith(".gz")) {response->addHeader("Content-Encoding", "gzip");}
+#endif
 		
 		// Сброс watchdog после beginResponse() и перед send()
 #if defined(ESP32)

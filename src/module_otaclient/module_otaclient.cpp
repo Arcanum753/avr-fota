@@ -58,8 +58,14 @@ void MODULE_CLASS_OTACLIENT::begin(String _hostname, String _password) {
 void otaclientTimer() {
     uint16_t timeout = otaClient.getTimeOut();
     if (otaClient.isStart() == false){   return; }
+    
+    // timeOut == 0: timer runs at 1min interval, no update checks
+    if (timeout == 0) {
+        SetTimerTask(otaclientTimer, SEC * MINUTES * 1);
+        return;
+    }
+    
     if (timeout > 60){ timeout = 60;}
-    if (timeout == 0) { return;  }
     
     // Don't start a new check if update is already in progress
     if (otaClient._updateInProgress) {
@@ -132,7 +138,7 @@ void MODULE_CLASS_OTACLIENT::loop() {
         if (WiFi.status() != WL_CONNECTED) {
             _testStatusCode = OTACLIENT_TEST_SERVER_UNAVAIL;
             _testStatusMessage = "WiFi not connected";
-            DEBUGOTACLIENT("Test: WiFi not connected\n");
+            DEBUGOTACLIENT("checkForUpdates from button: WiFi not connected\n");
             return;
         }
         
@@ -142,11 +148,11 @@ void MODULE_CLASS_OTACLIENT::loop() {
         if (!fetchManifest(_manifestEntries, entryCount)) {
             _testStatusCode = OTACLIENT_TEST_SERVER_UNAVAIL;
             _testStatusMessage = "Server unavailable";
-            DEBUGOTACLIENT("Test: server unavailable\n");
+            DEBUGOTACLIENT("checkForUpdates from button: server unavailable\n");
             return;
         }
         
-        DEBUGOTACLIENT("Test: manifest has %d entries\n", entryCount);
+        DEBUGOTACLIENT("checkForUpdates from button: manifest has %d entries\n", entryCount);
         
         fileCompareResult fwResult, fsResult;
         bool fwValid, fsValid;
@@ -547,9 +553,18 @@ bool MODULE_CLASS_OTACLIENT::fetchManifest(ManifestEntry* entries, int& count) {
     
     int idx = 0;
     for (int i = 0; i < numFiles && idx < OTACLIENT_MAX_MANIFEST_ENTRIES; i++) {
-        String path = "files";
-        ModClassJson.jsonGetArrayStr(payload, "files", i, "name", entries[idx].name);
-        ModClassJson.jsonGetArrayStr(payload, "files", i, "type", entries[idx].type);
+        String name, type, md5;
+        ModClassJson.jsonGetArrayStr(payload, "files", i, "name", name);
+        ModClassJson.jsonGetArrayStr(payload, "files", i, "type", type);
+        
+        if (name.length() == 0 || type.length() == 0) {
+            DEBUGOTACLIENT("  [%d] SKIPPED (missing name or type)\n", i);
+            continue;
+        }
+        
+        entries[idx].name = name;
+        entries[idx].type = type;
+        
         int32_t sizeVal = 0;
         if (ModClassJson.jsonGetArrayInt(payload, "files", i, "size", sizeVal)) entries[idx].size = (size_t)sizeVal;
         ModClassJson.jsonGetArrayStr(payload, "files", i, "md5", entries[idx].md5);
@@ -763,7 +778,7 @@ bool MODULE_CLASS_OTACLIENT::downloadAndUpdate(const String& url, size_t size, c
 // CHECK FOR UPDATES (main logic)
 // ============================================================
 void MODULE_CLASS_OTACLIENT::checkForUpdates() {
-    DEBUGOTACLIENT("%s\n\r", __FUNCTION__);
+    DEBUGOTACLIENT("checkForUpdates from timer\n\r");
     
     // Don't start if already updating
     if (_updateInProgress) {

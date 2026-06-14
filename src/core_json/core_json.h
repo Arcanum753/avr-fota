@@ -64,6 +64,7 @@ public:
     // Parse from nested path: jsonParseNestedStr(json, "filesystem|version|full_string", out)
     bool jsonParseNestedStr(const String& json, const String& path, String& out);
     bool jsonParseNestedInt(const String& json, const String& path, int32_t& out);
+    bool jsonParseNestedInt64(const String& json, const String& path, int64_t& out);
     bool jsonParseNestedBool(const String& json, const String& path, bool& out);
     // Get array size at path (e.g. "files")
     int jsonGetArraySize(const String& json, const String& path);

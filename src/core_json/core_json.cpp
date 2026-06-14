@@ -207,6 +207,26 @@ bool CORE_CLASS_JSON::jsonParseNestedInt(const String& json, const String& path,
     return true;
 }
 
+bool CORE_CLASS_JSON::jsonParseNestedInt64(const String& json, const String& path, int64_t& out) {
+    JsonDocument doc;
+    DeserializationError err = deserializeJson(doc, json);
+    if (err) return false;
+
+    JsonVariant current = doc.as<JsonVariant>();
+    int start = 0;
+    while (true) {
+        int delim = path.indexOf('|', start);
+        String segment = (delim < 0) ? path.substring(start) : path.substring(start, delim);
+        if (segment.length() == 0) break;
+        current = current[segment];
+        if (current.isNull()) return false;
+        if (delim < 0) break;
+        start = delim + 1;
+    }
+    out = current.as<int64_t>();
+    return true;
+}
+
 bool CORE_CLASS_JSON::jsonParseNestedBool(const String& json, const String& path, bool& out) {
     JsonDocument doc;
     DeserializationError err = deserializeJson(doc, json);

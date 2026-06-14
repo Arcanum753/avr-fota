@@ -216,13 +216,15 @@ void CORE_OTA_CLASS::cacheFsVersionInfo() {
     
     if (!_fs) {
         DEBUGOTA("cacheFsVersionInfo: No FS mounted\n");
+        _fsVersionValid = false;
         return;
     }
     
     File jsonFile = _fs->open(FS_VERSION_JSON_PATH, "r");
     if (!jsonFile) {
         DEBUGOTA("cacheFsVersionInfo: version_fs.json not found\n");
-        _fsVersionCached = true;  // Mark as cached (with empty values)
+        _fsVersionCached = true;
+        _fsVersionValid = false;
         return;
     }
     
@@ -234,7 +236,7 @@ void CORE_OTA_CLASS::cacheFsVersionInfo() {
     
     DEBUGOTA("cacheFsVersionInfo: Read %d bytes\n", jsonStr.length());
     
-    parseVersionFromJson(jsonStr, _cachedFsDate, _cachedFsBuild, _cachedFsMajor, _cachedFsMinor);
+    _fsVersionValid = parseVersionFromJson(jsonStr, _cachedFsDate, _cachedFsBuild, _cachedFsMajor, _cachedFsMinor);
     _fsVersionCached = true;
 }
 
@@ -242,9 +244,7 @@ bool CORE_OTA_CLASS::parseVersionFromJson(const String& jsonStr, int64_t& date, 
     if (!ModClassJson.jsonParseNestedInt(jsonStr, "filesystem|version|major", major)) return false;
     if (!ModClassJson.jsonParseNestedInt(jsonStr, "filesystem|version|minor", minor)) return false;
     
-    int32_t dateVal = 0;
-    if (!ModClassJson.jsonParseNestedInt(jsonStr, "filesystem|version|date", dateVal)) return false;
-    date = dateVal;
+    if (!ModClassJson.jsonParseNestedInt64(jsonStr, "filesystem|version|date", date)) return false;
     
     if (!ModClassJson.jsonParseNestedInt(jsonStr, "filesystem|version|build", build)) return false;
     
@@ -270,16 +270,15 @@ int8_t CORE_OTA_CLASS::compareWithCurrentFsVersion(fileCompareResult* result, co
         if (!_fsVersionCached) {
             cacheFsVersionInfo();
         }
+        if (!_fsVersionValid) {
+            result->fsVersionCompare = -2;
+            DEBUGOTA("compareWithCurrentFsVersion: FS version data invalid\n");
+            return result->fsVersionCompare;
+        }
         result->fsCurrentMajor = _cachedFsMajor;
         result->fsCurrentMinor = _cachedFsMinor;
         result->fsCurrentDate = _cachedFsDate;
         result->fsCurrentBuild = _cachedFsBuild;
-        
-        if (_cachedFsDate == 0 && _cachedFsBuild == 0 && _cachedFsMajor == 0 && _cachedFsMinor == 0) {
-            result->fsVersionCompare = -2;
-            DEBUGOTA("compareWithCurrentFsVersion: No version_fs.json, using firmware version\n");
-            return result->fsVersionCompare;
-        }
     }
     
     result->fsVersionCompare = compareVersionDiffs(result->majorDiff, result->minorDiff, result->dateDiff, result->buildDiff);
@@ -555,6 +554,10 @@ int8_t CORE_OTA_CLASS::fileNameCheck(String filename, fileCompareResult* result)
     if (result->fileType == FILE_TYPE_FILESYSTEM) {
         if (!_fsVersionCached) {
             cacheFsVersionInfo();
+        }
+        if (!_fsVersionValid) {
+            DEBUGOTA("\t FS version data invalid, update blocked\r\n");
+            return -1;
         }
         currentMajor = _cachedFsMajor;
         currentMinor = _cachedFsMinor;
