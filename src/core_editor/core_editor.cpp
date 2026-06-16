@@ -151,12 +151,13 @@ void CORE_CLASS_EDITOR::handleFileList(AsyncWebServerRequest *request) {
     Dir dir = _fs->openDir(path);
     while (dir.next()) {
         File entry = dir.openFile("r");
+        if (!entry) { continue; }
         if (output != "[") { output += ','; }
         bool isDir = false;
         output += "{\"type\":\"";
         output += (isDir) ? "dir" : "file";
         output += "\",\"name\":\"";
-        output += escapeJsonStr(String(entry.name()).substring(1));
+        output += escapeJsonStr(String(entry.name()));
         output += "\",\"size\":";
         output += String(entry.size());
         output += "}";
@@ -221,7 +222,8 @@ void CORE_CLASS_EDITOR::handleFsInfo(AsyncWebServerRequest *request) {
 #if defined(ESP32)
     totalBytes = _fs->totalBytes();
     usedBytes = _fs->usedBytes();
-#elif defined(ESP8266)
+#endif
+#if defined(ESP8266)
     FSInfo fi;
     if (_fs->info(fi)) {
         totalBytes = fi.totalBytes;

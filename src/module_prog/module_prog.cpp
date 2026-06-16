@@ -102,7 +102,7 @@ bool Class_ProgBase::web_GetFilesListExe(String &_str)	{
 	bool _ret = true;
 
 	JsonDocument listDoc;
-	bool listLoaded = ModClassJson.jsonFileLoadDoc(PROG_FILELIST_JSON, listDoc);
+	bool listLoaded = filelist_EnsureLoaded(listDoc);
 	JsonArray arr;
 	String lastSuccessFilename = "";
 	if (listLoaded) {
@@ -464,13 +464,24 @@ void Class_ProgBase::web_setMD5(AsyncWebServerRequest *request) {
 
 // ========== Filelist Management ==========
 
-bool Class_ProgBase::filelist_Load() {
-	JsonDocument doc;
-	return ModClassJson.jsonFileLoadDoc(PROG_FILELIST_JSON, doc);
-}
-
-bool Class_ProgBase::filelist_Save() {
-	return true; // saves happen inside AddEntry/SetProgStatus via jsonFileSaveDoc
+bool Class_ProgBase::filelist_EnsureLoaded(JsonDocument &doc) {
+	if (!_fs) return false;
+	if (!_fs->exists(PROG_FILELIST_JSON)) {
+		doc.clear();
+		doc.to<JsonArray>();
+		return ModClassJson.jsonFileSaveDoc(PROG_FILELIST_JSON, doc);
+	}
+	if (!ModClassJson.jsonFileLoadDoc(PROG_FILELIST_JSON, doc)) {
+		doc.clear();
+		doc.to<JsonArray>();
+		ModClassJson.jsonFileSaveDoc(PROG_FILELIST_JSON, doc);
+		return false;
+	}
+	if (!doc.is<JsonArray>()) {
+		doc.clear();
+		doc.to<JsonArray>();
+	}
+	return true;
 }
 
 void Class_ProgBase::filelist_Clear() {
@@ -481,7 +492,7 @@ void Class_ProgBase::filelist_Clear() {
 
 bool Class_ProgBase::filelist_AddEntry(const String &filename, const String &upload_date, const String &md5) {
 	JsonDocument doc;
-	ModClassJson.jsonFileLoadDoc(PROG_FILELIST_JSON, doc);
+	filelist_EnsureLoaded(doc);
 	JsonArray arr = doc.as<JsonArray>();
 
 	String normalizedName = filename;
@@ -507,7 +518,7 @@ bool Class_ProgBase::filelist_AddEntry(const String &filename, const String &upl
 
 bool Class_ProgBase::filelist_SetProgStatus(const String &filename, const String &prog_date, const String &prog_status, const String &prog_error, const String &prog_time, const String &prog_error_stage, const String &prog_error_percent, const String &prog_speed) {
 	JsonDocument doc;
-	ModClassJson.jsonFileLoadDoc(PROG_FILELIST_JSON, doc);
+	filelist_EnsureLoaded(doc);
 	JsonArray arr = doc.as<JsonArray>();
 
 	String normalizedName = filename;
@@ -573,7 +584,7 @@ bool Class_ProgBase::filelist_SetProgStatus(const String &filename, const String
 
 String Class_ProgBase::filelist_GetLastSuccessFilename() {
 	JsonDocument doc;
-	if (!ModClassJson.jsonFileLoadDoc(PROG_FILELIST_JSON, doc)) return "";
+	if (!filelist_EnsureLoaded(doc)) return "";
 	JsonArray arr = doc.as<JsonArray>();
 
 	String bestFilename = "";
@@ -595,7 +606,7 @@ String Class_ProgBase::filelist_GetLastSuccessFilename() {
 
 bool Class_ProgBase::filelist_RemoveEntry(const String &filename) {
 	JsonDocument doc;
-	ModClassJson.jsonFileLoadDoc(PROG_FILELIST_JSON, doc);
+	filelist_EnsureLoaded(doc);
 	JsonArray arr = doc.as<JsonArray>();
 
 	String normalizedName = filename;
@@ -619,7 +630,7 @@ bool Class_ProgBase::filelist_RemoveEntry(const String &filename) {
 
 bool Class_ProgBase::filelist_FileExists(const String &filename) {
 	JsonDocument doc;
-	ModClassJson.jsonFileLoadDoc(PROG_FILELIST_JSON, doc);
+	filelist_EnsureLoaded(doc);
 	JsonArray arr = doc.as<JsonArray>();
 
 	String normalizedName = filename;
@@ -686,7 +697,7 @@ void Class_ProgBase::web_FileUploadProgress(AsyncWebServerRequest *request) {
 		// Скорость из filelist (свежая запись уже сохранена)
 		JsonDocument speedDoc;
 		String speedStr = "";
-		if (ModClassJson.jsonFileLoadDoc(PROG_FILELIST_JSON, speedDoc)) {
+		if (filelist_EnsureLoaded(speedDoc)) {
 			JsonArray arr = speedDoc.as<JsonArray>();
 			String normalizedName = _flashPath;
 			if (normalizedName.startsWith("/")) normalizedName = normalizedName.substring(1);
@@ -714,7 +725,7 @@ void Class_ProgBase::web_FileUploadProgress(AsyncWebServerRequest *request) {
 		}
 		String errorText = "";
 		JsonDocument doc;
-		if (ModClassJson.jsonFileLoadDoc(PROG_FILELIST_JSON, doc)) {
+		if (filelist_EnsureLoaded(doc)) {
 			JsonArray arr = doc.as<JsonArray>();
 			String normalizedName = _flashPath;
 			if (normalizedName.startsWith("/")) {

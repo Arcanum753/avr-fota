@@ -110,8 +110,7 @@ public:
 	void	setUploadPercent(uint8_t p) { _uploadPercent = p; }
 
 	// filelist management
-	bool	filelist_Load();
-	bool	filelist_Save();
+	bool	filelist_EnsureLoaded(JsonDocument &doc);
 	void	filelist_Clear();
 	bool	filelist_AddEntry(const String &filename, const String &upload_date, const String &md5);
 	bool	filelist_RemoveEntry(const String &filename);
