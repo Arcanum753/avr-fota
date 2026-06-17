@@ -12,11 +12,11 @@
 
 #include <ESPAsyncWebServer.h>
 #if defined(ESP32)
-#include <SPIFFS.h>
+#include <LittleFS.h>
 #endif
 
 #if defined(ESP8266)
-#include <FS.h>
+#include <LittleFS.h>
 #endif
 
 #include <Ticker.h>
@@ -47,8 +47,6 @@ typedef struct {
     String deviceName;
     String deviceSerial;
     String fsVersion;
-    int16_t wifiScanTime;
-    uint16_t wifiAPLifeTime;
 } strSysConfig;
 
 
@@ -75,7 +73,7 @@ class AsyncFSWebServer : public AsyncWebServer {
 public:
     AsyncFSWebServer(uint16_t port);
 #if ESP32
-    void begin(fs::SPIFFSFS* fs);
+    void begin(fs::LittleFSFS* fs);
 #elif defined(ESP8266)
     void begin(FS* fs) ;                        // esp8266/esp32 flash file system
 #endif
@@ -94,7 +92,7 @@ public:
 
 protected:
 #if ESP32
-    fs::SPIFFSFS*               _fs;
+    fs::LittleFSFS*               _fs;
 #elif defined(ESP8266)
     FS*                         _fs;                        // esp8266/esp32 flash file system
 #endif
@@ -117,8 +115,6 @@ private:
 public:
     bool checkAuth(AsyncWebServerRequest *request);
     bool handleFileRead(String path, AsyncWebServerRequest *request);
-    uint16_t configSys_ApTimeGet()   ;
-    int16_t  configSys_ScanTimeGet() ;
 
     
 private:

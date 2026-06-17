@@ -11,7 +11,7 @@ MODULE_CLASS_GPIO :: MODULE_CLASS_GPIO (bool _in) {
 }
 
 #if defined(ESP32)
-void MODULE_CLASS_GPIO::setFs(fs::SPIFFSFS* fs) //esp32 flash file system
+void MODULE_CLASS_GPIO::setFs(fs::LittleFSFS* fs) //esp32 flash file system
 #elif defined(ESP8266)
 void MODULE_CLASS_GPIO::setFs(FS* fs)	// esp8266 flash file system
 #endif

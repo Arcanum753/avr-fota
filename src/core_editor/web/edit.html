@@ -1,0 +1,919 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <title>SPIFFS Editor</title>
+    <style type="text/css" media="screen">
+      :root {
+        --bg: #fff;
+        --text: #000;
+        --panel-bg: #f5f5f5;
+        --panel-border: #ccc;
+        --tree-link: #00f;
+        --tree-active-bg: #e0e0ff;
+        --tree-active-text: #000;
+        --uploader-bg: #444;
+        --uploader-text: #EEE;
+        --hotkeys-text: #888;
+        --context-bg: #F5F5F5;
+        --context-text: #444;
+        --context-hover-bg: #444;
+        --context-hover-text: #EEE;
+        --property-text: #000;
+        --scrollbar: #ccc;
+      }
+      body.dark {
+        --bg: #1e1e1e;
+        --text: #d4d4d4;
+        --panel-bg: #252526;
+        --panel-border: #3c3c3c;
+        --tree-link: #569cd6;
+        --tree-active-bg: #264f78;
+        --tree-active-text: #fff;
+        --uploader-bg: #333;
+        --uploader-text: #ccc;
+        --hotkeys-text: #666;
+        --context-bg: #252526;
+        --context-text: #d4d4d4;
+        --context-hover-bg: #094771;
+        --context-hover-text: #fff;
+        --property-text: #d4d4d4;
+        --scrollbar: #555;
+      }
+      body {
+        margin: 0;
+        overflow: hidden;
+        font: normal 11px Verdana, Arial, Sans-serif;
+        background: var(--bg);
+        color: var(--text);
+      }
+      #left-panel {
+        position: absolute;
+        top: 28px;
+        left: 0;
+        bottom: 0;
+        width: 192px;
+        display: flex;
+        flex-direction: column;
+      }
+      #tree {
+        flex: 1;
+        overflow: auto;
+        padding: 4px;
+        background: var(--bg);
+        color: var(--text);
+      }
+      #tree::-webkit-scrollbar { width: 8px; }
+      #tree::-webkit-scrollbar-thumb { background: var(--scrollbar); border-radius: 4px; }
+      #properties {
+        height: 188px;
+        min-height: 188px;
+        padding: 4px;
+        overflow: auto;
+        border-top: 1px solid var(--panel-border);
+        font-size: 11px;
+        background: var(--panel-bg);
+        color: var(--property-text);
+      }
+      #properties .fs-info { margin-bottom: 6px; }
+      #properties .open-file { font-weight: bold; word-break: break-all; }
+      #properties .hotkeys { color: var(--hotkeys-text); font-size: 10px; margin-top: 4px; }
+      #status-bar {
+        position: absolute;
+        right: 8px;
+        top: 4px;
+        font-size: 11px;
+        font-weight: bold;
+        pointer-events: none;
+      }
+      .status-ok { color: #8f8; }
+      .status-error { color: #f88; }
+      .status-info { color: #8cf; }
+
+      #uploader {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 28px;
+        line-height: 24px;
+        padding-left: 10px;
+        background-color: var(--uploader-bg);
+        color: var(--uploader-text);
+        white-space: nowrap;
+        overflow-x: auto;
+        overflow-y: hidden;
+      }
+      #uploader button, #uploader select {
+        background: var(--uploader-bg);
+        color: var(--uploader-text);
+        border: 1px solid #666;
+        padding: 1px 4px;
+        cursor: pointer;
+      }
+      #uploader input[type="text"] {
+        background: #555;
+        color: #EEE;
+        border: 1px solid #666;
+        width: 80px;
+      }
+      #editor, #preview {
+        position: absolute;
+        top: 28px;
+        right: 0;
+        bottom: 0;
+        left: 200px;
+      }
+      #preview {
+        background-color: var(--panel-bg);
+        padding: 5px;
+      }
+      .contextMenu {
+        z-index: 300;
+        position: absolute;
+        left: 5px;
+        border: 1px solid var(--panel-border);
+        background-color: var(--context-bg);
+        display: none;
+        box-shadow: 0 0 10px rgba(0,0,0,.4);
+        font-size: 12px;
+        font-family: sans-serif;
+        font-weight: bold;
+      }
+      .contextMenu ul {
+        list-style: none;
+        top: 0;
+        left: 0;
+        margin: 0;
+        padding: 0;
+      }
+      .contextMenu li {
+        position: relative;
+        min-width: 60px;
+        cursor: pointer;
+      }
+      .contextMenu span {
+        color: var(--context-text);
+        display: inline-block;
+        padding: 6px;
+      }
+      .contextMenu li:hover { background: var(--context-hover-bg); }
+      .contextMenu li:hover span { color: var(--context-hover-text); }
+
+      .css-treeview ul, .css-treeview li {
+        padding: 0;
+        margin: 0;
+        list-style: none;
+      }
+      .css-treeview input {
+        position: absolute;
+        opacity: 0;
+      }
+      .css-treeview {
+        font: normal 11px Verdana, Arial, Sans-serif;
+        -moz-user-select: none;
+        -webkit-user-select: none;
+        user-select: none;
+      }
+      .css-treeview li > span {
+        color: var(--tree-link);
+        cursor: pointer;
+        display: inline-block;
+        max-width: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        vertical-align: middle;
+      }
+      .css-treeview li > span:hover {
+        text-decoration: underline;
+      }
+      .css-treeview li.active > span {
+        font-weight: bold;
+        color: var(--tree-active-text);
+        background: var(--tree-active-bg);
+        border-radius: 2px;
+      }
+      .css-treeview input + label + ul {
+        margin: 0 0 0 22px;
+      }
+      .css-treeview input ~ ul {
+        display: none;
+      }
+      .css-treeview label, .css-treeview label::before {
+        cursor: pointer;
+      }
+      .css-treeview input:disabled + label {
+        cursor: default;
+        opacity: .6;
+      }
+      .css-treeview input:checked:not(:disabled) ~ ul {
+        display: block;
+      }
+      .css-treeview label, .css-treeview label::before {
+        background: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAACgCAYAAAAFOewUAAAAGXRFWHRTb2Z0d2FyZQBBZG9iZSBJbWFnZVJlYWR5ccllPAAAApxJREFUeNrslM1u00AQgGdthyalFFOK+ClIIKQKyqUVQvTEE3DmAhLwAhU8QZoH4A2Q2gMSFace4MCtJ8SPBFwAkRuiHKpA6sRN/Lu7zG5i14kctaUqRGhGXnu9O/Pt7MzsMiklvF+9t2kWTDvyIrAsA0aKRRi1T0C/hJ4LUbt5/8rNpWVlp8RSr9J40b48fxFaTQ9+ft8EZ6MJYb0Ok+dnYGpmPgXwKIAvLx8vYXc5GdMAQJgQEkpjRTh36TS2U+DWW/D17WuYgm8pwJyY1npZsZKOxImOV1I/h4+O6vEg5GCZBpgmA6hX8wHKUHDRBXQYicQ4rlc3Tf0VMs8DHBS864F2YFspjgUYjKX/Az3gsdQd2eeBHwmdGWXHcgBGSkZXOXohcEXebRoQcAgjqediNY+AVyu3Z3sAKqfKoGMsewBeEIOPgQxxPJIjcGH6qtL/0AdADzKGnuuD+2tLK7Q8DhHHbOBW+KEzcHLuYc82MkEUekLiwuvVH+guQBQzOG4XdAb8EOcRcqQvDkY2iCLuxECJ43JobMXoutqGgDa2T7UqLKwt9KRyuxKVByqVXXqIoCCUCAqhUOioTWC7G4TQEOD0APy2/7G2Xpu1J4+lxeQ4TXBbITDpoVelRN/BVFbwu5oMMJUBhoXy5tmdRcMwymP2OLQaLjx9/vnBo6V3K6izATmSnMa0Dq7ferIohJhr1p01zrlz49rZF4OMs8JkX23vVQzYp+wbYGV/KpXKjvspl8tsIKCrMNAYFxj2GKS5ZWxg4ewKsJfaGMIY5KXqPz8LBBj6+yDvVP79+yDp/9F9oIx3OisHWwe7Oal0HxCAAAQgAAEIQAACEIAABCAAAQhAAAIQgAAEIAABCEAAAhCAAAQgwD8E/BZgAP0qhKj3rXO7AAAAAElFTkSuQmCC") no-repeat;
+      }
+      .css-treeview label, .css-treeview span, .css-treeview label::before {
+        display: inline-block;
+        height: 16px;
+        line-height: 16px;
+        vertical-align: middle;
+      }
+      .css-treeview label {
+        background-position: 18px 0;
+      }
+      .css-treeview label::before {
+        content: "";
+        width: 16px;
+        margin: 0 22px 0 0;
+        vertical-align: middle;
+        background-position: 0 -32px;
+      }
+      .css-treeview input:checked + label::before {
+        background-position: 0 -16px;
+      }
+      @media screen and (-webkit-min-device-pixel-ratio:0) {
+        .css-treeview {
+          -webkit-animation: webkit-adjacent-element-selector-bugfix infinite 1s;
+        }
+        @-webkit-keyframes webkit-adjacent-element-selector-bugfix {
+          from { padding: 0; }
+          to   { padding: 0; }
+        }
+      }
+    </style>
+    <script>
+      function showStatus(msg, type, duration) {
+        var bar = document.getElementById('status-bar');
+        if (!bar) return;
+        bar.textContent = msg;
+        bar.className = 'status-' + type;
+        if (duration > 0) {
+          if (bar._statusTimer) clearTimeout(bar._statusTimer);
+          bar._statusTimer = setTimeout(function() {
+            bar.textContent = '';
+            bar.className = '';
+          }, duration);
+        }
+      }
+
+      function formatSize(bytes) {
+        if (typeof bytes !== 'number') return '';
+        if (bytes < 1024) return bytes + ' B';
+        if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+        return (bytes / 1048576).toFixed(1) + ' MB';
+      }
+
+      var _openFileLabel = null;
+
+      function updateOpenFileLabel(path) {
+        var el = document.getElementById('open-file-label');
+        if (el) el.textContent = path || '(none)';
+      }
+
+      function fetchFsInfo() {
+        var xhr = new XMLHttpRequest();
+        xhr.onreadystatechange = function() {
+          if (xhr.readyState == 4 && xhr.status == 200) {
+            try {
+              var info = JSON.parse(xhr.responseText);
+              var el = document.getElementById('fs-info');
+              if (el) {
+                var usedPct = info.total > 0 ? (info.used / info.total * 100).toFixed(1) : '0.0';
+                el.innerHTML = 'FS: ' + formatSize(info.used) + ' / ' + formatSize(info.total) + ' (' + usedPct + '%)';
+              }
+            } catch(e) {}
+          }
+        };
+        xhr.open('GET', '/fsinfo', true);
+        xhr.send(null);
+      }
+
+      function createFileUploader(element, tree, editor){
+        var btnHome = document.createElement("button");
+        btnHome.innerHTML = 'Main page';
+        
+        var input = document.createElement("input");
+        input.type = "file";
+        input.multiple = false;
+        input.name = "data";
+        
+        var path = document.createElement("input");
+        path.id = "upload-path";
+        path.type = "text";
+        path.name = "path";
+        path.defaultValue = "/";
+        
+        var uploadButton = document.createElement("button");
+        uploadButton.innerHTML = 'Upload';
+        
+        var mkdir = document.createElement("button");
+        mkdir.innerHTML = 'MkDir';
+        
+        var mkfile = document.createElement("button");
+        mkfile.innerHTML = 'MkFile';
+		    
+        var saveFile = document.createElement("button");
+        saveFile.innerHTML = 'Save';
+        
+        var undoButton = document.createElement("button");
+        undoButton.innerHTML = 'Undo';
+        
+        var redoButton = document.createElement("button");
+        redoButton.innerHTML = 'Redo';
+        
+        var themeCombobox = document.createElement("select");
+        themeCombobox.innerHTML = 'Theme';
+        var option0 = document.createElement("option");
+        var option1 = document.createElement("option");
+        
+        option0.text = option0.value = "Dark theme";
+        option1.text = option1.value = "Light theme";
+        themeCombobox.appendChild (option0);
+        themeCombobox.appendChild (option1);
+        
+        
+        document.getElementById(element).appendChild(btnHome);
+        document.getElementById(element).appendChild(input);
+        document.getElementById(element).appendChild(path);
+        document.getElementById(element).appendChild(uploadButton);
+        document.getElementById(element).appendChild(mkdir);
+        document.getElementById(element).appendChild(mkfile);
+        document.getElementById(element).appendChild(saveFile);
+        document.getElementById(element).appendChild(undoButton);
+        document.getElementById(element).appendChild(redoButton);
+        document.getElementById(element).appendChild(themeCombobox);
+        
+        
+        
+  
+        function httpPostProcessRequest(xhr, cbPath, statusOk, statusErr){
+          return function(){
+            if (xhr.readyState == 4){
+              if(xhr.status != 200) {
+                showStatus(statusErr || 'Operation failed', 'error', 3000);
+                alert("ERROR["+xhr.status+"]: "+xhr.responseText);
+              } else {
+                showStatus(statusOk || 'Done', 'ok', 2000);
+                tree.refreshPath(cbPath);
+                if (typeof fetchFsInfo === 'function') fetchFsInfo();
+              }
+            }
+          };
+        }
+        function createPath(p){
+          var xhr = new XMLHttpRequest();
+          xhr.onreadystatechange = httpPostProcessRequest(xhr, p, 'Created', 'Create failed');
+          var formData = new FormData();
+          formData.append("path", p);
+          xhr.open("PUT", "/edit");
+          xhr.send(formData);
+        }
+        
+        themeCombobox. onchange = function (e) {
+          var value = themeCombobox.value;
+          var theme;
+          if (value == 'Dark theme') {
+            theme = 'tomorrow_night_bright';
+            document.body.classList.add('dark');
+          }
+          if (value == 'Light theme') {
+            theme = 'github_light_default';
+            document.body.classList.remove('dark');
+          }
+          editor.setTheme("ace/theme/" + theme);
+        };
+
+        btnHome. onclick = function (e) {
+           location.href ='index.html';
+        };
+        saveFile.onclick = function (e) {
+            editor.execCommand("saveCommand");
+        };
+        undoButton.onclick = function (e) {
+            editor.getSession().getUndoManager().undo(false);
+        };
+        redoButton.onclick = function (e) {
+            editor.getSession().getUndoManager().redo(false);
+        };
+        mkfile.onclick = function(e){
+          if(path.value.indexOf(".") === -1) return;
+          createPath(path.value);
+          editor.loadUrl(path.value);
+        };
+        mkdir.onclick = function(e){
+          if(path.value.length < 2) return;
+          var dir = path.value
+          if(dir.indexOf(".") !== -1){
+            if(dir.lastIndexOf("/") === 0) return;
+            dir = dir.substring(0, dir.lastIndexOf("/"));
+          }
+          createPath(dir);
+        };
+        uploadButton.onclick = function(e){
+          if(input.files.length === 0) return;
+          showStatus('Uploading...', 'info', 0);
+          var xhr = new XMLHttpRequest();
+          xhr.onreadystatechange = httpPostProcessRequest(xhr, path.value, 'Upload OK', 'Upload failed');
+          var formData = new FormData();
+          formData.append("data", input.files[0], path.value);
+          xhr.open("POST", "/edit");
+          xhr.send(formData);
+        }
+        input.onchange = function(e){
+          if(input.files.length === 0) return;
+          var filename = input.files[0].name;
+          var ext = /(?:\.([^.]+))?$/.exec(filename)[1];
+          var name = /(.*)\.[^.]+$/.exec(filename)[1];
+          if(typeof name !== "undefined"){
+            filename = name;
+          }
+          if(typeof ext !== "undefined"){
+            filename = filename + "." + ext;
+          }
+          if(path.value === "/" || path.value.lastIndexOf("/") === 0){
+            path.value = "/"+filename;
+          } else {
+            path.value = path.value.substring(0, path.value.lastIndexOf("/")+1)+filename;
+          }
+        }
+      }
+
+      function createTree(element, editor){
+        var preview = document.getElementById("preview");
+        var treeRoot = document.createElement("div");
+        treeRoot.className = "css-treeview";
+        document.getElementById(element).appendChild(treeRoot);
+  
+        function loadDownload(path){
+          document.getElementById('download-frame').src = path+"?download=true";
+        }
+  
+        function loadPreview(path){
+          document.getElementById("editor").style.display = "none";
+          preview.style.display = "block";
+          preview.innerHTML = "";
+          var img = document.createElement("img");
+          img.src = path;
+          img.style.cssText = "max-width:100%; max-height:100%; margin:auto; display:block;";
+          preview.appendChild(img);
+        }
+  
+        function fillFolderMenu(el, path){
+          var list = document.createElement("ul");
+          el.appendChild(list);
+          var action = document.createElement("li");
+          list.appendChild(action);
+          var isChecked = document.getElementById(path).checked;
+          var expnd = document.createElement("li");
+          list.appendChild(expnd);
+          if(isChecked){
+            expnd.innerHTML = "<span>Collapse</span>";
+            expnd.onclick = function(e){
+              document.getElementById(path).checked = false;
+              if(document.body.getElementsByClassName('contextMenu').length > 0) document.body.removeChild(el);
+            };
+            var refrsh = document.createElement("li");
+            list.appendChild(refrsh);
+            refrsh.innerHTML = "<span>Refresh</span>";
+            refrsh.onclick = function(e){
+              var leaf = document.getElementById(path).parentNode;
+              if(leaf.childNodes.length == 3) leaf.removeChild(leaf.childNodes[2]);
+              httpGet(leaf, path);
+              if(document.body.getElementsByClassName('contextMenu').length > 0) document.body.removeChild(el);
+            };
+          } else {
+            expnd.innerHTML = "<span>Expand</span>";
+            expnd.onclick = function(e){
+              document.getElementById(path).checked = true;
+              var leaf = document.getElementById(path).parentNode;
+              if(leaf.childNodes.length == 3) leaf.removeChild(leaf.childNodes[2]);
+              httpGet(leaf, path);
+              if(document.body.getElementsByClassName('contextMenu').length > 0) document.body.removeChild(el);
+            };
+          }
+          var upload = document.createElement("li");
+          list.appendChild(upload);
+          upload.innerHTML = "<span>Upload</span>";
+          upload.onclick = function(e){
+            var pathEl = document.getElementById("upload-path");
+            if(pathEl){
+              var subPath = pathEl.value;
+              if(subPath.lastIndexOf("/") < 1) pathEl.value = path+subPath;
+              else pathEl.value = path.substring(subPath.lastIndexOf("/"))+subPath;
+            }
+            if(document.body.getElementsByClassName('contextMenu').length > 0) document.body.removeChild(el);
+          };
+          var delFile = document.createElement("li");
+          list.appendChild(delFile);
+          delFile.innerHTML = "<span>Delete</span>";
+          delFile.onclick = function(e){
+            httpDelete(path);
+            if(document.body.getElementsByClassName('contextMenu').length > 0) document.body.removeChild(el);
+          };
+        }
+  
+        function fillFileMenu(el, path){
+          var list = document.createElement("ul");
+          el.appendChild(list);
+          var action = document.createElement("li");
+          list.appendChild(action);
+          if(isTextFile(path)){
+            action.innerHTML = "<span>Edit</span>";
+            action.onclick = function(e){
+              var allActive = document.querySelectorAll('.css-treeview li.active');
+              for (var i = 0; i < allActive.length; i++) allActive[i].classList.remove('active');
+              var target = document.getElementById(path);
+              if (target) target.classList.add('active');
+              editor.loadUrl(path);
+              if(document.body.getElementsByClassName('contextMenu').length > 0) document.body.removeChild(el);
+            };
+          } else if(isImageFile(path)){
+            action.innerHTML = "<span>Preview</span>";
+            action.onclick = function(e){
+              var allActive = document.querySelectorAll('.css-treeview li.active');
+              for (var i = 0; i < allActive.length; i++) allActive[i].classList.remove('active');
+              var target = document.getElementById(path);
+              if (target) target.classList.add('active');
+              loadPreview(path);
+              if(document.body.getElementsByClassName('contextMenu').length > 0) document.body.removeChild(el);
+            };
+          }
+          var download = document.createElement("li");
+          list.appendChild(download);
+          download.innerHTML = "<span>Download</span>";
+          download.onclick = function(e){
+            loadDownload(path);
+            if(document.body.getElementsByClassName('contextMenu').length > 0) document.body.removeChild(el);
+          };
+          var delFile = document.createElement("li");
+          list.appendChild(delFile);
+          delFile.innerHTML = "<span>Delete</span>";
+          delFile.onclick = function(e){
+            httpDelete(path);
+            if(document.body.getElementsByClassName('contextMenu').length > 0) document.body.removeChild(el);
+          };
+        }
+  
+        function closeContextMenu(divContext) {
+          if (divContext && divContext.parentNode) {
+            divContext.parentNode.removeChild(divContext);
+          }
+          document.removeEventListener('click', closeContextMenu._clickHandler);
+          document.removeEventListener('keydown', closeContextMenu._keyHandler);
+        }
+
+        function showContextMenu(e, path, isfile){
+          var divContext = document.createElement("div");
+          var scrollTop = document.body.scrollTop ? document.body.scrollTop : document.documentElement.scrollTop;
+          var scrollLeft = document.body.scrollLeft ? document.body.scrollLeft : document.documentElement.scrollLeft;
+          var left = e.clientX + scrollLeft;
+          var top = e.clientY + scrollTop;
+          divContext.className = 'contextMenu';
+          divContext.style.display = 'block';
+          divContext.style.left = left + 'px';
+          divContext.style.top = top + 'px';
+          if(isfile) fillFileMenu(divContext, path);
+          else fillFolderMenu(divContext, path);
+          document.body.appendChild(divContext);
+
+          closeContextMenu._clickHandler = function(ev) {
+            if (!divContext.contains(ev.target)) {
+              closeContextMenu(divContext);
+            }
+          };
+          closeContextMenu._keyHandler = function(ev) {
+            if (ev.key === 'Escape') {
+              closeContextMenu(divContext);
+            }
+          };
+          setTimeout(function() {
+            document.addEventListener('click', closeContextMenu._clickHandler);
+            document.addEventListener('keydown', closeContextMenu._keyHandler);
+          }, 0);
+        }
+  
+        function createTreeLeaf(path, name, size){
+          var leaf = document.createElement("li");
+          leaf.id = (((path == "/")?"":path)+"/"+name);//.toLowerCase();
+          var label = document.createElement("span");
+          var sz = (typeof size === 'number') ? size : Number(size);
+          label.textContent = name + (sz > 0 ? ' (' + formatSize(sz) + ')' : '');//.toLowerCase();
+          leaf.appendChild(label);
+          leaf.onclick = function(e){
+            var allActive = document.querySelectorAll('.css-treeview li.active');
+            for (var i = 0; i < allActive.length; i++) {
+              allActive[i].classList.remove('active');
+            }
+            leaf.classList.add('active');
+            updateOpenFileLabel(leaf.id);
+            if(isTextFile(leaf.id)){
+              editor.loadUrl(leaf.id);
+            } else if(isImageFile(leaf.id)){
+              loadPreview(leaf.id);
+            }
+          };
+          leaf.oncontextmenu = function(e){
+            e.preventDefault();
+            e.stopPropagation();
+            showContextMenu(e, leaf.id, true);
+          };
+          return leaf;
+        }
+  
+        function createTreeBranch(path, name, disabled){
+          var leaf = document.createElement("li");
+          var check = document.createElement("input");
+          check.type = "checkbox";
+          check.id = (((path == "/") ? "" : path) + "/" + name);//.toLowerCase();
+          if(typeof disabled !== "undefined" && disabled) check.disabled = "disabled";
+          leaf.appendChild(check);
+          var label = document.createElement("label");
+          label.for = check.id;
+          label.textContent = name;//.toLowerCase();
+          leaf.appendChild(label);
+          check.onchange = function(e){
+            if(check.checked){
+              if(leaf.childNodes.length == 3) leaf.removeChild(leaf.childNodes[2]);
+              httpGet(leaf, check.id);
+            }
+          };
+          label.onclick = function(e){
+            if(!check.checked){
+              check.checked = true;
+              if(leaf.childNodes.length == 3) leaf.removeChild(leaf.childNodes[2]);
+              httpGet(leaf, check.id);
+            } else {
+              check.checked = false;
+            }
+          };
+          leaf.oncontextmenu = function(e){
+            e.preventDefault();
+            e.stopPropagation();
+            showContextMenu(e, check.id, false);
+          }
+          return leaf;
+        }
+  
+        function addList(parent, path, items){
+          var list = document.createElement("ul");
+          parent.appendChild(list);
+          var ll = items.length;
+          for(var i = 0; i < ll; i++){
+            var item = items[i];
+            var itemEl;
+            if(item.type === "file"){
+              itemEl = createTreeLeaf(path, item.name, item.size);
+            } else {
+              itemEl = createTreeBranch(path, item.name);
+            }
+            list.appendChild(itemEl);
+          }
+    
+        }
+  
+        function isTextFile(path){
+          var ext = /(?:\.([^.]+))?$/.exec(path)[1];
+          if(typeof ext !== "undefined"){
+            switch(ext){
+              case "txt":
+              case "htm":
+              case "html":
+              case "js":
+              case "json":
+              case "c":
+              case "h":
+              case "cpp":
+              case "css":
+              case "xml":
+                return true;
+            }
+          }
+          return false;
+        }
+  
+        function isImageFile(path){
+          var ext = /(?:\.([^.]+))?$/.exec(path)[1];
+          if(typeof ext !== "undefined"){
+            switch(ext){
+              case "png":
+              case "jpg":
+              case "gif":
+              case "ico":
+                return true;
+            }
+          }
+          return false;
+        }
+  
+        this.refreshPath = function(path){
+          if(path.lastIndexOf('/') < 1){
+            path = '/';
+            treeRoot.removeChild(treeRoot.childNodes[0]);
+            httpGet(treeRoot, "/");
+          } else {
+            path = path.substring(0, path.lastIndexOf('/'));
+            var leaf = document.getElementById(path).parentNode;
+            if(leaf.childNodes.length == 3) leaf.removeChild(leaf.childNodes[2]);
+            httpGet(leaf, path);
+          }
+        };
+  
+        function delCb(xhr, path){
+          return function(){
+            if (xhr.readyState == 4){
+              if(xhr.status != 200){
+                showStatus('Delete failed', 'error', 3000);
+                alert("ERROR["+xhr.status+"]: "+xhr.responseText);
+              } else {
+                showStatus('Deleted', 'ok', 2000);
+                if (typeof fetchFsInfo === 'function') fetchFsInfo();
+                if(path.lastIndexOf('/') < 1){
+                  path = '/';
+                  treeRoot.removeChild(treeRoot.childNodes[0]);
+                  httpGet(treeRoot, "/");
+                } else {
+                  path = path.substring(0, path.lastIndexOf('/'));
+                  var leaf = document.getElementById(path).parentNode;
+                  if(leaf.childNodes.length == 3) leaf.removeChild(leaf.childNodes[2]);
+                  httpGet(leaf, path);
+                }
+              }
+            }
+          }
+        }
+
+        function httpDelete(filename){
+          var xhr = new XMLHttpRequest();
+          xhr.onreadystatechange = delCb(xhr, filename);
+          var formData = new FormData();
+          formData.append("path", filename);
+          xhr.open("DELETE", "/edit");
+          xhr.send(formData);
+        }
+
+        function getCb(xhr, parent, path){
+          return function(){
+            if (xhr.readyState == 4){
+              if(xhr.status == 200) {
+                addList(parent, path, JSON.parse(xhr.responseText).sort((a, b) => a.name.localeCompare(b.name)));
+              }
+            }
+          }
+        }
+
+        function httpGet(parent, path){
+          var xhr = new XMLHttpRequest();
+          xhr.onreadystatechange = getCb(xhr, parent, path);
+          xhr.open("GET", "/list?dir="+path, true);
+          xhr.send(null);
+        }
+  
+        httpGet(treeRoot, "/");
+        return this;
+      }
+
+      function createEditor(element, file, lang, theme, type){
+        function getLangFromFilename(filename){
+          var lang = "plain";
+          var ext = /(?:\.([^.]+))?$/.exec(filename)[1];
+          if(typeof ext !== "undefined"){
+            switch(ext){
+              case "txt": lang = "plain"; break;
+              case "htm": lang = "html"; break;
+              case "js": lang = "javascript"; break;
+              case "c":  lang = "c_cpp"; break;
+              case "cpp": lang = "c_cpp"; break;
+              case "css": lang = "css";  break;
+              case "html": lang = "html";  break;
+              case "json": lang = "json";  break;
+              case "hex": lang = "plain"; break;
+              case "php":
+              case "scss":
+              case "xml":
+                lang = ext;
+            }
+          }
+          return lang;
+        }
+
+        if(typeof file === "undefined") file = "/index.html";
+
+        if(typeof lang === "undefined"){
+          lang = getLangFromFilename(file);
+        }
+
+        if (typeof theme === "undefined") theme = "tomorrow_night_bright";
+
+        if(typeof type === "undefined"){
+          type = "text/"+lang;
+          if(lang === "c_cpp") type = "text/plain";
+        }
+
+        var editor = ace.edit(element);
+
+        function httpPost(filename, data, contentType){
+          showStatus('Saving...', 'info', 0);
+          var xhr = new XMLHttpRequest();
+          xhr.onreadystatechange = function(){
+            if (xhr.readyState == 4) {
+              if (xhr.status == 200) showStatus('Saved!', 'ok', 1500);
+              else {
+                showStatus('Save failed', 'error', 3000);
+                alert("ERROR["+xhr.status+"]: "+xhr.responseText);
+              }
+            }
+          };
+          var formData = new FormData();
+          formData.append("data", new Blob([data], { type: contentType }), filename);
+          xhr.open("POST", "/edit");
+          xhr.send(formData);
+        }
+
+        function httpGetProcessRequest(xhr, ed){
+          return function(){
+            if (xhr.readyState == 4){
+              document.getElementById("preview").style.display = "none";
+              document.getElementById("editor").style.display = "block";
+              if(xhr.status == 200) ed.setValue(xhr.responseText);
+              else ed.setValue("");
+              ed.clearSelection();
+            }
+          };
+        }
+
+        function httpGet(theUrl){
+            var xhr = new XMLHttpRequest();
+            xhr.onreadystatechange = httpGetProcessRequest(xhr, editor);
+            xhr.open("GET", theUrl, true);
+            xhr.send(null);
+        }
+
+        if(lang !== "plain") editor.getSession().setMode("ace/mode/"+lang);
+        editor.setTheme("ace/theme/"+theme);
+        editor.$blockScrolling = Infinity;
+        editor.getSession().setUseSoftTabs(true);
+        editor.getSession().setTabSize(2);
+        editor.setHighlightActiveLine(true);
+        editor.setShowPrintMargin(false);
+        editor.commands.addCommand({
+            name: 'saveCommand',
+            bindKey: {win: 'Ctrl-S',  mac: 'Command-S'},
+            exec: function(editor) {
+              httpPost(file, editor.getValue()+"", type);
+            },
+            readOnly: false
+        });
+        editor.commands.addCommand({
+            name: 'undoCommand',
+            bindKey: {win: 'Ctrl-Z',  mac: 'Command-Z'},
+            exec: function(editor) {
+              editor.getSession().getUndoManager().undo(false);
+            },
+            readOnly: false
+        });
+        editor.commands.addCommand({
+            name: 'redoCommand',
+            bindKey: {win: 'Ctrl-Shift-Z',  mac: 'Command-Shift-Z'},
+            exec: function(editor) {
+              editor.getSession().getUndoManager().redo(false);
+            },
+            readOnly: false
+        });
+        httpGet(file);
+        editor.loadUrl = function(filename){
+          file = filename;
+          updateOpenFileLabel(file);
+          lang = getLangFromFilename(file);
+          type = "text/"+lang;
+          if(lang !== "plain") editor.getSession().setMode("ace/mode/"+lang);
+          httpGet(file);
+        }
+        return editor;
+      }
+      function onBodyLoad(){
+        var vars = {};
+        var parts = window.location.href.replace(/[?&]+([^=&]+)=([^&]*)/gi, function(m,key,value) { vars[key] = value; });
+        var editor = createEditor("editor", vars.file, vars.lang, vars.theme);
+        var tree = createTree("tree", editor);
+        createFileUploader("uploader", tree, editor);
+        fetchFsInfo();
+      };
+    </script>
+    <script src="ace.js" type="text/javascript" charset="utf-8"></script>
+    <script>ace.config.set("workerPath", "");</script>
+  </head>
+  <body class="dark" onload="onBodyLoad();">
+    <div id="uploader"><span id="status-bar"></span></div>
+    <div id="left-panel">
+      <div id="tree"></div>
+      <div id="properties">
+        <div id="fs-info" class="fs-info">FS: --</div>
+        <div class="open-file">Editing: <span id="open-file-label">(none)</span></div>
+        <div class="hotkeys">Ctrl+S: Save | Ctrl+Z: Undo | Ctrl+Shift+Z: Redo</div>
+      </div>
+    </div>
+    <div id="editor"></div>
+    <div id="preview" style="display:none;"></div>
+    <iframe id=download-frame style='display:none;'></iframe>
+  </body>
+</html>

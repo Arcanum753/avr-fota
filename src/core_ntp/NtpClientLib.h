@@ -56,6 +56,8 @@ extern "C" {
 
 #endif
 
+#include "eertos.h"
+
 #include <TimeLib.h>
 
 #if defined(ARDUINO) && ARDUINO >= 100
@@ -108,11 +110,9 @@ const int NTP_PACKET_SIZE = 48; // NTP time is in the first 48 bytes of message
 #elif NETWORK_TYPE == NETWORK_ESP8266
 #include <ESP8266WiFi.h>
 #include <ESPAsyncUDP.h>
-#include <Ticker.h>
 #elif NETWORK_TYPE == NETWORK_ESP32
 #include <WiFi.h>
 #include <AsyncUDP.h>
-#include <Ticker.h>
 #else
 #error "Incorrect platform. Only ARDUINO and ESP8266 MCUs are valid."
 #endif // NETWORK_TYPE
@@ -459,8 +459,6 @@ protected:
 #if NETWORK_TYPE == NETWORK_ESP8266 || NETWORK_TYPE == NETWORK_ESP32
     NTPStatus_t status = unsyncd; ///< Sync status
     DNSStatus_t dnsStatus = DNS_IDLE; ///< DNS request status
-    Ticker responseTimer;       ///< Timer to trigger response timeout
-    Ticker responseTimer2;       ///< Timer to trigger response timeout
 
                                 /**
                                 * Get packet response and update time as of its data
@@ -476,19 +474,23 @@ protected:
     boolean sendNTPpacket (AsyncUDP *udp);
 
     /**
-    * Process internal state in case of a response timeout. If a response comes later is is asumed as non valid.
+    * Process internal state in case of a response timeout. Called via eertos TimerService.
     */
-    void IRAM_ATTR processRequestTimeout ();
+    void processRequestTimeout ();
 
     /**
-    * Static method for Ticker argument.
+    * Process DNS timeout. Called via eertos TimerService (ESP8266 only).
     */
-    static void IRAM_ATTR s_processRequestTimeout (void* arg);
+    void processDNSTimeout ();
+
+    /**
+    * Eertos timer wrappers (friend functions for use with SetTimerTask).
+    */
+    friend void ntpResponseTimeoutTask();
+    friend void ntpDnsTimeoutTask();
 
     static void s_dnsFound (const char *name, const ip_addr_t *ipaddr, void *callback_arg);
     void dnsFound (const ip_addr_t *ipaddr);
-    static void IRAM_ATTR s_processDNSTimeout (void* arg);
-    void processDNSTimeout ();
 
 #endif
 
@@ -541,6 +543,10 @@ private:
     //bool sendNTPpacket(IPAddress &address);
 //#endif
 };
+
+// Forward declarations for eertos timer task functions
+void ntpResponseTimeoutTask();
+void ntpDnsTimeoutTask();
 
 extern NTPClient NTP;
 

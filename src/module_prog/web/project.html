@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Programmer project configuration</title>
+    <meta http-equiv="Content-type" content="text/html; charset=utf-8">
+	<link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+    <markup>./page_head.html</markup>
+    <h2 class="title" style="background: #7D8EE2">Programmer project configuration</h2>
+
+    <div class="content" style="text-align: center;">
+        <table class="scan" style="width: auto; margin: 0 auto;">
+            <tr><th colspan="2">Project Configuration</th></tr>
+            <tr><td class="label">Project name:</td>    <td><input type="text" id="progproj" value=""></td></tr>
+            <tr><td class="label">Chip:</td>            <td><select id="progchip"></select></td></tr>
+            <tr><td colspan="2" style="text-align: center; padding: 8px;"> <input type="button" value="Save" onclick="saveProject()" class="button-prog"></td></tr>
+        </table>
+    </div>
+
+    <div id="chipinfo" style="display:none; margin-top: 10px; text-align: center;">
+        <table class="scan" style="width: auto; margin: 0 auto;">
+            <tr><th colspan="2">Chip Information</th></tr>
+            <tbody id="chipinfo_body"></tbody>
+        </table>
+    </div>
+    
+	<markup>./page_bottom.html</markup>
+	<script src="GetJson.js" defer></script>
+	<script src="GetMarkup.js" defer></script>
+	<script>
+		const CHIP_FIELD_LABELS = {
+			"name": "Name",
+			"signature": "Signature",
+			"family": "Family",
+			"flash": "Flash size",
+			"page": "Page size",
+			"flash_start": "Flash start",
+			"word_size": "Word size",
+			"csw_value": "CSW value"
+		};
+
+		function loadChips(selectedChip) {
+			return fetch('/project/chips')
+				.then(response => response.json())
+				.then(chips => {
+					const sel = document.getElementById('progchip');
+					sel.innerHTML = '';
+					const emptyOpt = document.createElement('option');
+					emptyOpt.value = '';
+					emptyOpt.textContent = '-- Select chip --';
+					sel.appendChild(emptyOpt);
+					for (const chipName of chips) {
+						const opt = document.createElement('option');
+						opt.value = chipName;
+						opt.textContent = chipName;
+						sel.appendChild(opt);
+					}
+					if (selectedChip && selectedChip.length > 0) {
+						sel.value = selectedChip;
+					}
+				});
+		}
+
+		window.onload = function() {
+			setTimeout(() => {
+				ApplyCVT("/system/version")
+					.then(() => loadChips(''))
+					.then(() => ApplyCVT("/project/info"))
+					.then(() => showChipInfo());
+			}, 500);
+		};
+
+		document.addEventListener('change', function(e) {
+			if (e.target && e.target.id == 'progchip') {
+				showChipInfo();
+			}
+		});
+
+		function showChipInfo() {
+			const sel = document.getElementById('progchip');
+			if (!sel || !sel.value) {
+				document.getElementById('chipinfo').style.display = 'none';
+				return;
+			}
+			fetch('/project/chipinfo?name=' + encodeURIComponent(sel.value))
+				.then(response => response.json())
+				.then(data => {
+					const tbody = document.getElementById('chipinfo_body');
+					tbody.innerHTML = '';
+					for (const [key, value] of Object.entries(data)) {
+						const label = CHIP_FIELD_LABELS[key] || key;
+						const tr = document.createElement('tr');
+						tr.innerHTML = '<td class="label">' + label + ':</td><td>' + escapeHtml(String(value)) + '</td>';
+						tbody.appendChild(tr);
+					}
+					document.getElementById('chipinfo').style.display = 'block';
+				})
+				.catch(err => {
+					console.error('Failed to load chip info:', err);
+					document.getElementById('chipinfo').style.display = 'none';
+				});
+		}
+
+		function escapeHtml(text) {
+			if (!text) return "";
+			const div = document.createElement('div');
+			div.textContent = text;
+			return div.innerHTML;
+		}
+
+		function saveProject() {
+			const progproj = document.getElementById('progproj').value;
+			const progchip = document.getElementById('progchip').value;
+			
+			if (!progproj) {
+				alert('Project name cannot be empty');
+				return;
+			}
+			
+			const xhr = new XMLHttpRequest();
+			xhr.open('GET', '/project/save?progproj=' + encodeURIComponent(progproj) + '&progchip=' + encodeURIComponent(progchip), true);
+			xhr.timeout = 5000;
+			
+			xhr.onload = function() {
+				if (xhr.status === 200 && xhr.responseText === 'OK') {
+					alert('Configuration saved successfully');
+				} else {
+					alert('Error: ' + xhr.responseText);
+				}
+			};
+			xhr.onerror = function() {
+				alert('Network error during save');
+			};
+			xhr.ontimeout = function() {
+				alert('Save timeout');
+			};
+			xhr.send();
+		}
+	</script>
+
+</body>
+
+</html>

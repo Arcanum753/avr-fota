@@ -1,10 +1,10 @@
 
 #if defined(ESP32)
-#include <SPIFFS.h>
+#include <LittleFS.h>
 #include <esp_task_wdt.h>
 #endif
 #if defined(ESP8266)
-#include <FS.h>
+#include <LittleFS.h>
 #endif
 #include "version.h"
 #include <Ticker.h>
@@ -28,7 +28,7 @@ void setup() {
   
 #if defined(ESP32)
     // Увеличиваем таймаут Task Watchdog до 30 секунд для обработки
-    // длительных операций SPIFFS и HTTP-запросов в async_tcp,
+    // длительных операций LittleFS и HTTP-запросов в async_tcp,
     // особенно при загрузке страниц с множеством статических ресурсов
     esp_task_wdt_init(30, true);
 #endif
@@ -38,11 +38,11 @@ void setup() {
 
     Serial.begin(115200);
     InitRTOS(); // init eertos
-    fsMounted = SPIFFS.begin();
-    if (fsMounted == false) { Serial.println("\n\r\nSPIFFS Mount Failed\n\r\n\r"); }
+    fsMounted = LittleFS.begin();
+    if (fsMounted == false) { Serial.println("\n\r\nLittleFS Mount Failed\n\r\n\r"); }
     printGitInfo();
 	// WiFi is started inside library
-    ESPHTTPServer.begin(&SPIFFS);
+    ESPHTTPServer.begin(&LittleFS);
     TerminalInit();
     ledInit(); 
     // flashLED(CONNECTION_LED, 25, 150);
@@ -62,7 +62,7 @@ void loop() {
     yield();
 #endif
     // Сбрасываем watchdog перед выполнением задач EERTOS
-    // TaskManager может выполнять длительные операции (SPIFFS, WiFi)
+    // TaskManager может выполнять длительные операции (LittleFS, WiFi)
     TaskManager();
     
     // Сбрасываем watchdog после TaskManager
@@ -103,10 +103,7 @@ void printGitInfo() {
 
     
     #if defined(ESP32)
-    Serial.println(" ESP32 WebPages version: "+ String(VERSION_WEB));
-	#endif
-    #if defined(ESP8266)
-    Serial.println(" ESP8266 WebPages version: "+ String(VERSION_WEB));
+
 	#endif  
     
 }

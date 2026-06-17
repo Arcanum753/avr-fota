@@ -25,6 +25,7 @@ WEB_PREFIX = "web_"                     # префикс для папок ко�
 
 # ------------------- Имена модулей и папок -------------------
 MODULE_PREFIX = "module_"                # префикс модулей
+SUBMODULE_PREFIX = "submodule_"          # префикс субмодулей
 CORE_PREFIX = "core_"                    # префикс ядерных модулей
 WEB_FOLDER_NAME = "web"                  # имя папки с веб-файлами внутри модуля
 
@@ -168,16 +169,19 @@ def parse_src_filter(src_filter: str) -> List[str]:
     
     modules: Set[str] = set()
     
-    patterns = [
-        r'\+<' + MODULE_PREFIX + r'([^>/]+)',
-        r'\+' + MODULE_PREFIX + r'([^/\s]+)',
-    ]
+    prefixes = [MODULE_PREFIX, SUBMODULE_PREFIX]
     
-    for pattern in patterns:
+    pattern_prefix_pairs = []
+    for prefix in prefixes:
+        pattern_prefix_pairs.append((r'\+<' + prefix + r'([^>/]+)', prefix))
+        pattern_prefix_pairs.append((r'\+' + prefix + r'([^/\s]+)', prefix))
+    
+    for pattern, prefix in pattern_prefix_pairs:
         matches = re.findall(pattern, src_filter)
         for match in matches:
-            if validate_module_name(match):
-                modules.add(f"{MODULE_PREFIX}{match}")
+            module_name = f"{prefix}{match}"
+            if validate_module_name(module_name):
+                modules.add(module_name)
     
     result = sorted(list(modules))
     
@@ -263,6 +267,7 @@ def read_version_from_counter_file(project_dir: Path) -> Dict[str, Any]:
         "major": 0,
         "minor": 0,
         "date": 0,
+        "date_str": "",
         "build": 0,
         "full_string": "0.0.0.0",
         "is_debug": False
@@ -327,6 +332,7 @@ def read_version_from_header(project_dir: Path) -> Dict[str, Any]:
         "major": 0,
         "minor": 0,
         "date": 0,
+        "date_str": "",
         "build": 0,
         "full_string": "0.0.0.0",
         "is_debug": False
@@ -354,18 +360,30 @@ def read_version_from_header(project_dir: Path) -> Dict[str, Any]:
         if minor_match:
             version_info["minor"] = int(minor_match.group(1))
         
-        # Ищем VERSION_DATE
-        date_match = re.search(r'#define\s+VERSION_DATE\s+(\d+)', content)
-        if date_match:
-            version_info["date"] = int(date_match.group(1))
+        # Ищем VERSION_DATE_STR (с _) или VERSION_DATE
+        date_str_match = re.search(r'#define\s+VERSION_DATE_STR\s+"(\d+_\d+)"', content)
+        if date_str_match:
+            version_info["date_str"] = date_str_match.group(1)
+            version_info["date"] = int(date_str_match.group(1).replace('_', ''))
+        else:
+            date_match = re.search(r'#define\s+VERSION_DATE\s+(\d+)', content)
+            if date_match:
+                d = date_match.group(1)
+                version_info["date"] = int(d)
+                version_info["date_str"] = d[:8] + '_' + d[8:] if len(d) > 8 else d
         
         # Ищем VERSION_BUILD
         build_match = re.search(r'#define\s+VERSION_BUILD\s+(\d+)', content)
         if build_match:
             version_info["build"] = int(build_match.group(1))
         
-        # Формируем полную строку
-        version_info["full_string"] = f"{version_info['major']}.{version_info['minor']}.{version_info['date']}.{version_info['build']}"
+        # Пробуем взять полную строку из FIRMWARE_VERSION
+        fw_match = re.search(r'#define\s+FIRMWARE_VERSION\s+"([^"]+)"', content)
+        if fw_match:
+            version_info["full_string"] = fw_match.group(1)
+        else:
+            # Формируем сами с ведущими нулями
+            version_info["full_string"] = f"{version_info['major']}.{version_info['minor']:03d}.{version_info.get('date_str', str(version_info['date']))}.{version_info['build']:04d}"
         version_info["is_debug"] = version_info["build"] > 0
         
         if version_info["major"] > 0 or version_info["minor"] > 0:
@@ -393,8 +411,10 @@ def get_current_version(project_dir: Path) -> Dict[str, Any]:
         version_info = read_version_from_header(project_dir)
     else:
         version_info["build"] = build_num
-        version_info["date"] = int(datetime.datetime.now().strftime("%Y%m%d%H%M"))
-        version_info["full_string"] = f"{version_info['major']}.{version_info['minor']}.{version_info['date']}.{build_num}"
+        date_str = datetime.datetime.now().strftime("%Y%m%d_%H%M")
+        version_info["date_str"] = date_str
+        version_info["date"] = int(date_str.replace('_', ''))
+        version_info["full_string"] = f"{version_info['major']}.{version_info['minor']:03d}.{date_str}.{build_num:04d}"
         version_info["is_debug"] = build_num > 0
     
     return version_info
@@ -784,8 +804,9 @@ def prepare_fs_image() -> Optional[Path]:
     # 8. Генерируем динамический page_head.html на основе включённых модулей
     if _HAS_PAGE_HEAD_GEN:
         try:
-            # Используем только module_* имена (не core_*) для правой колонки меню
-            module_only_names = [m for m in all_web_modules if m.startswith(MODULE_PREFIX)]
+            # Используем module_* и submodule_* имена (не core_*) для правой колонки меню
+            module_only_names = [m for m in all_web_modules 
+                                 if m.startswith(MODULE_PREFIX) or m.startswith(SUBMODULE_PREFIX)]
             
             page_head_html = generate_page_head(module_only_names, src_dir=str(src_dir))
             page_head_path = target_web_dir / "page_head.html"

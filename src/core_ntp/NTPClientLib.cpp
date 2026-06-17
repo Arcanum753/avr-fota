@@ -198,6 +198,15 @@ void NTPClient::s_dnsFound (const char *name, const ip_addr_t *ipaddr, void *cal
     reinterpret_cast<NTPClient*>(callback_arg)->dnsFound (ipaddr);
 }
 
+boolean NTPClient::SyncStatus(){
+
+	if (status==syncd) {
+		return true;
+	}
+	return false;
+
+}
+
 #if NETWORK_TYPE == NETWORK_ESP8266
 IPAddress getIPClass (const ip_addr_t *ipaddr) {
 
@@ -216,25 +225,16 @@ IPAddress getIPClass (const ip_addr_t *ipaddr) {
     return ip;
 }
 
-boolean NTPClient::SyncStatus(){
-	
-	if (status==syncd) {
-		return true;
-	}
-	return false;
-	
-}
-
 void NTPClient::dnsFound (const ip_addr_t *ipaddr) {
     //IPAddress ip;
 
     dnsStatus = DNS_SOLVED;
-    responseTimer2.detach ();
+    DelTimerTask(ntpDnsTimeoutTask);
     ntpServerIPAddress = getIPClass (ipaddr);
     DEBUGLOG ("%s - %s\n", __FUNCTION__, ntpServerIPAddress.toString ().c_str ());
     if (ipaddr != NULL && ntpServerIPAddress != (uint32_t)(0)) {
        time_t newTime = getTime();
-	   DEBUGLOG ("%s - Get time\n", __FUNCTION__);
+       DEBUGLOG ("%s - Get time\n", __FUNCTION__);
        if (newTime) setTime(newTime);
     }
 }
@@ -242,15 +242,14 @@ void NTPClient::dnsFound (const ip_addr_t *ipaddr) {
 void  NTPClient::processDNSTimeout () {
     status = unsyncd;
     dnsStatus = DNS_IDLE;
-    //timer1_disable ();
-    responseTimer2.detach ();
+    DelTimerTask(ntpDnsTimeoutTask);
     DEBUGLOG ("%s - DNS response Timeout\n", __FUNCTION__);
     if (onSyncEvent)
         onSyncEvent (invalidAddress);
 }
 
-void IRAM_ATTR NTPClient::s_processDNSTimeout (void* arg) {
-    reinterpret_cast<NTPClient*>(arg)->processDNSTimeout ();
+void ntpDnsTimeoutTask() {
+    NTP.processDNSTimeout();
 }
 #endif
 
@@ -273,7 +272,7 @@ time_t NTPClient::getTime () {
         if (error == ERR_INPROGRESS) {
             dnsStatus = DNS_REQUESTED;
             DEBUGLOG ("%s - DNS Resolution in progress\n", __FUNCTION__);
-            responseTimer2.once_ms (dnsTimeout, &NTPClient::s_processDNSTimeout, static_cast<void*>(this));
+            SetTimerTask(ntpDnsTimeoutTask, dnsTimeout);
             return 0;
         } else if (error == ERR_OK) {
             dnsStatus = DNS_SOLVED;
@@ -303,10 +302,7 @@ time_t NTPClient::getTime () {
             if (sendNTPpacket (udp)) {
                 DEBUGLOG ("%s - NTP request sent\n", __FUNCTION__);
                 status = ntpRequested;
-                responseTimer.once_ms (ntpTimeout, &NTPClient::s_processRequestTimeout, static_cast<void*>(this));
-                /*timer1_attachInterrupt (s_processRequestTimeout);
-                timer1_enable (TIM_DIV256, TIM_EDGE, TIM_SINGLE);
-                timer1_write ((uint32_t)(312.5*ntpTimeout));*/
+                SetTimerTask(ntpResponseTimeoutTask, ntpTimeout);
                 if (onSyncEvent)
                     onSyncEvent (requestSent);
                 return 0;
@@ -382,8 +378,7 @@ void NTPClient::processPacket (AsyncUDPPacket& packet) {
     if (status == ntpRequested) {
         size = packet.length ();
         if (size >= NTP_PACKET_SIZE) {
-            //timer1_disable ();
-            responseTimer.detach ();
+            DelTimerTask(ntpResponseTimeoutTask);
             ntpPacketBuffer = packet.data ();
             time_t timeValue = decodeNtpMessage (ntpPacketBuffer);
             setTime (timeValue);
@@ -423,19 +418,15 @@ void NTPClient::processPacket (AsyncUDPPacket& packet) {
     DEBUGLOG ("\n");
 }
 
-void IRAM_ATTR NTPClient::processRequestTimeout () {
+void NTPClient::processRequestTimeout () {
     status = unsyncd;
-    //timer1_disable ();
-    responseTimer.detach ();
+    DelTimerTask(ntpResponseTimeoutTask);
     DEBUGLOG ("NTP response Timeout\n");
     if (onSyncEvent)
         onSyncEvent (noResponse);
 }
 
-void IRAM_ATTR NTPClient::s_processRequestTimeout (void* arg) {
-    NTPClient* self = reinterpret_cast<NTPClient*>(arg);
-    self->processRequestTimeout ();
-}
+void ntpResponseTimeoutTask(void) { NTP.processRequestTimeout(); }
 #endif
 
 int8_t NTPClient::getTimeZone () {

@@ -1,5 +1,4 @@
 #include <Arduino.h>
-#include <ArduinoJson.h>
 #include "version.h"
 #include "main.h"
 #ifdef ESP32
@@ -230,30 +229,23 @@ void UDPBROADCAST_CLASS::get_udp_configuration_html(AsyncWebServerRequest *reque
 // ========== JSON GET ==========
 String UDPBROADCAST_CLASS::udpJsonGet() {
     String ret = "";
-    JsonDocument jsonDoc;
-    
-    jsonDoc["deviceName"]   = ESPHTTPServer._sysConfig.deviceName;
-    jsonDoc["deviceSerial"] = ESPHTTPServer._sysConfig.deviceSerial;
-    
-    jsonDoc["ip"]           = WiFi.localIP().toString();
-    jsonDoc["mac"]          = WiFi.macAddress();
-    jsonDoc["udpPortTx"]    = _udpConfig.udpPortTx;
-    jsonDoc["udpPortRx"]    = _udpConfig.udpPortRx;
-    jsonDoc["udpTimeOut"]   = _udpConfig.udpTimeOut;
-    jsonDoc["keyword"]      = _udpConfig.keyword;
-
-    jsonDoc["target"]       = BUILD_ENV;
-    jsonDoc["buildtime"]    = BUILD_TIME;
-    jsonDoc["gitbranch"]    = GIT_BRANCH;
-    jsonDoc["gitcommit"]    = GIT_COMMIT;
-    jsonDoc["uptime"]       = (String)NTP.getUptimeString();
-    jsonDoc["rstreason"]    =  ESPHTTPServer.getResetReason();
-
-    
-    jsonDoc["espVer"]       = FIRMWARE_VERSION;
-    jsonDoc["webVer"]       = VERSION_WEB;
-	
-	serializeJsonPretty(jsonDoc, ret);
+    ret += "{\n";
+    ret += "  \"deviceName\": \"" + ESPHTTPServer._sysConfig.deviceName + "\",\n";
+    ret += "  \"deviceSerial\": \"" + ESPHTTPServer._sysConfig.deviceSerial + "\",\n";
+    ret += "  \"ip\": \"" + WiFi.localIP().toString() + "\",\n";
+    ret += "  \"mac\": \"" + WiFi.macAddress() + "\",\n";
+    ret += "  \"udpPortTx\": " + String(_udpConfig.udpPortTx) + ",\n";
+    ret += "  \"udpPortRx\": " + String(_udpConfig.udpPortRx) + ",\n";
+    ret += "  \"udpTimeOut\": " + String(_udpConfig.udpTimeOut) + ",\n";
+    ret += "  \"keyword\": \"" + _udpConfig.keyword + "\",\n";
+    ret += "  \"target\": \"" + String(BUILD_ENV) + "\",\n";
+    ret += "  \"buildtime\": \"" + String(BUILD_TIME) + "\",\n";
+    ret += "  \"gitbranch\": \"" + String(GIT_BRANCH) + "\",\n";
+    ret += "  \"gitcommit\": \"" + String(GIT_COMMIT) + "\",\n";
+    ret += "  \"uptime\": \"" + String(NTP.getUptimeString()) + "\",\n";
+    ret += "  \"rstreason\": \"" + ESPHTTPServer.getResetReason() + "\",\n";
+    ret += "  \"espVer\": \"" + String(FIRMWARE_VERSION) + "\"\n";
+    ret += "}\n";
     return ret;
 }
 
@@ -270,28 +262,28 @@ void UDPBROADCAST_CLASS::defaultConfigUDP() {
 // ========== SAVE CONFIG ==========
 bool UDPBROADCAST_CLASS::save_configUDP() {
     DEBUGUDP("%s\n\r", __PRETTY_FUNCTION__);
-    JsonDocument jsonDoc;
-    jsonDoc["udpPortTx"]    = _udpConfig.udpPortTx;
-    jsonDoc["udpPortRx"]    = _udpConfig.udpPortRx;
-    jsonDoc["udpTimeOut"]   = _udpConfig.udpTimeOut;
-    jsonDoc["udpkeyword"]   = _udpConfig.keyword;
-    jsonDoc["udpPowerOn"]   = _udpConfig.udpPowerOn;
-    jsonDoc["udpResponse"]   = _udpConfig.udpResponse;
-    return ModClassJson.save_jsonDoc(jsonDoc, CONFIG_FILE_UDP);
+    JsonDocument doc;
+    ModClassJson.jsonFileLoadDoc(CONFIG_FILE_UDP, doc);
+    doc["udpPortTx"] = _udpConfig.udpPortTx;
+    doc["udpPortRx"] = _udpConfig.udpPortRx;
+    doc["udpTimeOut"] = _udpConfig.udpTimeOut;
+    doc["udpkeyword"] = _udpConfig.keyword;
+    doc["udpPowerOn"] = _udpConfig.udpPowerOn;
+    doc["udpResponse"] = _udpConfig.udpResponse;
+    return ModClassJson.jsonFileSaveDoc(CONFIG_FILE_UDP, doc);
 }
 
 // ========== LOAD CONFIG ==========
 bool UDPBROADCAST_CLASS::load_config_UDP() {
     DEBUGUDP("%s\n\r", __PRETTY_FUNCTION__);
-    JsonDocument jsonDoc;
-    if (ModClassJson.load_jsonDoc(CONFIG_FILE_UDP, jsonDoc) == false) { return false; }
-    
-    _udpConfig.udpPortTx    = jsonDoc["udpPortTx"].as<int>();
-    _udpConfig.udpPortRx    = jsonDoc["udpPortRx"].as<int>();
-    _udpConfig.udpTimeOut   = jsonDoc["udpTimeOut"].as<int>();
-    _udpConfig.keyword      = jsonDoc["udpkeyword"].as<const char*>();
-    _udpConfig.udpPowerOn   = jsonDoc["udpPowerOn"].as<bool>();
-    _udpConfig.udpResponse   = jsonDoc["udpResponse"].as<bool>();
+    JsonDocument doc;
+    if (!ModClassJson.jsonFileLoadDoc(CONFIG_FILE_UDP, doc)) return false;
+    _udpConfig.udpPortTx = doc["udpPortTx"].as<int>();
+    _udpConfig.udpPortRx = doc["udpPortRx"].as<int>();
+    _udpConfig.udpTimeOut = doc["udpTimeOut"].as<int>();
+    _udpConfig.keyword = doc["udpkeyword"].as<String>();
+    _udpConfig.udpPowerOn = doc["udpPowerOn"].as<bool>();
+    _udpConfig.udpResponse = doc["udpResponse"].as<bool>();
     
     DEBUGUDP("updPortTx: %d\n\r", _udpConfig.udpPortTx);
     DEBUGUDP("updPortRx: %d\n\r", _udpConfig.udpPortRx);

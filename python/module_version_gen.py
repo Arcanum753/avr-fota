@@ -17,6 +17,7 @@ DEBUG = False  # Установите True для отладочного выв�
 SRC_FOLDER = "src"                       # папка с исходниками
 CORE_PREFIX = "core_"                     # префикс ядерных модулей
 MODULE_PREFIX = "module_"                 # префикс модулей
+SUBMODULE_PREFIX = "submodule_"           # префикс субмодулей
 
 # ========== ФАЙЛЫ СЧЁТЧИКОВ ==========
 VERSION_STORAGE_FILE = ".module_versions"  # файл для хранения версий модулей
@@ -228,11 +229,11 @@ def generate_module_versions():
         info_print(f"ERROR: Source directory not found: {src_dir}")
         return
     
-    # Собираем все папки с префиксами core_ и module_
+    # Собираем все папки с префиксами core_, module_ и submodule_
     modules = []
     for item in src_dir.iterdir():
         if item.is_dir():
-            if item.name.startswith(CORE_PREFIX) or item.name.startswith(MODULE_PREFIX):
+            if item.name.startswith(CORE_PREFIX) or item.name.startswith(MODULE_PREFIX) or item.name.startswith(SUBMODULE_PREFIX):
                 modules.append(item)
     
     if not modules:

@@ -35,6 +35,7 @@ Please Wait....Configuring Wifi.
 #define WIFI_CONFIG_FILE1           "/config_wifi1.json"
 #define WIFI_CONFIG_FILE2           "/config_wifi2.json"
 #define WIFI_CONFIG_FILE3           "/config_wifi3.json"
+#define WIFI_CONFIG_SYS             "/config_wifi.json"
 
 
 
@@ -79,12 +80,12 @@ class  CORE_CLASS_WIFI    {
     public:
     CORE_CLASS_WIFI (bool _in);
     #if ESP32
-    fs::SPIFFSFS*               _fs;
+    fs::LittleFSFS*               _fs;
     #elif defined(ESP8266)
     FS*                         _fs;                        // esp8266/esp32 flash file system
     #endif
     #if defined(ESP32)  
-    void begin(fs::SPIFFSFS* fs);
+    void begin(fs::LittleFSFS* fs);
     #elif defined(ESP8266)
     void begin(FS* fs) ;                        // esp8266/esp32 flash file system
     #endif
@@ -111,6 +112,12 @@ class  CORE_CLASS_WIFI    {
     uint8_t connectionTimout;
     bool _secondFlag;
     uint8_t             _wifiFailCount[4] = {0, 0, 0, 0}; // Счётчики неудачных попыток для каждого SSID
+    uint16_t            _wifiScanTime;
+    uint16_t            _wifiAPLifeTime;
+    volatile uint16_t   _apUptime = 0;
+    volatile uint16_t   _apClientIdleSec = 0;
+    volatile bool       _apClientActivity = false;
+    void notifyApClientActivity() { _apClientActivity = true; }
     
     static void s_secondTick(void* arg);
     void webInit();
@@ -119,6 +126,9 @@ class  CORE_CLASS_WIFI    {
     bool load_configWifi(int _in);
     bool save_configWifi(int _in);
     void defaultConfigWifi(int _in);
+    bool load_configWifiSys();
+    bool save_configWifiSys();
+    void defaultConfigWifiSys();
     void startDNSCaptive();
     void configureWifiAP();
     void configureWifi();
@@ -149,6 +159,8 @@ private:
     void save_slot_json(AsyncWebServerRequest *request, int slot);
     void handle_slot_post(AsyncWebServerRequest *request, int slot);
     void handle_slot_upload(AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total);
+    void send_wifi_sysconf_json(AsyncWebServerRequest *request);
+    void handle_wifi_sysconf_post(AsyncWebServerRequest *request);
 protected: 
     volatile int16_t scanTime = 1;
     bool  dumb = false;

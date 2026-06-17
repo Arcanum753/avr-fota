@@ -12,7 +12,7 @@
     <h2 class="title" style="background: #7D8EE2"> <span id="devicename"></span> OTA Client Configuration</h2>
     
     <div class="content" style="text-align: center;">
-        <form action="" method="post">
+        <form id="configForm" onsubmit="return saveOtaConfig(event)">
             <table class="scan" style="width: auto; margin: 0 auto;">
                 <tr><th colspan="2">OTA Client Settings</th></tr>
                 <tr><td class="label">OTA Client check every ... minute (0 is off)</td>    <td><input type="number" id="otaclienttime" name="otaclienttime"  min="0" max="60" value=""  onkeyup=setMinMax();></td></tr>
@@ -223,6 +223,22 @@
                 setTimeout(pollTestStatus, 1000);
             };
             xhr.send();
+        }
+
+        function saveOtaConfig(event) {
+            event.preventDefault();
+            const form = document.getElementById('configForm');
+            const params = new URLSearchParams(new FormData(form));
+            const xhr = new XMLHttpRequest();
+            xhr.open('POST', '/otaclient.html');
+            xhr.onload = function() {
+                if (xhr.status === 200) {
+                    ApplyCVT("/otaclient/info");
+                    ApplyCVT("/otaclient/ver");
+                }
+            };
+            xhr.send(params);
+            return false;
         }
 
 		function setMinMax() {

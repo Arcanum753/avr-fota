@@ -423,6 +423,57 @@ markup {
     transition: width 0.3s;
 }
 
+/* ===== OTA version diff styles ===== */
+
+.diff-newer {
+    color: #2e7d32;
+    font-weight: bold;
+}
+.diff-older {
+    color: #c62828;
+    font-weight: bold;
+}
+.diff-same {
+    color: #555;
+}
+.diff-matched {
+    color: #2e7d32;
+    font-weight: bold;
+}
+.diff-unmatched {
+    color: #c62828;
+    font-weight: bold;
+}
+.diff-debug-yes {
+    color: #b8860b;
+    font-weight: bold;
+}
+.diff-debug-no {
+    color: #2e7d32;
+    font-weight: bold;
+}
+.diff-block-label {
+    font-weight: bold;
+    color: #247;
+    display: block;
+    margin: 6px 0 2px 0;
+    padding: 3px 6px;
+    background: #e8e8e3;
+    border-radius: 3px;
+    text-align: left;
+}
+.ver-abs-row {
+    font-size: 13px;
+    color: #444;
+    margin: 2px 0;
+    padding-left: 8px;
+}
+.block-reason {
+    color: #c62828;
+    font-weight: bold;
+    font-size: 13px;
+}
+
 /* Диск info */
 .diskinfo-wrap {
     margin: 10px auto;

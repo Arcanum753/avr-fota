@@ -1,5 +1,4 @@
 #include <Arduino.h>
-#include <ArduinoJson.h>
 #include "version.h"
 #include "main.h"
 
@@ -14,18 +13,17 @@
 #include <core_ntp/NtpClientLib.h>
 #include "core_json/core_json.h"
 #include "module_otaclient/module_otaclient.h"
-#include "core_ota/core_ota.h"
 #include "eertos.h"
 #include "common.h"
 #include "module_otaclient_version.h"
 
 // Single global object - the class itself
-MODULE_CLASS_OTACLIENT otaClient;
+MODULE_CLASS_OTACLIENT otaClient; 
 
 // Static manifest entries buffer (avoid stack allocation)
 ManifestEntry MODULE_CLASS_OTACLIENT::_manifestEntries[OTACLIENT_MAX_MANIFEST_ENTRIES];
 
-MODULE_CLASS_OTACLIENT::MODULE_CLASS_OTACLIENT() {
+MODULE_CLASS_OTACLIENT::MODULE_CLASS_OTACLIENT() : CORE_OTA_CLASS(true) {
     _isStarted = false;
     _updateInProgress = false;
     _updateRetries = 0;
@@ -44,7 +42,8 @@ uint16_t MODULE_CLASS_OTACLIENT::serverPortGet()       { return _config.serverPo
 String MODULE_CLASS_OTACLIENT::manifestPathGet()       { return _config.manifestPath; }
 uint8_t MODULE_CLASS_OTACLIENT::isStart()              { return _isStarted; }
 
-void MODULE_CLASS_OTACLIENT::begin() {
+void MODULE_CLASS_OTACLIENT::begin(String _hostname, String _password) {
+    CORE_OTA_CLASS::begin(_hostname, _password);
     defaultConfig();
     if ( load_config() == false) {save_config();}
     DEBUGOTACLIENT("%s\r\n", __FUNCTION__);
@@ -59,8 +58,14 @@ void MODULE_CLASS_OTACLIENT::begin() {
 void otaclientTimer() {
     uint16_t timeout = otaClient.getTimeOut();
     if (otaClient.isStart() == false){   return; }
+    
+    // timeOut == 0: timer runs at 1min interval, no update checks
+    if (timeout == 0) {
+        SetTimerTask(otaclientTimer, SEC * MINUTES * 1);
+        return;
+    }
+    
     if (timeout > 60){ timeout = 60;}
-    if (timeout == 0) { return;  }
     
     // Don't start a new check if update is already in progress
     if (otaClient._updateInProgress) {
@@ -133,7 +138,7 @@ void MODULE_CLASS_OTACLIENT::loop() {
         if (WiFi.status() != WL_CONNECTED) {
             _testStatusCode = OTACLIENT_TEST_SERVER_UNAVAIL;
             _testStatusMessage = "WiFi not connected";
-            DEBUGOTACLIENT("Test: WiFi not connected\n");
+            DEBUGOTACLIENT("checkForUpdates from button: WiFi not connected\n");
             return;
         }
         
@@ -143,53 +148,23 @@ void MODULE_CLASS_OTACLIENT::loop() {
         if (!fetchManifest(_manifestEntries, entryCount)) {
             _testStatusCode = OTACLIENT_TEST_SERVER_UNAVAIL;
             _testStatusMessage = "Server unavailable";
-            DEBUGOTACLIENT("Test: server unavailable\n");
+            DEBUGOTACLIENT("checkForUpdates from button: server unavailable\n");
             return;
         }
         
-        DEBUGOTACLIENT("Test: manifest has %d entries\n", entryCount);
+        DEBUGOTACLIENT("checkForUpdates from button: manifest has %d entries\n", entryCount);
         
-        // Find our files (matching BUILD_ENV)
+        fileCompareResult fwResult, fsResult;
+        bool fwValid, fsValid;
+        _testCompareResult = 0;
+        _testFwCompareResult = 0;
+        _testFsCompareResult = 0;
+        
         ManifestEntry* firmwareEntry = NULL;
         ManifestEntry* fsEntry = NULL;
-        
-        for (int i = 0; i < entryCount; i++) {
-            if (_manifestEntries[i].type == "filesystem") {
-                fsEntry = &_manifestEntries[i];
-                DEBUGOTACLIENT("  Found FS file: %s\n", _manifestEntries[i].name.c_str());
-            } else if (_manifestEntries[i].type == "firmware") {
-                firmwareEntry = &_manifestEntries[i];
-                DEBUGOTACLIENT("  Found firmware file: %s\n", _manifestEntries[i].name.c_str());
-            }
-        }
-        
-        // Check versions using core_ota's fileNameCheck + compareWithCurrentFsVersion
-        fileCompareResult fwResult, fsResult;
-        bool fwValid = false;
-        bool fsValid = false;
-        _testCompareResult = 0;     // default: same/missing
-        _testFwCompareResult = 0;   // default: same
-        _testFsCompareResult = 0;   // default: same
-        
-        if (firmwareEntry) {
-            int8_t ret = modOtaClass.fileNameCheck(firmwareEntry->name, &fwResult);
-            // Use compareWithCurrentFsVersion to check if server version is NEWER
-            int8_t fwCompare = modOtaClass.compareWithCurrentFsVersion(&fwResult, firmwareEntry->name);
-            fwValid = (ret == 1 && fwCompare == 1);  // only valid if truly NEWER
-            _testFwCompareResult = fwCompare;
-            DEBUGOTACLIENT("Firmware version check: %s (nameMatch=%d, fsCompare=%d, valid=%d)\n",
-                           fwResult.nameMatch == 1 ? "MATCH" : "NO MATCH", fwResult.nameMatch, fwCompare, fwValid);
-        }
-        
-        if (fsEntry) {
-            int8_t ret = modOtaClass.fileNameCheck(fsEntry->name, &fsResult);
-            // Use compareWithCurrentFsVersion to check if server version is NEWER
-            int8_t fsCompare = modOtaClass.compareWithCurrentFsVersion(&fsResult, fsEntry->name);
-            fsValid = (ret == 1 && fsCompare == 1);  // only valid if truly NEWER
-            _testFsCompareResult = fsCompare;
-            DEBUGOTACLIENT("FS version check: %s (nameMatch=%d, fsCompare=%d, valid=%d)\n",
-                           fsResult.nameMatch == 1 ? "MATCH" : "NO MATCH", fsResult.nameMatch, fsCompare, fsValid);
-        }
+        checkManifestEntries(_manifestEntries, entryCount, fwResult, fsResult, fwValid, fsValid,
+                             _testFwCompareResult, _testFsCompareResult,
+                             firmwareEntry, fsEntry);
         
         // Combine compare results for display:
         // - If any is NEWER (1) -> combined = 1
@@ -297,7 +272,11 @@ void MODULE_CLASS_OTACLIENT::loop() {
 
 // ========== WEB INIT ==========
 void MODULE_CLASS_OTACLIENT::webInit(void) {
+    registerCommonRoutes();
+    registerCustomRoutes();
+}
 
+void MODULE_CLASS_OTACLIENT::registerCustomRoutes() {
     ESPHTTPServer.on(HTML_FILE_OTACLIENT, HTTP_POST, [this](AsyncWebServerRequest *request) {
         if (!ESPHTTPServer.checkAuth(request)) {return request->requestAuthentication(); }
         get_configuration_html(request);
@@ -375,9 +354,8 @@ void MODULE_CLASS_OTACLIENT::get_configuration_html(AsyncWebServerRequest *reque
             if (request->argName(i) == "otaclientmanifest") { _config.manifestPath = urldecode(request->arg(i)); }
         }
         
-        request->send_P(200, "text/html", Page_GeneralOtaClient);
         save_config();
-        otaclientTimer();
+        request->send(200, "application/json", "{\"success\":true}");
     }
     else {
         ESPHTTPServer.handleFileRead(request->url(), request);
@@ -387,27 +365,21 @@ void MODULE_CLASS_OTACLIENT::get_configuration_html(AsyncWebServerRequest *reque
 // ========== JSON GET ==========
 String MODULE_CLASS_OTACLIENT::jsonGet() {
     String ret = "";
-    JsonDocument jsonDoc;
-    
-    jsonDoc["deviceName"]   = ESPHTTPServer._sysConfig.deviceName;
-    jsonDoc["deviceSerial"] = ESPHTTPServer._sysConfig.deviceSerial;
-    
-    jsonDoc["ip"]           = WiFi.localIP().toString();
-    jsonDoc["mac"]          = WiFi.macAddress();
-    jsonDoc["timeOut"]   = _config.timeOut;
-    jsonDoc["serverPort"] = _config.serverPort;
-
-    jsonDoc["target"]       = BUILD_ENV;
-    jsonDoc["buildtime"]    = BUILD_TIME;
-    jsonDoc["gitbranch"]    = GIT_BRANCH;
-    jsonDoc["gitcommit"]    = GIT_COMMIT;
-    jsonDoc["uptime"]       = (String)NTP.getUptimeString();
-    jsonDoc["rstreason"]    =  ESPHTTPServer.getResetReason();
-
-    jsonDoc["espVer"]       = FIRMWARE_VERSION;
-    jsonDoc["webVer"]       = VERSION_WEB;
-	
-	serializeJsonPretty(jsonDoc, ret);
+    ret += "{\n";
+    ret += "  \"deviceName\": \"" + ESPHTTPServer._sysConfig.deviceName + "\",\n";
+    ret += "  \"deviceSerial\": \"" + ESPHTTPServer._sysConfig.deviceSerial + "\",\n";
+    ret += "  \"ip\": \"" + WiFi.localIP().toString() + "\",\n";
+    ret += "  \"mac\": \"" + WiFi.macAddress() + "\",\n";
+    ret += "  \"timeOut\": " + String(_config.timeOut) + ",\n";
+    ret += "  \"serverPort\": " + String(_config.serverPort) + ",\n";
+    ret += "  \"target\": \"" + String(BUILD_ENV) + "\",\n";
+    ret += "  \"buildtime\": \"" + String(BUILD_TIME) + "\",\n";
+    ret += "  \"gitbranch\": \"" + String(GIT_BRANCH) + "\",\n";
+    ret += "  \"gitcommit\": \"" + String(GIT_COMMIT) + "\",\n";
+    ret += "  \"uptime\": \"" + String(NTP.getUptimeString()) + "\",\n";
+    ret += "  \"rstreason\": \"" + ESPHTTPServer.getResetReason() + "\",\n";
+    ret += "  \"espVer\": \"" + String(FIRMWARE_VERSION) + "\"\n";
+    ret += "}\n";
     return ret;
 }
 
@@ -423,26 +395,26 @@ void MODULE_CLASS_OTACLIENT::defaultConfig() {
 // ========== SAVE CONFIG ==========
 bool MODULE_CLASS_OTACLIENT::save_config() {
     DEBUGOTACLIENT("%s\n\r", __PRETTY_FUNCTION__);
-    JsonDocument jsonDoc;
-    jsonDoc["timeOut"]        = _config.timeOut;
-    jsonDoc["powerOn"]        = _config.powerOn;
-    jsonDoc["serverAddress"]  = _config.serverAddress;
-    jsonDoc["serverPort"]     = _config.serverPort;
-    jsonDoc["manifestPath"]   = _config.manifestPath;
-    return ModClassJson.save_jsonDoc(jsonDoc, CONFIG_FILE_OTACLIENT);
+    JsonDocument doc;
+    ModClassJson.jsonFileLoadDoc(CONFIG_FILE_OTACLIENT, doc);
+    doc["timeOut"] = _config.timeOut;
+    doc["powerOn"] = _config.powerOn;
+    doc["serverAddress"] = _config.serverAddress;
+    doc["serverPort"] = _config.serverPort;
+    doc["manifestPath"] = _config.manifestPath;
+    return ModClassJson.jsonFileSaveDoc(CONFIG_FILE_OTACLIENT, doc);
 }
 
 // ========== LOAD CONFIG ==========
 bool MODULE_CLASS_OTACLIENT::load_config() {
     DEBUGOTACLIENT("%s\n\r", __PRETTY_FUNCTION__);
-    JsonDocument jsonDoc;
-    if (ModClassJson.load_jsonDoc(CONFIG_FILE_OTACLIENT, jsonDoc) == false) { return false; }
-    
-    _config.timeOut        = jsonDoc["timeOut"].as<int>();
-    _config.powerOn        = jsonDoc["powerOn"].as<bool>();
-    _config.serverAddress  = jsonDoc["serverAddress"].as<const char *>();
-    _config.serverPort     = jsonDoc["serverPort"].as<uint16_t>();
-    _config.manifestPath   = jsonDoc["manifestPath"].as<const char *>();
+    JsonDocument doc;
+    if (!ModClassJson.jsonFileLoadDoc(CONFIG_FILE_OTACLIENT, doc)) return false;
+    _config.timeOut = doc["timeOut"].as<uint16_t>();
+    _config.powerOn = doc["powerOn"].as<bool>();
+    _config.serverAddress = doc["serverAddress"].as<String>();
+    _config.serverPort = doc["serverPort"].as<uint16_t>();
+    _config.manifestPath = doc["manifestPath"].as<String>();
     
     DEBUGOTACLIENT("timeOut: %d\n\r", _config.timeOut);
     DEBUGOTACLIENT("powerOn: %d\n\r", _config.powerOn);
@@ -486,8 +458,8 @@ bool MODULE_CLASS_OTACLIENT::fetchManifest(ManifestEntry* entries, int& count) {
         return false;
     }
     
-    // Отправляем HTTP GET запрос вручную
-    client.print(String("GET ") + _config.manifestPath + " HTTP/1.1\r\n" +
+    // Отправляем HTTP GET запрос вручную с query-параметрами
+    client.print(String("GET ") + _config.manifestPath + "?target=" + BUILD_ENV + "&ver=" + FIRMWARE_VERSION + " HTTP/1.1\r\n" +
                  "Host: " + _config.serverAddress + ":" + String(_config.serverPort) + "\r\n" +
                  "Connection: close\r\n\r\n");
     
@@ -514,7 +486,7 @@ bool MODULE_CLASS_OTACLIENT::fetchManifest(ManifestEntry* entries, int& count) {
                 int c = client.read();
                 if (c == -1) break;
                 payload += (char)c;
-                if (payload.length() > 2048) {  // Жёсткий лимит: 2048 байт
+                if (payload.length() > 4096) {  // Жёсткий лимит: 4096 байт
                     DEBUGOTACLIENT("fetchManifest: payload too large\n");
                     client.stop();
                     return false;
@@ -567,34 +539,35 @@ bool MODULE_CLASS_OTACLIENT::fetchManifest(ManifestEntry* entries, int& count) {
 #endif
     
     // Parse JSON
-    JsonDocument doc;
-    DeserializationError error = deserializeJson(doc, payload);
-    if (error) {
-        DEBUGOTACLIENT("fetchManifest: JSON parse error: %s\n", error.c_str());
-        return false;
-    }
-    
-    // Проверяем, есть ли файлы для нашего target на сервере
-    bool hasFiles = doc["has_files"].as<bool>() || false;
-    if (!hasFiles) {
+    bool hasFiles = false;
+    if (!ModClassJson.jsonParseNestedBool(payload, "has_files", hasFiles) || !hasFiles) {
         DEBUGOTACLIENT("fetchManifest: no files for target %s on server\n", BUILD_ENV);
         return false;
     }
     
-    JsonArray files = doc["files"].as<JsonArray>();
-    if (files.isNull()) {
+    int numFiles = ModClassJson.jsonGetArraySize(payload, "files");
+    if (numFiles <= 0) {
         DEBUGOTACLIENT("fetchManifest: no 'files' array in manifest\n");
         return false;
     }
     
     int idx = 0;
-    for (JsonObject file : files) {
-        if (idx >= OTACLIENT_MAX_MANIFEST_ENTRIES) break;
+    for (int i = 0; i < numFiles && idx < OTACLIENT_MAX_MANIFEST_ENTRIES; i++) {
+        String name, type, md5;
+        ModClassJson.jsonGetArrayStr(payload, "files", i, "name", name);
+        ModClassJson.jsonGetArrayStr(payload, "files", i, "type", type);
         
-        entries[idx].name = file["name"].as<const char *>();
-        entries[idx].type = file["type"].as<const char *>();
-        entries[idx].size = file["size"].as<size_t>();
-        entries[idx].md5  = file["md5"].as<const char *>();
+        if (name.length() == 0 || type.length() == 0) {
+            DEBUGOTACLIENT("  [%d] SKIPPED (missing name or type)\n", i);
+            continue;
+        }
+        
+        entries[idx].name = name;
+        entries[idx].type = type;
+        
+        int32_t sizeVal = 0;
+        if (ModClassJson.jsonGetArrayInt(payload, "files", i, "size", sizeVal)) entries[idx].size = (size_t)sizeVal;
+        ModClassJson.jsonGetArrayStr(payload, "files", i, "md5", entries[idx].md5);
         
         DEBUGOTACLIENT("  [%d] %s (%s) %u bytes MD5:%s\n",
             idx, entries[idx].name.c_str(), entries[idx].type.c_str(),
@@ -605,6 +578,70 @@ bool MODULE_CLASS_OTACLIENT::fetchManifest(ManifestEntry* entries, int& count) {
     
     count = idx;
     return count > 0;
+}
+
+// ============================================================
+// UNIFIED MANIFEST ENTRY CHECKING
+// ============================================================
+void MODULE_CLASS_OTACLIENT::checkManifestEntries(ManifestEntry* entries, int count,
+                                                    fileCompareResult& fwResult, fileCompareResult& fsResult,
+                                                    bool& fwValid, bool& fsValid,
+                                                    int8_t& fwCompareResult, int8_t& fsCompareResult,
+                                                    ManifestEntry*& fwEntryOut, ManifestEntry*& fsEntryOut) {
+    ManifestEntry* firmwareEntry = NULL;
+    ManifestEntry* fsEntry = NULL;
+    int bestFwBuild = -1, bestFsBuild = -1;
+    
+    for (int i = 0; i < count; i++) {
+        int build = -1;
+        int lastDot = entries[i].name.lastIndexOf('.');
+        int prevDot = (lastDot > 0) ? entries[i].name.lastIndexOf('.', lastDot - 1) : -1;
+        if (prevDot > 0) {
+            String buildStr = entries[i].name.substring(prevDot + 1, lastDot);
+            build = buildStr.toInt();
+        }
+        
+        if (entries[i].type == "filesystem") {
+            if (build > bestFsBuild) {
+                bestFsBuild = build;
+                fsEntry = &entries[i];
+            }
+            DEBUGOTACLIENT("  Found FS file: %s (build=%d)\n", entries[i].name.c_str(), build);
+        } else if (entries[i].type == "firmware") {
+            if (build > bestFwBuild) {
+                bestFwBuild = build;
+                firmwareEntry = &entries[i];
+            }
+            DEBUGOTACLIENT("  Found firmware file: %s (build=%d)\n", entries[i].name.c_str(), build);
+        }
+    }
+    
+    fwValid = false;
+    fsValid = false;
+    fwCompareResult = 0;
+    fsCompareResult = 0;
+    
+    if (firmwareEntry) {
+        int8_t ret = fileNameCheck(firmwareEntry->name, &fwResult);
+        int8_t fwCompare = compareWithCurrentFsVersion(&fwResult, firmwareEntry->name);
+        fwValid = (ret == 1 && fwCompare == 1);
+        fwCompareResult = fwCompare;
+        DEBUGOTACLIENT("Firmware version check: %s (nameMatch=%d, fsCompare=%d, valid=%d)\n",
+                       fwResult.nameMatch == 1 ? "MATCH" : "NO MATCH", fwResult.nameMatch, fwCompare, fwValid);
+    }
+    
+    if (fsEntry) {
+        int8_t ret = fileNameCheck(fsEntry->name, &fsResult);
+        int8_t fsCompare = compareWithCurrentFsVersion(&fsResult, fsEntry->name);
+        fsValid = (ret == 1 && fsCompare == 1);
+        fsCompareResult = fsCompare;
+        
+        DEBUGOTACLIENT("FS version check: %s (nameMatch=%d, fsCompare=%d, valid=%d)\n",
+                       fsResult.nameMatch == 1 ? "MATCH" : "NO MATCH", fsResult.nameMatch, fsCompare, fsValid);
+    }
+    
+    fwEntryOut = firmwareEntry;
+    fsEntryOut = fsEntry;
 }
 
 // ============================================================
@@ -627,12 +664,8 @@ bool MODULE_CLASS_OTACLIENT::performUpdateFromStream(WiFiClient& stream, size_t 
 #endif
     
     // End filesystem before update
-    if (modOtaClass._fs) {
-        DEBUGOTACLIENT("Ending filesystem...\n");
-        modOtaClass._fs->end();
-        _fsEnded = true;
-        delay(100);
-    }
+    fsEnd();
+    _fsEnded = true;
     
 #if defined(ESP8266)
     Update.runAsync(true);
@@ -644,14 +677,8 @@ bool MODULE_CLASS_OTACLIENT::performUpdateFromStream(WiFiClient& stream, size_t 
         Update.printError(Serial);
 #endif
         // Remount filesystem
-        if (modOtaClass._fs) {
-#if defined(ESP32)
-            modOtaClass._fs->begin(true);
-#elif defined(ESP8266)
-            modOtaClass._fs->begin();
-#endif
-            _fsEnded = false;
-        }
+        fsRemount();
+        _fsEnded = false;
         return false;
     }
     
@@ -676,14 +703,8 @@ bool MODULE_CLASS_OTACLIENT::performUpdateFromStream(WiFiClient& stream, size_t 
 #if defined(ESP8266)
             Update.end();
 #endif
-            if (modOtaClass._fs) {
-#if defined(ESP32)
-                modOtaClass._fs->begin(true);
-#elif defined(ESP8266)
-                modOtaClass._fs->begin();
-#endif
-                _fsEnded = false;
-            }
+            fsRemount();
+            _fsEnded = false;
             return false;
         }
         
@@ -696,14 +717,8 @@ bool MODULE_CLASS_OTACLIENT::performUpdateFromStream(WiFiClient& stream, size_t 
 #if defined(ESP8266)
             Update.end();
 #endif
-            if (modOtaClass._fs) {
-#if defined(ESP32)
-                modOtaClass._fs->begin(true);
-#elif defined(ESP8266)
-                modOtaClass._fs->begin();
-#endif
-                _fsEnded = false;
-            }
+            fsRemount();
+            _fsEnded = false;
             return false;
         }
         
@@ -724,14 +739,8 @@ bool MODULE_CLASS_OTACLIENT::performUpdateFromStream(WiFiClient& stream, size_t 
 #ifdef DEBUG_OTA
         Update.printError(Serial);
 #endif
-        if (modOtaClass._fs) {
-#if defined(ESP32)
-            modOtaClass._fs->begin(true);
-#elif defined(ESP8266)
-            modOtaClass._fs->begin();
-#endif
-            _fsEnded = false;
-        }
+        fsRemount();
+        _fsEnded = false;
         return false;
     }
     
@@ -784,7 +793,7 @@ bool MODULE_CLASS_OTACLIENT::downloadAndUpdate(const String& url, size_t size, c
 // CHECK FOR UPDATES (main logic)
 // ============================================================
 void MODULE_CLASS_OTACLIENT::checkForUpdates() {
-    DEBUGOTACLIENT("%s\n\r", __FUNCTION__);
+    DEBUGOTACLIENT("checkForUpdates from timer\n\r");
     
     // Don't start if already updating
     if (_updateInProgress) {
@@ -808,67 +817,15 @@ void MODULE_CLASS_OTACLIENT::checkForUpdates() {
     
     DEBUGOTACLIENT("Manifest has %d entries\n", entryCount);
     
-    // Find our files (matching BUILD_ENV)
+    fileCompareResult fwResult, fsResult;
+    bool fwValid, fsValid;
+    int8_t fwCompareResult, fsCompareResult;
     ManifestEntry* firmwareEntry = NULL;
     ManifestEntry* fsEntry = NULL;
     
-    for (int i = 0; i < entryCount; i++) {
-        if (_manifestEntries[i].type == "filesystem") {
-            fsEntry = &_manifestEntries[i];
-            DEBUGOTACLIENT("  Found FS file: %s\n", _manifestEntries[i].name.c_str());
-        } else if (_manifestEntries[i].type == "firmware") {
-            firmwareEntry = &_manifestEntries[i];
-            DEBUGOTACLIENT("  Found firmware file: %s\n", _manifestEntries[i].name.c_str());
-        }
-    }
-    
-    // Check versions using core_ota's fileNameCheck + compareWithCurrentFsVersion
-    fileCompareResult fwResult, fsResult;
-    bool fwValid = false;
-    bool fsValid = false;
-    
-    if (firmwareEntry) {
-        int8_t ret = modOtaClass.fileNameCheck(firmwareEntry->name, &fwResult);
-        // Only update if server version is NEWER than current
-        int8_t fwCompare = modOtaClass.compareWithCurrentFsVersion(&fwResult, firmwareEntry->name);
-        fwValid = (ret == 1 && fwCompare == 1);
-        DEBUGOTACLIENT("Firmware version check: %s (nameMatch=%d, fsCompare=%d, valid=%d)\n",
-                       fwResult.nameMatch == 1 ? "MATCH" : "NO MATCH", fwResult.nameMatch, fwCompare, fwValid);
-    }
-    
-    if (fsEntry) {
-        int8_t ret = modOtaClass.fileNameCheck(fsEntry->name, &fsResult);
-        // Only update if server version is NEWER than current
-        int8_t fsCompare = modOtaClass.compareWithCurrentFsVersion(&fsResult, fsEntry->name);
-        fsValid = (ret == 1 && fsCompare == 1);
-        
-        // Дополнительная проверка: если версия FS-файла совпадает с кэшированной версией FS — не обновляем
-        // (защита от случая, когда compareWithCurrentFsVersion даёт неверный результат)
-        if (fsValid) {
-            int64_t cachedDate = modOtaClass.getCachedFsDate();
-            int32_t cachedBuild = modOtaClass.getCachedFsBuild();
-            int32_t cachedMajor = modOtaClass.getCachedFsMajor();
-            int32_t cachedMinor = modOtaClass.getCachedFsMinor();
-            
-            if (cachedDate != 0 || cachedBuild != 0 || cachedMajor != 0 || cachedMinor != 0) {
-                // Восстанавливаем версию файла из fsResult.*Diff (которые посчитаны относительно FW)
-                // fileVersion = diff + VERSION_*, т.к. fsResult.dateDiff = fileDate - VERSION_DATE
-                int64_t fileDate = fsResult.dateDiff + VERSION_DATE;
-                int32_t fileBuild = fsResult.isDebug ? (fsResult.buildDiff + VERSION_BUILD) : 0;
-                int32_t fileMajor = fsResult.majorDiff + VERSION_MAJOR;
-                int32_t fileMinor = fsResult.minorDiff + VERSION_MINOR;
-                
-                if (fileDate == cachedDate && fileBuild == cachedBuild &&
-                    fileMajor == cachedMajor && fileMinor == cachedMinor) {
-                    fsValid = false;
-                    DEBUGOTACLIENT("FS version matches cached version, skipping\n");
-                }
-            }
-        }
-        
-        DEBUGOTACLIENT("FS version check: %s (nameMatch=%d, fsCompare=%d, valid=%d)\n",
-                       fsResult.nameMatch == 1 ? "MATCH" : "NO MATCH", fsResult.nameMatch, fsCompare, fsValid);
-    }
+    checkManifestEntries(_manifestEntries, entryCount, fwResult, fsResult, fwValid, fsValid,
+                         fwCompareResult, fsCompareResult,
+                         firmwareEntry, fsEntry);
     
     // Decision logic:
     // If both are valid and have the same version -> update FS first, then firmware
@@ -919,13 +876,8 @@ void MODULE_CLASS_OTACLIENT::checkForUpdates() {
     SetTimerTask(otaclientLoopTask, 50);
     
     // If FS was ended during update attempt, try to remount it
-    if (_fsEnded && modOtaClass._fs) {
-        DEBUGOTACLIENT("Remounting filesystem after update attempt...\n");
-#if defined(ESP32)
-        modOtaClass._fs->begin(true);
-#elif defined(ESP8266)
-        modOtaClass._fs->begin();
-#endif
+    if (_fsEnded) {
+        fsRemount();
         _fsEnded = false;
     }
     

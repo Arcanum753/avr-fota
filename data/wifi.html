@@ -104,6 +104,22 @@
         </tr>
     </table>
     
+    <!-- WiFi System Settings -->
+    <div style="margin: 15px 0; padding: 10px; background: #f0f8ff; border-radius: 5px;">
+        <table border="0" cellspacing="2" cellpadding="2" align="center">
+            <tr><th colspan="2" style="background: #7D8EE2; color: white; padding: 5px;">WiFi System Settings</th></tr>
+            <tr><td align="right">Scan Wifi for:</td>
+                <td><input type="number" id="scantime_hours" min="0" max="12" value="0" style="width:50px;"> h
+                    <input type="number" id="scantime_mins" min="0" max="59" value="0" style="width:50px;"> m (0:0 is off)</td></tr>
+            <tr><td align="right">WiFi AP lifetime:</td>
+                <td><input type="number" id="aptime" name="aptime" min="0" max="60" value="10" style="width:60px;"> minute (0 is off)</td></tr>
+            <tr><td colspan="2" align="center">
+                <input type="button" value="Save WiFi System" class="button-prog" onclick="saveWifiSysConf();">
+                <span id="sysconfStatus" style="margin-left:10px;font-size:12px;"></span>
+            </td></tr>
+        </table>
+    </div>
+    
     <!-- Глобальные настройки -->
     <div style="margin: 15px 0; padding: 10px; background: #f5f5f5; border-radius: 5px; text-align: center;">
         <label>
@@ -338,6 +354,43 @@ async function saveSlotData(slotNumber) {
     }
 }
 
+        // Функция сохранения WiFi системных настроек
+        async function saveWifiSysConf() {
+            const statusEl = document.getElementById('sysconfStatus');
+            statusEl.innerHTML = 'Saving...';
+            statusEl.style.color = 'orange';
+            
+            const hours = parseInt(document.getElementById('scantime_hours').value) || 0;
+            const mins = parseInt(document.getElementById('scantime_mins').value) || 0;
+            const totalMins = hours * 60 + mins;
+            
+            const data = {
+                scantime: totalMins,
+                aptime: parseInt(document.getElementById('aptime').value) || 0
+            };
+            
+            try {
+                const response = await fetch('/wifi/sysconf', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                const result = await response.json();
+                if (result.success) {
+                    statusEl.innerHTML = 'Saved';
+                    statusEl.style.color = 'green';
+                } else {
+                    statusEl.innerHTML = 'Error: ' + (result.error || 'unknown');
+                    statusEl.style.color = 'red';
+                }
+            } catch (e) {
+                statusEl.innerHTML = 'Connection error';
+                statusEl.style.color = 'red';
+            }
+            
+            setTimeout(() => { statusEl.innerHTML = ''; }, 3000);
+        }
+
         // Функция отправки запроса на перезагрузку
         function sendRestartRequest() {
             console.log('Sending restart request...');
@@ -407,6 +460,7 @@ async function saveSlotData(slotNumber) {
                 ApplyCVT("/system/version")
                     .then(() => ApplyCVT("/system/infovalues"))
                     .then(() => ApplyCVT("/wifi/info"))
+                    .then(() => ApplyCVT("/wifi/sysconf"))
                     .then(() => loadAllSlots())
                     .then(() => getNetwork());
             }, 500);
