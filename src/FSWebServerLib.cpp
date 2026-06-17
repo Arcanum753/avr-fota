@@ -20,6 +20,10 @@
 #include "module_gpio/module_gpio.h"
 #endif
 
+#if defined(MODULE_TEMPLATE)
+#include "module_template/module_template.h"
+#endif
+
 #if defined(MODULE_UDP)
 #include "module_udp/module_udp.h"
 #endif
@@ -123,6 +127,11 @@ AsyncFSWebServer::AsyncFSWebServer(uint16_t port) : AsyncWebServer(port) {}
 #if defined(MODULE_GPIO)
 	ModClassGpio.setFs(&LittleFS);
 	ModClassGpio.webInit();
+#endif
+
+#if defined(MODULE_TEMPLATE)
+	ModClassTemplate.setFs(&LittleFS);
+	ModClassTemplate.webInit();
 #endif
 	
 #ifdef PROGTYPE_SWD
