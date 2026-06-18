@@ -40,6 +40,7 @@ Submodules (`submodule_*`) inherit from `Class_ProgBase` and implement specific 
 | `module_prog` + `submodule_isp` | `-D PROGTYPE_ISP` | AVR-ISP programmer (AtMega/AtTiny) |
 | `module_prog` + `submodule_swd` | `-D PROGTYPE_SWD` | SWD programmer (STM32 F1/F4) |
 | `module_gpio` | `-D MODULE_GPIO` | GPIO control via web |
+| `module_lcd-i2c` | `-D MODULE_LCD_I2C` | LCD I2C display control (LiquidCrystal_I2C, маски date/time, backlight) |
 | `module_udp` | `-D MODULE_UDP` | UDP broadcast for device discovery |
 | `module_otaclient` | `-D MODULE_OTACLIENT=1` | OTA client (auto-update from remote server) |
 | `module_template` | `-D MODULE_TEMPLATE` | Шаблон модуля — основа для создания новых модулей |

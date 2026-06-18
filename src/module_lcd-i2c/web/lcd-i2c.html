@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>LCD I2C</title>
+    <meta http-equiv="Content-type" content="text/html; charset=utf-8">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <markup>./page_head.html</markup>
+    <h2 class="title" style="background: #7D8EE2">
+        <span id="devicename"></span> LCD I2C — Display
+    </h2>
+
+
+        <table class="cfg" style="width: auto; margin: 0 auto;">
+            <tr><th>Backlight</th></tr>
+            <tr><td><label><input type="checkbox" id="backlightChk" onchange="toggleBacklight(this.checked)"> Backlight</label></td></tr>
+        </table>
+        <br>
+
+        <table class="cfg" id="displayTable">
+            <tr><th colspan="2">Display lines (masks: <b>date</b>, <b>time</b>)</th></tr>
+        </table>
+        <br>
+        <button type="button" onclick="refreshInfo()">Refresh</button>
+        <button type="button" onclick="sendDisplay()">Show</button>
+    </div>
+
+    <div class="footer">
+        Module version: <span id="gpioversion"> </span> &nbsp;|&nbsp;
+        Build: <span id="gpiogentime"> </span> <br>
+    </div>
+
+    <markup>./page_bottom.html</markup>
+	<script src="GetJson.js" defer></script>
+	<script src="GetMarkup.js" defer></script>
+    <script>
+        window.onload = function() {
+            ApplyCVT("/system/devconf")
+            .then(() => ApplyCVT("/system/version"))
+            .then(() => loadInfo());
+        };
+        var _backlightInit = false;
+        function applyCvtData(data) {
+            var lines = data.split('\n');
+            for (var i = 0; i < lines.length; i++) {
+                var line = lines[i].trim();
+                if (!line) continue;
+                var parts = line.split('|');
+                var id = parts[0];
+                var val = parts[1];
+                var type = parts[2];
+                var el = document.getElementById(id);
+                if (!el) continue;
+                if (type === 'chk') { el.checked = (val === 'checked'); }
+                else if (type === 'input') { el.value = val; }
+                else if (type === 'div') { el.innerHTML = val; }
+            }
+        }
+
+        function buildDisplayTable(cols, rows) {
+            var table = document.getElementById('displayTable');
+            while (table.rows.length > 1) { table.deleteRow(1); }
+            if (!rows || rows < 1) rows = 1;
+            if (!cols || cols < 1) cols = 8;
+            for (var r = 0; r < rows; r++) {
+                var tr = table.insertRow();
+                var td1 = tr.insertCell();
+                td1.textContent = 'Line ' + (r + 1) + ':';
+                td1.style.width = '80px';
+                td1.style.textAlign = 'right';
+                var td2 = tr.insertCell();
+                var input = document.createElement('input');
+                input.type = 'text';
+                input.id = 'line' + r;
+                input.name = 'line' + r;
+                input.style.width = Math.min(cols * 10, 300) + 'px';
+                input.maxLength = 40;
+                td2.appendChild(input);
+            }
+        }
+
+        async function loadInfo() {
+            try {
+                var resp = await fetch('/lcd-i2c/info');
+                var data = await resp.text();
+                var cols = parseInt(getCvtValue(data, 'cols'));
+                var rows = parseInt(getCvtValue(data, 'rows'));
+                var table = document.getElementById('displayTable');
+                var needsRebuild = (table.rows.length - 1) !== rows;
+                if (needsRebuild) {
+                    buildDisplayTable(cols, rows);
+                }
+                applyCvtData(data);
+                if (!_backlightInit) {
+                    _backlightInit = true;
+                    var bl = document.getElementById('backlightChk');
+                    bl.checked = getCvtValue(data, 'backlight') === 'checked';
+                }
+            } catch(e) { console.error('loadInfo error:', e); }
+        }
+
+        function getCvtValue(data, id) {
+            var lines = data.split('\n');
+            for (var i = 0; i < lines.length; i++) {
+                var line = lines[i].trim();
+                if (!line) continue;
+                var parts = line.split('|');
+                if (parts[0] === id) return parts[1];
+            }
+            return '';
+        }
+
+        async function toggleBacklight(state) {
+            var params = new URLSearchParams();
+            params.append('backlight', state ? 'true' : 'false');
+            try {
+                await fetch('/lcd-i2c/backlight', { method: 'POST', body: params });
+            } catch(e) { console.error('backlight error:', e); }
+        }
+
+        async function sendDisplay() {
+            var lines = document.querySelectorAll('#displayTable input');
+            var params = new URLSearchParams();
+            for (var i = 0; i < lines.length; i++) {
+                params.append(lines[i].name, lines[i].value);
+            }
+            try {
+                var resp = await fetch('/lcd-i2c/save_content', { method: 'POST', body: params });
+                var text = await resp.text();
+                if (text === 'OK') { loadInfo(); }
+            } catch(e) { console.error('send error:', e); }
+        }
+
+        async function refreshInfo() {
+            await loadInfo();
+            var resp = await fetch('/lcd-i2c/sysinfo');
+            applyCvtData(await resp.text());
+        }
+
+        loadInfo();
+    </script>
+</body>
+</html>

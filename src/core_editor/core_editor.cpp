@@ -147,7 +147,8 @@ void CORE_CLASS_EDITOR::handleFileList(AsyncWebServerRequest *request) {
         output += "}";
         file = root.openNextFile();
     }
-#else
+#endif
+#ifdef ESP8266
     Dir dir = _fs->openDir(path);
     while (dir.next()) {
         File entry = dir.openFile("r");
@@ -157,7 +158,9 @@ void CORE_CLASS_EDITOR::handleFileList(AsyncWebServerRequest *request) {
         output += "{\"type\":\"";
         output += (isDir) ? "dir" : "file";
         output += "\",\"name\":\"";
-        output += escapeJsonStr(String(entry.name()));
+        String entryName = String(entry.name());
+        if (entryName.startsWith("/")) entryName = entryName.substring(1);
+        output += escapeJsonStr(entryName);
         output += "\",\"size\":";
         output += String(entry.size());
         output += "}";

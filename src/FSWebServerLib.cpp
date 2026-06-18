@@ -24,6 +24,10 @@
 #include "module_template/module_template.h"
 #endif
 
+#if defined(MODULE_LCD_I2C)
+#include "module_lcd-i2c/module_lcd-i2c.h"
+#endif
+
 #if defined(MODULE_UDP)
 #include "module_udp/module_udp.h"
 #endif
@@ -133,6 +137,12 @@ AsyncFSWebServer::AsyncFSWebServer(uint16_t port) : AsyncWebServer(port) {}
 	ModClassTemplate.setFs(&LittleFS);
 	ModClassTemplate.begin();
 	ModClassTemplate.webInit();
+#endif
+
+#if defined(MODULE_LCD_I2C)
+	ModClassLcdI2c.setFs(&LittleFS);
+	ModClassLcdI2c.begin();
+	ModClassLcdI2c.webInit();
 #endif
 	
 #ifdef PROGTYPE_SWD
