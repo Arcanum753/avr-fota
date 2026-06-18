@@ -131,6 +131,7 @@ AsyncFSWebServer::AsyncFSWebServer(uint16_t port) : AsyncWebServer(port) {}
 
 #if defined(MODULE_TEMPLATE)
 	ModClassTemplate.setFs(&LittleFS);
+	ModClassTemplate.begin();
 	ModClassTemplate.webInit();
 #endif
 	

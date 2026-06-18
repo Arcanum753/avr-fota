@@ -1,61 +1,49 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Template advanced</title>
+    <title>Template demo</title>
     <meta http-equiv="Content-type" content="text/html; charset=utf-8">
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
     <markup>./page_head.html</markup>
-    <h2 class="title" style="background: #7D8EE2"> <span id="devicename"></span> Template module — advanced</h2>
+    <h2 class="title" style="background: #7D8EE2"> <span id="devicename"></span> Template module — demo form</h2>
 
-    <!-- Описание модуля на русском и английском (AI generated) -->
+    <!-- Описание -->
     <div class="content" style="text-align: center;">
         <table class="scan" style="width: auto; margin: 0 auto;">
             <tr><th>Описание / Description</th></tr>
             <tr><td style="text-align: left; padding: 8px;">
-                <b>RU:</b> Пример второй страницы конфигурации шаблонного модуля.
-                Демонстрирует работу с дополнительными параметрами: выбор из списка и чекбокс.
-                Конфиг сохраняется в тот же JSON-файл, что и базовые настройки.<br>
-                <b>EN:</b> Example of the second configuration page of the template module.
-                Demonstrates additional parameters: dropdown select and checkbox.
-                Config is saved to the same JSON file as basic settings.<br>
+                <b>RU:</b> Демо-страница — пример работы с формой и сохранением в JSON.
+                Поле ниже сохраняется в config_template.json, но не влияет на работу GPIO.
+                Используйте как заготовку для своих полей конфигурации.<br>
+                <b>EN:</b> Demo page — example of form handling and JSON save.
+                The field below is saved to config_template.json but does not affect GPIO.
+                Use as a template for your own config fields.<br>
                 <small><i>(AI generated)</i></small>
             </td></tr>
         </table>
     </div>
 
-    <!-- Дополнительные настройки -->
+    <!-- Демо-форма (сохраняется в JSON, ни на что не влияет) -->
     <div class="content" style="text-align: center;">
         <form action="" method="post">
             <table class="scan" style="width: auto; margin: 0 auto;">
-                <tr><th colspan="2">Advanced settings</th></tr>
+                <tr><th colspan="2">Demo config (example only)</th></tr>
                 <tr>
-                    <td class="label">UART baud rate</td>
-                    <td>
-                        <select id="baudRate" name="baudRate">
-                            <option value="9600">9600</option>
-                            <option value="19200">19200</option>
-                            <option value="38400">38400</option>
-                            <option value="57600">57600</option>
-                            <option value="115200" selected>115200</option>
-                        </select>
-                    </td>
+                    <td class="label">Sample text</td>
+                    <td><input type="text" id="demoSampleText" name="demoSampleText" value=""></td>
                 </tr>
-                <tr>
-                    <td class="label">Enable logging</td>
-                    <td><input type="checkbox" id="enableLogging" name="enableLogging"></td>
-                </tr>
-                <tr><td colspan="2" style="text-align: center; padding: 8px;"> <input type="submit" value="Save" class="button-prog"></td></tr>
+                <tr><td colspan="2" style="text-align: center; padding: 8px;"> <input type="submit" value="Применить" class="button-prog"></td></tr>
             </table>
         </form>
     </div>
 
-    <!-- Текущее время -->
+    <!-- Время и дата -->
     <div class="content" style="text-align: center;">
         <table class="scan" style="width: auto; margin: 0 auto;">
-            <tr><th>Current time</th></tr>
-            <tr><td style="padding: 12px; font-size: 1.3em;"><span id="clock2">--:--:--</span></td></tr>
+            <tr><th>Текущее время / Current time</th></tr>
+            <tr><td style="padding: 12px; font-size: 1.3em;"><span id="templateTime">--</span></td></tr>
         </table>
     </div>
 
@@ -63,13 +51,7 @@
     <script src="GetJson.js" defer></script>
     <script src="GetMarkup.js" defer></script>
     <script>
-        function updateClock2() {
-            const now = new Date();
-            document.getElementById('clock2').innerText = now.toLocaleTimeString();
-        }
         window.onload = function() {
-            updateClock2();
-            setInterval(updateClock2, 1000);
             setTimeout(() => {
                 ApplyCVT("/system/version")
                     .then(() => ApplyCVT("/template/info"))

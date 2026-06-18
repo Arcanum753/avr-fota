@@ -1,1 +1,1 @@
-{"textField":"hello","interval":5,"gpioPin":2,"baudRate":115200,"enableLogging":true}
+{"gpio1State":false,"gpio2State":false,"blinkInterval":0,"demoSampleText":"demo text"}

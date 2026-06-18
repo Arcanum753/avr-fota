@@ -15,17 +15,39 @@
 #include <LittleFS.h>
 #endif
 
+// Пины для двух GPIO, управляемых с веб-страницы
+// ESP32 DevKit1: 
+// ESP8266 D1 mini: 
+#if defined(ESP32)
+#define TEMPLATE_GPIO1  32   // 
+#define TEMPLATE_GPIO2  33   // 
+#endif
+
+#if  defined(ESP8266)
+#define TEMPLATE_GPIO1  16   // D0
+#define TEMPLATE_GPIO2  14   // D5
+#endif
+
 #define CONFIG_FILE_TEMPLATE    "/config_template.json"
 #define HTML_FILE_TEMPLATE      "/template.html"
 #define HTML_FILE_TEMPLATE2     "/template2.html"
 
-// Структура конфига шаблона — все поля хранятся в одном config_template.json
+const char Page_GeneralSysTemplate1[] PROGMEM = R"=====(
+<meta http-equiv="refresh" content="2; URL=/template.html">
+Save OK. Please wait...
+)=====";
+
+const char Page_GeneralSysTemplate2[] PROGMEM = R"=====(
+<meta http-equiv="refresh" content="2; URL=/template2.html">
+Save OK. Please wait...
+)=====";
+
+// Структура конфига — сохраняется в config_template.json
 typedef struct {
-    String textField;
-    uint16_t interval;
-    uint8_t gpioPin;
-    uint32_t baudRate;
-    bool enableLogging;
+    bool gpio1State;
+    bool gpio2State;
+    uint16_t blinkInterval;   // период моргания в мс, 0 = не моргать
+    String demoSampleText;    // демо-поле, ни на что не влияет
 } strTmplConfig;
 
 class MODULE_CLASS_TEMPLATE {
@@ -46,17 +68,18 @@ private:
     void html_ver_get(AsyncWebServerRequest *request);
 
     // Обработчики веб-запросов
-    void handleTemplateInfo(AsyncWebServerRequest *request);
-    void handleTemplate1Config(AsyncWebServerRequest *request);
-    void handleTemplate2Config(AsyncWebServerRequest *request);
-    void handleGpio(AsyncWebServerRequest *request);
+    void handleInfo(AsyncWebServerRequest *request);
+    void handleConfigGpio(AsyncWebServerRequest *request);
+    void handleConfigDemo(AsyncWebServerRequest *request);
 
     // Работа с конфигом
     void defaultConfigTemplate();
     bool load_config_template();
     bool save_config_template();
 
-    String getTimeStr();
+    // Логика моргания
+    void applyGpioState();
+    static void blinkTimerTask();
 
 protected:
     bool dumb;
@@ -67,6 +90,7 @@ protected:
 #endif
 
     strTmplConfig _config;
+    bool _blinkState;
 };
 
 extern MODULE_CLASS_TEMPLATE ModClassTemplate;
