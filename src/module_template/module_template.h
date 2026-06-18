@@ -16,31 +16,15 @@
 #endif
 
 // Пины для двух GPIO, управляемых с веб-страницы
-// ESP32 DevKit1: 
-// ESP8266 D1 mini: 
 #if defined(ESP32)
-#define TEMPLATE_GPIO1  32   // 
-#define TEMPLATE_GPIO2  33   // 
-#endif
-
-#if  defined(ESP8266)
+#define TEMPLATE_GPIO1  32   // D32
+#define TEMPLATE_GPIO2  33   // D33
+#elif defined(ESP8266)
 #define TEMPLATE_GPIO1  16   // D0
 #define TEMPLATE_GPIO2  14   // D5
 #endif
 
 #define CONFIG_FILE_TEMPLATE    "/config_template.json"
-#define HTML_FILE_TEMPLATE      "/template.html"
-#define HTML_FILE_TEMPLATE2     "/template2.html"
-
-const char Page_GeneralSysTemplate1[] PROGMEM = R"=====(
-<meta http-equiv="refresh" content="2; URL=/template.html">
-Save OK. Please wait...
-)=====";
-
-const char Page_GeneralSysTemplate2[] PROGMEM = R"=====(
-<meta http-equiv="refresh" content="2; URL=/template2.html">
-Save OK. Please wait...
-)=====";
 
 // Структура конфига — сохраняется в config_template.json
 typedef struct {
@@ -69,6 +53,7 @@ private:
 
     // Обработчики веб-запросов
     void handleInfo(AsyncWebServerRequest *request);
+    void handleTime(AsyncWebServerRequest *request);
     void handleConfigGpio(AsyncWebServerRequest *request);
     void handleConfigDemo(AsyncWebServerRequest *request);
 

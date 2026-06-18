@@ -16,27 +16,25 @@
             <tr><td style="text-align: left; padding: 8px;">
                 <b>RU:</b> Демо-страница — пример работы с формой и сохранением в JSON.
                 Поле ниже сохраняется в config_template.json, но не влияет на работу GPIO.
-                Используйте как заготовку для своих полей конфигурации.<br>
+                Сохранение без перезагрузки страницы.<br>
                 <b>EN:</b> Demo page — example of form handling and JSON save.
                 The field below is saved to config_template.json but does not affect GPIO.
-                Use as a template for your own config fields.<br>
+                Save without page reload.<br>
                 <small><i>(AI generated)</i></small>
             </td></tr>
         </table>
     </div>
 
-    <!-- Демо-форма (сохраняется в JSON, ни на что не влияет) -->
+    <!-- Демо-форма -->
     <div class="content" style="text-align: center;">
-        <form action="" method="post">
-            <table class="scan" style="width: auto; margin: 0 auto;">
-                <tr><th colspan="2">Demo config (example only)</th></tr>
-                <tr>
-                    <td class="label">Sample text</td>
-                    <td><input type="text" id="demoSampleText" name="demoSampleText" value=""></td>
-                </tr>
-                <tr><td colspan="2" style="text-align: center; padding: 8px;"> <input type="submit" value="Применить" class="button-prog"></td></tr>
-            </table>
-        </form>
+        <table class="scan" style="width: auto; margin: 0 auto;">
+            <tr><th colspan="2">Demo config (example only)</th></tr>
+            <tr>
+                <td class="label">Sample text</td>
+                <td><input type="text" id="demoSampleText" value=""></td>
+            </tr>
+            <tr><td colspan="2" style="text-align: center; padding: 8px;"> <input type="button" value="Применить" class="button-prog" onclick="saveDemoConfig()"> <span id="demoStatus" style="margin-left:8px;font-size:12px;"></span></td></tr>
+        </table>
     </div>
 
     <!-- Время и дата -->
@@ -51,12 +49,43 @@
     <script src="GetJson.js" defer></script>
     <script src="GetMarkup.js" defer></script>
     <script>
+        async function saveDemoConfig() {
+            const text = document.getElementById('demoSampleText').value;
+            const statusEl = document.getElementById('demoStatus');
+            statusEl.innerHTML = 'Saving...';
+            try {
+                const resp = await fetch(`/template/save_demo?demoSampleText=${encodeURIComponent(text)}`, { method: 'POST' });
+                if (resp.ok) {
+                    statusEl.innerHTML = 'Saved';
+                    setTimeout(() => { statusEl.innerHTML = ''; }, 3000);
+                } else {
+                    statusEl.innerHTML = 'Error';
+                }
+            } catch(e) {
+                statusEl.innerHTML = 'Error';
+            }
+        }
+        async function updateTime() {
+            try {
+                const resp = await fetch('/template/time');
+                const text = await resp.text();
+                const lines = text.split('\n');
+                for (const line of lines) {
+                    const parts = line.split('|');
+                    if (parts.length >= 2 && parts[0] === 'templateTime') {
+                        document.getElementById('templateTime').innerText = parts[1];
+                    }
+                }
+            } catch(e) {}
+        }
         window.onload = function() {
             setTimeout(() => {
                 ApplyCVT("/system/version")
                     .then(() => ApplyCVT("/template/info"))
                     .then(() => ApplyCVT("/template/ver"));
             }, 500);
+            updateTime();
+            setInterval(updateTime, 1000);
         };
     </script>
 </body>

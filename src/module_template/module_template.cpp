@@ -31,13 +31,9 @@ void MODULE_CLASS_TEMPLATE::begin() {
     defaultConfigTemplate();
     if (load_config_template() == false) { save_config_template(); }
 
-    // Применяем состояние GPIO из конфига
-    // applyGpioState();
     _blinkState = false;
 
-    // Запускаем задачу моргания, если интервал задан
     if (_config.blinkInterval > 0) { SetTimerTask(blinkTimerTask, _config.blinkInterval); }
-    SetTimerTask(blinkTimerTask, 100); 
 }
 
 void MODULE_CLASS_TEMPLATE::applyGpioState() {
@@ -58,20 +54,20 @@ void MODULE_CLASS_TEMPLATE::blinkTimerTask() {
     (ModClassTemplate._blinkState && ModClassTemplate._config.gpio1State) ? HIGH : LOW);
     digitalWrite(TEMPLATE_GPIO2,
     (ModClassTemplate._blinkState && ModClassTemplate._config.gpio2State) ? HIGH : LOW);
-    SetTimerTask(blinkTimerTask, 500);
+    SetTimerTask(blinkTimerTask, ModClassTemplate._config.blinkInterval);
 }
 
 void MODULE_CLASS_TEMPLATE::webInit() {
     DEBUGTEMPLATE("%s\r\n", __FUNCTION__);
 
-    // Приём формы с template.html (настройки GPIO)
-    ESPHTTPServer.on(HTML_FILE_TEMPLATE, HTTP_POST, [this](AsyncWebServerRequest *request) {
+    // AJAX — сохранение GPIO конфига (POST /template/save)
+    ESPHTTPServer.on("/template/save", HTTP_POST, [this](AsyncWebServerRequest *request) {
         if (!ESPHTTPServer.checkAuth(request)) { return request->requestAuthentication(); }
         this->handleConfigGpio(request);
     });
 
-    // Приём формы с template2.html (демо-форма)
-    ESPHTTPServer.on(HTML_FILE_TEMPLATE2, HTTP_POST, [this](AsyncWebServerRequest *request) {
+    // AJAX — сохранение демо-конфига (POST /template/save_demo)
+    ESPHTTPServer.on("/template/save_demo", HTTP_POST, [this](AsyncWebServerRequest *request) {
         if (!ESPHTTPServer.checkAuth(request)) { return request->requestAuthentication(); }
         this->handleConfigDemo(request);
     });
@@ -80,6 +76,12 @@ void MODULE_CLASS_TEMPLATE::webInit() {
     ESPHTTPServer.on("/template/info", HTTP_GET, [this](AsyncWebServerRequest *request) {
         if (!ESPHTTPServer.checkAuth(request)) { return request->requestAuthentication(); }
         this->handleInfo(request);
+    });
+
+    // AJAX — только время и дата (опрос раз в секунду)
+    ESPHTTPServer.on("/template/time", HTTP_GET, [this](AsyncWebServerRequest *request) {
+        if (!ESPHTTPServer.checkAuth(request)) { return request->requestAuthentication(); }
+        this->handleTime(request);
     });
 
     // Версия модуля
@@ -104,10 +106,18 @@ void MODULE_CLASS_TEMPLATE::handleInfo(AsyncWebServerRequest *request) {
     request->send(200, "text/plain", values);
 }
 
+// Отдаёт только время и дату — для每秒ного опроса без перезаписи формы
+void MODULE_CLASS_TEMPLATE::handleTime(AsyncWebServerRequest *request) {
+    String timeDate = "NTP not synced";
+    if (NTP.getLastNTPSync() > 0) { timeDate = NTP.getTimeDateString(); }
+    String values = "";
+    values += "templateTime|" + timeDate + "|div\n";
+    request->send(200, "text/plain", values);
+}
+
 void MODULE_CLASS_TEMPLATE::handleConfigGpio(AsyncWebServerRequest *request) {
     DEBUGTEMPLATE("%s\r\n", __FUNCTION__);
 
-    // Сбрасываем чекбоксы (они приходят только когда отмечены)
     _config.gpio1State = false;
     _config.gpio2State = false;
 
@@ -115,42 +125,34 @@ void MODULE_CLASS_TEMPLATE::handleConfigGpio(AsyncWebServerRequest *request) {
         for (uint8_t i = 0; i < request->args(); i++) {
             DEBUGTEMPLATE("Arg %d: %s %s\r\n", i, request->argName(i).c_str(), request->arg(i).c_str());
 
-            if (request->argName(i) == "gpio1State") {
+            if (request->argName(i) == "gpio1State" && request->arg(i) == "true") {
                 _config.gpio1State = true;
                 continue;
             }
-            if (request->argName(i) == "gpio2State") {
+            if (request->argName(i) == "gpio2State" && request->arg(i) == "true") {
                 _config.gpio2State = true;
                 continue;
             }
             if (request->argName(i) == "blinkInterval") {
                 uint16_t newInterval = (uint16_t)request->arg(i).toInt();
-                if (_config.blinkInterval == 0 && newInterval > 0) {
-                    // Моргание только что включили — запускаем таймер
+                if (newInterval > 0) {
+                    DelTimerTask(blinkTimerTask);
                     _config.blinkInterval = newInterval;
                     _blinkState = false;
                     SetTimerTask(blinkTimerTask, _config.blinkInterval);
-                } else if (_config.blinkInterval > 0 && newInterval == 0) {
-                    // Моргание выключили — удаляем таймер
+                } else {
                     DelTimerTask(blinkTimerTask);
                     _config.blinkInterval = 0;
                     applyGpioState();
-                } else 
-                if (newInterval > 0) {
-                    // Меняем период — старый таймер сам перезапустится с новым интервалом
-                    _config.blinkInterval = newInterval;
                 }
                 continue;
             }
         }
 
-        // Применяем состояние GPIO
         applyGpioState();
 
         save_config_template();
-        request->send_P(200, "text/html", Page_GeneralSysTemplate1);
-    } else {
-        ESPHTTPServer.handleFileRead(request->url(), request);
+        request->send(200, "text/plain", "OK");
     }
 }
 
@@ -168,9 +170,7 @@ void MODULE_CLASS_TEMPLATE::handleConfigDemo(AsyncWebServerRequest *request) {
         }
 
         save_config_template();
-        request->send_P(200, "text/html", Page_GeneralSysTemplate2);
-    } else {
-        ESPHTTPServer.handleFileRead(request->url(), request);
+        request->send(200, "text/plain", "OK");
     }
 }
 

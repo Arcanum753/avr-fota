@@ -16,14 +16,10 @@
             <tr><td style="text-align: left; padding: 8px;">
                 <b>RU:</b> Управление двумя фиксированными GPIO через веб-интерфейс.
                 Пины задаются дефайнами TEMPLATE_GPIO1 и TEMPLATE_GPIO2 в module_template.h.
-                ESP32 DevKit1: D4=GPIO4, D5=GPIO5.
-                ESP8266 D1 mini: D1=GPIO5, D2=GPIO4.
-                Настройки сохраняются в config_template.json.<br>
+                Настройки сохраняются в config_template.json без перезагрузки страницы.<br>
                 <b>EN:</b> Two fixed GPIOs controlled via web interface.
                 Pins are defined by TEMPLATE_GPIO1 and TEMPLATE_GPIO2 in module_template.h.
-                ESP32 DevKit1: D4=GPIO4, D5=GPIO5.
-                ESP8266 D1 mini: D1=GPIO5, D2=GPIO4.
-                Settings are saved to config_template.json.<br>
+                Settings are saved to config_template.json without page reload.<br>
                 <small><i>(AI generated)</i></small>
             </td></tr>
         </table>
@@ -31,24 +27,22 @@
 
     <!-- Управление GPIO -->
     <div class="content" style="text-align: center;">
-        <form action="" method="post">
-            <table class="scan" style="width: auto; margin: 0 auto;">
-                <tr><th colspan="2">GPIO control</th></tr>
-                <tr>
-                    <td class="label">GPIO1 <span style="font-size:0.8em; color:#888;">(TEMPLATE_GPIO1)</span></td>
-                    <td><input type="checkbox" id="gpio1State" name="gpio1State"> Вкл</td>
-                </tr>
-                <tr>
-                    <td class="label">GPIO2 <span style="font-size:0.8em; color:#888;">(TEMPLATE_GPIO2)</span></td>
-                    <td><input type="checkbox" id="gpio2State" name="gpio2State"> Вкл</td>
-                </tr>
-                <tr>
-                    <td class="label">Blink interval (ms)</td>
-                    <td><input type="number" id="blinkInterval" name="blinkInterval" min="0" max="60000" value="0"> (0 = off)</td>
-                </tr>
-                <tr><td colspan="2" style="text-align: center; padding: 8px;"> <input type="submit" value="Применить" class="button-prog"></td></tr>
-            </table>
-        </form>
+        <table class="scan" style="width: auto; margin: 0 auto;">
+            <tr><th colspan="2">GPIO control</th></tr>
+            <tr>
+                <td class="label">GPIO1</td>
+                <td><input type="checkbox" id="gpio1State"> Вкл</td>
+            </tr>
+            <tr>
+                <td class="label">GPIO2</td>
+                <td><input type="checkbox" id="gpio2State"> Вкл</td>
+            </tr>
+            <tr>
+                <td class="label">Blink interval (ms)</td>
+                <td><input type="number" id="blinkInterval" min="0" max="60000" value="0"> (0 = off)</td>
+            </tr>
+            <tr><td colspan="2" style="text-align: center; padding: 8px;"> <input type="button" value="Применить" class="button-prog" onclick="saveGpioConfig()"> <span id="gpioStatus" style="margin-left:8px;font-size:12px;"></span></td></tr>
+        </table>
     </div>
 
     <!-- Время и дата -->
@@ -63,12 +57,45 @@
     <script src="GetJson.js" defer></script>
     <script src="GetMarkup.js" defer></script>
     <script>
+        async function saveGpioConfig() {
+            const gpio1 = document.getElementById('gpio1State').checked ? 'true' : '';
+            const gpio2 = document.getElementById('gpio2State').checked ? 'true' : '';
+            const blink = document.getElementById('blinkInterval').value;
+            const statusEl = document.getElementById('gpioStatus');
+            statusEl.innerHTML = 'Saving...';
+            try {
+                const resp = await fetch(`/template/save?gpio1State=${gpio1}&gpio2State=${gpio2}&blinkInterval=${blink}`, { method: 'POST' });
+                if (resp.ok) {
+                    statusEl.innerHTML = 'Saved';
+                    setTimeout(() => { statusEl.innerHTML = ''; }, 3000);
+                } else {
+                    statusEl.innerHTML = 'Error';
+                }
+            } catch(e) {
+                statusEl.innerHTML = 'Error';
+            }
+        }
+        async function updateTime() {
+            try {
+                const resp = await fetch('/template/time');
+                const text = await resp.text();
+                const lines = text.split('\n');
+                for (const line of lines) {
+                    const parts = line.split('|');
+                    if (parts.length >= 2 && parts[0] === 'templateTime') {
+                        document.getElementById('templateTime').innerText = parts[1];
+                    }
+                }
+            } catch(e) {}
+        }
         window.onload = function() {
             setTimeout(() => {
                 ApplyCVT("/system/version")
                     .then(() => ApplyCVT("/template/info"))
                     .then(() => ApplyCVT("/template/ver"));
             }, 500);
+            updateTime();
+            setInterval(updateTime, 1000);
         };
     </script>
 </body>
