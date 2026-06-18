@@ -32,6 +32,7 @@ typedef struct {
     bool gpio2State;
     uint16_t blinkInterval;   // период моргания в мс, 0 = не моргать
     String demoSampleText;    // демо-поле, ни на что не влияет
+    String demoArray[3];      // пример массива строк — см. load_config_template()
 } strTmplConfig;
 
 class MODULE_CLASS_TEMPLATE {

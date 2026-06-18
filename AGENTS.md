@@ -52,8 +52,11 @@ Submodules (`submodule_*`) inherit from `Class_ProgBase` and implement specific 
 **Что содержит шаблон (брать за основу):**
 - `module_xxx.h` — класс с debug-макросом, `setFs()`, `begin()`, `webInit()`, структурой конфига (`strXxxConfig`), версионными методами
 - `module_xxx.cpp` — глобальный объект, загрузка/сохранение JSON конфига через `ModClassJson`, AJAX-эндпоинты (`/xxx/info`, `/xxx/save`, `/xxx/ver`), ответ `text/plain "OK"`
+  - `save_config()` использует `ModClassJson.jsonFileLoadDoc()` + мерж (не перезапись), затем `jsonFileSaveDoc()`.
+  - Чтение массивов из JSON — через `is<JsonArray>()` + `as<JsonArray>()` с проверкой границ.
+  - Сохранение массивов — через `doc["key"].to<JsonArray>()` + `arr.add()`.
 - `web/_menu.html` — ссылки в меню
-- `web/xxx.html` — HTML-страница с формой, JS через `fetch` и `ApplyCVT()`, сохранение без перезагрузки
+- `web/xxx.html` — HTML-страница с формой, JS через `fetch` и `ApplyCVT()` из общих файлов `GetJson.js`/`GetMarkup.js` (не дублировать `applyCvtData` на каждой странице), сохранение без перезагрузки
 - `web/config_xxx.json` — дефолтный конфиг
 - Интеграция в `FSWebServerLib.cpp` под флагом `MODULE_XXX`
 - Таргеты в `targets/targets_example.ini`
@@ -61,6 +64,7 @@ Submodules (`submodule_*`) inherit from `Class_ProgBase` and implement specific 
 **Что НЕ брать из шаблона (заменить под свою логику):**
 - Управление GPIO через `pinMode`/`digitalWrite` — это только пример. В новом модуле будет своя аппаратная логика.
 - Отображение времени через `/xxx/time` — только как демонстрация периодического AJAX-опроса. В новом модуле заменить на свою периодическую задачу или удалить.
+- Массив `demoArray` в конфиге — только как демонстрация паттерна `is<JsonArray>()`. В реальном модуле заменить на свои поля или удалить.
 
 ### EERTOS — Cooperative scheduler
 

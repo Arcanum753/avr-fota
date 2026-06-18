@@ -1,1 +1,1 @@
-{"gpio1State":false,"gpio2State":false,"blinkInterval":0,"demoSampleText":"demo text"}
+{"gpio1State":false,"gpio2State":false,"blinkInterval":0,"demoSampleText":"demo text","demoArray":["a","b","c"]}

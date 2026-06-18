@@ -99,6 +99,11 @@ void MODULE_CLASS_TEMPLATE::handleInfo(AsyncWebServerRequest *request) {
     values += "blinkInterval|"   + String(_config.blinkInterval)                    + "|input\n";
     values += "demoSampleText|"  + _config.demoSampleText                           + "|input\n";
 
+    for (uint8_t i = 0; i < 3; i++) {
+        String id = "demoArray" + String(i);
+        values += id + "|" + _config.demoArray[i] + "|input\n";
+    }
+
     // Время и дата
     String timeDate = "NTP not synced";
     if (NTP.getLastNTPSync() > 0) { timeDate = NTP.getTimeDateString(); }
@@ -167,6 +172,14 @@ void MODULE_CLASS_TEMPLATE::handleConfigDemo(AsyncWebServerRequest *request) {
                 _config.demoSampleText = urldecode(request->arg(i));
                 continue;
             }
+
+            for (uint8_t j = 0; j < 3; j++) {
+                String id = "demoArray" + String(j);
+                if (request->argName(i) == id) {
+                    _config.demoArray[j] = urldecode(request->arg(i));
+                    break;
+                }
+            }
         }
 
         save_config_template();
@@ -181,6 +194,8 @@ void MODULE_CLASS_TEMPLATE::defaultConfigTemplate() {
     _config.gpio2State     = false;
     _config.blinkInterval  = 0;
     _config.demoSampleText = "demo text";
+
+    for (uint8_t i = 0; i < 3; i++) { _config.demoArray[i] = ""; }
 }
 
 bool MODULE_CLASS_TEMPLATE::load_config_template() {
@@ -192,6 +207,17 @@ bool MODULE_CLASS_TEMPLATE::load_config_template() {
     _config.gpio2State     = doc["gpio2State"].as<bool>();
     _config.blinkInterval  = doc["blinkInterval"].as<uint16_t>();
     _config.demoSampleText = doc["demoSampleText"].as<String>();
+
+    if (doc["demoArray"].is<JsonArray>()) {
+        JsonArray arr = doc["demoArray"].as<JsonArray>();
+        for (uint8_t i = 0; i < 3; i++) {
+            if (i < arr.size()) {
+                _config.demoArray[i] = arr[i].as<String>();
+            } else {
+                _config.demoArray[i] = "";
+            }
+        }
+    }
 
     DEBUGTEMPLATE("gpio1State: %d\r\n",     _config.gpio1State);
     DEBUGTEMPLATE("gpio2State: %d\r\n",     _config.gpio2State);
@@ -209,6 +235,13 @@ bool MODULE_CLASS_TEMPLATE::save_config_template() {
     doc["gpio2State"]     = _config.gpio2State;
     doc["blinkInterval"]  = _config.blinkInterval;
     doc["demoSampleText"] = _config.demoSampleText;
+
+    JsonArray arr = doc["demoArray"].to<JsonArray>();
+    arr.clear();
+    for (uint8_t i = 0; i < 3; i++) {
+        arr.add(_config.demoArray[i]);
+    }
+
     return ModClassJson.jsonFileSaveDoc(CONFIG_FILE_TEMPLATE, doc);
 }
 

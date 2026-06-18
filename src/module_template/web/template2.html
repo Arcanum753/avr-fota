@@ -33,6 +33,18 @@
                 <td class="label">Sample text</td>
                 <td><input type="text" id="demoSampleText" value=""></td>
             </tr>
+            <tr>
+                <td class="label">Array[0]</td>
+                <td><input type="text" id="demoArray0" value=""></td>
+            </tr>
+            <tr>
+                <td class="label">Array[1]</td>
+                <td><input type="text" id="demoArray1" value=""></td>
+            </tr>
+            <tr>
+                <td class="label">Array[2]</td>
+                <td><input type="text" id="demoArray2" value=""></td>
+            </tr>
             <tr><td colspan="2" style="text-align: center; padding: 8px;"> <input type="button" value="Применить" class="button-prog" onclick="saveDemoConfig()"> <span id="demoStatus" style="margin-left:8px;font-size:12px;"></span></td></tr>
         </table>
     </div>
@@ -56,10 +68,13 @@
     <script>
         async function saveDemoConfig() {
             const text = document.getElementById('demoSampleText').value;
+            const arr0 = document.getElementById('demoArray0').value;
+            const arr1 = document.getElementById('demoArray1').value;
+            const arr2 = document.getElementById('demoArray2').value;
             const statusEl = document.getElementById('demoStatus');
             statusEl.innerHTML = 'Saving...';
             try {
-                const resp = await fetch(`/template/save_demo?demoSampleText=${encodeURIComponent(text)}`, { method: 'POST' });
+                const resp = await fetch(`/template/save_demo?demoSampleText=${encodeURIComponent(text)}&demoArray0=${encodeURIComponent(arr0)}&demoArray1=${encodeURIComponent(arr1)}&demoArray2=${encodeURIComponent(arr2)}`, { method: 'POST' });
                 if (resp.ok) {
                     statusEl.innerHTML = 'Saved';
                     setTimeout(() => { statusEl.innerHTML = ''; }, 3000);

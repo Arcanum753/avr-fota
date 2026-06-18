@@ -45,6 +45,17 @@
         </table>
     </div>
 
+    <!-- Демо-массив строк (пример is<JsonArray>()) -->
+    <div class="content" style="text-align: center;">
+        <table class="scan" style="width: auto; margin: 0 auto;">
+            <tr><th colspan="2">Demo array (is&lt;JsonArray&gt; example)</th></tr>
+            <tr><td class="label">Array[0]</td><td><input type="text" id="demoArray0"></td></tr>
+            <tr><td class="label">Array[1]</td><td><input type="text" id="demoArray1"></td></tr>
+            <tr><td class="label">Array[2]</td><td><input type="text" id="demoArray2"></td></tr>
+            <tr><td colspan="2" style="text-align: center; padding: 8px;"> <input type="button" value="Применить" class="button-prog" onclick="saveDemoConfig()"> <span id="demoStatus" style="margin-left:8px;font-size:12px;"></span></td></tr>
+        </table>
+    </div>
+
     <!-- Время и дата -->
     <div class="content" style="text-align: center;">
         <table class="scan" style="width: auto; margin: 0 auto;">
@@ -70,6 +81,26 @@
             statusEl.innerHTML = 'Saving...';
             try {
                 const resp = await fetch(`/template/save?gpio1State=${gpio1}&gpio2State=${gpio2}&blinkInterval=${blink}`, { method: 'POST' });
+                if (resp.ok) {
+                    statusEl.innerHTML = 'Saved';
+                    setTimeout(() => { statusEl.innerHTML = ''; }, 3000);
+                } else {
+                    statusEl.innerHTML = 'Error';
+                }
+            } catch(e) {
+                statusEl.innerHTML = 'Error';
+            }
+        }
+        async function saveDemoConfig() {
+            const arr0 = document.getElementById('demoArray0') ? document.getElementById('demoArray0').value : '';
+            const arr1 = document.getElementById('demoArray1') ? document.getElementById('demoArray1').value : '';
+            const arr2 = document.getElementById('demoArray2') ? document.getElementById('demoArray2').value : '';
+            const text = document.getElementById('demoSampleText') ? document.getElementById('demoSampleText').value : '';
+            const statusEl = document.getElementById('demoStatus');
+            if (!statusEl) { return; }
+            statusEl.innerHTML = 'Saving...';
+            try {
+                const resp = await fetch(`/template/save_demo?demoSampleText=${encodeURIComponent(text)}&demoArray0=${encodeURIComponent(arr0)}&demoArray1=${encodeURIComponent(arr1)}&demoArray2=${encodeURIComponent(arr2)}`, { method: 'POST' });
                 if (resp.ok) {
                     statusEl.innerHTML = 'Saved';
                     setTimeout(() => { statusEl.innerHTML = ''; }, 3000);
