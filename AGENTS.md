@@ -42,6 +42,24 @@ Submodules (`submodule_*`) inherit from `Class_ProgBase` and implement specific 
 | `module_gpio` | `-D MODULE_GPIO` | GPIO control via web |
 | `module_udp` | `-D MODULE_UDP` | UDP broadcast for device discovery |
 | `module_otaclient` | `-D MODULE_OTACLIENT=1` | OTA client (auto-update from remote server) |
+| `module_template` | `-D MODULE_TEMPLATE` | Шаблон модуля — основа для создания новых модулей |
+
+### module_template — шаблон нового модуля
+
+`src/module_template/` содержит эталонную структуру optional-модуля. При создании нового модуля копировать эту папку и переименовывать.
+
+**Что содержит шаблон (брать за основу):**
+- `module_xxx.h` — класс с debug-макросом, `setFs()`, `begin()`, `webInit()`, структурой конфига (`strXxxConfig`), версионными методами
+- `module_xxx.cpp` — глобальный объект, загрузка/сохранение JSON конфига через `ModClassJson`, AJAX-эндпоинты (`/xxx/info`, `/xxx/save`, `/xxx/ver`), ответ `text/plain "OK"`
+- `web/_menu.html` — ссылки в меню
+- `web/xxx.html` — HTML-страница с формой, JS через `fetch` и `ApplyCVT()`, сохранение без перезагрузки
+- `web/config_xxx.json` — дефолтный конфиг
+- Интеграция в `FSWebServerLib.cpp` под флагом `MODULE_XXX`
+- Таргеты в `targets/targets_example.ini`
+
+**Что НЕ брать из шаблона (заменить под свою логику):**
+- Управление GPIO через `pinMode`/`digitalWrite` — это только пример. В новом модуле будет своя аппаратная логика.
+- Отображение времени через `/xxx/time` — только как демонстрация периодического AJAX-опроса. В новом модуле заменить на свою периодическую задачу или удалить.
 
 ### EERTOS — Cooperative scheduler
 

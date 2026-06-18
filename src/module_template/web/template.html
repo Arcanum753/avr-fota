@@ -15,10 +15,10 @@
             <tr><th>Описание / Description</th></tr>
             <tr><td style="text-align: left; padding: 8px;">
                 <b>RU:</b> Управление двумя фиксированными GPIO через веб-интерфейс.
-                Пины задаются дефайнами TEMPLATE_GPIO1 и TEMPLATE_GPIO2 в module_template.h.
+                Для ESP32 — GPIO32 и GPIO33, для ESP8266 — D0 (GPIO16) и D5 (GPIO14).
                 Настройки сохраняются в config_template.json без перезагрузки страницы.<br>
                 <b>EN:</b> Two fixed GPIOs controlled via web interface.
-                Pins are defined by TEMPLATE_GPIO1 and TEMPLATE_GPIO2 in module_template.h.
+                ESP32 — GPIO32, GPIO33; ESP8266 — D0 (GPIO16), D5 (GPIO14).
                 Settings are saved to config_template.json without page reload.<br>
                 <small><i>(AI generated)</i></small>
             </td></tr>
@@ -51,6 +51,11 @@
             <tr><th>Текущее время / Current time</th></tr>
             <tr><td style="padding: 12px; font-size: 1.3em;"><span id="templateTime">--</span></td></tr>
         </table>
+    </div>
+
+    <div class="footer">
+        Module version: <span id="templateversion"> </span> &nbsp;|&nbsp;
+        Build: <span id="templategentime"> </span> <br>
     </div>
 
     <markup>./page_bottom.html</markup>
