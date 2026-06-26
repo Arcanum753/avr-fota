@@ -55,8 +55,8 @@ Submodules (`submodule_*`) inherit from `Class_ProgBase` and implement specific 
   - `save_config()` использует `ModClassJson.jsonFileLoadDoc()` + мерж (не перезапись), затем `jsonFileSaveDoc()`.
   - Чтение массивов из JSON — через `is<JsonArray>()` + `as<JsonArray>()` с проверкой границ.
   - Сохранение массивов — через `doc["key"].to<JsonArray>()` + `arr.add()`.
-- `web/_menu.html` — ссылки в меню
-- `web/xxx.html` — HTML-страница с формой, JS через `fetch` и `ApplyCVT()` из общих файлов `GetJson.js`/`GetMarkup.js` (не дублировать `applyCvtData` на каждой странице), сохранение без перезагрузки
+- `web/_menu.html` — ссылки в меню.
+- `web/xxx.html` — HTML-страница с формой, JS через `fetch` и `ApplyCVT()` из общих файлов `GetJson.js`/`GetMarkup.js` (не дублировать `applyCvtData` на каждой странице), сохранение без перезагрузки страницы.
 - `web/config_xxx.json` — дефолтный конфиг
 - Интеграция в `FSWebServerLib.cpp` под флагом `MODULE_XXX`
 - Таргеты в `targets/targets_example.ini`

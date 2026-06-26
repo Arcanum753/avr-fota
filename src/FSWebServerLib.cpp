@@ -24,6 +24,10 @@
 #include "module_template/module_template.h"
 #endif
 
+#if defined(MODULE_RGB)
+#include "module_rgb/module_rgb.h"
+#endif
+
 #if defined(MODULE_LCD_I2C)
 #include "module_lcd-i2c/module_lcd-i2c.h"
 #endif
@@ -143,6 +147,12 @@ AsyncFSWebServer::AsyncFSWebServer(uint16_t port) : AsyncWebServer(port) {}
 	ModClassLcdI2c.setFs(&LittleFS);
 	ModClassLcdI2c.begin();
 	ModClassLcdI2c.webInit();
+#endif
+
+#if defined(MODULE_RGB)
+	ModClassRgb.setFs(&LittleFS);
+	ModClassRgb.begin();
+	ModClassRgb.webInit();
 #endif
 	
 #ifdef PROGTYPE_SWD

@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>RGB LED Control</title>
+    <meta http-equiv="Content-type" content="text/html; charset=utf-8">
+    <link rel="stylesheet" href="style.css">
+    <style>
+        .mode-btn { background: #555; border: none; color: white; padding: 8px 16px; margin: 3px; border-radius: 4px; cursor: pointer; }
+        .mode-btn.active { background: #4CAF50; }
+        .mode-btn:hover { opacity: 0.8; }
+        .led-grid { display: grid; grid-template-columns: repeat(10, 1fr); gap: 4px; max-width: 520px; margin: 0 auto; }
+        .led-cell { width: 46px; height: 46px; border: 1px solid #444; border-radius: 4px; cursor: pointer; position: relative; }
+        .led-cell input[type="color"] { width: 100%; height: 100%; border: none; padding: 0; cursor: pointer; background: transparent; }
+        .led-cell.disabled { opacity: 0.2; pointer-events: none; }
+        .led-cell .idx-label { position: absolute; bottom: 1px; right: 2px; font-size: 8px; color: #888; }
+        .section { margin: 12px auto; }
+        .section.hidden { display: none; }
+        .params { display: inline-block; text-align: left; }
+        .params td { padding: 4px 8px; }
+        .params td.label { text-align: right; white-space: nowrap; }
+        .status-msg { font-size: 12px; color: #aaa; margin-left: 8px; }
+    </style>
+</head>
+<body>
+    <markup>./page_head.html</markup>
+    <h2 class="title" style="background: #E24040"> <span id="devicename"></span> RGB LED Control</h2>
+
+    <div class="content" style="text-align: center;">
+        <table class="scan" style="width: auto; margin: 0 auto;">
+            <tr><td style="text-align: left; padding: 8px;">
+                <b>RU:</b> Управление адресной RGB лентой. Настройки сохраняются в config_rgb.json.<br>
+                <b>EN:</b> Addressable RGB LED strip control. Settings saved to config_rgb.json.
+            </td></tr>
+        </table>
+    </div>
+
+    <div class="content" style="text-align: center;">
+        <div class="params">
+            <table>
+                <tr><td class="label">Data pin:</td><td><input type="number" id="dataPin" min="0" max="33" value="16"></td></tr>
+                <tr><td class="label">LED count:</td><td><input type="number" id="numLeds" min="1" max="100" value="10"></td></tr>
+                <tr><td class="label">Brightness:</td><td><input type="range" id="brightness" min="0" max="255" value="128" oninput="document.getElementById('bVal').innerText=this.value" onchange="onBrightness(this.value)"><span id="bVal">128</span></td></tr>
+                <tr><td class="label">Effect speed (ms):</td><td><input type="number" id="effectSpeed" min="10" max="5000" value="50" onchange="onEffectSpeed(this.value)"></td></tr>
+                <input type="hidden" id="mode" value="0">
+                <tr><td colspan="2" style="text-align:center; padding:8px;">
+                    <button class="button-prog" onclick="saveAll()">Apply pin/count</button>
+                    <span id="saveStatus" class="status-msg"></span>
+                </td></tr>
+            </table>
+        </div>
+    </div>
+
+    <div class="content" style="text-align: center;">
+        <div>
+            <button class="mode-btn" data-mode="0" onclick="setMode(0)">Solid</button>
+            <button class="mode-btn" data-mode="1" onclick="setMode(1); applyRainbowNow()">Rainbow</button>
+            <button class="mode-btn" data-mode="2" onclick="setMode(2)">Gradient</button>
+            <button class="mode-btn" data-mode="3" onclick="setMode(3)">Individual</button>
+            <button class="mode-btn" data-mode="4" onclick="setMode(4)">Equalizer</button>
+        </div>
+    </div>
+
+    <div id="sectionSolid" class="content section hidden" style="text-align:center;">
+        <table class="scan" style="width:auto;margin:0 auto;"><tr><th>Solid Color</th></tr>
+        <tr><td><input type="color" id="solidColor" value="#ff0000" onchange="applySolidNow(this.value)"></td></tr></table>
+    </div>
+
+    <div id="sectionGradient" class="content section hidden" style="text-align:center;">
+        <table class="scan" style="width:auto;margin:0 auto;"><tr><th colspan="2">Gradient</th></tr>
+        <tr><td class="label">Start:</td><td><input type="color" id="gradStartColor" value="#ff0000" onchange="applyGradientNow()"></td></tr>
+        <tr><td class="label">End:</td><td><input type="color" id="gradEndColor" value="#0000ff" onchange="applyGradientNow()"></td></tr></table>
+    </div>
+
+    <div id="sectionIndividual" class="content section hidden" style="text-align:center;">
+        <table class="scan" style="width:auto;margin:0 auto;"><tr><th>Individual LEDs (10x10 grid)</th></tr></table>
+        <div class="led-grid" id="ledGrid"></div>
+        <div style="margin-top:8px;">
+            <button class="button-prog" onclick="saveIndividual()">Save all colors</button>
+            <span id="indStatus" class="status-msg"></span>
+        </div>
+    </div>
+
+    <div id="sectionEqualizer" class="content section hidden" style="text-align:center;">
+        <table class="scan" style="width:auto;margin:0 auto;"><tr><th colspan="2">Equalizer</th></tr>
+        <tr><td class="label">Bands:</td><td><input type="number" id="eqBands" min="1" max="50" value="10"></td></tr>
+        <tr><td class="label">LEDs per band:</td><td><input type="number" id="eqLedsPerBand" min="1" max="50" value="10"></td></tr>
+        <tr><td colspan="2" style="text-align:center; padding:8px;">
+            <button class="button-prog" onclick="applyEqualizer()">Apply Equalizer</button>
+            <span id="eqStatus" class="status-msg"></span>
+        </td></tr></table>
+    </div>
+
+    <div class="footer">
+        Module version: <span id="rgbversion"> </span> &nbsp;|&nbsp;
+        Build: <span id="rgbgentime"> </span> <br>
+    </div>
+
+    <markup>./page_bottom.html</markup>
+    <script src="GetJson.js" defer></script>
+    <script src="GetMarkup.js" defer></script>
+    <script>
+        let currentMode = 0;
+
+        function setMode(m) {
+            currentMode = m;
+            document.getElementById('mode').value = m;
+            document.querySelectorAll('.mode-btn').forEach(b => b.classList.toggle('active', parseInt(b.dataset.mode) === m));
+            ['sectionSolid','sectionGradient','sectionIndividual','sectionEqualizer'].forEach(id => document.getElementById(id).classList.add('hidden'));
+            if (m === 0) document.getElementById('sectionSolid').classList.remove('hidden');
+            else if (m === 2) document.getElementById('sectionGradient').classList.remove('hidden');
+            else if (m === 3) document.getElementById('sectionIndividual').classList.remove('hidden');
+            else if (m === 4) document.getElementById('sectionEqualizer').classList.remove('hidden');
+        }
+
+        function applySolidNow(color) {
+            fetch('/rgb/save?mode=0&solidColor=' + encodeURIComponent(color), { method: 'POST' });
+        }
+
+        function applyGradientNow() {
+            const s = document.getElementById('gradStartColor').value;
+            const e = document.getElementById('gradEndColor').value;
+            fetch('/rgb/save?mode=2&gradStartColor=' + encodeURIComponent(s) + '&gradEndColor=' + encodeURIComponent(e), { method: 'POST' });
+        }
+
+        function applyRainbowNow() {
+            const speed = document.getElementById('effectSpeed').value;
+            fetch('/rgb/save?mode=1&effectSpeed=' + encodeURIComponent(speed), { method: 'POST' });
+        }
+
+        function onBrightness(val) {
+            fetch('/rgb/save?brightness=' + val, { method: 'POST' });
+        }
+
+        function onEffectSpeed(val) {
+            const m = parseInt(document.getElementById('mode').value);
+            if (m === 1 || m === 4) {
+                fetch('/rgb/save?effectSpeed=' + val + '&mode=' + m, { method: 'POST' });
+            }
+        }
+
+        function applyEqualizer() {
+            const bands = document.getElementById('eqBands').value;
+            const ledsPerBand = document.getElementById('eqLedsPerBand').value;
+            const speed = document.getElementById('effectSpeed').value;
+            const statusEl = document.getElementById('eqStatus');
+            statusEl.innerHTML = 'Saving...';
+            fetch('/rgb/save?mode=4&eqBands=' + bands + '&eqLedsPerBand=' + ledsPerBand + '&effectSpeed=' + speed, { method: 'POST' })
+                .then(r => { if (r.ok) { statusEl.innerHTML = 'Saved'; setTimeout(() => { statusEl.innerHTML = ''; }, 3000); } else { statusEl.innerHTML = 'Error'; } })
+                .catch(() => { statusEl.innerHTML = 'Error'; });
+        }
+
+        function buildGrid(numLeds) {
+            const grid = document.getElementById('ledGrid');
+            grid.innerHTML = '';
+            for (let i = 0; i < 100; i++) {
+                const cell = document.createElement('div');
+                cell.className = 'led-cell' + (i >= numLeds ? ' disabled' : '');
+                const inp = document.createElement('input');
+                inp.type = 'color';
+                inp.value = '#000000';
+                inp.id = 'ind_' + i;
+                inp.setAttribute('data-idx', i);
+                inp.onchange = function() {
+                    const idx = parseInt(this.getAttribute('data-idx'));
+                    fetch('/rgb/setPixel?index=' + idx + '&color=' + encodeURIComponent(this.value), { method: 'POST' })
+                        .catch(e => {});
+                };
+                cell.appendChild(inp);
+                const lbl = document.createElement('span');
+                lbl.className = 'idx-label';
+                lbl.textContent = i;
+                cell.appendChild(lbl);
+                grid.appendChild(cell);
+            }
+        }
+
+        async function updateFromInfo() {
+            try {
+                const resp = await fetch('/rgb/info');
+                const text = await resp.text();
+                const lines = text.split('\n');
+                for (const line of lines) {
+                    const parts = line.split('|');
+                    if (parts.length < 2) continue;
+                    const id = parts[0];
+                    const val = parts[1];
+                    const el = document.getElementById(id);
+                    if (el) {
+                        if (el.type === 'checkbox') el.checked = (val === 'checked');
+                        else el.value = val;
+                    }
+                }
+                const numEl = document.getElementById('numLeds');
+                const numLeds = parseInt(numEl.value) || 10;
+                document.getElementById('bVal').innerText = document.getElementById('brightness').value;
+
+                currentMode = parseInt(document.getElementById('mode').value) || 0;
+                setMode(currentMode);
+
+                buildGrid(numLeds);
+                for (let i = 0; i < numLeds; i++) {
+                    const inp = document.getElementById('ind_' + i);
+                    if (inp) inp.value = document.getElementById('ind_' + i)?.value || '#000000';
+                }
+            } catch(e) {}
+        }
+
+        async function saveAll() {
+            const statusEl = document.getElementById('saveStatus');
+            statusEl.innerHTML = 'Saving...';
+            const numLeds = parseInt(document.getElementById('numLeds').value) || 10;
+            const params = 'dataPin=' + encodeURIComponent(document.getElementById('dataPin').value)
+                        + '&numLeds=' + numLeds;
+            try {
+                const resp = await fetch('/rgb/save?' + params, { method: 'POST' });
+                if (resp.ok) {
+                    statusEl.innerHTML = 'Saved';
+                    setTimeout(() => { statusEl.innerHTML = ''; }, 3000);
+                    buildGrid(numLeds);
+                } else {
+                    statusEl.innerHTML = 'Error';
+                }
+            } catch(e) { statusEl.innerHTML = 'Error'; }
+        }
+
+        async function saveIndividual() {
+            const statusEl = document.getElementById('indStatus');
+            statusEl.innerHTML = 'Saving...';
+            const numLeds = parseInt(document.getElementById('numLeds').value) || 10;
+            let params = 'mode=3';
+            for (let i = 0; i < numLeds; i++) {
+                const inp = document.getElementById('ind_' + i);
+                if (inp) params += '&ind_' + i + '=' + encodeURIComponent(inp.value);
+            }
+            try {
+                const resp = await fetch('/rgb/save?' + params, { method: 'POST' });
+                if (resp.ok) { statusEl.innerHTML = 'Saved'; setTimeout(() => { statusEl.innerHTML = ''; }, 3000); }
+                else { statusEl.innerHTML = 'Error'; }
+            } catch(e) { statusEl.innerHTML = 'Error'; }
+        }
+
+        window.onload = function() {
+            buildGrid(10);
+            setTimeout(() => {
+                ApplyCVT("/system/version")
+                    .then(() => updateFromInfo())
+                    .then(() => ApplyCVT("/rgb/ver"));
+            }, 500);
+        };
+    </script>
+</body>
+</html>
