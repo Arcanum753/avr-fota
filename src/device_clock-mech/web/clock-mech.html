@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Clock mechanism</title>
+    <meta http-equiv="Content-type" content="text/html; charset=utf-8">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <markup>./page_head.html</markup>
+    <h2 class="title" style="background: #7D8EE2"> <span id="devicename"></span> Clock mechanism</h2>
+
+    <div class="content" style="text-align: center;">
+        <table class="scan" style="width: auto; margin: 0 auto;">
+            <tr><th colspan="2">Настройки триггера / Trigger settings</th></tr>
+            <tr>
+                <td class="label">Enabled</td>
+                <td><input type="checkbox" id="enabled"> Вкл</td>
+            </tr>
+            <tr>
+                <td class="label">Trigger hour (0-23)</td>
+                <td><input type="number" id="triggerHour" min="0" max="23" value="12"></td>
+            </tr>
+            <tr>
+                <td class="label">Trigger minute (0-59)</td>
+                <td><input type="number" id="triggerMinute" min="0" max="59" value="0"></td>
+            </tr>
+            <tr><td colspan="2" style="text-align: center; padding: 8px;"> <input type="button" value="Применить" class="button-prog" onclick="saveConfig()"> <span id="cfgStatus" style="margin-left:8px;font-size:12px;"></span></td></tr>
+        </table>
+    </div>
+
+    <div class="footer">
+        Module version: <span id="clockmechversion"> </span> &nbsp;|&nbsp;
+        Build: <span id="clockmechgentime"> </span> <br>
+    </div>
+
+    <markup>./page_bottom.html</markup>
+    <script src="GetJson.js" defer></script>
+    <script src="GetMarkup.js" defer></script>
+    <script>
+        async function saveConfig() {
+            const enabled = document.getElementById('enabled').checked ? 'true' : '';
+            const hour = document.getElementById('triggerHour').value;
+            const minute = document.getElementById('triggerMinute').value;
+            const statusEl = document.getElementById('cfgStatus');
+            statusEl.innerHTML = 'Saving...';
+            try {
+                const resp = await fetch(`/clock-mech/save?enabled=${enabled}&triggerHour=${hour}&triggerMinute=${minute}`, { method: 'POST' });
+                if (resp.ok) {
+                    statusEl.innerHTML = 'Saved';
+                    setTimeout(() => { statusEl.innerHTML = ''; }, 3000);
+                } else {
+                    statusEl.innerHTML = 'Error';
+                }
+            } catch(e) {
+                statusEl.innerHTML = 'Error';
+            }
+        }
+        window.onload = function() {
+            setTimeout(() => {
+                ApplyCVT("/system/version")
+                    .then(() => ApplyCVT("/clock-mech/info"))
+                    .then(() => ApplyCVT("/clock-mech/ver"));
+            }, 500);
+        };
+    </script>
+</body>
+</html>

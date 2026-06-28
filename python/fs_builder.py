@@ -27,6 +27,7 @@ WEB_PREFIX = "web_"                     # префикс для папок ко�
 MODULE_PREFIX = "module_"                # префикс модулей
 SUBMODULE_PREFIX = "submodule_"          # префикс субмодулей
 CORE_PREFIX = "core_"                    # префикс ядерных модулей
+DEVICE_PREFIX = "device_"                # префикс девайс-модулей
 WEB_FOLDER_NAME = "web"                  # имя папки с веб-файлами внутри модуля
 
 # ------------------- Имена бинарников файловых систем -------------------
@@ -169,7 +170,7 @@ def parse_src_filter(src_filter: str) -> List[str]:
     
     modules: Set[str] = set()
     
-    prefixes = [MODULE_PREFIX, SUBMODULE_PREFIX]
+    prefixes = [MODULE_PREFIX, SUBMODULE_PREFIX, DEVICE_PREFIX]
     
     pattern_prefix_pairs = []
     for prefix in prefixes:
@@ -806,7 +807,7 @@ def prepare_fs_image() -> Optional[Path]:
         try:
             # Используем module_* и submodule_* имена (не core_*) для правой колонки меню
             module_only_names = [m for m in all_web_modules 
-                                 if m.startswith(MODULE_PREFIX) or m.startswith(SUBMODULE_PREFIX)]
+                                 if m.startswith(MODULE_PREFIX) or m.startswith(SUBMODULE_PREFIX) or m.startswith(DEVICE_PREFIX)]
             
             page_head_html = generate_page_head(module_only_names, src_dir=str(src_dir))
             page_head_path = target_web_dir / "page_head.html"

@@ -44,6 +44,7 @@ Submodules (`submodule_*`) inherit from `Class_ProgBase` and implement specific 
 | `module_udp` | `-D MODULE_UDP` | UDP broadcast for device discovery |
 | `module_otaclient` | `-D MODULE_OTACLIENT=1` | OTA client (auto-update from remote server) |
 | `module_template` | `-D MODULE_TEMPLATE` | Шаблон модуля — основа для создания новых модулей |
+| `module_i2c-mapper` | `-D MODULE_I2C_MAPPER` | I2C bus scanner (web interface, Wire0) |
 
 ### module_template — шаблон нового модуля
 
@@ -322,6 +323,7 @@ Each module has a dedicated debug flag and macro:
 - `DEBUG_SWD` → `DEBUGLOGSWD(...)`
 - `DEBUG_UDP` → `DEBUGUDP(...)`
 - `DEBUG_OTACLIENT` → `DEBUGOTACLIENT(...)`
+- `DEBUG_I2C_MAPPER` → `DEBUGI2CMAPPER(...)`
 - `RELEASE` defined → all debug macros are no-ops
 
 ### Key defines

@@ -24,12 +24,20 @@
 #include "module_template/module_template.h"
 #endif
 
+#if defined(MODULE_I2C_MAPPER)
+#include "module_i2c-mapper/module_i2c-mapper.h"
+#endif
+
 #if defined(MODULE_RGB)
 #include "module_rgb/module_rgb.h"
 #endif
 
 #if defined(MODULE_LCD_I2C)
 #include "module_lcd-i2c/module_lcd-i2c.h"
+#endif
+
+#if defined(DEVICE_CLOCKMECH)
+#include "device_clock-mech/device_clock-mech.h"
 #endif
 
 #if defined(MODULE_UDP)
@@ -143,6 +151,11 @@ AsyncFSWebServer::AsyncFSWebServer(uint16_t port) : AsyncWebServer(port) {}
 	ModClassTemplate.webInit();
 #endif
 
+#if defined(MODULE_I2C_MAPPER)
+	ModClassI2cMapper.begin();
+	ModClassI2cMapper.webInit();
+#endif
+
 #if defined(MODULE_LCD_I2C)
 	ModClassLcdI2c.setFs(&LittleFS);
 	ModClassLcdI2c.begin();
@@ -153,6 +166,12 @@ AsyncFSWebServer::AsyncFSWebServer(uint16_t port) : AsyncWebServer(port) {}
 	ModClassRgb.setFs(&LittleFS);
 	ModClassRgb.begin();
 	ModClassRgb.webInit();
+#endif
+
+#if defined(DEVICE_CLOCKMECH)
+	ModClassClockMech.setFs(&LittleFS);
+	ModClassClockMech.begin();
+	ModClassClockMech.webInit();
 #endif
 	
 #ifdef PROGTYPE_SWD

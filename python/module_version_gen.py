@@ -18,6 +18,7 @@ SRC_FOLDER = "src"                       # папка с исходниками
 CORE_PREFIX = "core_"                     # префикс ядерных модулей
 MODULE_PREFIX = "module_"                 # префикс модулей
 SUBMODULE_PREFIX = "submodule_"           # префикс субмодулей
+DEVICE_PREFIX = "device_"                 # префикс девайс-модулей
 
 # ========== ФАЙЛЫ СЧЁТЧИКОВ ==========
 VERSION_STORAGE_FILE = ".module_versions"  # файл для хранения версий модулей
@@ -234,7 +235,7 @@ def generate_module_versions():
     modules = []
     for item in src_dir.iterdir():
         if item.is_dir():
-            if item.name.startswith(CORE_PREFIX) or item.name.startswith(MODULE_PREFIX) or item.name.startswith(SUBMODULE_PREFIX):
+            if item.name.startswith(CORE_PREFIX) or item.name.startswith(MODULE_PREFIX) or item.name.startswith(SUBMODULE_PREFIX) or item.name.startswith(DEVICE_PREFIX):
                 modules.append(item)
     
     if not modules:
