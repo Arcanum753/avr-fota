@@ -310,8 +310,8 @@ String UDPBROADCAST_CLASS::getCommitDateStr(){
 void UDPBROADCAST_CLASS::html_ver_get(AsyncWebServerRequest *request) {
     DEBUGUDP("%s\n\r", __FUNCTION__);
     String values = "";
-    values += "udpversion|"     + getVersionStr()    + "|dev\n";
-    values += "udpgentime|"     + getGeneratedTime() + "|dev\n";
-    values += "udpgendate|"     + getCommitDateStr() + "|dev\n";
+    values += "udpversion|"     + getVersionStr()    + "|div\n";
+    values += "udpgentime|"     + getGeneratedTime() + "|div\n";
+    values += "udpgendate|"     + getCommitDateStr() + "|div\n";
     request->send(200, "text/plain", values);
 }

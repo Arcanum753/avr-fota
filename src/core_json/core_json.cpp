@@ -431,8 +431,8 @@ String CORE_CLASS_JSON::getCommitDateStr(){
 void CORE_CLASS_JSON::html_ver_get(AsyncWebServerRequest *request) {
     DEBUGJSON("%s\n\r", __FUNCTION__);
     String values = "";
-    values += "jsnversion|"     + getVersionStr()    + "|dev\n";
-    values += "jsngentime|"     + getGeneratedTime() + "|dev\n";
-    values += "jsngendate|"     + getCommitDateStr() + "|dev\n";
+    values += "jsnversion|"     + getVersionStr()    + "|div\n";
+    values += "jsngentime|"     + getGeneratedTime() + "|div\n";
+    values += "jsngendate|"     + getCommitDateStr() + "|div\n";
     request->send(200, "text/plain", values);
 }

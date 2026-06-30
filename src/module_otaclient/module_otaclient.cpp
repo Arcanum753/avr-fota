@@ -901,9 +901,9 @@ String MODULE_CLASS_OTACLIENT::getCommitDateStr(){
 void MODULE_CLASS_OTACLIENT::html_ver_get(AsyncWebServerRequest *request) {
     DEBUGOTACLIENT("%s\n\r", __FUNCTION__);
     String values = "";
-    values += "otaclientversion|"     + getVersionStr()    + "|dev\n";
-    values += "otaclientgentime|"     + getGeneratedTime() + "|dev\n";
-    values += "otaclientgendate|"     + getCommitDateStr() + "|dev\n";
+    values += "otaclientversion|"     + getVersionStr()    + "|div\n";
+    values += "otaclientgentime|"     + getGeneratedTime() + "|div\n";
+    values += "otaclientgendate|"     + getCommitDateStr() + "|div\n";
     request->send(200, "text/plain", values);
 }
 

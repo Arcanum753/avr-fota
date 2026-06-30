@@ -841,9 +841,9 @@ void Class_ProgBase::web_FileDelete(AsyncWebServerRequest *request) {
 void Class_ProgBase::html_ver_get(AsyncWebServerRequest *request) {
 	DEBUGLOGPROG("%s\n\r", __FUNCTION__);
 	String values = "";
-	values += "version|"    + getVersionStr()    + "|dev\n";
-	values += "gentime|"    + getGeneratedTime() + "|dev\n";
-	values += "gendate|"    + getCommitDateStr() + "|dev\n";
+	values += "version|"    + getVersionStr()    + "|div\n";
+	values += "gentime|"    + getGeneratedTime() + "|div\n";
+	values += "gendate|"    + getCommitDateStr() + "|div\n";
 	request->send(200, "text/plain", values);
 }
 

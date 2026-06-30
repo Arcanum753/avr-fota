@@ -10,6 +10,7 @@
 #define MainTimerQueueSize  30
 
 typedef void (*TPTR)(void);
+extern void Idle_task(void);
 extern void InitRTOS(void);
 extern void SetTask(TPTR TS);
 extern void SetTaskFromISR(TPTR TS);

@@ -212,9 +212,9 @@ String CORE_CLASS_EDITOR::getCommitDateStr() {
 void CORE_CLASS_EDITOR::html_ver_get(AsyncWebServerRequest *request) {
     DEBUGEDIT("%s\n\r", __FUNCTION__);
     String values = "";
-    values += "edtversion|" + getVersionStr()    + "|dev\n";
-    values += "edtgentime|" + getGeneratedTime() + "|dev\n";
-    values += "edtgendate|" + getCommitDateStr() + "|dev\n";
+    values += "edtversion|" + getVersionStr()    + "|div\n";
+    values += "edtgentime|" + getGeneratedTime() + "|div\n";
+    values += "edtgendate|" + getCommitDateStr() + "|div\n";
     request->send(200, "text/plain", values);
 }
 

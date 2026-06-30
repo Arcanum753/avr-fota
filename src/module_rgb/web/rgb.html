@@ -37,10 +37,10 @@
     <div class="content" style="text-align: center;">
         <div class="params">
             <table>
-                <tr><td class="label">Data pin:</td><td><input type="number" id="dataPin" min="0" max="33" value="16"></td></tr>
-                <tr><td class="label">LED count:</td><td><input type="number" id="numLeds" min="1" max="100" value="10"></td></tr>
+                <tr><td class="label">Data pin:</td><td><input type="number" id="dataPin" min="0" max="33" value="16" style="width:120px;"></td></tr>
+                <tr><td class="label">LED count:</td><td><input type="number" id="numLeds" min="1" max="100" value="10" style="width:120px;"></td></tr>
                 <tr><td class="label">Brightness:</td><td><input type="range" id="brightness" min="0" max="255" value="128" oninput="document.getElementById('bVal').innerText=this.value" onchange="onBrightness(this.value)"><span id="bVal">128</span></td></tr>
-                <tr><td class="label">Effect speed (ms):</td><td><input type="number" id="effectSpeed" min="10" max="5000" value="50" onchange="onEffectSpeed(this.value)"></td></tr>
+                <tr><td class="label">Effect speed (ms):</td><td><input type="number" id="effectSpeed" min="10" max="5000" value="50" onchange="onEffectSpeed(this.value)" style="width:120px;"></td></tr>
                 <input type="hidden" id="mode" value="0">
                 <tr><td colspan="2" style="text-align:center; padding:8px;">
                     <button class="button-prog" onclick="saveAll()">Apply pin/count</button>
@@ -82,8 +82,8 @@
 
     <div id="sectionEqualizer" class="content section hidden" style="text-align:center;">
         <table class="scan" style="width:auto;margin:0 auto;"><tr><th colspan="2">Equalizer</th></tr>
-        <tr><td class="label">Bands:</td><td><input type="number" id="eqBands" min="1" max="50" value="10"></td></tr>
-        <tr><td class="label">LEDs per band:</td><td><input type="number" id="eqLedsPerBand" min="1" max="50" value="10"></td></tr>
+        <tr><td class="label">Bands:</td><td><input type="number" id="eqBands" min="1" max="50" value="10" style="width:120px;"></td></tr>
+        <tr><td class="label">LEDs per band:</td><td><input type="number" id="eqLedsPerBand" min="1" max="50" value="10" style="width:120px;"></td></tr>
         <tr><td colspan="2" style="text-align:center; padding:8px;">
             <button class="button-prog" onclick="applyEqualizer()">Apply Equalizer</button>
             <span id="eqStatus" class="status-msg"></span>

@@ -32,6 +32,10 @@
 #include "module_rgb/module_rgb.h"
 #endif
 
+#if defined(MODULE_DS3231)
+#include "module_ds3231/module_ds3231.h"
+#endif
+
 #if defined(MODULE_LCD_I2C)
 #include "module_lcd-i2c/module_lcd-i2c.h"
 #endif
@@ -160,6 +164,12 @@ AsyncFSWebServer::AsyncFSWebServer(uint16_t port) : AsyncWebServer(port) {}
 	ModClassLcdI2c.setFs(&LittleFS);
 	ModClassLcdI2c.begin();
 	ModClassLcdI2c.webInit();
+#endif
+
+#if defined(MODULE_DS3231)
+	ModClassDs3231.setFs(&LittleFS);
+	ModClassDs3231.begin();
+	ModClassDs3231.webInit();
 #endif
 
 #if defined(MODULE_RGB)

@@ -262,8 +262,8 @@ String MODULE_CLASS_TEMPLATE::getCommitDateStr() {
 void MODULE_CLASS_TEMPLATE::html_ver_get(AsyncWebServerRequest *request) {
     DEBUGTEMPLATE("%s\r\n", __FUNCTION__);
     String values = "";
-    values += "templateversion|" + getVersionStr()    + "|dev\n";
-    values += "templategentime|" + getGeneratedTime() + "|dev\n";
-    values += "templategendate|" + getCommitDateStr() + "|dev\n";
+    values += "templateversion|" + getVersionStr()    + "|div\n";
+    values += "templategentime|" + getGeneratedTime() + "|div\n";
+    values += "templategendate|" + getCommitDateStr() + "|div\n";
     request->send(200, "text/plain", values);
 }

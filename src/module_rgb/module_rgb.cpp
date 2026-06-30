@@ -489,8 +489,8 @@ String MODULE_CLASS_RGB::getCommitDateStr() {
 void MODULE_CLASS_RGB::html_ver_get(AsyncWebServerRequest *request) {
     DEBUGRGB("%s\r\n", __FUNCTION__);
     String values = "";
-    values += "rgbversion|" + getVersionStr()    + "|dev\n";
-    values += "rgbgentime|" + getGeneratedTime() + "|dev\n";
-    values += "rbggendate|" + getCommitDateStr() + "|dev\n";
+    values += "rgbversion|" + getVersionStr()    + "|div\n";
+    values += "rgbgentime|" + getGeneratedTime() + "|div\n";
+    values += "rbggendate|" + getCommitDateStr() + "|div\n";
     request->send(200, "text/plain", values);
 }

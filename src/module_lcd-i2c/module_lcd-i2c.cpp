@@ -311,8 +311,8 @@ String MODULE_CLASS_LCD_I2C::getCommitDateStr() {
 void MODULE_CLASS_LCD_I2C::html_ver_get(AsyncWebServerRequest *request) {
     DEBUGLCD("%s\r\n", __FUNCTION__);
     String values = "";
-    values += "lcdi2cversion|" + getVersionStr()    + "|dev\n";
-    values += "lcdi2cgentime|" + getGeneratedTime() + "|dev\n";
-    values += "lcdi2cgendate|" + getCommitDateStr() + "|dev\n";
+    values += "lcdi2cversion|" + getVersionStr()    + "|div\n";
+    values += "lcdi2cgentime|" + getGeneratedTime() + "|div\n";
+    values += "lcdi2cgendate|" + getCommitDateStr() + "|div\n";
     request->send(200, "text/plain", values);
 }

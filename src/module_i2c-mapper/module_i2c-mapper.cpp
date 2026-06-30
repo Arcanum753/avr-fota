@@ -77,8 +77,8 @@ String MODULE_CLASS_I2C_MAPPER::getCommitDateStr() {
 void MODULE_CLASS_I2C_MAPPER::html_ver_get(AsyncWebServerRequest *request) {
     DEBUGI2CMAPPER("%s\r\n", __FUNCTION__);
     String values = "";
-    values += "i2cmapperversion|" + getVersionStr()    + "|dev\n";
-    values += "i2cmappergentime|" + getGeneratedTime() + "|dev\n";
-    values += "i2cmappergendate|" + getCommitDateStr() + "|dev\n";
+    values += "i2cmapperversion|" + getVersionStr()    + "|div\n";
+    values += "i2cmappergentime|" + getGeneratedTime() + "|div\n";
+    values += "i2cmappergendate|" + getCommitDateStr() + "|div\n";
     request->send(200, "text/plain", values);
 }

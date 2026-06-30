@@ -791,21 +791,21 @@ String CORE_OTA_CLASS::getCommitDateStr(){
 void CORE_OTA_CLASS::html_ver_get(AsyncWebServerRequest *request) {
     DEBUGOTA("%s\n\r", __FUNCTION__);
     String values = "";
-    values += "otaversion|"     + getVersionStr()    + "|dev\n";
-    values += "otagentime|"     + getGeneratedTime() + "|dev\n";
-    values += "otagendate|"     + getCommitDateStr() + "|dev\n";
+    values += "otaversion|"     + getVersionStr()    + "|div\n";
+    values += "otagentime|"     + getGeneratedTime() + "|div\n";
+    values += "otagendate|"     + getCommitDateStr() + "|div\n";
     
     // Current firmware version (from version.h macros)
-    values += "fwVersion|"      + String(FIRMWARE_VERSION) + "|dev\n";
+    values += "fwVersion|"      + String(FIRMWARE_VERSION) + "|div\n";
     
     // Current filesystem version (from cache or version_fs.json)
     if (!_fsVersionCached) {
         cacheFsVersionInfo();
     }
     if (_cachedFsVersionStr != "") {
-        values += "fsVersion|"  + _cachedFsVersionStr + "|dev\n";
+        values += "fsVersion|"  + _cachedFsVersionStr + "|div\n";
     } else {
-        values += "fsVersion|"  + String((int)_cachedFsMajor) + "." + String((int)_cachedFsMinor) + "." + String((long long)_cachedFsDate) + "." + String((long)_cachedFsBuild) + "|dev\n";
+        values += "fsVersion|"  + String((int)_cachedFsMajor) + "." + String((int)_cachedFsMinor) + "." + String((long long)_cachedFsDate) + "." + String((long)_cachedFsBuild) + "|div\n";
     }
     
     request->send(200, "text/plain", values);

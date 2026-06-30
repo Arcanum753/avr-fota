@@ -748,9 +748,9 @@ String CORE_CLASS_WIFI::getCommitDateStr(){
 void CORE_CLASS_WIFI::html_ver_get(AsyncWebServerRequest *request) {
     DEBUGLOGWIFI("%s\n\r", __FUNCTION__);
     String values = "";
-    values += "wifiversion|"     + getVersionStr()    + "|dev\n";
-    values += "wifigentime|"     + getGeneratedTime() + "|dev\n";
-    values += "wifigendate|"     + getCommitDateStr() + "|dev\n";
+    values += "wifiversion|"     + getVersionStr()    + "|div\n";
+    values += "wifigentime|"     + getGeneratedTime() + "|div\n";
+    values += "wifigendate|"     + getCommitDateStr() + "|div\n";
     request->send(200, "text/plain", values);
 }
 
