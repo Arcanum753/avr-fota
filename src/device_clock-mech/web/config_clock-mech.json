@@ -1,1 +1,1 @@
-{"enabled":false,"triggerHour":12,"triggerMinute":0}
+{"enabled":true,"timeSource":"ds3231","triggerHour":12,"triggerMinute":0,"stepsPerRevolution":400,"pollInterval":5,"stepTime":5,"errorLimitSteps":1500,"sensorLedEnabled":true}

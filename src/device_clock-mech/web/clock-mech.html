@@ -17,6 +17,15 @@
                 <td><input type="checkbox" id="enabled"> Вкл</td>
             </tr>
             <tr>
+                <td class="label">Time source</td>
+                <td>
+                    <select id="timeSource">
+                        <option value="ds3231">DS3231</option>
+                        <option value="ntp">NTP</option>
+                    </select>
+                </td>
+            </tr>
+            <tr>
                 <td class="label">Trigger hour (0-23)</td>
                 <td><input type="number" id="triggerHour" min="0" max="23" value="12"></td>
             </tr>
@@ -24,7 +33,48 @@
                 <td class="label">Trigger minute (0-59)</td>
                 <td><input type="number" id="triggerMinute" min="0" max="59" value="0"></td>
             </tr>
+            <tr>
+                <td class="label">Steps per revolution</td>
+                <td><input type="number" id="stepsPerRevolution" min="1" value="400"></td>
+            </tr>
+            <tr>
+                <td class="label">Poll interval (sec)</td>
+                <td><input type="number" id="pollInterval" min="1" value="5"></td>
+            </tr>
+            <tr>
+                <td class="label">Step time (ms)</td>
+                <td><input type="number" id="stepTime" min="1" value="5"></td>
+            </tr>
+            <tr>
+                <td class="label">Error limit (steps)</td>
+                <td><input type="number" id="errorLimitSteps" min="1" value="1500"></td>
+            </tr>
+            <tr>
+                <td class="label">Sensor LED enabled</td>
+                <td><input type="checkbox" id="sensorLedEnabled"> Вкл</td>
+            </tr>
             <tr><td colspan="2" style="text-align: center; padding: 8px;"> <input type="button" value="Применить" class="button-prog" onclick="saveConfig()"> <span id="cfgStatus" style="margin-left:8px;font-size:12px;"></span></td></tr>
+        </table>
+    </div>
+
+    <div class="content" style="text-align: center;">
+        <table class="scan" style="width: auto; margin: 0 auto;">
+            <tr><th colspan="2">Управление / Control</th></tr>
+            <tr><td colspan="2" style="text-align: center; padding: 8px;">
+                <input type="button" value="Сброс в 12:00" class="button-prog" onclick="sendReset()">
+                <input type="button" value="Подсчитать шаги" class="button-prog" onclick="sendCount()">
+            </td></tr>
+        </table>
+    </div>
+
+    <div class="content" style="text-align: center;">
+        <table class="scan" style="width: auto; margin: 0 auto;">
+            <tr><th>Статус / Status</th><th>Значение</th></tr>
+            <tr><td class="label">Статус</td><td><span id="status"></span></td></tr>
+            <tr><td class="label">Положение минут</td><td><span id="mechMin"></span></td></tr>
+            <tr><td class="label">Положение часов</td><td><span id="mechHour"></span></td></tr>
+            <tr><td class="label">Шагов контроля</td><td><span id="mechControlSteps"></span></td></tr>
+            <tr><td class="label">Текущее время</td><td><span id="currentTime"></span></td></tr>
         </table>
     </div>
 
@@ -39,12 +89,23 @@
     <script>
         async function saveConfig() {
             const enabled = document.getElementById('enabled').checked ? 'true' : '';
+            const timeSource = document.getElementById('timeSource').value;
             const hour = document.getElementById('triggerHour').value;
             const minute = document.getElementById('triggerMinute').value;
+            const steps = document.getElementById('stepsPerRevolution').value;
+            const poll = document.getElementById('pollInterval').value;
+            const st = document.getElementById('stepTime').value;
+            const err = document.getElementById('errorLimitSteps').value;
+            const sensLed = document.getElementById('sensorLedEnabled').checked ? 'true' : '';
             const statusEl = document.getElementById('cfgStatus');
             statusEl.innerHTML = 'Saving...';
             try {
-                const resp = await fetch(`/clock-mech/save?enabled=${enabled}&triggerHour=${hour}&triggerMinute=${minute}`, { method: 'POST' });
+                const params = new URLSearchParams({
+                    enabled, timeSource, triggerHour: hour, triggerMinute: minute,
+                    stepsPerRevolution: steps, pollInterval: poll,
+                    stepTime: st, errorLimitSteps: err, sensorLedEnabled: sensLed
+                });
+                const resp = await fetch('/clock-mech/save', { method: 'POST', body: params });
                 if (resp.ok) {
                     statusEl.innerHTML = 'Saved';
                     setTimeout(() => { statusEl.innerHTML = ''; }, 3000);
@@ -54,6 +115,16 @@
             } catch(e) {
                 statusEl.innerHTML = 'Error';
             }
+        }
+        async function sendReset() {
+            try {
+                await fetch('/clock-mech/reset', { method: 'POST' });
+            } catch(e) {}
+        }
+        async function sendCount() {
+            try {
+                await fetch('/clock-mech/count', { method: 'POST' });
+            } catch(e) {}
         }
         window.onload = function() {
             setTimeout(() => {

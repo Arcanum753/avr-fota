@@ -33,6 +33,15 @@ char delimiterChar = ' ';
 
 SerialTerminal term(newlineChar, delimiterChar);
 
+static TerminalModuleInit _moduleSlots[TERMINAL_MODULE_SLOTS];
+static uint8_t _moduleSlotCount = 0;
+
+void TerminalRegisterModule(TerminalModuleInit initFn) {
+    if (_moduleSlotCount < TERMINAL_MODULE_SLOTS) {
+        _moduleSlots[_moduleSlotCount++] = initFn;
+    }
+}
+
 void TerminalInit(){
     term.addCommand("help",  TerminalHelp );    // показать все команды
     term.addCommand("reset", EspReset );        // ресет мк
@@ -54,6 +63,10 @@ void TerminalInit(){
     // term.addCommand("stm32",    termStm32 );
     // term.addCommand("swdf", termSwdFlash1 );
     // term.addCommand("avr",  avr );
+
+    for (uint8_t i = 0; i < _moduleSlotCount; i++) {
+        _moduleSlots[i]();
+    }
 
     Serial.println("\n\r Serial terminal inited.");
     term.setSerialEcho(true);
