@@ -17,8 +17,10 @@
 #define CLOCKMECH_SENS_HOUR 25
 #define CLOCKMECH_SENS_MIN  26
 
-#define CLOCKMECH_CounterClockWise LOW
-#define CLOCKMECH_ClockWise HIGH
+#define CLOCKMECH_MIN_STEPS_GAP 30
+
+#define CLOCKMECH_CounterClockWise  LOW
+#define CLOCKMECH_ClockWise         HIGH
 
 #define CONFIG_FILE_CLOCKMECH    "/config_clock-mech.json"
 
@@ -58,7 +60,9 @@ public:
     static void cmdSens();
     static void cmdN();
     static void cmdSet1200();
-
+    static void cmdCount();
+    
+    static void GetSens();
 private:
     String getVersionStr();
     String getGeneratedTime();
@@ -77,13 +81,16 @@ private:
 
 
     static void MechSet1200_Setup();
-    static void MechSet1200_Proc();
+    static void MechSet1200_Task();
     static void MechSet1200_endOk();
     static void MechSet1200_endFail();
 
     
     static void MechCountStepsSetup();
     static void MechCountStepsTask();
+    static void MechCountStepsOk();
+    static void MechCountStepsFail();
+
     static void MechSetArrows();
     static void MechSetArrowHour();
     static void MechSetArrowMin();
@@ -96,12 +103,7 @@ private:
 
 protected:
     bool dumb;
-#if defined(ESP32)
     fs::LittleFSFS*       _fs;
-#elif defined(ESP8266)
-    FS*                   _fs;
-#endif
-
     strClockMechConfig _config;
     uint16_t _mechControlSteps;
     uint8_t  _mechStepPhase;
@@ -111,7 +113,9 @@ protected:
     uint8_t  _timeHourReal;
     uint8_t  _status;
     bool     _needSync;
-    bool     _sensorLedState;
+    int     _sensorLedState;
+    int     _sensorLedStateHOUR;
+    int     _sensorLedStateMIN;
 };
 
 extern MODULE_CLASS_CLOCKMECH ModClassClockMech;

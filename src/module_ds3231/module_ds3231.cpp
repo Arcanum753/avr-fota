@@ -375,7 +375,7 @@ void MODULE_CLASS_DS3231::begin() {
             delay(100);
         }
         if (!found) {
-            DEBUGDS3231("DS3231: адрес 0x%02X не отвечает, пересканирование...\r\n", _config.addr);
+            DEBUGDS3231("DS3231:  0x%02X  didn't response. Rescan...\r\n", _config.addr);
             _config.addr = _scanForDS3231();
             saveConfig();
         }
@@ -385,9 +385,9 @@ void MODULE_CLASS_DS3231::begin() {
     }
 
     if (_config.addr != DS3231_ADDR_NONE) {
-        DEBUGDS3231("DS3231: инициализирован, адрес 0x%02X\r\n", _config.addr);
+        DEBUGDS3231("DS3231: inited, adr: 0x%02X\r\n", _config.addr);
     } else {
-        DEBUGDS3231("DS3231: НЕ НАЙДЕН\r\n");
+        DEBUGDS3231("DS3231: Not found!\r\n");
     }
 }
 
