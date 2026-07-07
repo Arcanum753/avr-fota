@@ -11,10 +11,15 @@
 
     <div class="content" style="text-align: center;">
         <table class="scan" style="width: auto; margin: 0 auto;">
-            <tr><th colspan="2">Настройки триггера / Trigger settings</th></tr>
+            <tr><th colspan="2">Настройки / Settings</th></tr>
             <tr>
-                <td class="label">Enabled</td>
-                <td><input type="checkbox" id="enabled"> Вкл</td>
+                <td class="label">Режим / Mode</td>
+                <td>
+                    <select id="enable_status">
+                        <option value="0">Debug</option>
+                        <option value="1">Work</option>
+                    </select>
+                </td>
             </tr>
             <tr>
                 <td class="label">Time source</td>
@@ -26,24 +31,12 @@
                 </td>
             </tr>
             <tr>
-                <td class="label">Trigger hour (0-23)</td>
-                <td><input type="number" id="triggerHour" min="0" max="23" value="12"></td>
-            </tr>
-            <tr>
-                <td class="label">Trigger minute (0-59)</td>
-                <td><input type="number" id="triggerMinute" min="0" max="59" value="0"></td>
-            </tr>
-            <tr>
                 <td class="label">Steps per revolution</td>
                 <td><input type="number" id="stepsPerRevolution" min="1" value="400"></td>
             </tr>
             <tr>
                 <td class="label">Poll interval (sec)</td>
                 <td><input type="number" id="pollInterval" min="1" value="5"></td>
-            </tr>
-            <tr>
-                <td class="label">Step time (ms)</td>
-                <td><input type="number" id="stepTime" min="1" value="5"></td>
             </tr>
             <tr>
                 <td class="label">Error limit (steps)</td>
@@ -58,23 +51,43 @@
     </div>
 
     <div class="content" style="text-align: center;">
-        <table class="scan" style="width: auto; margin: 0 auto;">
-            <tr><th colspan="2">Управление / Control</th></tr>
-            <tr><td colspan="2" style="text-align: center; padding: 8px;">
-                <input type="button" value="Сброс в 12:00" class="button-prog" onclick="sendReset()">
-                <input type="button" value="Подсчитать шаги" class="button-prog" onclick="sendCount()">
-            </td></tr>
-        </table>
-    </div>
-
-    <div class="content" style="text-align: center;">
-        <table class="scan" style="width: auto; margin: 0 auto;">
+        <table class="scan" style="width: auto; margin: 0 auto;" id="statusTable">
             <tr><th>Статус / Status</th><th>Значение</th></tr>
             <tr><td class="label">Статус</td><td><span id="status"></span></td></tr>
+            <tr><td class="label">Режим</td><td><span id="mode"></span></td></tr>
             <tr><td class="label">Положение минут</td><td><span id="mechMin"></span></td></tr>
             <tr><td class="label">Положение часов</td><td><span id="mechHour"></span></td></tr>
             <tr><td class="label">Шагов контроля</td><td><span id="mechControlSteps"></span></td></tr>
             <tr><td class="label">Текущее время</td><td><span id="currentTime"></span></td></tr>
+            <tr id="fullStatusRow" style="display:none;"><td colspan="2"><div id="fullStatusDump" style="font-size:12px; text-align:left; padding:4px;"></div></td></tr>
+            <tr><td colspan="2" style="text-align: center; padding: 8px;">
+                <input type="button" value="Обновить статус" class="button-prog" onclick="fetchInfo()">
+                <input type="button" value="Полный статус" class="button-prog" onclick="fetchStatus()">
+            </td></tr>
+        </table>
+    </div>
+
+    <div class="content" style="text-align: center;" id="debugBlock">
+        <h3 style="background: #7D8EE2; margin:0; padding:4px; font-size:14px;">Отладка / Debug</h3>
+        <table class="scan" style="width: auto; margin: 0 auto;">
+            <tr><td colspan="2" style="text-align: center; padding: 4px;">
+                <input type="button" value="Один шаг" class="button-prog" onclick="sendAction('/clock-mech/step')">
+                <input type="button" value="Сменить DIR" class="button-prog" onclick="sendAction('/clock-mech/dir')">
+                <input type="button" value="Вкл/Выкл EN" class="button-prog" onclick="sendAction('/clock-mech/en')">
+                <input type="button" value="Вкл/Выкл LED" class="button-prog" onclick="sendAction('/clock-mech/sled')">
+            </td></tr>
+            <tr><td colspan="2" style="text-align: center; padding: 4px;">
+                <input type="button" value="Опрос сенсоров" class="button-prog" onclick="sendAction('/clock-mech/sens')">
+                <input type="button" value="Сброс в 12:00" class="button-prog" onclick="sendAction('/clock-mech/reset')">
+                <input type="button" value="Подсчёт шагов" class="button-prog" onclick="sendAction('/clock-mech/count')">
+            </td></tr>
+            <tr><td colspan="2" style="text-align: center; padding: 4px;">
+                Шагов: <input type="number" id="nStepCount" value="10" min="1" style="width:60px;">
+                <input type="button" value="Шагнуть" class="button-prog" onclick="sendN()">
+            </td></tr>
+            <tr><td colspan="2" style="text-align: center; padding: 4px;">
+                <input type="button" value="Скрыть полный статус" class="button-prog" onclick="document.getElementById('fullStatusRow').style.display='none'">
+            </td></tr>
         </table>
     </div>
 
@@ -87,28 +100,60 @@
     <script src="GetJson.js" defer></script>
     <script src="GetMarkup.js" defer></script>
     <script>
+        function statusText(s) {
+            const map = ['IDLE', 'SET1200', 'SETHOUR', 'SETMIN', 'POLL', 'COUNTING', 'ERROR'];
+            return map[s] !== undefined ? map[s] : '?';
+        }
+
+        async function fetchInfo() {
+            try {
+                const resp = await fetch('/clock-mech/info');
+                const data = await resp.json();
+                document.getElementById('enable_status').value = data.enable_status;
+                document.getElementById('timeSource').value = data.timeSource;
+                document.getElementById('stepsPerRevolution').value = data.stepsPerRevolution;
+                document.getElementById('pollInterval').value = data.pollInterval;
+                document.getElementById('errorLimitSteps').value = data.errorLimitSteps;
+                document.getElementById('sensorLedEnabled').checked = data.sensorLedEnabled;
+                document.getElementById('status').textContent = data.status + ' (' + statusText(data.status) + ')';
+                document.getElementById('mode').textContent = data.enable_status == 1 ? 'Work' : 'Debug';
+                document.getElementById('mechMin').textContent = data.mechMin;
+                document.getElementById('mechHour').textContent = data.mechHour;
+                document.getElementById('mechControlSteps').textContent = data.mechControlSteps;
+                document.getElementById('currentTime').textContent = data.currentTime;
+                updateDebugBlock(data.enable_status);
+            } catch(e) {
+                console.error('fetchInfo error:', e);
+            }
+        }
+
+        function updateDebugBlock(mode) {
+            const btns = document.querySelectorAll('#debugBlock input[type="button"]');
+            for (const btn of btns) {
+                btn.disabled = (mode == 1);
+            }
+        }
+
         async function saveConfig() {
-            const enabled = document.getElementById('enabled').checked ? 'true' : '';
+            const enabled = document.getElementById('enable_status').value;
             const timeSource = document.getElementById('timeSource').value;
-            const hour = document.getElementById('triggerHour').value;
-            const minute = document.getElementById('triggerMinute').value;
             const steps = document.getElementById('stepsPerRevolution').value;
             const poll = document.getElementById('pollInterval').value;
-            const st = document.getElementById('stepTime').value;
             const err = document.getElementById('errorLimitSteps').value;
             const sensLed = document.getElementById('sensorLedEnabled').checked ? 'true' : '';
             const statusEl = document.getElementById('cfgStatus');
             statusEl.innerHTML = 'Saving...';
             try {
                 const params = new URLSearchParams({
-                    enabled, timeSource, triggerHour: hour, triggerMinute: minute,
+                    enable_status: enabled, timeSource,
                     stepsPerRevolution: steps, pollInterval: poll,
-                    stepTime: st, errorLimitSteps: err, sensorLedEnabled: sensLed
+                    errorLimitSteps: err, sensorLedEnabled: sensLed
                 });
                 const resp = await fetch('/clock-mech/save', { method: 'POST', body: params });
                 if (resp.ok) {
                     statusEl.innerHTML = 'Saved';
                     setTimeout(() => { statusEl.innerHTML = ''; }, 3000);
+                    fetchInfo();
                 } else {
                     statusEl.innerHTML = 'Error';
                 }
@@ -116,21 +161,55 @@
                 statusEl.innerHTML = 'Error';
             }
         }
-        async function sendReset() {
+
+        async function sendAction(url) {
             try {
-                await fetch('/clock-mech/reset', { method: 'POST' });
-            } catch(e) {}
+                const resp = await fetch(url);
+                const data = await resp.json();
+                if (data.error) {
+                    alert(data.error);
+                }
+                fetchInfo();
+            } catch(e) {
+                console.error('sendAction error:', e);
+            }
         }
-        async function sendCount() {
+
+        async function sendN() {
+            const n = document.getElementById('nStepCount').value;
             try {
-                await fetch('/clock-mech/count', { method: 'POST' });
-            } catch(e) {}
+                const resp = await fetch('/clock-mech/n?count=' + n);
+                const data = await resp.json();
+                if (data.error) {
+                    alert(data.error);
+                }
+                fetchInfo();
+            } catch(e) {
+                console.error('sendN error:', e);
+            }
         }
+
+        async function fetchStatus() {
+            try {
+                const resp = await fetch('/clock-mech/status');
+                const data = await resp.json();
+                let html = '<table style="font-size:12px;width:100%">';
+                for (const [key, val] of Object.entries(data)) {
+                    html += '<tr><td>' + key + '</td><td>' + val + '</td></tr>';
+                }
+                html += '</table>';
+                document.getElementById('fullStatusDump').innerHTML = html;
+                document.getElementById('fullStatusRow').style.display = '';
+            } catch(e) {
+                console.error('fetchStatus error:', e);
+            }
+        }
+
         window.onload = function() {
             setTimeout(() => {
                 ApplyCVT("/system/version")
-                    .then(() => ApplyCVT("/clock-mech/info"))
-                    .then(() => ApplyCVT("/clock-mech/ver"));
+                    .then(() => ApplyCVT("/clock-mech/ver"))
+                    .then(() => fetchInfo());
             }, 500);
         };
     </script>
