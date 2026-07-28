@@ -430,8 +430,6 @@ void MODULE_CLASS_CLOCKMECH::cmdStatus() {
         snprintf(buf, sizeof(buf), "%02d:%02d", hour(t), minute(t));
         Serial.printf("time: %s\r\n", buf);
     }
-    // Serial.printf("_sensorLedStateHOUR: %d\r\n", ModClassClockMech._sensorLedStateHOUR);
-    // Serial.printf("_sensorLedStateMIN: %d\r\n", ModClassClockMech._sensorLedStateMIN);
     Serial.printf("mchCS:             %d\r\n", ModClassClockMech.mchCS);
     Serial.printf("SENS_HOUR=%d SENS_MIN=%d SENS_LED=%d\r\n",
         digitalRead(CLOCKMECH_SENS_HOUR),
@@ -659,12 +657,12 @@ void MODULE_CLASS_CLOCKMECH::MechSetArrowHourEndOk() {
     GoToTaskAfterStep = Idle_task;
     ModClassClockMech._Mech_Status = STATUS_IDLE;
     GetSens();
-    DEBUGCLOCKMECH("HOUR Arrow: %02d\r\n",  ModClassClockMech._timeMechHour);
     if (ModClassClockMech._timeMechHour == ModClassClockMech._timeHourReal) { DEBUGCLOCKMECH("tH_M == tH_R \r\n"); }
     ModClassClockMech._timeMechMin = 0;
     ModClassClockMech._mechControlSteps = 0;
     ModClassClockMech._timeMechHour++;
     if (ModClassClockMech._timeMechHour > 12) { ModClassClockMech._timeMechHour -= 12; }
+    DEBUGCLOCKMECH("HOUR Arrow: %02d\r\n",  ModClassClockMech._timeMechHour);
     SetTask(MechSetArrows); // set all arows
     digitalWrite(CLOCKMECH_EN, HIGH);
     digitalWrite(CLOCKMECH_SENS_LED, LOW);
@@ -782,7 +780,7 @@ bool MODULE_CLASS_CLOCKMECH::loadConfig() {
     _config.sensorLedEnabled    = doc["sensorLedEnabled"].as<bool>();
 
     if (_config.timeSource != "ds3231" && _config.timeSource != "ntp") { _config.timeSource = "ds3231"; }
-    if (_config.pollInterval < 1)  { _config.pollInterval = 5; }
+    if (_config.pollInterval < 1)   { _config.pollInterval = 5; }
     if (_config.stepsPerRevolution < 1) { _config.stepsPerRevolution = 400; }
 
     return true;

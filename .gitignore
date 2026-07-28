@@ -19,3 +19,4 @@ build_counter.txt
 task_progress.md
 *version.h
 /.kilo
+/example

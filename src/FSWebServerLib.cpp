@@ -43,6 +43,9 @@
 #if defined(DEVICE_CLOCKMECH)
 #include "device_clock-mech/device_clock-mech.h"
 #endif
+#if defined(DEVICE_RINGMECH)
+#include "device_mech-ring/device_mech-ring.h"
+#endif
 
 #if defined(MODULE_UDP)
 #include "module_udp/module_udp.h"
@@ -182,6 +185,12 @@ AsyncFSWebServer::AsyncFSWebServer(uint16_t port) : AsyncWebServer(port) {}
 	ModClassClockMech.setFs(&LittleFS);
 	ModClassClockMech.begin();
 	ModClassClockMech.webInit();
+#endif
+	
+#if defined(DEVICE_RINGMECH)
+	ModClassRingMech.setFs(&LittleFS);
+	ModClassRingMech.begin();
+	ModClassRingMech.webInit();
 #endif
 	
 #ifdef PROGTYPE_SWD
