@@ -12,9 +12,14 @@
 #include <LittleFS.h>
 #define RINGMECH_STEP      17
 #define RINGMECH_EN        16
+
 #define RINGMECH_SENS      32
 
 #define RINGMECH_MIN_STEPS_GAP 40
+#define RINGMECH_RING_FIRST_PAUSE_DEFAULT 200
+#define RINGMECH_RING_SECON_PAUSE_DEFAULT 200
+#define RINGMECH_SPEED_DEFAULT 2
+#define RINGMECH_FIRST_POSITION_DEFAULT 85
 
 #define CONFIG_FILE_RINGMECH    "/config_ring-mech.json"
 
@@ -44,6 +49,9 @@ typedef struct {
     uint16_t stepsPerRevolution;
     uint16_t pollInterval;
     uint16_t errorLimitSteps;
+    uint16_t ringPauseOne;
+    uint16_t ringPauseTwo;
+    uint8_t firstPosition;
 } strRingMechConfig;
 
 class MODULE_CLASS_RINGMECH {
@@ -76,8 +84,6 @@ private:
 
     void handleInfo_ring(AsyncWebServerRequest *request);
     void handleSave(AsyncWebServerRequest *request);
-    void handleHome(AsyncWebServerRequest *request);
-    void handleCount(AsyncWebServerRequest *request);
     
 
     void MechInitGPIOs();

@@ -1,1 +1,1 @@
-{"enable_status":0,"stepsPerRevolution":400,"pollInterval":5,"errorLimitSteps":1500}
+{"enable_status":0,"stepsPerRevolution":400,"pollInterval":5,"errorLimitSteps":1500,"ringPauseOne":200,"ringPauseTwo":200,"firstPosition":0}

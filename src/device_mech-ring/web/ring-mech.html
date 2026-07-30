@@ -33,6 +33,18 @@
                 <td class="label">Error limit (steps)</td>
                 <td><input type="number" id="errorLimitSteps" min="1" value="1500"></td>
             </tr>
+            <tr>
+                <td class="label">Ring first pause (ms)</td>
+                <td><input type="number" id="ringPause" min="1" value="2"></td>
+            </tr>
+            <tr>
+                <td class="label">Ring second pause (ms)</td>
+                <td><input type="number" id="ringPauseTwo" min="1" value="200"></td>
+            </tr>
+            <tr>
+                <td class="label">First position</td>
+                <td><input type="number" id="firstPosition" min="0" max="255" value="0"></td>
+            </tr>
             <tr><td colspan="2" style="text-align: center; padding: 8px;"> <input type="button" value="Применить" class="button-prog" onclick="saveConfig()"> <span id="cfgStatus" style="margin-left:8px;font-size:12px;"></span></td></tr>
         </table>
     </div>
@@ -96,6 +108,9 @@
                 document.getElementById('stepsPerRevolution').value = data.stepsPerRevolution;
                 document.getElementById('pollInterval').value = data.pollInterval;
                 document.getElementById('errorLimitSteps').value = data.errorLimitSteps;
+                document.getElementById('ringPause').value = data.ringPauseOne;
+                document.getElementById('ringPauseTwo').value = data.ringPauseTwo;
+                document.getElementById('firstPosition').value = data.firstPosition;
                 document.getElementById('status').textContent = data.status + ' (' + statusText(data.status) + ')';
                 document.getElementById('mode').textContent = data.enable_status == 1 ? 'Work' : 'Debug';
                 document.getElementById('mechControlSteps').textContent = data.mechControlSteps;
@@ -119,13 +134,16 @@
             const steps = document.getElementById('stepsPerRevolution').value;
             const poll = document.getElementById('pollInterval').value;
             const err = document.getElementById('errorLimitSteps').value;
+            const speed = document.getElementById('ringPause').value;
+            const speed2 = document.getElementById('ringPauseTwo').value;
+            const firstPos = document.getElementById('firstPosition').value;
             const statusEl = document.getElementById('cfgStatus');
             statusEl.innerHTML = 'Saving...';
             try {
                 const params = new URLSearchParams({
                     enable_status: enabled,
                     stepsPerRevolution: steps, pollInterval: poll,
-                    errorLimitSteps: err
+                    errorLimitSteps: err, ringPauseOne: speed, ringPauseTwo: speed2, firstPosition: firstPos
                 });
                 const resp = await fetch('/ring-mech/save', { method: 'POST', body: params });
                 if (resp.ok) {
