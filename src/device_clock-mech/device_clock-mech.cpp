@@ -456,9 +456,10 @@ void MODULE_CLASS_CLOCKMECH::handleReset(AsyncWebServerRequest *request) {
 
 
 void MODULE_CLASS_CLOCKMECH::MechSet1200_Setup() {
+    digitalWrite(CLOCKMECH_SENS_LED, HIGH);
+    if (SENS_SET) {  MechSet1200_endOk(); return; }
     ModClassClockMech._Mech_Status = STATUS_SET1200;
     ModClassClockMech._sensorLedState = digitalRead(CLOCKMECH_SENS_LED);
-    digitalWrite(CLOCKMECH_SENS_LED, HIGH);
     digitalWrite(CLOCKMECH_EN, LOW);
     digitalWrite(CLOCKMECH_DIR, CLOCKMECH_CounterClockWise);
     ModClassClockMech._mechControlSteps = 0;
@@ -475,10 +476,7 @@ void MODULE_CLASS_CLOCKMECH::MechSet1200_Task() {
     }
     
     // Нашли положение 12:00
-    if (SENS_SET) { 
-        MechSet1200_endOk();
-        return;
-    }
+    if (SENS_SET) { MechSet1200_endOk(); return; }
     // Двигаемся дальше
     ModClassClockMech._mechControlSteps++;
     GoToTaskAfterStep = MechSet1200_Task;
