@@ -2,7 +2,6 @@
 
 #include "core_json/core_json.h"
 
-#include "device_clock-mech/device_clock-mech.h"
 #include "device_mech-ring.h"
 #include "common.h"
 #include "device_mech-ring_version.h"
@@ -18,6 +17,19 @@ MODULE_CLASS_RINGMECH::MODULE_CLASS_RINGMECH(bool _in) { dumb = _in; }
 void MODULE_CLASS_RINGMECH::setFs(fs::LittleFSFS* fs)  {   _fs = fs;   }
 volatile uint16_t step_time = RINGMECH_SPEED_DEFAULT;
 
+// ============================================================
+// Время из источника
+// ============================================================
+time_t MODULE_CLASS_RINGMECH::getCurrentTime() {
+#if defined(MODULE_DS3231)
+    if (_config.timeSource == "ds3231") {
+        time_t t = ModClassDs3231.getTime();
+        if (t > 0) { return t; }
+        DEBUGRINGMECH("DS3231 error, fallback to NTP\r\n");
+    }
+#endif
+    return now();
+}
 
 // ============================================================
 // begin()
@@ -37,6 +49,7 @@ void MODULE_CLASS_RINGMECH::begin() {
 
     if (_config.enable_status == RING_MODE_WORK) { SetTask(MechHomeSetup); }
     SetTask(RingPollTask);
+    _timeHourReal  = 0;
 }
 
 // ============================================================
@@ -61,6 +74,7 @@ void MODULE_CLASS_RINGMECH::webInit() {
     ESPHTTPServer.on("/ring-mech/home",   HTTP_GET, [](AsyncWebServerRequest *request) { if (ESPHTTPServer.checkAuth(request)) cmdHomeWeb(request); else request->requestAuthentication(); });
     ESPHTTPServer.on("/ring-mech/count",  HTTP_GET, [](AsyncWebServerRequest *request) { if (ESPHTTPServer.checkAuth(request)) cmdCountWeb(request); else request->requestAuthentication(); });
     ESPHTTPServer.on("/ring-mech/status", HTTP_GET, [](AsyncWebServerRequest *request) { if (ESPHTTPServer.checkAuth(request)) cmdStatusWeb(request); else request->requestAuthentication(); });
+    ESPHTTPServer.on("/ring-mech/reset",  HTTP_GET, [](AsyncWebServerRequest *request) { if (ESPHTTPServer.checkAuth(request)) cmdResetWeb(request);  else request->requestAuthentication(); });
     ESPHTTPServer.on("/ring-mech/ver",    HTTP_GET, [this](AsyncWebServerRequest *request) { this->html_ver_get(request);});
 }
 
@@ -73,6 +87,8 @@ void ringMechTerminalRegister() {
     term.addCommand("r-stat",  MODULE_CLASS_RINGMECH::cmdStatus);
     term.addCommand("r-save",  MODULE_CLASS_RINGMECH::cmdSave);
     term.addCommand("r-trn",   MODULE_CLASS_RINGMECH::cmdTurn);
+    term.addCommand("r-time",  MODULE_CLASS_RINGMECH::cmdTime);
+    term.addCommand("r-src",   MODULE_CLASS_RINGMECH::cmdSource);
 }
 
 // ============================================================
@@ -88,10 +104,21 @@ void MODULE_CLASS_RINGMECH::handleInfo_ring(AsyncWebServerRequest *request) {
     doc["ringPauseOne"]         = _config.ringPauseOne;
     doc["ringPauseTwo"]         = _config.ringPauseTwo;
     doc["firstPosition"]        = _config.firstPosition;
+    doc["time_begin"]           = _config.time_begin;
+    doc["time_end"]             = _config.time_end;
+    doc["timeSource"]           = _config.timeSource;
     doc["status"]               = _ringStatus;
     doc["mechControlSteps"]     = _mechControlSteps;
     doc["turnCount"]            = _mechTurnTarget;
     doc["sensor"]               = digitalRead(RINGMECH_SENS);
+    time_t t = getCurrentTime();
+    if (t > 0) {
+        char buf[9];
+        snprintf(buf, sizeof(buf), "%02d:%02d:%02d", hour(t), minute(t), second(t));
+        doc["currentTime"] = buf;
+    } else {
+        doc["currentTime"] = "N/A";
+    }
     String json;
     serializeJson(doc, json);
     request->send(200, "application/json", json);
@@ -112,6 +139,17 @@ void MODULE_CLASS_RINGMECH::handleSave(AsyncWebServerRequest *request) {
             else if (name == "ringPauseOne")           { _config.ringPauseOne = (uint16_t)val.toInt(); if (_config.ringPauseOne < 1) _config.ringPauseOne = RINGMECH_RING_FIRST_PAUSE_DEFAULT; }
             else if (name == "ringPauseTwo")           { _config.ringPauseTwo = (uint16_t)val.toInt(); if (_config.ringPauseTwo < 1) _config.ringPauseTwo = RINGMECH_RING_SECON_PAUSE_DEFAULT; }
             else if (name == "firstPosition")       { _config.firstPosition = (uint8_t)val.toInt(); }
+            else if (name == "time_begin") {
+                uint8_t v = (uint8_t)constrain(val.toInt(), 0, 23);
+                if (v == 0 && _config.time_end == 0) { _config.time_begin = 0; }
+                else if (v <= _config.time_end) _config.time_begin = v;
+            }
+            else if (name == "time_end") {
+                uint8_t v = (uint8_t)constrain(val.toInt(), 0, 23);
+                if (_config.time_begin == 0 && v == 0) { _config.time_end = 0; }
+                else if (v >= _config.time_begin) _config.time_end = v;
+            }
+            else if (name == "timeSource")          { _config.timeSource = val; }
         }
         saveConfig();
         request->send(200, "text/plain", "OK");
@@ -169,6 +207,13 @@ void MODULE_CLASS_RINGMECH::cmdStatusWeb(AsyncWebServerRequest *request) {
     String json;
     serializeJson(doc, json);
     request->send(200, "application/json", json);
+}
+
+void MODULE_CLASS_RINGMECH::cmdResetWeb(AsyncWebServerRequest *request) {
+    ModClassRingMech._mechControlSteps = 0;
+    ModClassRingMech._mechTurnTarget = 0;
+    ModClassRingMech._ringStatus = RING_STATUS_IDLE;
+    request->send(200, "application/json", "{\"ok\":true}");
 }
 
 // ============================================================
@@ -245,14 +290,56 @@ void MODULE_CLASS_RINGMECH::cmdStatus() {
     Serial.printf("_config.ringPauseOne:     %d\r\n",      ModClassRingMech._config.ringPauseOne);
     Serial.printf("_config.ringPauseTwo:     %d\r\n",      ModClassRingMech._config.ringPauseTwo);
     Serial.printf("_config.firstPosition: %d\r\n",      ModClassRingMech._config.firstPosition);
+    Serial.printf("_config.time_begin:    %d\r\n",      ModClassRingMech._config.time_begin);
+    Serial.printf("_config.time_end:      %d\r\n",      ModClassRingMech._config.time_end);
+    Serial.printf("_config.timeSource:    %s\r\n",      ModClassRingMech._config.timeSource.c_str());
     Serial.printf("_mechControlSteps:     %d\r\n",      ModClassRingMech._mechControlSteps);
     Serial.printf("_mechTurnTarget:       %d\r\n",      ModClassRingMech._mechTurnTarget);
     Serial.printf("_sensorState:          %d\r\n",      ModClassRingMech._sensorState);
+    time_t t = ModClassRingMech.getCurrentTime();
+    if (t > 0) {
+        char buf[12];
+        snprintf(buf, sizeof(buf), "%02d:%02d", hour(t), minute(t));
+        Serial.printf("time: %s\r\n", buf);
+    }
     Serial.printf("SENS=%d STEP=%d EN=%d\r\n",
         digitalRead(RINGMECH_SENS),
         digitalRead(RINGMECH_STEP),
         digitalRead(RINGMECH_EN));
     Serial.printf("=============================\r\n");
+}
+
+void MODULE_CLASS_RINGMECH::cmdTime() {
+    char *arg1 = term.getNext();
+    if (arg1 == NULL) {
+        Serial.printf("time_begin=%d time_end=%d\r\n", ModClassRingMech._config.time_begin, ModClassRingMech._config.time_end);
+        return;
+    }
+    uint8_t b = (uint8_t)atoi(arg1);
+    if (b > 23) { Serial.println("Error: value must be 0-23"); return; }
+    char *arg2 = term.getNext();
+    if (arg2 == NULL) { Serial.println("Usage: r-time <begin> <end>"); return; }
+    uint8_t e = (uint8_t)atoi(arg2);
+    if (e > 23) { Serial.println("Error: value must be 0-23"); return; }
+    if (b > e) { Serial.println("Error: begin must be <= end"); return; }
+    ModClassRingMech._config.time_begin = b;
+    ModClassRingMech._config.time_end   = e;
+    Serial.println("OK");
+}
+
+void MODULE_CLASS_RINGMECH::cmdSource() {
+    char *arg = term.getNext();
+    if (arg == NULL) {
+        Serial.printf("timeSource=%s\r\n", ModClassRingMech._config.timeSource.c_str());
+        return;
+    }
+    String s(arg);
+    if (s == "ds3231" || s == "ntp") {
+        ModClassRingMech._config.timeSource = s;
+        Serial.println("OK");
+    } else {
+        Serial.println("Usage: r-src [ds3231|ntp]");
+    }
 }
 
 // ============================================================
@@ -261,7 +348,7 @@ void MODULE_CLASS_RINGMECH::cmdStatus() {
 
 
 void MODULE_CLASS_RINGMECH::MechHomeSetup() {
-    digitalWrite(CLOCKMECH_SENS_LED, HIGH);
+    digitalWrite(RINGMECH_SENS_LED, HIGH);
     if (SENS_TRIGGERED) { MechHomeEndOk(); return; }
     ModClassRingMech._ringStatus = RING_STATUS_HOMING;
     ModClassRingMech._sensorState = digitalRead(RINGMECH_SENS);
@@ -291,7 +378,7 @@ void MODULE_CLASS_RINGMECH::MechHomeEndOk() {
     ModClassRingMech._mechControlSteps = 0;
     ModClassRingMech._sensorState = digitalRead(RINGMECH_SENS);
     digitalWrite(RINGMECH_EN, HIGH);
-    digitalWrite(CLOCKMECH_SENS_LED, LOW);
+    digitalWrite(RINGMECH_SENS_LED, LOW);
 
     if (ModClassRingMech._config.enable_status == RING_MODE_WORK) {
         if (ModClassRingMech._config.stepsPerRevolution == 0) { SetTask(MechCountStepsSetup); }
@@ -304,7 +391,7 @@ void MODULE_CLASS_RINGMECH::MechHomeEndFail() {
     ModClassRingMech._ringStatus = RING_ERROR_NO_MECH;
     GoToTaskAfterStepRing = Idle_task;
     digitalWrite(RINGMECH_EN, HIGH);
-    digitalWrite(CLOCKMECH_SENS_LED, LOW);
+    digitalWrite(RINGMECH_SENS_LED, LOW);
     ModClassRingMech._sensorState = digitalRead(RINGMECH_SENS);
     DEBUGRINGMECH("MechHome: RING_ERROR_NO_MECH (%d steps)\r\n", ModClassRingMech._mechControlSteps);
     ModClassRingMech._mechControlSteps = 0;
@@ -318,7 +405,7 @@ void MODULE_CLASS_RINGMECH::MechHomeEndFail() {
 
 void MODULE_CLASS_RINGMECH::MechCountStepsSetup() {
     ModClassRingMech._ringStatus = RING_STATUS_COUNTING;
-    digitalWrite(CLOCKMECH_SENS_LED, HIGH);
+    digitalWrite(RINGMECH_SENS_LED, HIGH);
     ModClassRingMech._sensorState = digitalRead(RINGMECH_SENS);
     digitalWrite(RINGMECH_EN, LOW);
     ModClassRingMech._mechControlSteps = 0;
@@ -346,7 +433,7 @@ void MODULE_CLASS_RINGMECH::MechCountStepsOk() {
     DEBUGRINGMECH("%s\r\n", __FUNCTION__);
     digitalWrite(RINGMECH_EN, HIGH);
     ModClassRingMech._sensorState = digitalRead(RINGMECH_SENS);
-    digitalWrite(CLOCKMECH_SENS_LED, LOW);
+    digitalWrite(RINGMECH_SENS_LED, LOW);
     ModClassRingMech._config.stepsPerRevolution = ModClassRingMech._mechControlSteps;
     if (ModClassRingMech._mechControlSteps != 0) { ModClassRingMech.saveConfig(); }
     GoToTaskAfterStepRing = Idle_task;
@@ -363,7 +450,7 @@ void MODULE_CLASS_RINGMECH::MechCountStepsFail() {
     ModClassRingMech._mechControlSteps = 0;
     digitalWrite(RINGMECH_EN, HIGH);
     ModClassRingMech._sensorState = digitalRead(RINGMECH_SENS);
-    digitalWrite(CLOCKMECH_SENS_LED, LOW);
+    digitalWrite(RINGMECH_SENS_LED, LOW);
 }
 
 // ============================================================
@@ -381,7 +468,7 @@ void MODULE_CLASS_RINGMECH::MechTurnNCount() {
 
 void MODULE_CLASS_RINGMECH::MechTurnNSetup() {
     ModClassRingMech._ringStatus = RING_STATUS_TURN;
-    digitalWrite(CLOCKMECH_SENS_LED, HIGH);
+    digitalWrite(RINGMECH_SENS_LED, HIGH);
     ModClassRingMech._sensorState = digitalRead(RINGMECH_SENS);
     digitalWrite(RINGMECH_EN, LOW);
     ModClassRingMech._mechControlSteps = 0;
@@ -410,7 +497,7 @@ void MODULE_CLASS_RINGMECH::MechTurnNTask() {
 void MODULE_CLASS_RINGMECH::MechTurnNEndOk() {
     digitalWrite(RINGMECH_EN, HIGH);
     ModClassRingMech._sensorState = digitalRead(RINGMECH_SENS);
-    digitalWrite(CLOCKMECH_SENS_LED, LOW);
+    digitalWrite(RINGMECH_SENS_LED, LOW);
     GoToTaskAfterStepRing = Idle_task;
     ModClassRingMech._mechControlSteps = 0;
     ModClassRingMech._ringStatus = RING_STATUS_IDLE;
@@ -423,7 +510,7 @@ void MODULE_CLASS_RINGMECH::MechTurnNEndFail() {
     DEBUGRINGMECH("MechTurn: fail at step %d, turn %d\r\n", ModClassRingMech._mechControlSteps, ModClassRingMech._mechTurnTarget);
     digitalWrite(RINGMECH_EN, HIGH);
     ModClassRingMech._sensorState = digitalRead(RINGMECH_SENS);
-    digitalWrite(CLOCKMECH_SENS_LED, LOW);
+    digitalWrite(RINGMECH_SENS_LED, LOW);
     GoToTaskAfterStepRing = Idle_task;
     ModClassRingMech._mechControlSteps = 0;
     ModClassRingMech._ringStatus = RING_ERROR_NO_MECH;
@@ -436,8 +523,26 @@ void MODULE_CLASS_RINGMECH::RingPollTask() {
     SetTimerTask(RingPollTask, ModClassRingMech._config.pollInterval * 1000UL);
     if (ModClassRingMech._config.enable_status != RING_MODE_WORK) { return; }
     if (ModClassRingMech._ringStatus != RING_STATUS_IDLE) { return; }
-    // SetTask(MechRotationSetup);
+
+    time_t t = ModClassRingMech.getCurrentTime();
+    if (t == 0) { return; }
+    if ( (uint8_t)minute(t) == 0 && (uint8_t)second(t) <= 10 ){
+        bool timeOk = (ModClassRingMech._config.time_begin == 0 && ModClassRingMech._config.time_end == 0) ||
+                      ((uint8_t)hour(t) >= ModClassRingMech._config.time_begin && (uint8_t)hour(t) <= ModClassRingMech._config.time_end);
+        if (timeOk) {
+            ModClassRingMech._mechTurnTarget = ModClassRingMech._timeHourReal;
+            SetTask(MechTurnNCount);
+        }
+    }
 }
+
+void MODULE_CLASS_RINGMECH::CheckTime (uint8_t _inH)	{
+	if (_inH >= HOURINCIRCLE)   { _inH -= HOURINCIRCLE; }
+	// if (_inM >= MININHOUR)      { _inM = MINMAX; }
+	_timeHourReal = _inH;
+	// _timeMinReal = _inM;
+}
+
 
 // ============================================================
 // Конфиг
@@ -447,9 +552,12 @@ void MODULE_CLASS_RINGMECH::defaultConfig() {
     _config.stepsPerRevolution = 0;
     _config.pollInterval       = 5;
     _config.errorLimitSteps    = 500;
-    _config.ringPauseOne          = RINGMECH_RING_FIRST_PAUSE_DEFAULT ;
-    _config.ringPauseTwo          = RINGMECH_RING_SECON_PAUSE_DEFAULT;
-    _config.firstPosition      = RINGMECH_FIRST_POSITION_DEFAULT;
+    _config.ringPauseOne        = RINGMECH_RING_FIRST_PAUSE_DEFAULT ;
+    _config.ringPauseTwo        = RINGMECH_RING_SECON_PAUSE_DEFAULT;
+    _config.firstPosition       = RINGMECH_FIRST_POSITION_DEFAULT;
+    _config.time_begin          = RINGMECH_TIME_BEGIN_DEFAULT;
+    _config.time_end            = RINGMECH_TIME_END_DEFAULT;
+    _config.timeSource          = "ds3231";
 }
 
 bool MODULE_CLASS_RINGMECH::loadConfig() {
@@ -464,6 +572,14 @@ bool MODULE_CLASS_RINGMECH::loadConfig() {
     _config.ringPauseOne           = doc["ringPauseOne"].as<uint16_t>();
     _config.ringPauseTwo           = doc["ringPauseTwo"].as<uint16_t>();
     _config.firstPosition       = doc["firstPosition"].as<uint8_t>();
+    _config.time_begin           = doc["time_begin"].as<uint8_t>();
+    _config.time_end             = doc["time_end"].as<uint8_t>();
+    _config.timeSource           = doc["timeSource"].as<String>();
+
+    if (_config.timeSource != "ds3231" && _config.timeSource != "ntp") { _config.timeSource = "ds3231"; }
+    if (_config.time_begin > 23) _config.time_begin = RINGMECH_TIME_BEGIN_DEFAULT;
+    if (_config.time_end   > 23) _config.time_end   = RINGMECH_TIME_END_DEFAULT;
+    if (_config.time_begin > _config.time_end && !(_config.time_begin == 0 && _config.time_end == 0)) { _config.time_begin = RINGMECH_TIME_BEGIN_DEFAULT; _config.time_end = RINGMECH_TIME_END_DEFAULT; }
 
     if (_config.pollInterval < 1)   { _config.pollInterval = 5; }
     if (_config.stepsPerRevolution < 1) { _config.stepsPerRevolution = 400; }
@@ -484,6 +600,9 @@ bool MODULE_CLASS_RINGMECH::saveConfig() {
     doc["ringPauseOne"]         = _config.ringPauseOne;
     doc["ringPauseTwo"]         = _config.ringPauseTwo;
     doc["firstPosition"]        = _config.firstPosition;
+    doc["time_begin"]           = _config.time_begin;
+    doc["time_end"]             = _config.time_end;
+    doc["timeSource"]           = _config.timeSource;
     return ModClassJson.jsonFileSaveDoc(CONFIG_FILE_RINGMECH, doc);
 }
 

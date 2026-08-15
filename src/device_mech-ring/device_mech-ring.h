@@ -10,22 +10,35 @@
 #endif
 
 #include <LittleFS.h>
+
+#include <TimeLib.h>
+
+#if defined(MODULE_DS3231)
+#include "module_ds3231/module_ds3231.h"
+#endif
+
 #define RINGMECH_STEP      17
 #define RINGMECH_EN        16
-
+#define RINGMECH_SENS_LED  27
 #define RINGMECH_SENS      32
 
+
 #define RINGMECH_MIN_STEPS_GAP 40
-#define RINGMECH_RING_FIRST_PAUSE_DEFAULT 200
-#define RINGMECH_RING_SECON_PAUSE_DEFAULT 200
+#define RINGMECH_RING_FIRST_PAUSE_DEFAULT 750
+#define RINGMECH_RING_SECON_PAUSE_DEFAULT 750
 #define RINGMECH_SPEED_DEFAULT 2
 #define RINGMECH_FIRST_POSITION_DEFAULT 85
+#define RINGMECH_TIME_BEGIN_DEFAULT 9
+#define RINGMECH_TIME_END_DEFAULT   18
 
 #define CONFIG_FILE_RINGMECH    "/config_ring-mech.json"
 
 #define SENS_TRIGGERED  (digitalRead(RINGMECH_SENS) == LOW)
 
-extern DPDR GoToTaskAfterStepRing ;
+#define     HOURINCIRCLE				12
+#define     MININHOUR					60
+#define     MINMAX						59
+typedef void (*DPDR)(void);
 typedef enum {
     RING_STATUS_IDLE    = 0,
     RING_STATUS_HOMING,
@@ -52,6 +65,9 @@ typedef struct {
     uint16_t ringPauseOne;
     uint16_t ringPauseTwo;
     uint8_t firstPosition;
+    uint8_t time_begin;
+    uint8_t time_end;
+    String   timeSource;
 } strRingMechConfig;
 
 class MODULE_CLASS_RINGMECH {
@@ -60,6 +76,7 @@ public:
     void setFs(fs::LittleFSFS* fs);
     void begin();
     void webInit();
+    time_t getCurrentTime();
 
     static void cmdEn();
     static void cmdSens();
@@ -69,6 +86,8 @@ public:
     static void cmdSave();
     static void cmdMode();
     static void cmdStatus();
+    static void cmdTime();
+    static void cmdSource();
     static void cmdEnWeb(AsyncWebServerRequest *request);
     static void cmdSensWeb(AsyncWebServerRequest *request);
     static void cmdNWeb(AsyncWebServerRequest *request);
@@ -76,6 +95,7 @@ public:
     static void cmdCountWeb(AsyncWebServerRequest *request);
     static void cmdTurnWeb(AsyncWebServerRequest *request);
     static void cmdStatusWeb(AsyncWebServerRequest *request);
+    static void cmdResetWeb(AsyncWebServerRequest *request);
 private:
     String getVersionStr();
     String getGeneratedTime();
@@ -84,7 +104,7 @@ private:
 
     void handleInfo_ring(AsyncWebServerRequest *request);
     void handleSave(AsyncWebServerRequest *request);
-    
+    void CheckTime (uint8_t _inH);
 
     void MechInitGPIOs();
     static void MechMoveStepDown();
@@ -95,11 +115,6 @@ private:
     static void MechHomeTask();
     static void MechHomeEndOk();
     static void MechHomeEndFail();
-
-    static void MechRotationSetup();
-    static void MechRotationTask();
-    static void MechRotationOk();
-    static void MechRotationFail();
 
     static void MechCountStepsSetup();
     static void MechCountStepsTask();
@@ -126,6 +141,8 @@ protected:
     uint16_t            _mechTurnTarget;
     uint8_t             _ringStatus;
     int                 _sensorState;
+    uint8_t             _timeHourReal;
+    uint8_t             _timeMinReal;
 };
 
 extern MODULE_CLASS_RINGMECH ModClassRingMech;

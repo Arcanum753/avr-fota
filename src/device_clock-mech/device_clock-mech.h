@@ -45,7 +45,6 @@ typedef enum {
 #define     HOURCONTROLDEF              5	
 typedef void (*DPDR)(void);
 void clockMechTerminalRegister() ;
-extern DPDR GoToTaskAfterStep;
 
 typedef struct {
     uint8_t  enable_status;

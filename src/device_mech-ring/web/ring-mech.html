@@ -13,6 +13,15 @@
         <table class="scan" style="width: auto; margin: 0 auto;">
             <tr><th colspan="2">Настройки / Settings</th></tr>
             <tr>
+                <td class="label">Time source</td>
+                <td>
+                    <select id="timeSource">
+                        <option value="ds3231">DS3231</option>
+                        <option value="ntp">NTP</option>
+                    </select>
+                </td>
+            </tr>
+            <tr>
                 <td class="label">Режим / Mode</td>
                 <td>
                     <select id="enable_status">
@@ -45,6 +54,14 @@
                 <td class="label">First position</td>
                 <td><input type="number" id="firstPosition" min="0" max="255" value="0"></td>
             </tr>
+            <tr>
+                <td class="label">Time begin (hour)</td>
+                <td><input type="number" id="time_begin" min="0" max="23" step="1" value="9"></td>
+            </tr>
+            <tr>
+                <td class="label">Time end (hour)</td>
+                <td><input type="number" id="time_end" min="0" max="23" step="1" value="18"></td>
+            </tr>
             <tr><td colspan="2" style="text-align: center; padding: 8px;"> <input type="button" value="Применить" class="button-prog" onclick="saveConfig()"> <span id="cfgStatus" style="margin-left:8px;font-size:12px;"></span></td></tr>
         </table>
     </div>
@@ -57,6 +74,7 @@
             <tr><td class="label">Шагов контроля</td><td><span id="mechControlSteps"></span></td></tr>
             <tr><td class="label">Осталось оборотов</td><td><span id="turnCount"></span></td></tr>
             <tr><td class="label">Сенсор</td><td><span id="sensor"></span></td></tr>
+            <tr><td class="label">Текущее время</td><td><span id="currentTime"></span></td></tr>
             <tr id="fullStatusRow" style="display:none;"><td colspan="2"><div id="fullStatusDump" style="font-size:12px; text-align:left; padding:4px;"></div></td></tr>
             <tr><td colspan="2" style="text-align: center; padding: 8px;">
                 <input type="button" value="Обновить статус" class="button-prog" onclick="fetchInfo()">
@@ -81,6 +99,7 @@
                 <input type="button" value="Вращение (N оборотов)" class="button-prog" onclick="sendTurn()">
             </td></tr>
             <tr><td colspan="2" style="text-align: center; padding: 4px;">
+                <input type="button" value="Reset mech" class="button-prog" onclick="sendAction('/ring-mech/reset')">
                 <input type="button" value="Скрыть полный статус" class="button-prog" onclick="document.getElementById('fullStatusRow').style.display='none'">
             </td></tr>
         </table>
@@ -111,6 +130,10 @@
                 document.getElementById('ringPause').value = data.ringPauseOne;
                 document.getElementById('ringPauseTwo').value = data.ringPauseTwo;
                 document.getElementById('firstPosition').value = data.firstPosition;
+                document.getElementById('time_begin').value = data.time_begin;
+                document.getElementById('time_end').value = data.time_end;
+                document.getElementById('timeSource').value = data.timeSource;
+                document.getElementById('currentTime').textContent = data.currentTime;
                 document.getElementById('status').textContent = data.status + ' (' + statusText(data.status) + ')';
                 document.getElementById('mode').textContent = data.enable_status == 1 ? 'Work' : 'Debug';
                 document.getElementById('mechControlSteps').textContent = data.mechControlSteps;
@@ -137,13 +160,16 @@
             const speed = document.getElementById('ringPause').value;
             const speed2 = document.getElementById('ringPauseTwo').value;
             const firstPos = document.getElementById('firstPosition').value;
+            const tb = document.getElementById('time_begin').value;
+            const te = document.getElementById('time_end').value;
+            const timeSource = document.getElementById('timeSource').value;
             const statusEl = document.getElementById('cfgStatus');
             statusEl.innerHTML = 'Saving...';
             try {
                 const params = new URLSearchParams({
-                    enable_status: enabled,
+                    enable_status: enabled, timeSource,
                     stepsPerRevolution: steps, pollInterval: poll,
-                    errorLimitSteps: err, ringPauseOne: speed, ringPauseTwo: speed2, firstPosition: firstPos
+                    errorLimitSteps: err, ringPauseOne: speed, ringPauseTwo: speed2, firstPosition: firstPos, time_begin: tb, time_end: te
                 });
                 const resp = await fetch('/ring-mech/save', { method: 'POST', body: params });
                 if (resp.ok) {
