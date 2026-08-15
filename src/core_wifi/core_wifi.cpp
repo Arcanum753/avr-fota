@@ -93,8 +93,14 @@ void CORE_CLASS_WIFI::s_secondTick(void* arg) {
 	if (self->wifiStatus == FS_STAT_APMODE && self->scanTime > 0) {
 		if (++self->_apUptime >= self->scanTime) {
 			if (WiFi.softAPgetStationNum() == 0) {
+				// Выходим из AP-режима, иначе configureWifi() сразу вернётся
+				// из-за проверки wifiStatus == FS_STAT_APMODE и пересканирование
+				// никогда не выполнится (устройство навсегда застрянет в AP).
 				DEBUGLOGWIFI("AP timeout, no clients. Re-scanning.\r\n");
 				self->_apUptime = 0;
+				dnsServer.stop();
+				WiFi.softAPdisconnect(true);
+				self->wifiStatus = FS_STAT_DISCONNECTED;
 				self->WifiScan = WF_STAT_SCANING;
 				self->configureWifi();
 				ledMacrosWifiScan();
@@ -169,7 +175,7 @@ void CORE_CLASS_WIFI::begin(fs::LittleFSFS* fs)
 // Register wifi Event to control connection LED and wifi connection status
 	#if defined(ESP32)
 	onStationModeConnectedHandler 		= WiFi.onEvent([this](WiFiEvent_t event, WiFiEventInfo_t info)	{	this->onWiFiConnected();		},	WiFiEvent_t::ARDUINO_EVENT_WIFI_STA_CONNECTED);
-	onStationModeDisconnectedHandler 	= WiFi.onEvent([this](WiFiEvent_t event, WiFiEventInfo_t info)	{	this->onWiFiDisconnected();		},	WiFiEvent_t::ARDUINO_EVENT_WIFI_STA_DISCONNECTED);
+	onStationModeDisconnectedHandler 	= WiFi.onEvent([this](WiFiEvent_t event, WiFiEventInfo_t info)	{	this->onWiFiDisconnected(info);		},	WiFiEvent_t::ARDUINO_EVENT_WIFI_STA_DISCONNECTED);
 	onStationModeGotIPHandler 			= WiFi.onEvent([this](WiFiEvent_t event, WiFiEventInfo_t info)	{	this->onWiFiConnectedGotIP();	}, 	WiFiEvent_t::ARDUINO_EVENT_WIFI_STA_GOT_IP);
 #endif
 #if defined(ESP8266)
@@ -366,7 +372,7 @@ void CORE_CLASS_WIFI::onWiFiConnectedGotIP(WiFiEventStationModeGotIP data) {
 }
 
 #if defined(ESP32)
-void CORE_CLASS_WIFI::onWiFiDisconnected() {
+void CORE_CLASS_WIFI::onWiFiDisconnected(WiFiEventInfo_t info) {
 #endif
 #if defined(ESP8266)
 void CORE_CLASS_WIFI::onWiFiDisconnected(WiFiEventStationModeDisconnected data) {
@@ -381,21 +387,30 @@ void CORE_CLASS_WIFI::onWiFiDisconnected(WiFiEventStationModeDisconnected data) 
 	if (wifiStatus == FS_STAT_RESET) {return;}
 
 DEBUGLOGWIFI(" case STA_DISCONNECTED \r\n");
+
+	// Определяем команду "неверный пароль" по точной причине отключения
+	// из события, а не по WiFi.status(), — на ESP32 внутри события отключения
+	// WiFi.status() почти всегда возвращает "не подключён" и ложно помечает
+	// любой временный обрыв как "wrong password", блокируя автовосстановление.
+	bool wrongPass = false;
 #if defined(ESP8266)
-	// Используем точную причину отключения из события,
-	// чтобы не ловить ложные "wrong password" при временных сбоях
-	if (data.reason == WIFI_DISCONNECT_REASON_AUTH_FAIL ||
-		data.reason == WIFI_DISCONNECT_REASON_AUTH_EXPIRE ||
-		data.reason == WIFI_DISCONNECT_REASON_AUTH_LEAVE ||
-		data.reason == WIFI_DISCONNECT_REASON_NO_AP_FOUND) {
+	wrongPass =
+		(data.reason == WIFI_DISCONNECT_REASON_AUTH_FAIL ||
+		 data.reason == WIFI_DISCONNECT_REASON_AUTH_EXPIRE ||
+		 data.reason == WIFI_DISCONNECT_REASON_AUTH_LEAVE ||
+		 data.reason == WIFI_DISCONNECT_REASON_NO_AP_FOUND);
 #endif
 #if defined(ESP32)
-	if(WiFi.status() != WL_CONNECTED && WiFi.status() != WL_NO_SSID_AVAIL) {
+	wrongPass =
+		(info.wifi_sta_disconnected.reason == WIFI_REASON_AUTH_FAIL ||
+		 info.wifi_sta_disconnected.reason == WIFI_REASON_AUTH_EXPIRE ||
+		 info.wifi_sta_disconnected.reason == WIFI_REASON_AUTH_LEAVE ||
+		 info.wifi_sta_disconnected.reason == WIFI_REASON_NO_AP_FOUND);
 #endif
+	if (wrongPass) {
 		wifiStatus = FS_STAT_WRONGPASSWORDS;
 		WifiScan = WF_SCAN_NO_NEED;
 		wifiSsidSetPSWDwrong(_wifiConfig.ssid);
-		WiFi.disconnect();		// anyway need it to avoid wifi logic errors
 		ledMacrosWifiDisconnect()	;
 	}
 
