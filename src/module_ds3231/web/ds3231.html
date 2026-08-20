@@ -18,6 +18,9 @@
                 &nbsp;|&nbsp; Адрес: <span id="ds_addr">--</span>
                 &nbsp;|&nbsp; Температура: <span id="ds_temp">--</span> °C
             </td></tr>
+            <tr><td style="padding: 6px; font-size: 1.05em; font-weight:bold;">
+                Будильник: <span id="ds_alarm_state" style="color: #999;">--</span>
+            </td></tr>
         </table>
     </div>
 
@@ -45,6 +48,20 @@
 
     <!-- Будильники — горизонтально -->
     <div class="content" style="text-align: center;">
+        <table class="scan">
+            <tr><th>Как настроить будильник</th></tr>
+            <tr><td style="text-align: left; padding: 10px; font-size: 0.92em; line-height: 1.6;">
+                <b>Alarm 1 (с секундами).</b> Задайте <i>Час / Минута / Секунда</i> и выберите «Режим» — он определяет, какие поля сравниваются с текущим временем:
+                <br>&nbsp;• 0 · Раз в секунду — срабатывает каждую секунду (поля не важны);
+                <br>&nbsp;• 1 · По секундам — раз в минуту, когда совпали секунды;
+                <br>&nbsp;• 2 · По минутам:секундам — ежечасно, когда совпали минуты и секунды;
+                <br>&nbsp;• 3 · По часам:минутам:секундам — ежедневно в указанное время;
+                <br>&nbsp;• 4 · По дню/дате + время — в заданный день недели или число месяца в указанное время.
+                <br><b>Alarm 2 (без секунд).</b> Микросхема DS3231 не хранит секунды для Alarm 2 (регистры будильника 2 содержат только минуты, часы и день/дату), поэтому поля «Секунды» здесь нет. Режимы аналогичны, но без секунд: раз в минуту / по минутам / по часам:минутам / по дню/дате + время.
+                <br><b>День/Дата и «День недели».</b> Если включён чекбокс «День недели», значение поля «День/Дата» трактуется как день недели (1=воскресенье … 7=суббота по DS3231). Если выключен — как число месяца (1–31). Для режимов «раз в …» и обычных масок совпадения день не используется.
+                <br>После заполнения нажмите <b>«Установить»</b>.
+            </td></tr>
+        </table>
         <div style="display: flex; justify-content: center; gap: 20px; flex-wrap: wrap;">
             <!-- Будильник 1 -->
             <table class="scan" style="width: auto; margin: 0;">
@@ -142,6 +159,82 @@
             <tr><td colspan="2" style="text-align: center; padding: 8px;">
                 <input type="button" value="Сохранить" class="button-prog" onclick="savePollConfig()">
                 <span id="pollStatus" style="margin-left:8px;font-size:12px;"></span>
+            </td></tr>
+        </table>
+    </div>
+
+    <!-- SQW / GPIO (только ESP32) -->
+    <div class="content" style="text-align: center;">
+        <table class="scan" style="width: auto; margin: 0 auto;">
+            <tr><th colspan="2">Вывод SQW / INT# (GPIO)</th></tr>
+            <tr>
+                <td class="label">Включить мониторинг</td>
+                <td><input type="checkbox" id="ds_sqw_enabled"></td>
+            </tr>
+            <tr>
+                <td class="label">Метод чтения</td>
+                <td>
+                    <select id="ds_sqw_mode">
+                        <option value="0">Опрос (polling)</option>
+                        <option value="1">Прерывание (interrupt)</option>
+                    </select>
+                </td>
+            </tr>
+            <tr>
+                <td class="label">Активный уровень</td>
+                <td>
+                    <select id="ds_sqw_level">
+                        <option value="0">Низкий (LOW)</option>
+                        <option value="1">Высокий (HIGH)</option>
+                    </select>
+                </td>
+            </tr>
+            <tr>
+                <td class="label">Пин (DS3231_SQW_PIN)</td>
+                <td><span id="ds_sqw_pin">--</span></td>
+            </tr>
+            <tr>
+                <td class="label">Текущий уровень</td>
+                <td><span id="ds_sqw_level_read">--</span></td>
+            </tr>
+            <tr><td colspan="2" style="text-align: center; padding: 8px;">
+                <input type="button" value="Сохранить" class="button-prog" onclick="saveSqwConfig()">
+                <span id="sqwStatus" style="margin-left:8px;font-size:12px;"></span>
+            </td></tr>
+        </table>
+    </div>
+
+    <!-- Режим выхода SQW (Control 0x0E) -->
+    <div class="content" style="text-align: center;">
+        <table class="scan" style="width: auto; margin: 0 auto;">
+            <tr><th colspan="2">Режим выхода SQW (Control 0x0E)</th></tr>
+            <tr>
+                <td class="label">BBSQW / INTCN</td>
+                <td>
+                    <select id="ds_ctrl_mode">
+                        <option value="0">INT# по будильникам (INTCN=1)</option>
+                        <option value="1">Меандр 1 Гц</option>
+                        <option value="2">Меандр 1.024 кГц</option>
+                        <option value="3">Меандр 4.096 кГц</option>
+                        <option value="4">Меандр 8.192 кГц</option>
+                    </select>
+                </td>
+            </tr>
+            <tr>
+                <td class="label">A1IE (Alarm 1)</td>
+                <td><input type="checkbox" id="ds_ctrl_a1ie"></td>
+            </tr>
+            <tr>
+                <td class="label">A2IE (Alarm 2)</td>
+                <td><input type="checkbox" id="ds_ctrl_a2ie"></td>
+            </tr>
+            <tr><td colspan="2" style="text-align: center; padding: 8px;">
+                <!-- Скрытые поля для синхронизации бит Control с сервера -->
+                <input type="hidden" id="ds_ctrl_bbsqw">
+                <input type="hidden" id="ds_ctrl_rs">
+                <input type="hidden" id="ds_ctrl_intcn">
+                <input type="button" value="Записать биты Control" class="button-prog" onclick="setCtrlBits()">
+                <span id="ctrlBitsStatus" style="margin-left:8px;font-size:12px;"></span>
             </td></tr>
         </table>
     </div>
@@ -284,20 +377,35 @@
             try {
                 const resp = await fetch('/ds3231/poll');
                 const text = await resp.text();
-                const lines = text.split('\n');
-                for (const line of lines) {
-                    const parts = line.split('|');
-                    if (parts.length < 2) { continue; }
-                    const id = parts[0].trim();
-                    const val = parts[1];
-                    const type = parts.length >= 3 ? parts[2].trim() : 'div';
-                    if (type === 'input' || type === 'chk') { continue; }
-                    const el = document.getElementById(id);
-                    if (!el) { continue; }
-                    el.innerText = val;
-                }
-                updateStateColor();
+                applyData(text);
             } catch(e) {}
+        }
+
+        // Общая обработка ответа вида ID|VALUE|TYPE
+        function applyData(text) {
+            const lines = text.split('\n');
+            for (const line of lines) {
+                const parts = line.split('|');
+                if (parts.length < 2) { continue; }
+                const id = parts[0].trim();
+                const val = parts[1];
+                const type = parts.length >= 3 ? parts[2].trim() : 'div';
+                const el = document.getElementById(id);
+                if (!el) { continue; }
+                // SELECT и элементы типа select нельзя заполнять через innerText —
+                // это удаляет все <option>. Задаём только value.
+                if (type === 'select' || el.tagName === 'SELECT') {
+                    el.value = val;
+                } else if (type === 'chk') {
+                    el.checked = (val === 'checked');
+                } else {
+                    el.innerText = val;
+                    if (el.tagName === 'INPUT') { el.value = val; }
+                }
+            }
+            updateStateColor();
+            updateAlarmColor();
+            applySqwFields();
         }
 
         function updateStateColor() {
@@ -311,26 +419,93 @@
             }
         }
 
+        function updateAlarmColor() {
+            const el = document.getElementById('ds_alarm_state');
+            if (!el) { return; }
+            const text = el.innerText.trim();
+            if (text && text !== '--') {
+                el.style.color = 'red';
+            } else {
+                el.style.color = '#999';
+            }
+        }
+
+        // Отобразить сохранённые значения SQW/Control (после ApplyCVT)
+        function applySqwFields() {
+            // SELECT-поля ds_sqw_mode / ds_sqw_level уже установлены в applyData.
+            // Синхронизируем селект режима выхода из бит Control
+            buildCtrlModeSelect();
+        }
+
+        // Собрать выпадающий список режима выхода из значений бит Control
+        function buildCtrlModeSelect() {
+            const sel = document.getElementById('ds_ctrl_mode');
+            if (!sel) { return; }
+            const intcn = document.getElementById('ds_ctrl_intcn');
+            const rs = document.getElementById('ds_ctrl_rs');
+            const bbsqw = document.getElementById('ds_ctrl_bbsqw');
+            if (!intcn || !rs) { return; }
+            if (intcn.value === '1' || intcn.innerText === '1') {
+                sel.value = '0';
+            } else if (bbsqw && (bbsqw.value === '1' || bbsqw.innerText === '1')) {
+                const r = parseInt(rs.value !== '' ? rs.value : rs.innerText) || 0;
+                sel.value = String(r + 1);
+            } else {
+                sel.value = '0';
+            }
+        }
+
+        async function saveSqwConfig() {
+            const enabled = document.getElementById('ds_sqw_enabled').checked ? 'true' : '';
+            const mode = document.getElementById('ds_sqw_mode').value;
+            const level = document.getElementById('ds_sqw_level').value;
+            const statusEl = document.getElementById('sqwStatus');
+            statusEl.innerHTML = 'Saving...';
+            try {
+                const resp = await fetch(`/ds3231/save?sqwEnabled=${enabled}&sqwMode=${mode}&sqwLevel=${level}`, { method: 'POST' });
+                const text = await resp.text();
+                if (text === 'OK') {
+                    statusEl.innerHTML = 'OK';
+                    setTimeout(() => { statusEl.innerHTML = ''; }, 3000);
+                } else {
+                    statusEl.innerHTML = text;
+                }
+            } catch(e) {
+                statusEl.innerHTML = 'Error';
+            }
+        }
+
+        async function setCtrlBits() {
+            const mode = document.getElementById('ds_ctrl_mode').value;
+            // Режим выхода: 0 = INTCN=1 (INT# по будильникам), иначе BBSQW=1 меандр с частотой RS
+            let bbsqw = '0', intcn = '1', rs = '0';
+            if (mode === '0') {
+                bbsqw = '0'; intcn = '1'; rs = '0';
+            } else {
+                bbsqw = '1'; intcn = '1'; rs = String(parseInt(mode) - 1);
+            }
+            const a1ie = document.getElementById('ds_ctrl_a1ie').checked ? '1' : '0';
+            const a2ie = document.getElementById('ds_ctrl_a2ie').checked ? '1' : '0';
+            const statusEl = document.getElementById('ctrlBitsStatus');
+            statusEl.innerHTML = 'Writing...';
+            try {
+                const resp = await fetch(`/ds3231/set_reg?bbsqw=${bbsqw}&rs=${rs}&intcn=${intcn}&a1ie=${a1ie}&a2ie=${a2ie}`, { method: 'POST' });
+                const text = await resp.text();
+                if (text === 'OK') {
+                    statusEl.innerHTML = 'OK';
+                    setTimeout(() => { statusEl.innerHTML = ''; }, 3000);
+                } else {
+                    statusEl.innerHTML = text;
+                }
+            } catch(e) {
+                statusEl.innerHTML = 'Error';
+            }
+        }
+
         const _origApply = window.ApplyCVT_data;
         window.ApplyCVT_data = function(text) {
             if (_origApply) { return _origApply(text); }
-            const lines = text.split('\n');
-            for (const line of lines) {
-                const parts = line.split('|');
-                if (parts.length < 2) { continue; }
-                const id = parts[0].trim();
-                const val = parts[1];
-                const type = parts.length >= 3 ? parts[2].trim() : 'div';
-                const el = document.getElementById(id);
-                if (!el) { continue; }
-                if (type === 'chk') {
-                    el.checked = (val === 'checked');
-                } else {
-                    el.innerText = val;
-                    if (el.tagName === 'INPUT') { el.value = val; }
-                }
-            }
-            updateStateColor();
+            applyData(text);
         };
 
         window.onload = function() {
