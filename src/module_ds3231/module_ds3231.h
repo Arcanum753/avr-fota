@@ -82,6 +82,8 @@ public:
     bool getSqwLevel();                // текущий уровень GPIO SQW
     bool getAlarmFired1();
     bool getAlarmFired2();
+    time_t getLastAlarm1Time();   // 0 = не срабатывал с момента старта
+    time_t getLastAlarm2Time();   // 0 = не срабатывал с момента старта
 #endif
 
 private:
@@ -149,6 +151,8 @@ protected:
     bool          _sqwCareActive;   // флаг «активный сигнал замечен»
     bool          _alarm1Fired;     // однократное срабатывание Alarm 1 (фронт)
     bool          _alarm2Fired;     // однократное срабатывание Alarm 2 (фронт)
+    time_t        _lastAlarm1At;    // время последнего срабатывания Alarm 1 (0=нет)
+    time_t        _lastAlarm2At;    // время последнего срабатывания Alarm 2 (0=нет)
     bool          _sqwInterrupting; // прерывание сейчас подключено
     friend void ds3231SqwIsr();      // ISR обрабатывает флаг через метод sqwSetIrqFlag
     friend void ds3231SqwPollTask(); // EERTOS-задача опроса

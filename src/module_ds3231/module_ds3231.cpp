@@ -27,6 +27,8 @@ MODULE_CLASS_DS3231::MODULE_CLASS_DS3231(bool _in) {
     _sqwCareActive = false;
     _alarm1Fired = false;
     _alarm2Fired = false;
+    _lastAlarm1At = 0;
+    _lastAlarm2At = 0;
     _sqwInterrupting = false;
 #endif
 }
@@ -552,6 +554,8 @@ bool MODULE_CLASS_DS3231::getSqwLevel() {
 
 bool MODULE_CLASS_DS3231::getAlarmFired1() { return _alarm1Fired; }
 bool MODULE_CLASS_DS3231::getAlarmFired2() { return _alarm2Fired; }
+time_t MODULE_CLASS_DS3231::getLastAlarm1Time() { return _lastAlarm1At; }
+time_t MODULE_CLASS_DS3231::getLastAlarm2Time() { return _lastAlarm2At; }
 
 // Форматирование времени срабатывания: YYYY-MM-DD HH:MM:SS. Если время
 // недостоверно (t==0, например OSF), возвращаем пометку "time invalid".
@@ -572,6 +576,13 @@ static void _formatAlarmTime(time_t t, String &out) {
     out = dt;
 }
 
+// Форматирование штампа времени срабатывания для отображения.
+// Если времени нет (t==0 — не срабатывал), возвращаем "--".
+static void _formatAlarmStamp(time_t t, String &out) {
+    if (t == 0) { out = "--"; return; }
+    _formatAlarmTime(t, out);
+}
+
 // Обработка срабатывания одного будильника: вывод сообщения с временем в терминал
 // и автовзвод (перезапись) для периодических режимов mode=1..3.
 // mode=0 (раз в секунду) — только краткое сообщение, перезапись не требуется.
@@ -582,6 +593,10 @@ void MODULE_CLASS_DS3231::_handleAlarmFired(uint8_t alarmNum, uint8_t mode,
     time_t t = _readTime();
     String when;
     _formatAlarmTime(t, when);
+
+    // Сохраняем время последнего срабатывания (для всех режимов, включая mode=0).
+    // Не сбрасывается при setAlarm1/setAlarm2 — обновляется только фактической сработкой.
+    if (alarmNum == 1) { _lastAlarm1At = t; } else { _lastAlarm2At = t; }
 
     if (mode == 0) {
         // Раз в секунду — краткое сообщение без полной даты.
@@ -665,18 +680,21 @@ void MODULE_CLASS_DS3231::emitSqwFields(String &values) {
     emitAlarmState(values);
 }
 
-// Статус сработавших будильников
+// Статус сработавших будильников на основе сохранённого времени последнего срабатывания.
 void MODULE_CLASS_DS3231::emitAlarmState(String &values) {
-    uint8_t stat = _readReg(0x0F);
-    bool a1f = (stat & 0x01) ? true : false;
-    bool a2f = (stat & 0x02) ? true : false;
+    bool has1 = (_lastAlarm1At != 0);
+    bool has2 = (_lastAlarm2At != 0);
+    String t1, t2;
+    _formatAlarmStamp(_lastAlarm1At, t1);
+    _formatAlarmStamp(_lastAlarm2At, t2);
+
     String st = "";
-    if (a1f && a2f) { st = "Alarm 1 и Alarm 2 сработали!"; }
-    else if (a1f)   { st = "Alarm 1 сработал!"; }
-    else if (a2f)   { st = "Alarm 2 сработал!"; }
-    else            { st = "--"; }
+    if (has1 && has2) { st = "Alarm 1: " + t1 + " | Alarm 2: " + t2; }
+    else if (has1)    { st = "Alarm 1 сработал: " + t1; }
+    else if (has2)    { st = "Alarm 2 сработал: " + t2; }
+    else              { st = "--"; }
     values += "ds_alarm_state|" + st + "|div\n";
-    values += "ds_alarm_any|"   + String((a1f || a2f) ? "1" : "0") + "|div\n";
+    values += "ds_alarm_any|"   + String(((has1 || has2) ? "1" : "0")) + "|div\n";
 }
 
 #endif // ESP32
@@ -1248,6 +1266,20 @@ void ds3231CmdAlarm() {
     if (stat & 0x01) { DEBUGDS3231("DS3231: Alarm 1 fired\r\n"); }
     if (stat & 0x02) { DEBUGDS3231("DS3231: Alarm 2 fired\r\n"); }
     if (!(stat & 0x03)) { DEBUGDS3231("DS3231: no alarm fired\r\n"); }
+#if defined(ESP32)
+    // Время последнего срабатывания (сохранённое в RAM).
+    if (ModClassDs3231.getLastAlarm1Time() != 0) {
+        String s; _formatAlarmStamp(ModClassDs3231.getLastAlarm1Time(), s);
+        DEBUGDS3231("DS3231: Alarm 1 last fired: %s\r\n", s.c_str());
+    }
+    if (ModClassDs3231.getLastAlarm2Time() != 0) {
+        String s; _formatAlarmStamp(ModClassDs3231.getLastAlarm2Time(), s);
+        DEBUGDS3231("DS3231: Alarm 2 last fired: %s\r\n", s.c_str());
+    }
+    if (ModClassDs3231.getLastAlarm1Time() == 0 && ModClassDs3231.getLastAlarm2Time() == 0) {
+        DEBUGDS3231("DS3231: no alarm fired since boot\r\n");
+    }
+#endif
 }
 
 void ds3231CmdSqw() {
