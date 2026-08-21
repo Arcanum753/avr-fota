@@ -40,8 +40,32 @@ Submodules (`submodule_*`) inherit from `Class_ProgBase` and implement specific 
 | `module_prog` + `submodule_isp` | `-D PROGTYPE_ISP` | AVR-ISP programmer (AtMega/AtTiny) |
 | `module_prog` + `submodule_swd` | `-D PROGTYPE_SWD` | SWD programmer (STM32 F1/F4) |
 | `module_gpio` | `-D MODULE_GPIO` | GPIO control via web |
+| `module_lcd-i2c` | `-D MODULE_LCD_I2C` | LCD I2C display control (LiquidCrystal_I2C, маски date/time, backlight) |
 | `module_udp` | `-D MODULE_UDP` | UDP broadcast for device discovery |
 | `module_otaclient` | `-D MODULE_OTACLIENT=1` | OTA client (auto-update from remote server) |
+| `module_template` | `-D MODULE_TEMPLATE` | Шаблон модуля — основа для создания новых модулей |
+| `module_i2c-mapper` | `-D MODULE_I2C_MAPPER` | I2C bus scanner (web interface, Wire0) |
+
+### module_template — шаблон нового модуля
+
+`src/module_template/` содержит эталонную структуру optional-модуля. При создании нового модуля копировать эту папку и переименовывать.
+
+**Что содержит шаблон (брать за основу):**
+- `module_xxx.h` — класс с debug-макросом, `setFs()`, `begin()`, `webInit()`, структурой конфига (`strXxxConfig`), версионными методами
+- `module_xxx.cpp` — глобальный объект, загрузка/сохранение JSON конфига через `ModClassJson`, AJAX-эндпоинты (`/xxx/info`, `/xxx/save`, `/xxx/ver`), ответ `text/plain "OK"`
+  - `save_config()` использует `ModClassJson.jsonFileLoadDoc()` + мерж (не перезапись), затем `jsonFileSaveDoc()`.
+  - Чтение массивов из JSON — через `is<JsonArray>()` + `as<JsonArray>()` с проверкой границ.
+  - Сохранение массивов — через `doc["key"].to<JsonArray>()` + `arr.add()`.
+- `web/_menu.html` — ссылки в меню.
+- `web/xxx.html` — HTML-страница с формой, JS через `fetch` и `ApplyCVT()` из общих файлов `GetJson.js`/`GetMarkup.js` (не дублировать `applyCvtData` на каждой странице), сохранение без перезагрузки страницы.
+- `web/config_xxx.json` — дефолтный конфиг
+- Интеграция в `FSWebServerLib.cpp` под флагом `MODULE_XXX`
+- Таргеты в `targets/targets_example.ini`
+
+**Что НЕ брать из шаблона (заменить под свою логику):**
+- Управление GPIO через `pinMode`/`digitalWrite` — это только пример. В новом модуле будет своя аппаратная логика.
+- Отображение времени через `/xxx/time` — только как демонстрация периодического AJAX-опроса. В новом модуле заменить на свою периодическую задачу или удалить.
+- Массив `demoArray` в конфиге — только как демонстрация паттерна `is<JsonArray>()`. В реальном модуле заменить на свои поля или удалить.
 
 ### EERTOS — Cooperative scheduler
 
@@ -299,6 +323,7 @@ Each module has a dedicated debug flag and macro:
 - `DEBUG_SWD` → `DEBUGLOGSWD(...)`
 - `DEBUG_UDP` → `DEBUGUDP(...)`
 - `DEBUG_OTACLIENT` → `DEBUGOTACLIENT(...)`
+- `DEBUG_I2C_MAPPER` → `DEBUGI2CMAPPER(...)`
 - `RELEASE` defined → all debug macros are no-ops
 
 ### Key defines

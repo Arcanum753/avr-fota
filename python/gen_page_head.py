@@ -34,6 +34,7 @@ from typing import List, Optional, Set, Tuple
 MENU_CONFIG_FILE = "_menu.html"       # имя файла конфига меню в папке web модуля
 WEB_FOLDER_NAME = "web"               # имя папки с веб-файлами внутри модуля
 MODULE_PREFIX = "module_"             # префикс модулей
+DEVICE_PREFIX = "device_"             # префикс девайс-модулей
 
 
 # ============================================================

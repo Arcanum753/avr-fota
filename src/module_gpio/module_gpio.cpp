@@ -97,8 +97,8 @@ String MODULE_CLASS_GPIO::getCommitDateStr(){
 void MODULE_CLASS_GPIO::html_ver_get(AsyncWebServerRequest *request) {
     DEBUGGPIO("%s\n\r", __FUNCTION__);
     String values = "";
-    values += "gpioversion|"     + getVersionStr()    + "|dev\n";
-    values += "gpiogentime|"     + getGeneratedTime() + "|dev\n";
-    values += "gpiogendate|"     + getCommitDateStr() + "|dev\n";
+    values += "gpioversion|"     + getVersionStr()    + "|div\n";
+    values += "gpiogentime|"     + getGeneratedTime() + "|div\n";
+    values += "gpiogendate|"     + getCommitDateStr() + "|div\n";
     request->send(200, "text/plain", values);
 }

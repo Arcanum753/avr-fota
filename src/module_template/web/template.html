@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Template GPIO</title>
+    <meta http-equiv="Content-type" content="text/html; charset=utf-8">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <markup>./page_head.html</markup>
+    <h2 class="title" style="background: #7D8EE2"> <span id="devicename"></span> Template module — GPIO control</h2>
+
+    <!-- Описание модуля -->
+    <div class="content" style="text-align: center;">
+        <table class="scan" style="width: auto; margin: 0 auto;">
+            <tr><th>Описание / Description</th></tr>
+            <tr><td style="text-align: left; padding: 8px;">
+                <b>RU:</b> Управление двумя фиксированными GPIO через веб-интерфейс.
+                Для ESP32 — GPIO32 и GPIO33, для ESP8266 — D0 (GPIO16) и D5 (GPIO14).
+                Настройки сохраняются в config_template.json без перезагрузки страницы.<br>
+                <b>EN:</b> Two fixed GPIOs controlled via web interface.
+                ESP32 — GPIO32, GPIO33; ESP8266 — D0 (GPIO16), D5 (GPIO14).
+                Settings are saved to config_template.json without page reload.<br>
+                <small><i>(AI generated)</i></small>
+            </td></tr>
+        </table>
+    </div>
+
+    <!-- Управление GPIO -->
+    <div class="content" style="text-align: center;">
+        <table class="scan" style="width: auto; margin: 0 auto;">
+            <tr><th colspan="2">GPIO control</th></tr>
+            <tr>
+                <td class="label">GPIO1</td>
+                <td><input type="checkbox" id="gpio1State"> Вкл</td>
+            </tr>
+            <tr>
+                <td class="label">GPIO2</td>
+                <td><input type="checkbox" id="gpio2State"> Вкл</td>
+            </tr>
+            <tr>
+                <td class="label">Blink interval (ms)</td>
+                <td><input type="number" id="blinkInterval" min="0" max="60000" value="0"> (0 = off)</td>
+            </tr>
+            <tr><td colspan="2" style="text-align: center; padding: 8px;"> <input type="button" value="Применить" class="button-prog" onclick="saveGpioConfig()"> <span id="gpioStatus" style="margin-left:8px;font-size:12px;"></span></td></tr>
+        </table>
+    </div>
+
+    <!-- Демо-массив строк (пример is<JsonArray>()) -->
+    <div class="content" style="text-align: center;">
+        <table class="scan" style="width: auto; margin: 0 auto;">
+            <tr><th colspan="2">Demo array (is&lt;JsonArray&gt; example)</th></tr>
+            <tr><td class="label">Array[0]</td><td><input type="text" id="demoArray0"></td></tr>
+            <tr><td class="label">Array[1]</td><td><input type="text" id="demoArray1"></td></tr>
+            <tr><td class="label">Array[2]</td><td><input type="text" id="demoArray2"></td></tr>
+            <tr><td colspan="2" style="text-align: center; padding: 8px;"> <input type="button" value="Применить" class="button-prog" onclick="saveDemoConfig()"> <span id="demoStatus" style="margin-left:8px;font-size:12px;"></span></td></tr>
+        </table>
+    </div>
+
+    <!-- Время и дата -->
+    <div class="content" style="text-align: center;">
+        <table class="scan" style="width: auto; margin: 0 auto;">
+            <tr><th>Текущее время / Current time</th></tr>
+            <tr><td style="padding: 12px; font-size: 1.3em;"><span id="templateTime">--</span></td></tr>
+        </table>
+    </div>
+
+    <div class="footer">
+        Module version: <span id="templateversion"> </span> &nbsp;|&nbsp;
+        Build: <span id="templategentime"> </span> <br>
+    </div>
+
+    <markup>./page_bottom.html</markup>
+    <script src="GetJson.js" defer></script>
+    <script src="GetMarkup.js" defer></script>
+    <script>
+        async function saveGpioConfig() {
+            const gpio1 = document.getElementById('gpio1State').checked ? 'true' : '';
+            const gpio2 = document.getElementById('gpio2State').checked ? 'true' : '';
+            const blink = document.getElementById('blinkInterval').value;
+            const statusEl = document.getElementById('gpioStatus');
+            statusEl.innerHTML = 'Saving...';
+            try {
+                const resp = await fetch(`/template/save?gpio1State=${gpio1}&gpio2State=${gpio2}&blinkInterval=${blink}`, { method: 'POST' });
+                if (resp.ok) {
+                    statusEl.innerHTML = 'Saved';
+                    setTimeout(() => { statusEl.innerHTML = ''; }, 3000);
+                } else {
+                    statusEl.innerHTML = 'Error';
+                }
+            } catch(e) {
+                statusEl.innerHTML = 'Error';
+            }
+        }
+        async function saveDemoConfig() {
+            const arr0 = document.getElementById('demoArray0') ? document.getElementById('demoArray0').value : '';
+            const arr1 = document.getElementById('demoArray1') ? document.getElementById('demoArray1').value : '';
+            const arr2 = document.getElementById('demoArray2') ? document.getElementById('demoArray2').value : '';
+            const text = document.getElementById('demoSampleText') ? document.getElementById('demoSampleText').value : '';
+            const statusEl = document.getElementById('demoStatus');
+            if (!statusEl) { return; }
+            statusEl.innerHTML = 'Saving...';
+            try {
+                const resp = await fetch(`/template/save_demo?demoSampleText=${encodeURIComponent(text)}&demoArray0=${encodeURIComponent(arr0)}&demoArray1=${encodeURIComponent(arr1)}&demoArray2=${encodeURIComponent(arr2)}`, { method: 'POST' });
+                if (resp.ok) {
+                    statusEl.innerHTML = 'Saved';
+                    setTimeout(() => { statusEl.innerHTML = ''; }, 3000);
+                } else {
+                    statusEl.innerHTML = 'Error';
+                }
+            } catch(e) {
+                statusEl.innerHTML = 'Error';
+            }
+        }
+        async function updateTime() {
+            try {
+                const resp = await fetch('/template/time');
+                const text = await resp.text();
+                const lines = text.split('\n');
+                for (const line of lines) {
+                    const parts = line.split('|');
+                    if (parts.length >= 2 && parts[0] === 'templateTime') {
+                        document.getElementById('templateTime').innerText = parts[1];
+                    }
+                }
+            } catch(e) {}
+        }
+        window.onload = function() {
+            setTimeout(() => {
+                ApplyCVT("/system/version")
+                    .then(() => ApplyCVT("/template/info"))
+                    .then(() => ApplyCVT("/template/ver"));
+            }, 500);
+            updateTime();
+            setInterval(updateTime, 1000);
+        };
+    </script>
+</body>
+</html>

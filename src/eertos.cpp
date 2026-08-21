@@ -37,7 +37,12 @@
     #error "Unsupported platform"
 #endif
 
-static void Idle_task(void);
+
+ /**
+  * @brief Dummy procedure. Just do nothing
+  *
+  */
+ inline void Idle_task(void) {}
 
 /* Tasks queue with pointers to the runnable functions */
 static TPTR TaskQueue[TaskQueueSize];
@@ -51,11 +56,6 @@ static struct
     uint32_t Time;
 } MainTimer[MainTimerQueueSize];
 
-/**
- * @brief Dummy procedure. Just do nothing
- *
- */
-void Idle_task(void) {}
 
 /**
  * @brief Initialise Tasks and Timer Queue

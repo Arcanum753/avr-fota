@@ -20,6 +20,33 @@
 #include "module_gpio/module_gpio.h"
 #endif
 
+#if defined(MODULE_TEMPLATE)
+#include "module_template/module_template.h"
+#endif
+
+#if defined(MODULE_I2C_MAPPER)
+#include "module_i2c-mapper/module_i2c-mapper.h"
+#endif
+
+#if defined(MODULE_RGB)
+#include "module_rgb/module_rgb.h"
+#endif
+
+#if defined(MODULE_DS3231)
+#include "module_ds3231/module_ds3231.h"
+#endif
+
+#if defined(MODULE_LCD_I2C)
+#include "module_lcd-i2c/module_lcd-i2c.h"
+#endif
+
+#if defined(DEVICE_CLOCKMECH)
+#include "device_clock-mech/device_clock-mech.h"
+#endif
+#if defined(DEVICE_RINGMECH)
+#include "device_mech-ring/device_mech-ring.h"
+#endif
+
 #if defined(MODULE_UDP)
 #include "module_udp/module_udp.h"
 #endif
@@ -123,6 +150,47 @@ AsyncFSWebServer::AsyncFSWebServer(uint16_t port) : AsyncWebServer(port) {}
 #if defined(MODULE_GPIO)
 	ModClassGpio.setFs(&LittleFS);
 	ModClassGpio.webInit();
+#endif
+
+#if defined(MODULE_TEMPLATE)
+	ModClassTemplate.setFs(&LittleFS);
+	ModClassTemplate.begin();
+	ModClassTemplate.webInit();
+#endif
+
+#if defined(MODULE_I2C_MAPPER)
+	ModClassI2cMapper.begin();
+	ModClassI2cMapper.webInit();
+#endif
+
+#if defined(MODULE_LCD_I2C)
+	ModClassLcdI2c.setFs(&LittleFS);
+	ModClassLcdI2c.begin();
+	ModClassLcdI2c.webInit();
+#endif
+
+#if defined(MODULE_DS3231)
+	ModClassDs3231.setFs(&LittleFS);
+	ModClassDs3231.begin();
+	ModClassDs3231.webInit();
+#endif
+
+#if defined(MODULE_RGB)
+	ModClassRgb.setFs(&LittleFS);
+	ModClassRgb.begin();
+	ModClassRgb.webInit();
+#endif
+
+#if defined(DEVICE_CLOCKMECH)
+	ModClassClockMech.setFs(&LittleFS);
+	ModClassClockMech.begin();
+	ModClassClockMech.webInit();
+#endif
+	
+#if defined(DEVICE_RINGMECH)
+	ModClassRingMech.setFs(&LittleFS);
+	ModClassRingMech.begin();
+	ModClassRingMech.webInit();
 #endif
 	
 #ifdef PROGTYPE_SWD

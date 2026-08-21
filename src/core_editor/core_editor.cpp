@@ -147,7 +147,8 @@ void CORE_CLASS_EDITOR::handleFileList(AsyncWebServerRequest *request) {
         output += "}";
         file = root.openNextFile();
     }
-#else
+#endif
+#ifdef ESP8266
     Dir dir = _fs->openDir(path);
     while (dir.next()) {
         File entry = dir.openFile("r");
@@ -157,7 +158,9 @@ void CORE_CLASS_EDITOR::handleFileList(AsyncWebServerRequest *request) {
         output += "{\"type\":\"";
         output += (isDir) ? "dir" : "file";
         output += "\",\"name\":\"";
-        output += escapeJsonStr(String(entry.name()));
+        String entryName = String(entry.name());
+        if (entryName.startsWith("/")) entryName = entryName.substring(1);
+        output += escapeJsonStr(entryName);
         output += "\",\"size\":";
         output += String(entry.size());
         output += "}";
@@ -209,9 +212,9 @@ String CORE_CLASS_EDITOR::getCommitDateStr() {
 void CORE_CLASS_EDITOR::html_ver_get(AsyncWebServerRequest *request) {
     DEBUGEDIT("%s\n\r", __FUNCTION__);
     String values = "";
-    values += "edtversion|" + getVersionStr()    + "|dev\n";
-    values += "edtgentime|" + getGeneratedTime() + "|dev\n";
-    values += "edtgendate|" + getCommitDateStr() + "|dev\n";
+    values += "edtversion|" + getVersionStr()    + "|div\n";
+    values += "edtgentime|" + getGeneratedTime() + "|div\n";
+    values += "edtgendate|" + getCommitDateStr() + "|div\n";
     request->send(200, "text/plain", values);
 }
 

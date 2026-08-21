@@ -109,7 +109,7 @@ class  CORE_CLASS_WIFI    {
     long                wifiDisconnectedSince = 0;
     enWifiStatus        wifiStatus;
     enWifiScan WifiScan;
-    uint8_t connectionTimout;
+    uint16_t connectionTimout;
     bool _secondFlag;
     uint8_t             _wifiFailCount[4] = {0, 0, 0, 0}; // Счётчики неудачных попыток для каждого SSID
     uint16_t            _wifiScanTime;
@@ -143,7 +143,7 @@ class  CORE_CLASS_WIFI    {
     String buildNetworksJson() ;
     #if ESP32
     void onWiFiConnected        ();
-	void onWiFiDisconnected     ();
+	void onWiFiDisconnected     (WiFiEventInfo_t info);
 	void onWiFiConnectedGotIP   ();
     #elif defined(ESP8266)
     void onWiFiConnected        (WiFiEventStationModeConnected      data);

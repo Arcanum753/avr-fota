@@ -1,0 +1,1 @@
+{"enable_status":0,"stepsPerRevolution":400,"pollInterval":5,"errorLimitSteps":1500,"ringPauseOne":750,"ringPauseTwo":750,"firstPosition":85,"time_begin":9,"time_end":18,"timeSource":"ds3231"}

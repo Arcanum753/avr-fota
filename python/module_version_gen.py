@@ -18,6 +18,7 @@ SRC_FOLDER = "src"                       # папка с исходниками
 CORE_PREFIX = "core_"                     # префикс ядерных модулей
 MODULE_PREFIX = "module_"                 # префикс модулей
 SUBMODULE_PREFIX = "submodule_"           # префикс субмодулей
+DEVICE_PREFIX = "device_"                 # префикс девайс-модулей
 
 # ========== ФАЙЛЫ СЧЁТЧИКОВ ==========
 VERSION_STORAGE_FILE = ".module_versions"  # файл для хранения версий модулей
@@ -160,7 +161,8 @@ def generate_module_header(module_name, version, commit_date, commit_date_str, e
         commit_date_str = "1970.01.01 00.00"
     
     # Имя файла: module_name_version.h (например, core_ntp_version.h)
-    guard_name = f"{module_name.upper().replace('-', '_').replace('.', '_')}_VERSION_H"
+    macro_prefix = module_name.upper().replace('-', '_').replace('.', '_')
+    guard_name = f"{macro_prefix}_VERSION_H"
     
     content = f'''// Auto-generated version file for module: {module_name}
 // Generated: {now.strftime('%Y-%m-%d %H:%M')}
@@ -174,34 +176,34 @@ def generate_module_header(module_name, version, commit_date, commit_date_str, e
 // ============================================================
 
 // Числовая версия (для сравнений)
-#define {module_name.upper()}_VERSION {version}
+#define {macro_prefix}_VERSION {version}
 
 // Строковая версия
-#define {module_name.upper()}_VERSION_STR "{version}"
+#define {macro_prefix}_VERSION_STR "{version}"
 
 // ============================================================
 // ДАТА ПОСЛЕДНЕГО ИЗМЕНЕНИЯ
 // ============================================================
 
 // Дата в формате yyyy.mm.dd hh.mm (как строка)
-#define {module_name.upper()}_COMMIT_DATE_STR "{commit_date_str}"
+#define {macro_prefix}_COMMIT_DATE_STR "{commit_date_str}"
 
 // Компоненты даты (для числовых операций)
-#define {module_name.upper()}_COMMIT_YEAR {commit_year}
-#define {module_name.upper()}_COMMIT_MONTH {commit_month}
-#define {module_name.upper()}_COMMIT_DAY {commit_day}
-#define {module_name.upper()}_COMMIT_HOUR {commit_hour}
-#define {module_name.upper()}_COMMIT_MINUTE {commit_minute}
+#define {macro_prefix}_COMMIT_YEAR {commit_year}
+#define {macro_prefix}_COMMIT_MONTH {commit_month}
+#define {macro_prefix}_COMMIT_DAY {commit_day}
+#define {macro_prefix}_COMMIT_HOUR {commit_hour}
+#define {macro_prefix}_COMMIT_MINUTE {commit_minute}
 
 // Полная дата в формате YYYY-MM-DD HH:MM (для отладки)
-#define {module_name.upper()}_COMMIT_DATE "{commit_date if commit_date else '1970-01-01 00:00'}"
+#define {macro_prefix}_COMMIT_DATE "{commit_date if commit_date else '1970-01-01 00:00'}"
 
 // ============================================================
 // ИНФОРМАЦИЯ О ГЕНЕРАЦИИ
 // ============================================================
 
-#define {module_name.upper()}_GENERATED_TIME "{now.strftime('%Y-%m-%d %H:%M')}"
-#define {module_name.upper()}_GENERATED_TIMESTAMP "{now.strftime('%Y%m%d_%H%M%S')}"
+#define {macro_prefix}_GENERATED_TIME "{now.strftime('%Y-%m-%d %H:%M')}"
+#define {macro_prefix}_GENERATED_TIMESTAMP "{now.strftime('%Y%m%d_%H%M%S')}"
 
 #endif // {guard_name}
 '''
@@ -233,7 +235,7 @@ def generate_module_versions():
     modules = []
     for item in src_dir.iterdir():
         if item.is_dir():
-            if item.name.startswith(CORE_PREFIX) or item.name.startswith(MODULE_PREFIX) or item.name.startswith(SUBMODULE_PREFIX):
+            if item.name.startswith(CORE_PREFIX) or item.name.startswith(MODULE_PREFIX) or item.name.startswith(SUBMODULE_PREFIX) or item.name.startswith(DEVICE_PREFIX):
                 modules.append(item)
     
     if not modules:

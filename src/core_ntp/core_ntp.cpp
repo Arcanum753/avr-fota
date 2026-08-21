@@ -248,9 +248,9 @@ String CORE_CLASS_NTP::getCommitDateStr(){
 void CORE_CLASS_NTP::html_ver_get(AsyncWebServerRequest *request) {
     DEBUGNTP("%s\n\r", __FUNCTION__);
     String values = "";
-    values += "ntpversion|"     + getVersionStr()    + "|dev\n";
-    values += "ntpgentime|"     + getGeneratedTime() + "|dev\n";
-    values += "ntpgendate|"     + getCommitDateStr() + "|dev\n";
+    values += "ntpversion|"     + getVersionStr()    + "|div\n";
+    values += "ntpgentime|"     + getGeneratedTime() + "|div\n";
+    values += "ntpgendate|"     + getCommitDateStr() + "|div\n";
     request->send(200, "text/plain", values);
 }
 

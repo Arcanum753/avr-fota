@@ -28,13 +28,19 @@
 		
 	</div>
 
+    <div class="footer">
+        Module version: <span id="gpioversion"> </span> &nbsp;|&nbsp;
+        Build: <span id="gpiogentime"> </span> <br>
+    </div>
+
 	<markup>./page_bottom.html</markup>
 	<script src="GetJson.js" defer></script>
 	<script src="GetMarkup.js" defer></script>
 	<script>
 		window.onload = function() {
 			setTimeout(() => {
-				ApplyCVT("/system/version");
+				ApplyCVT("/system/version")
+				    .then(() => ApplyCVT("/gpio/ver"));
 			}, 250);
 		};
 
