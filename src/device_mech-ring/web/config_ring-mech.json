@@ -1,1 +1,1 @@
-{"enable_status":0,"stepsPerRevolution":400,"pollInterval":5,"errorLimitSteps":1500,"ringPauseOne":750,"ringPauseTwo":750,"firstPosition":85,"time_begin":9,"time_end":18,"timeSource":"ds3231"}
+{"enable_status":0,"stepsPerRevolution":152,"pollInterval":5,"errorLimitSteps":200,"ringPauseOne":800,"ringPauseTwo":1600,"firstPosition":80,"time_begin":9,"time_end":18,"timeSource":"ds3231"}

@@ -49,7 +49,6 @@ void MODULE_CLASS_RINGMECH::begin() {
 
     if (_config.enable_status == RING_MODE_WORK) { SetTask(MechHomeSetup); }
     SetTask(RingPollTask);
-    _timeHourReal  = 0;
 }
 
 // ============================================================
@@ -362,10 +361,11 @@ void MODULE_CLASS_RINGMECH::MechHomeSetup() {
 void MODULE_CLASS_RINGMECH::MechHomeTask() {
     if (ModClassRingMech._ringStatus != RING_STATUS_HOMING) { return; }
 
-    if (ModClassRingMech._mechControlSteps > ModClassRingMech._config.errorLimitSteps) {
-        MechHomeEndFail();
-        return;
-    }
+    // Светодиод сенсоров общий с часовым механизмом (GPIO 27).
+    // Включаем на каждой итерации, чтобы он не был сброшен логикой часов.
+    digitalWrite(RINGMECH_SENS_LED, HIGH);
+
+    if (ModClassRingMech._mechControlSteps > ModClassRingMech._config.errorLimitSteps) { MechHomeEndFail(); return; }
     if (SENS_TRIGGERED) { MechHomeEndOk(); return; }
     ModClassRingMech._mechControlSteps++;
     GoToTaskAfterStepRing = MechHomeTask;
@@ -382,7 +382,6 @@ void MODULE_CLASS_RINGMECH::MechHomeEndOk() {
 
     if (ModClassRingMech._config.enable_status == RING_MODE_WORK) {
         if (ModClassRingMech._config.stepsPerRevolution == 0) { SetTask(MechCountStepsSetup); }
-        
     }
     DEBUGRINGMECH("MechHome: done, sensor found\r\n");
 }
@@ -416,15 +415,14 @@ void MODULE_CLASS_RINGMECH::MechCountStepsSetup() {
 
 void MODULE_CLASS_RINGMECH::MechCountStepsTask() {
     if (ModClassRingMech._ringStatus != RING_STATUS_COUNTING) { return; }
-    if (ModClassRingMech._mechControlSteps >= ModClassRingMech._config.errorLimitSteps) {
-        MechCountStepsFail();
-        return;
-    }
-    if (SENS_TRIGGERED && ModClassRingMech._mechControlSteps > RINGMECH_MIN_STEPS_GAP) {
-        MechCountStepsOk();
-        return;
-    }
-    ModClassRingMech._mechControlSteps++;
+
+    // Светодиод сенсоров общий с часовым механизмом (GPIO 27).
+    // Включаем на каждой итерации, чтобы он не был сброшен логикой часов.
+    digitalWrite(RINGMECH_SENS_LED, HIGH);
+
+    if (ModClassRingMech._mechControlSteps >= ModClassRingMech._config.errorLimitSteps) { MechCountStepsFail(); return; }
+    if (SENS_TRIGGERED && ModClassRingMech._mechControlSteps > RINGMECH_MIN_STEPS_GAP) { MechCountStepsOk(); return; }
+    ModClassRingMech._mechControlSteps++; 
     GoToTaskAfterStepRing = MechCountStepsTask;
     SetTask(MechMoveStepDown);
 }
@@ -457,7 +455,6 @@ void MODULE_CLASS_RINGMECH::MechCountStepsFail() {
 // Вращение на N оборотов (r-turn)
 // ============================================================
 
-
 void MODULE_CLASS_RINGMECH::MechTurnNCount() {
     if (ModClassRingMech._ringStatus != RING_STATUS_IDLE ) { return; }
     if (ModClassRingMech._mechTurnTarget == 0) { return; }
@@ -480,18 +477,21 @@ void MODULE_CLASS_RINGMECH::MechTurnNSetup() {
 
 void MODULE_CLASS_RINGMECH::MechTurnNTask() {
     if (ModClassRingMech._ringStatus != RING_STATUS_TURN) { return; }
-    if (SENS_TRIGGERED && ModClassRingMech._mechControlSteps > RINGMECH_MIN_STEPS_GAP) {
-        MechTurnNEndOk(); return;
-    }
-    if (ModClassRingMech._mechControlSteps > ModClassRingMech._config.errorLimitSteps) {
-        MechTurnNEndFail(); return;
-    }
+
+    // Светодиод сенсоров общий с часовым механизмом (GPIO 27).
+    // Включаем на каждой итерации, чтобы он не был сброшен логикой часов.
+    digitalWrite(RINGMECH_SENS_LED, HIGH);
+
+    if (SENS_TRIGGERED && ModClassRingMech._mechControlSteps > RINGMECH_MIN_STEPS_GAP) { MechTurnNEndOk(); return; }
+    if (ModClassRingMech._mechControlSteps > ModClassRingMech._config.errorLimitSteps) { MechTurnNEndFail(); return; }
+    
     ModClassRingMech._mechControlSteps++;
     GoToTaskAfterStepRing = MechTurnNTask;
 
-    if ( ModClassRingMech._mechControlSteps == ModClassRingMech._config.firstPosition  ) {
-        SetTimerTask(MechMoveStepDown, ModClassRingMech._config.ringPauseOne);
-    } else { SetTask(MechMoveStepDown); }
+    if ( ModClassRingMech._mechControlSteps == ModClassRingMech._config.firstPosition  ) { 
+        SetTimerTask(MechMoveStepDown, ModClassRingMech._config.ringPauseOne); 
+    }
+    else { SetTask(MechMoveStepDown); }
 }
 
 void MODULE_CLASS_RINGMECH::MechTurnNEndOk() {
@@ -501,9 +501,7 @@ void MODULE_CLASS_RINGMECH::MechTurnNEndOk() {
     GoToTaskAfterStepRing = Idle_task;
     ModClassRingMech._mechControlSteps = 0;
     ModClassRingMech._ringStatus = RING_STATUS_IDLE;
-    
     SetTimerTask(MechTurnNCount, ModClassRingMech._config.ringPauseTwo);
-    // SetTask(MechTurnNCount);
 }
 
 void MODULE_CLASS_RINGMECH::MechTurnNEndFail() {
@@ -525,22 +523,26 @@ void MODULE_CLASS_RINGMECH::RingPollTask() {
     if (ModClassRingMech._ringStatus != RING_STATUS_IDLE) { return; }
 
     time_t t = ModClassRingMech.getCurrentTime();
+    
     if (t == 0) { return; }
-    if ( (uint8_t)minute(t) == 0 && (uint8_t)second(t) <= 10 ){
-        bool timeOk = (ModClassRingMech._config.time_begin == 0 && ModClassRingMech._config.time_end == 0) ||
-                      ((uint8_t)hour(t) >= ModClassRingMech._config.time_begin && (uint8_t)hour(t) <= ModClassRingMech._config.time_end);
-        if (timeOk) {
-            ModClassRingMech._mechTurnTarget = ModClassRingMech._timeHourReal;
+    uint8_t hourBegin = ModClassRingMech._config.time_begin;
+    uint8_t hourEnd = ModClassRingMech._config.time_end;
+    uint8_t timeNowHour = (uint8_t)hour(t) ;
+    uint8_t timeNowMin = (uint8_t)minute(t) ;
+    uint8_t timeNowSec = (uint8_t)second(t) ;
+
+    // if ((hourBegin > timeNowHour) && (timeNowHour > hourEnd  )  ){ return; } 
+    if (timeNowHour < hourBegin || timeNowHour > hourEnd) { return; } // мы НЕ в рабочем диапазоне
+    
+    if ( timeNowMin == 0 && timeNowSec <= 6 ){ // в начале часа
+            ModClassRingMech.CheckTime(timeNowHour);
             SetTask(MechTurnNCount);
-        }
     }
 }
 
 void MODULE_CLASS_RINGMECH::CheckTime (uint8_t _inH)	{
 	if (_inH >= HOURINCIRCLE)   { _inH -= HOURINCIRCLE; }
-	// if (_inM >= MININHOUR)      { _inM = MINMAX; }
-	_timeHourReal = _inH;
-	// _timeMinReal = _inM;
+	_mechTurnTarget = _inH;
 }
 
 

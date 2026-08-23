@@ -1,1 +1,1 @@
-{"enable_status":0,"timeSource":"ds3231","stepsPerRevolution":400,"pollInterval":5,"errorLimitSteps":1500,"sensorLedEnabled":true}
+{"enable_status":0,"timeSource":"ds3231","stepsPerRevolution":400,"pollInterval":5,"errorLimitSteps":450,"sensorLedEnabled":true}

@@ -62,7 +62,7 @@
             <tr id="fullStatusRow" style="display:none;"><td colspan="2"><div id="fullStatusDump" style="font-size:12px; text-align:left; padding:4px;"></div></td></tr>
             <tr><td colspan="2" style="text-align: center; padding: 8px;">
                 <input type="button" value="Обновить статус" class="button-prog" onclick="fetchInfo()">
-                <input type="button" value="Полный статус" class="button-prog" onclick="fetchStatus()">
+                <input type="button" value="Полный статус / Скрыть" class="button-prog" onclick="fetchStatus()">
             </td></tr>
         </table>
     </div>
@@ -82,11 +82,12 @@
                 <input type="button" value="Подсчёт шагов" class="button-prog" onclick="sendAction('/clock-mech/count')">
             </td></tr>
             <tr><td colspan="2" style="text-align: center; padding: 4px;">
-                Шагов: <input type="number" id="nStepCount" value="10" min="1" style="width:60px;">
-                <input type="button" value="Шагнуть" class="button-prog" onclick="sendN()">
+                <input type="button" value="Сброс в XX:00 (мин)" class="button-prog" onclick="sendAction('/clock-mech/set-xx00')">
+                <input type="button" value="Сброс в 12:XX (час)" class="button-prog" onclick="sendAction('/clock-mech/set-12xx')">
             </td></tr>
             <tr><td colspan="2" style="text-align: center; padding: 4px;">
-                <input type="button" value="Скрыть полный статус" class="button-prog" onclick="document.getElementById('fullStatusRow').style.display='none'">
+                Шагов: <input type="number" id="nStepCount" value="10" min="1" style="width:60px;">
+                <input type="button" value="Шагнуть" class="button-prog" onclick="sendN()">
             </td></tr>
         </table>
     </div>
@@ -190,6 +191,11 @@
         }
 
         async function fetchStatus() {
+            const row = document.getElementById('fullStatusRow');
+            if (row.style.display === '') {
+                row.style.display = 'none';
+                return;
+            }
             try {
                 const resp = await fetch('/clock-mech/status');
                 const data = await resp.json();
@@ -199,7 +205,7 @@
                 }
                 html += '</table>';
                 document.getElementById('fullStatusDump').innerHTML = html;
-                document.getElementById('fullStatusRow').style.display = '';
+                row.style.display = '';
             } catch(e) {
                 console.error('fetchStatus error:', e);
             }

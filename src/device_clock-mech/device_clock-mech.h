@@ -27,12 +27,21 @@
 typedef enum {
     STATUS_IDLE    = 0,
     STATUS_SET1200,
+    STATUS_SETXX00,
+    STATUS_SET12XX,
     STATUS_SETHOUR,
     STATUS_SETMIN,
     STATUS_POLL,
     STATUS_COUNTING,
-    ERROR_NO_MECH
+    ERROR_NO_MECH,
+    ERROR_NO_MIN,
+    ERROR_NO_HOUR,
 } mech_status_e;
+
+typedef enum {
+    DIR_clockwise = 0,
+    DIR_COUNTERclockwise  = 1
+} mech_direction_e;
 
 typedef enum {
     MODE_DEBUG = 0,
@@ -71,6 +80,8 @@ public:
     static void cmdSens();
     static void cmdN();
     static void cmdSet1200();
+    static void cmdSetxx00();
+    static void cmdSet12xx();
     static void cmdCount();
     static void cmdSave();
     static void cmdMode();
@@ -86,6 +97,8 @@ public:
     static void cmdSensWeb(AsyncWebServerRequest *request);
     static void cmdNWeb(AsyncWebServerRequest *request);
     static void cmdResetWeb(AsyncWebServerRequest *request);
+    static void cmdSetxx00Web(AsyncWebServerRequest *request);
+    static void cmdSet12xxWeb(AsyncWebServerRequest *request);
     static void cmdCountWeb(AsyncWebServerRequest *request);
     static void cmdStatusWeb(AsyncWebServerRequest *request);
 private:
@@ -99,14 +112,27 @@ private:
     void handleReset(AsyncWebServerRequest *request);
     void handleCount(AsyncWebServerRequest *request);
 
-    void CheckTime (uint8_t _inH, uint8_t _inM);
+    void MechTimeSet (uint8_t _inH, uint8_t _inM);
     //work
     void MechInitGPIOs();
     static void MechMoveStepDown();
     static void MechMoveStepUp();
     static void MechNCmdStep();
+    
+    //set xx:00
+    static void MechSetxx00_Setup();
+    static void MechSetxx00_Task();
+    static void MechSetxx00_endOk();
+    static void MechSetxx00_endFail();
 
-    //work
+
+    //set12:xx
+    static void MechSet12xx_Setup();
+    static void MechSet12xx_Task();
+    static void MechSet12xx_endOk();
+    static void MechSet12xx_endFail();
+
+    //set12:00
     static void MechSet1200_Setup();
     static void MechSet1200_Task();
     static void MechSet1200_endOk();
@@ -151,7 +177,6 @@ protected:
     int                 _sensorLedState;
     int                 _sensorLedStateHOUR;
     int                 _sensorLedStateMIN;
-    uint8_t             mchCS = 0;
 };
 
 extern MODULE_CLASS_CLOCKMECH ModClassClockMech;
