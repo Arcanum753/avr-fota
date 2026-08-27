@@ -6,6 +6,11 @@
 Ручной запуск под выбранный env:
     python python/module_registry_gen.py --env esp32_clock-mech
 
+Если аргумент --env не задан, скрипт сам определяет "текущий" env:
+  1. Переменная окружения PLATFORMIO_ENV (устанавливается PlatformIO IDE).
+  2. .vscode/launch.json -> projectEnvName (env, выбранный в PlatformIO IDE).
+  3. Иначе — первый env из списка [env:...] в конфигах.
+
 Скрипт:
   1. Читает platformio.ini и все extra_configs.
   2. Для выбранного env собирает полный src_filter (с учётом интерполяции ${...}).
@@ -19,6 +24,7 @@
 
 import argparse
 import configparser
+import json
 import os
 import re
 import sys
@@ -175,6 +181,62 @@ def read_registry_ini(project_dir: Path, module_name: str) -> Optional[Dict[str,
     return d
 
 
+def detect_current_env(project_dir: Path, env_names: List[str]) -> Optional[str]:
+    """
+    Определяет "текущий" env:
+      1. Переменная окружения PLATFORMIO_ENV (PlatformIO IDE).
+      2. Последний собранный env в .pio/build/ (по времени модификации) —
+         надёжнее, чем launch.json, который не всегда отражает выбор в IDE.
+      3. .vscode/launch.json -> projectEnvName.
+    Возвращает None, если не удалось определить.
+    """
+    # 1. Переменная окружения PLATFORMIO_ENV
+    from_env = os.environ.get("PLATFORMIO_ENV")
+    if from_env:
+        if from_env in env_names:
+            return from_env
+        log_warning(f"PLATFORMIO_ENV '{from_env}' not in env list — ignored")
+
+    # 2. Последний собранный env в .pio/build/ (по mtime каталога)
+    build_dir = project_dir / ".pio" / "build"
+    if build_dir.exists():
+        built = []
+        for entry in build_dir.iterdir():
+            if entry.is_dir() and entry.name in env_names:
+                try:
+                    built.append((entry.stat().st_mtime, entry.name))
+                except OSError:
+                    pass
+        if built:
+            built.sort(reverse=True)
+            return built[0][1]
+
+    # 3. .vscode/launch.json -> projectEnvName
+    launch = project_dir / ".vscode" / "launch.json"
+    if launch.exists():
+        try:
+            # Убираем однострочные //-комментарии (launch.json генерируется с ними),
+            # затем парсим как JSON.
+            lines = []
+            for line in launch.read_text(encoding="utf-8").splitlines():
+                stripped = line.strip()
+                if stripped.startswith("//"):
+                    continue
+                lines.append(line)
+            data = json.loads("\n".join(lines))
+            configs = data.get("configurations", [])
+            for cfg in configs:
+                env_cfg = cfg.get("projectEnvName")
+                if env_cfg:
+                    if env_cfg in env_names:
+                        return env_cfg
+                    log_warning(f"launch.json projectEnvName '{env_cfg}' not in env list — ignored")
+        except Exception as e:
+            log_warning(f"Cannot parse {launch}: {e}")
+
+    return None
+
+
 # ============================================================
 # Генерация файлов
 # ============================================================
@@ -256,7 +318,9 @@ def cpp_content(env_name: str,
 def main():
     parser = argparse.ArgumentParser(description="Генератор modules_registry для avr-fota")
     parser.add_argument("--env", dest="env", type=str, default=None,
-                        help="Имя env (например esp32_clock-mech). Если не задан — интерактивный выбор.")
+                        help="Имя env (например esp32_clock-mech). Если не задан — "
+                             "используется текущий выбранный env (PLATFORMIO_ENV / launch.json) "
+                             "или первый из списка.")
     args = parser.parse_args()
 
     project_dir = Path(os.getcwd()).resolve()
@@ -281,16 +345,14 @@ def main():
             log_error(f"Env '{args.env}' not found. Available: {', '.join(env_names)}")
             sys.exit(1)
         env_name = args.env
+        log_info(f"Env from --env: {env_name}")
     else:
-        log_info("Select env:")
-        for i, name in enumerate(env_names):
-            print(f"  {i}: {name}")
-        try:
-            idx = int(input("Enter number: ").strip())
-            env_name = env_names[idx]
-        except Exception:
-            log_error("Invalid selection")
-            sys.exit(1)
+        env_name = detect_current_env(project_dir, env_names)
+        if env_name is None:
+            env_name = env_names[0]
+            log_warning(f"Current env not detected — using first: {env_name}")
+        else:
+            log_info(f"Current env detected: {env_name}")
 
     log_info(f"Selected env: {env_name}")
 
