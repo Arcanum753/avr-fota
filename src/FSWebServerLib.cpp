@@ -63,16 +63,16 @@ AsyncFSWebServer::AsyncFSWebServer(uint16_t port) : AsyncWebServer(port) {}
 	// If this pin is HIGH during startup ESP will run in AP_ONLY mode. Backdoor to change WiFi settings when configured WiFi is not available.
 	if (AP_ENABLE_BUTTON >= 0) {	pinMode(AP_ENABLE_BUTTON, INPUT_PULLUP); 	}
 	if (AP_ENABLE_BUTTON >= 0) {
-		modWifiClass._apConfig.APenable = !digitalRead(AP_ENABLE_BUTTON); // Read AP button. If button is pressed activate AP
-		DEBUGLOG("AP Enable = %d\n", modWifiClass._apConfig.APenable);
+		core_wifi._apConfig.APenable = !digitalRead(AP_ENABLE_BUTTON); // Read AP button. If button is pressed activate AP
+		DEBUGLOG("AP Enable = %d\n", core_wifi._apConfig.APenable);
 	}
 
     if (!_fs) { _fs->begin();  }// If LittleFS is not started
 
 	// JSON-ядро должно быть инициализировано первым (используется loadHTTPAuth/load_config_Sys
-	// и всеми begin(ctx) через ModClassJson). Это соответствует старому // !!!MUST!!! be set as first.
+	// и всеми begin(ctx) через core_json). Это соответствует старому // !!!MUST!!! be set as first.
 	g_ctx.fs = fs;
-	ModClassJson.begin(g_ctx);
+	core_json.begin(g_ctx);
 
 	loadHTTPAuth();
 	defaultConfigSys();
@@ -104,7 +104,7 @@ AsyncFSWebServer::AsyncFSWebServer(uint16_t port) : AsyncWebServer(port) {}
 bool AsyncFSWebServer::loadHTTPAuth() {
 	DEBUGLOG(__PRETTY_FUNCTION__);	DEBUGLOG("\r\n");
 	JsonDocument doc;
-	if (!ModClassJson.jsonFileLoadDoc(SECRET_FILE, doc)) {
+	if (!core_json.jsonFileLoadDoc(SECRET_FILE, doc)) {
 		_httpAuth.auth = false;
 		_httpAuth.wwwUsername = "";
 		_httpAuth.wwwPassword = "";
@@ -154,7 +154,7 @@ void AsyncFSWebServer::html_send_chipinfo(AsyncWebServerRequest *request) {
 
 void AsyncFSWebServer::restart_esp() {
 	DEBUGLOG(__FUNCTION__);	DEBUGLOG("\r\n");
-	modWifiClass.wifiStatus = FS_STAT_RESET;
+	core_wifi.wifiStatus = FS_STAT_RESET;
 	WiFi.disconnect(true, false);
 	// Only call _fs->end() if it hasn't been already ended by the OTA update process.
 	// OTA already ended the filesystem in html_uploadUpdateFile() before calling Update.begin().
@@ -217,11 +217,11 @@ bool AsyncFSWebServer::saveHTTPAuth() {
 	//flag_config = false;
 	DEBUGLOG("Save secret\r\n");
 	JsonDocument doc;
-	ModClassJson.jsonFileLoadDoc(SECRET_FILE, doc);
+	core_json.jsonFileLoadDoc(SECRET_FILE, doc);
 	doc["auth"] = _httpAuth.auth;
 	doc["user"] = _httpAuth.wwwUsername;
 	doc["pass"] = _httpAuth.wwwPassword;
-	return ModClassJson.jsonFileSaveDoc(SECRET_FILE, doc);
+	return core_json.jsonFileSaveDoc(SECRET_FILE, doc);
 }
 
 
@@ -579,7 +579,7 @@ String AsyncFSWebServer::getFsVersionStr() {
     jsonFile.close();
     
     String fullString;
-    if (ModClassJson.jsonParseNestedStr(jsonStr, "filesystem|version|full_string", fullString)) {
+    if (core_json.jsonParseNestedStr(jsonStr, "filesystem|version|full_string", fullString)) {
         _sysConfig.fsVersion = fullString;
         DEBUGLOG("getFsVersionStr: FS version = %s\n", _sysConfig.fsVersion.c_str());
         return _sysConfig.fsVersion;
@@ -591,7 +591,7 @@ String AsyncFSWebServer::getFsVersionStr() {
 
 bool AsyncFSWebServer::load_config_Sys() {
 	JsonDocument doc;
-	if (!ModClassJson.jsonFileLoadDoc(CONFIG_FILE_SYS, doc)) return false;
+	if (!core_json.jsonFileLoadDoc(CONFIG_FILE_SYS, doc)) return false;
 	_sysConfig.deviceName = doc["deviceName"].as<String>();
 	_sysConfig.deviceSerial = doc["deviceSerial"].as<String>();
 	return true;
@@ -613,8 +613,8 @@ void AsyncFSWebServer::defaultConfigSys() {
 bool AsyncFSWebServer::save_configSys() {
 	DEBUGLOG("Save config SYSTEM\r\n");
 	JsonDocument doc;
-	ModClassJson.jsonFileLoadDoc(CONFIG_FILE_SYS, doc);
+	core_json.jsonFileLoadDoc(CONFIG_FILE_SYS, doc);
 	doc["deviceName"] = _sysConfig.deviceName;
 	doc["deviceSerial"] = _sysConfig.deviceSerial;
-	return ModClassJson.jsonFileSaveDoc(CONFIG_FILE_SYS, doc);
+	return core_json.jsonFileSaveDoc(CONFIG_FILE_SYS, doc);
 }

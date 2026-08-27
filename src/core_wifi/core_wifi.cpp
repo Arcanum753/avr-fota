@@ -34,7 +34,7 @@
 
 
 
-CLASS_CORE_WIFI 	modWifiClass(false);
+CLASS_CORE_WIFI 	core_wifi(false);
 DNSServer 		dnsServer;
 
 CLASS_CORE_WIFI :: CLASS_CORE_WIFI (bool _in) {
@@ -196,7 +196,7 @@ bool CLASS_CORE_WIFI::load_configWifi(int _in) {
 	if (_in < 0){ return false; }
 	char filename[40];
 	sprintf(filename, "/%s%d.json", WIFI_CONFIG_FILE_NAME, _in);
-	if (!ModClassJson.jsonFileLoadSlot(filename, _wifiConfig.ssid, _wifiConfig.password, _wifiConfig.dhcp,
+	if (!core_json.jsonFileLoadSlot(filename, _wifiConfig.ssid, _wifiConfig.password, _wifiConfig.dhcp,
 	                                   _wifiConfig.ip, _wifiConfig.netmask, _wifiConfig.gateway, _wifiConfig.dns)) {
 	    return false;
 	}
@@ -214,7 +214,7 @@ bool CLASS_CORE_WIFI::save_configWifi(int _in) {
 	DEBUGLOGWIFI("Save config\r\n");
 	char filename[40];
 	sprintf(filename, "/%s%d.json", WIFI_CONFIG_FILE_NAME, _in);
-	return ModClassJson.jsonFileSaveSlot(filename, _wifiConfig.ssid, _wifiConfig.password, _wifiConfig.dhcp,
+	return core_json.jsonFileSaveSlot(filename, _wifiConfig.ssid, _wifiConfig.password, _wifiConfig.dhcp,
 	                                      _wifiConfig.ip, _wifiConfig.netmask, _wifiConfig.gateway, _wifiConfig.dns);
 }
 
@@ -243,9 +243,9 @@ void CLASS_CORE_WIFI::startDNSCaptive() {
 
 void CLASS_CORE_WIFI::configureWifiAP() {
 	DEBUGLOGWIFI(__PRETTY_FUNCTION__);	DEBUGLOGWIFI("\r\n");
-	modNtpClass.ntpOnDisconected();
+	core_ntp.ntpOnDisconected();
 #if defined(MODULE_UDP)
-		udpBroadcast.udpStop();	// always stop!
+		module_udp.stop();	// always stop!
 #endif
 	String APname = ESPHTTPServer.getHostName();
 	if (WiFi.status() == WL_CONNECTED) { WiFi.disconnect();	}
@@ -362,15 +362,15 @@ void CLASS_CORE_WIFI::onWiFiConnectedGotIP(WiFiEventStationModeGotIP data) {
 	wifiStatus = FS_STAT_CONNECTED;
 #if defined(MODULE_UDP)
 //udp start to listen
-	udpBroadcast.begin();
+	module_udp.begin();
 	//udp broadcast - we are online!
-    if (udpBroadcast.udpPowerOnGet() == true ) {  udpBroadcastSimple(); }
+    if (module_udp.powerOnGet() == true ) {  broadcastSimple(); }
 #endif
-	modNtpClass.ntpOnConnected();
+	core_ntp.ntpOnConnected();
 
 #ifdef MODULE_OTACLIENT
 	// Trigger OTA client check on WiFi connect (if powerOn enabled)
-	otaClient.onWiFiConnect();
+	module_otaclient.onWiFiConnect();
 #endif
 
 }
@@ -384,9 +384,9 @@ void CLASS_CORE_WIFI::onWiFiDisconnected(WiFiEventStationModeDisconnected data) 
 
 
 #if defined(MODULE_UDP)
-	udpBroadcast.udpStop();	// always stop!
+	module_udp.stop();	// always stop!
 #endif
-	modNtpClass.ntpOnDisconected();
+	core_ntp.ntpOnDisconected();
 
 	if (wifiStatus == FS_STAT_RESET) {return;}
 
@@ -635,17 +635,17 @@ void CLASS_CORE_WIFI::web_Init () {
 
     //captive
     ESPHTTPServer.on("/generate_204", HTTP_GET, [](AsyncWebServerRequest *request) {
-        modWifiClass.notifyApClientActivity();
+        core_wifi.notifyApClientActivity();
         request->redirect("http://" + WiFi.softAPIP().toString());
     });
 
     ESPHTTPServer.on("/hotspot-detect.html", HTTP_GET, [](AsyncWebServerRequest *request) {
-        modWifiClass.notifyApClientActivity();
+        core_wifi.notifyApClientActivity();
         request->redirect("http://" + WiFi.softAPIP().toString());
     });
 
     ESPHTTPServer.on("/ncsi.txt", HTTP_GET, [](AsyncWebServerRequest *request) {
-        modWifiClass.notifyApClientActivity();
+        core_wifi.notifyApClientActivity();
         request->send(200, "text/plain", "Microsoft NCSI");
     });
 
@@ -671,7 +671,7 @@ void CLASS_CORE_WIFI::send_slot_json(AsyncWebServerRequest *request, int slot) {
     DEBUGLOGWIFI("Sending slot %d data as JSON\n", slot);
     load_configWifi(slot);
 
-    String response = ModClassJson.jsonBuildSlotConfig(
+    String response = core_json.jsonBuildSlotConfig(
         _wifiConfig.ssid, _wifiConfig.password, _wifiConfig.dhcp,
         _wifiConfig.ip, _wifiConfig.netmask, _wifiConfig.gateway, _wifiConfig.dns
     );
@@ -704,7 +704,7 @@ void CLASS_CORE_WIFI::handle_slot_post(AsyncWebServerRequest *request, int slot)
         gateway = this->_wifiConfig.gateway;
         dns = this->_wifiConfig.dns;
         
-        int parsed = ModClassJson.jsonParseSlotConfig(body, ssid, password, dhcp,
+        int parsed = core_json.jsonParseSlotConfig(body, ssid, password, dhcp,
                                                         ip, netmask, gateway, dns);
         
         // Освобождаем память
@@ -776,7 +776,7 @@ void CLASS_CORE_WIFI::html_ver_get(AsyncWebServerRequest *request) {
 bool CLASS_CORE_WIFI::load_configWifiSys() {
     DEBUGLOGWIFI("Loading WiFi sys config\n");
     JsonDocument doc;
-    if (!ModClassJson.jsonFileLoadDoc(WIFI_CONFIG_SYS, doc)) return false;
+    if (!core_json.jsonFileLoadDoc(WIFI_CONFIG_SYS, doc)) return false;
     _wifiScanTime = doc["scantime"].as<uint16_t>();
     _wifiAPLifeTime = doc["aptime"].as<uint16_t>();
     return true;
@@ -785,10 +785,10 @@ bool CLASS_CORE_WIFI::load_configWifiSys() {
 bool CLASS_CORE_WIFI::save_configWifiSys() {
     DEBUGLOGWIFI("Saving WiFi sys config\n");
     JsonDocument doc;
-    ModClassJson.jsonFileLoadDoc(WIFI_CONFIG_SYS, doc);
+    core_json.jsonFileLoadDoc(WIFI_CONFIG_SYS, doc);
     doc["scantime"] = _wifiScanTime;
     doc["aptime"] = _wifiAPLifeTime;
-    return ModClassJson.jsonFileSaveDoc(WIFI_CONFIG_SYS, doc);
+    return core_json.jsonFileSaveDoc(WIFI_CONFIG_SYS, doc);
 }
 
 void CLASS_CORE_WIFI::defaultConfigWifiSys() {
@@ -820,7 +820,7 @@ void CLASS_CORE_WIFI::handle_wifi_sysconf_post(AsyncWebServerRequest *request) {
     request->_tempObject = NULL;
 
     int32_t scantimeVal = 0, aptimeVal = 0;
-    if (!ModClassJson.jsonParseInt(body, "scantime", scantimeVal)) {
+    if (!core_json.jsonParseInt(body, "scantime", scantimeVal)) {
         request->send(400, "application/json", "{\"success\":false,\"error\":\"JSON parse error\"}");
         return;
     }
@@ -828,7 +828,7 @@ void CLASS_CORE_WIFI::handle_wifi_sysconf_post(AsyncWebServerRequest *request) {
     if (scantimeVal > 720) scantimeVal = 720;
     _wifiScanTime = (uint16_t)scantimeVal;
 
-    ModClassJson.jsonParseInt(body, "aptime", aptimeVal);
+    core_json.jsonParseInt(body, "aptime", aptimeVal);
     if (aptimeVal < 0) aptimeVal = 0;
     if (aptimeVal > 60) aptimeVal = 60;
     _wifiAPLifeTime = (uint16_t)aptimeVal;

@@ -89,7 +89,7 @@ private:
     bool  dumb = false;
 };
 
-extern CLASS_CORE_NTP modNtpClass;
+extern CLASS_CORE_NTP core_ntp;
 
 
 

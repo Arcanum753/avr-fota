@@ -4,7 +4,7 @@
 #include "common.h"
 #include "module_gpio_version.h"
 
-CLASS_MODULE_GPIO ModClassGpio(false);
+CLASS_MODULE_GPIO module_gpio(false);
 
 CLASS_MODULE_GPIO :: CLASS_MODULE_GPIO (bool _in) {
 	dumb = _in;

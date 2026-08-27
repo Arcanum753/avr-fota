@@ -4,7 +4,7 @@
 #include "main.h"
 #include "core_editor_version.h"
 
-CLASS_CORE_EDITOR ModClassEdit;
+CLASS_CORE_EDITOR core_editor;
 
 CLASS_CORE_EDITOR::CLASS_CORE_EDITOR() {}
 

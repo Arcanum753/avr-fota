@@ -165,7 +165,7 @@ protected:
 #endif
 };
 
-extern CLASS_MODULE_DS3231 ModClassDs3231;
+extern CLASS_MODULE_DS3231 module_ds3231;
 
 // SQW / GPIO — внешние функции (только ESP32)
 #if defined(ESP32)

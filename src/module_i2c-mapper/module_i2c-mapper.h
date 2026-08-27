@@ -45,6 +45,6 @@ protected:
     bool dumb;
 };
 
-extern CLASS_MODULE_I2C_MAPPER ModClassI2cMapper;
+extern CLASS_MODULE_I2C_MAPPER module_i2c_mapper;
 
 #endif // _MODULE_I2C_MAPPER_h

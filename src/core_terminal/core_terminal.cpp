@@ -199,19 +199,19 @@ void udpp (){
         Serial.println("Please set port 10000 < port <= 65536");
         return;
     }
-    String str = udpBroadcast.udpJsonGet();
-    udpBroadcast. udpBroadcastSend(port, str);
+    String str = module_udp.jsonGet();
+    module_udp.broadcastSend(port, str);
 #endif
 }
 
 void udpc ()    {
 #if defined(MODULE_UDP)
-  udpBroadcastSimple();
+  broadcastSimple();
 #endif
 }
 void udps ()    {
 #if defined(MODULE_UDP)
-    udpBroadcast.udpBroadcastSend(udpBroadcast.getUpdPortTx(), "test");
+    module_udp.broadcastSend(module_udp.getPortTx(), "test");
 #endif
 }
 

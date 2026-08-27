@@ -51,9 +51,9 @@ Submodules (`submodule_*`) inherit from `Class_ProgBase` and implement specific 
 `src/module_template/` содержит эталонную структуру optional-модуля. При создании нового модуля копировать эту папку и переименовывать.
 
 **Что содержит шаблон (брать за основу):**
-- `module_xxx.h` — класс с debug-макросом, `setFs()`, `begin()`, `webInit()`, структурой конфига (`strXxxConfig`), версионными методами
-- `module_xxx.cpp` — глобальный объект, загрузка/сохранение JSON конфига через `ModClassJson`, AJAX-эндпоинты (`/xxx/info`, `/xxx/save`, `/xxx/ver`), ответ `text/plain "OK"`
-  - `save_config()` использует `ModClassJson.jsonFileLoadDoc()` + мерж (не перезапись), затем `jsonFileSaveDoc()`.
+- `module_xxx.h` — класс с debug-макросом, `setFs()`, `begin()`, `web_Init()`, структурой конфига (`strXxxConfig`), версионными методами
+- `module_xxx.cpp` — глобальный объект, загрузка/сохранение JSON конфига через `core_json`, AJAX-эндпоинты (`/xxx/info`, `/xxx/save`, `/xxx/ver`), ответ `text/plain "OK"`
+  - `save_config()` использует `core_json.jsonFileLoadDoc()` + мерж (не перезапись), затем `jsonFileSaveDoc()`.
   - Чтение массивов из JSON — через `is<JsonArray>()` + `as<JsonArray>()` с проверкой границ.
   - Сохранение массивов — через `doc["key"].to<JsonArray>()` + `arr.add()`.
 - `web/_menu.html` — ссылки в меню.
@@ -82,7 +82,7 @@ The main loop (`loop()` in `main.cpp`):
 3. Resets watchdog again
 4. Calls `loop_user()` (user hook, empty by default)
 5. Calls `TerminalLoop()`
-6. Calls `core_loop()`, `modules_loop()`, `dev_loop()` (задача `modOtaClass.loop()`/`otaClient.loop()` вызывается через `core_loop`)
+6. Calls `core_loop()`, `modules_loop()`, `dev_loop()` (задача `core_ota.loop()`/`module_otaclient.loop()` вызывается через `core_loop`)
 
 ### Core initialization flow (`setup()`)
 
@@ -161,20 +161,20 @@ python python/module_registry_gen.py --env esp32_clock-mech
 Для каждого модуля генератор читает секцию `[registry]` из `src/<module>/<module>.ini`:
 ```ini
 [registry]
-object = ModClassDs3231
+object = module_ds3231
 define = MODULE_DS3231
 web = 1        # есть web_Init() — вызывается в *_web_Init
 loop = 0       # есть loop() — вызывается в *_loop
 ```
-- `object` — имя глобального extern-объекта (например `ModClassDs3231`, `progIsp`, `otaClient`).
+- `object` — имя глобального extern-объекта (например `module_ds3231`, `progIsp`, `module_otaclient`).
 - `define` — define-флаг env (справочно; сами `#if` в итоговый файл не пишутся).
 - `web` — 1 если у модуля есть `web_Init()`.
 - `loop` — 1 если у модуля есть `loop()`. Для `device_*` вызывается в `dev_loop()`, для остальных — в `modules_loop()`.
 
 Особые случаи:
-- `module_otaclient` (`otaClient`) при активном `-D MODULE_OTACLIENT` включаются/istр в **core**-группах
+- `module_otaclient` (`module_otaclient`) при активном `-D MODULE_OTACLIENT` включаются/istр в **core**-группах
   (begin/web/loop) вместе с базовым OTA, а не в modules-группах.
-- `module_udp` (`udpBroadcast`) — `begin()` вызывается из `core_wifi` при подключении, поэтому
+- `module_udp` (`module_udp`) — `begin()` вызывается из `core_wifi` при подключении, поэтому
   `begin` в registry не дублируется; регистрируется только `web_Init()`.
 - `core_terminal` — без класса; `TerminalInit()` вызывается в `core_begin`,
   `TerminalLoop()` — в `core_loop` (базовые команды регистрируются в begin, слоты

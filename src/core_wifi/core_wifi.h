@@ -171,7 +171,7 @@ protected:
 };
 
 
-extern CLASS_CORE_WIFI modWifiClass; 
+extern CLASS_CORE_WIFI core_wifi; 
 
 
 

@@ -8,7 +8,7 @@
 #include "debug.h"
 #include "core_json.h"
 #include "core_json_version.h"
-CLASS_CORE_JSON ModClassJson(false);
+CLASS_CORE_JSON core_json(false);
 
 CLASS_CORE_JSON :: CLASS_CORE_JSON (bool _in) {
 	dumb = _in;

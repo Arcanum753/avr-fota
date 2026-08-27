@@ -54,7 +54,7 @@ protected:
 #endif
 };
 
-extern CLASS_CORE_EDITOR ModClassEdit;
+extern CLASS_CORE_EDITOR core_editor;
 
 
 

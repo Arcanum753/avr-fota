@@ -49,7 +49,7 @@ void  gpioGetArgs(AsyncWebServerRequest *request) ;
 
 };
 
-extern CLASS_MODULE_GPIO ModClassGpio;
+extern CLASS_MODULE_GPIO module_gpio;
 
 
 

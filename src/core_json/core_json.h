@@ -109,7 +109,7 @@ protected:
 
 };
 
-extern CLASS_CORE_JSON ModClassJson;
+extern CLASS_CORE_JSON core_json;
 
 
 #endif // _MODULE_JSON_h

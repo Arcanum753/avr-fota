@@ -313,21 +313,21 @@ def main():
         '"core_terminal/core_terminal.h"',
     ]
     core_begin = [
-        # ModClassJson должен инициализироваться первым: его _fs используется
-        # modWifiClass/modNtpClass (загрузка конфигов) и всем остальным begin(ctx).
-        "ModClassJson.begin(ctx);",
-        "modWifiClass.begin(ctx);",
-        "modNtpClass.begin(ctx);",
-        "ModClassEdit.begin(ctx);",
+        # core_json должен инициализироваться первым: его _fs используется
+        # core_wifi/core_ntp (загрузка конфигов) и всем остальным begin(ctx).
+        "core_json.begin(ctx);",
+        "core_wifi.begin(ctx);",
+        "core_ntp.begin(ctx);",
+        "core_editor.begin(ctx);",
         # Терминал без класса: базовые команды регистрируются здесь,
         # слоты модулей применяются лениво в первом вызове TerminalLoop().
         "TerminalInit();",
     ]
     core_web = [
-        "modWifiClass.web_Init();",
-        "modNtpClass.web_Init();",
-        "ModClassJson.web_Init();",
-        "ModClassEdit.web_Init();",
+        "core_wifi.web_Init();",
+        "core_ntp.web_Init();",
+        "core_json.web_Init();",
+        "core_editor.web_Init();",
     ]
     core_loop: List[str] = [
         # Терминал читает сериал первым в цикле; первый вызов также применяет
@@ -336,14 +336,14 @@ def main():
     ]
 
     if is_otaclient:
-        # otaClient — модуль module_otaclient; заголовок подключается через регистрируемые модули.
-        core_begin.append("otaClient.begin(ctx);")
-        core_web.append("otaClient.web_Init();")
-        core_loop.append("otaClient.loop();")
+        # module_otaclient — OTA-клиент; заголовок подключается через регистрируемые модули.
+        core_begin.append("module_otaclient.begin(ctx);")
+        core_web.append("module_otaclient.web_Init();")
+        core_loop.append("module_otaclient.loop();")
     else:
-        core_begin.append("modOtaClass.begin(ctx);")
-        core_web.append("modOtaClass.web_Init();")
-        core_loop.append("modOtaClass.loop();")
+        core_begin.append("core_ota.begin(ctx);")
+        core_web.append("core_ota.web_Init();")
+        core_loop.append("core_ota.loop();")
 
     # ---- Модули / субмодули / устройства ----
     modules_begin: List[str] = []

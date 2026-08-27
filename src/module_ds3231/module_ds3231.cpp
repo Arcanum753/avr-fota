@@ -18,7 +18,7 @@
 #include <esp_attr.h>
 #endif
 
-CLASS_MODULE_DS3231 ModClassDs3231(false);
+CLASS_MODULE_DS3231 module_ds3231(false);
 CLASS_MODULE_DS3231::CLASS_MODULE_DS3231(bool _in) {
     dumb = _in; _lastError = 0; _wireStarted = false;
 #if defined(ESP32)
@@ -38,11 +38,11 @@ CLASS_MODULE_DS3231::CLASS_MODULE_DS3231(bool _in) {
 // ====================================================================
 #if defined(ESP32)
 void IRAM_ATTR ds3231SqwIsr() {
-    ModClassDs3231.sqwSetIrqFlag();
+    module_ds3231.sqwSetIrqFlag();
 }
 
 void ds3231SqwPollTask() {
-    ModClassDs3231.sqwPollStep();
+    module_ds3231.sqwPollStep();
 }
 #endif
 
@@ -1216,7 +1216,7 @@ void CLASS_MODULE_DS3231::defaultConfig() {
 bool CLASS_MODULE_DS3231::loadConfig() {
     DEBUGDS3231("%s\r\n", __FUNCTION__);
     JsonDocument doc;
-    if (ModClassJson.jsonFileLoadDoc(CONFIG_FILE_DS3231, doc) == false) { return false; }
+    if (core_json.jsonFileLoadDoc(CONFIG_FILE_DS3231, doc) == false) { return false; }
 
     _config.addr         = doc["addr"].as<uint8_t>();
     _config.autoPoll     = doc["autoPoll"].as<bool>();
@@ -1242,7 +1242,7 @@ bool CLASS_MODULE_DS3231::loadConfig() {
 bool CLASS_MODULE_DS3231::saveConfig() {
     DEBUGDS3231("%s\r\n", __FUNCTION__);
     JsonDocument doc;
-    ModClassJson.jsonFileLoadDoc(CONFIG_FILE_DS3231, doc);
+    core_json.jsonFileLoadDoc(CONFIG_FILE_DS3231, doc);
     doc["addr"]         = _config.addr;
     doc["autoPoll"]     = _config.autoPoll;
     doc["pollInterval"] = _config.pollInterval;
@@ -1256,7 +1256,7 @@ bool CLASS_MODULE_DS3231::saveConfig() {
     doc["ctrlA1ie"]       = _config.ctrlA1ie;
     doc["ctrlA2ie"]       = _config.ctrlA2ie;
 #endif
-    return ModClassJson.jsonFileSaveDoc(CONFIG_FILE_DS3231, doc);
+    return core_json.jsonFileSaveDoc(CONFIG_FILE_DS3231, doc);
 }
 
 // ====================================================================
@@ -1265,7 +1265,7 @@ bool CLASS_MODULE_DS3231::saveConfig() {
 
 void ds3231CmdAlarm() {
     // Показать статус сработавших будильников (флаги A1F/A2F регистра Status)
-    uint8_t stat = ModClassDs3231.getStatusReg();
+    uint8_t stat = module_ds3231.getStatusReg();
     DEBUGDS3231("DS3231 Status=0x%02X A1F=%d A2F=%d\r\n",
                 stat, (stat & 0x01) ? 1 : 0, (stat & 0x02) ? 1 : 0);
     if (stat & 0x01) { DEBUGDS3231("DS3231: Alarm 1 fired\r\n"); }
@@ -1273,15 +1273,15 @@ void ds3231CmdAlarm() {
     if (!(stat & 0x03)) { DEBUGDS3231("DS3231: no alarm fired\r\n"); }
 #if defined(ESP32)
     // Время последнего срабатывания (сохранённое в RAM).
-    if (ModClassDs3231.getLastAlarm1Time() != 0) {
-        String s; _formatAlarmStamp(ModClassDs3231.getLastAlarm1Time(), s);
+    if (module_ds3231.getLastAlarm1Time() != 0) {
+        String s; _formatAlarmStamp(module_ds3231.getLastAlarm1Time(), s);
         DEBUGDS3231("DS3231: Alarm 1 last fired: %s\r\n", s.c_str());
     }
-    if (ModClassDs3231.getLastAlarm2Time() != 0) {
-        String s; _formatAlarmStamp(ModClassDs3231.getLastAlarm2Time(), s);
+    if (module_ds3231.getLastAlarm2Time() != 0) {
+        String s; _formatAlarmStamp(module_ds3231.getLastAlarm2Time(), s);
         DEBUGDS3231("DS3231: Alarm 2 last fired: %s\r\n", s.c_str());
     }
-    if (ModClassDs3231.getLastAlarm1Time() == 0 && ModClassDs3231.getLastAlarm2Time() == 0) {
+    if (module_ds3231.getLastAlarm1Time() == 0 && module_ds3231.getLastAlarm2Time() == 0) {
         DEBUGDS3231("DS3231: no alarm fired since boot\r\n");
     }
 #endif
@@ -1293,38 +1293,38 @@ void ds3231CmdSqw() {
     String arg1 = term.getNext();
     DEBUGDS3231("ds-sqw arg=%s\r\n", arg1.c_str());
     if (arg1 == "on" || arg1 == "1") {
-        ModClassDs3231.sqwGpioInit();
-        ModClassDs3231._config.sqwEnabled = true;
-        ModClassDs3231.saveConfig();
+        module_ds3231.sqwGpioInit();
+        module_ds3231._config.sqwEnabled = true;
+        module_ds3231.saveConfig();
         Serial.println("SQW monitoring ON");
         return;
     }
     if (arg1 == "off" || arg1 == "0") {
-        ModClassDs3231._config.sqwEnabled = false;
-        ModClassDs3231.sqwGpioStop();
-        ModClassDs3231.saveConfig();
+        module_ds3231._config.sqwEnabled = false;
+        module_ds3231.sqwGpioStop();
+        module_ds3231.saveConfig();
         Serial.println("SQW monitoring OFF");
         return;
     }
     if (arg1 == "poll") {
-        ModClassDs3231._config.sqwMode = DS3231_SQW_MODE_POLLING;
-        ModClassDs3231.saveConfig();
-        ModClassDs3231.sqwGpioReinit();
+        module_ds3231._config.sqwMode = DS3231_SQW_MODE_POLLING;
+        module_ds3231.saveConfig();
+        module_ds3231.sqwGpioReinit();
         Serial.println("SQW mode: polling");
         return;
     }
     if (arg1 == "int") {
-        ModClassDs3231._config.sqwMode = DS3231_SQW_MODE_INTERRUPT;
-        ModClassDs3231.saveConfig();
-        ModClassDs3231.sqwGpioReinit();
+        module_ds3231._config.sqwMode = DS3231_SQW_MODE_INTERRUPT;
+        module_ds3231.saveConfig();
+        module_ds3231.sqwGpioReinit();
         Serial.println("SQW mode: interrupt");
         return;
     }
     // По умолчанию печатаем состояние
     Serial.printf("SQW enabled=%d mode=%s level=%d pin D%d\r\n",
-                  ModClassDs3231._config.sqwEnabled ? 1 : 0,
-                  (ModClassDs3231._config.sqwMode == DS3231_SQW_MODE_INTERRUPT) ? "interrupt" : "polling",
-                  ModClassDs3231._config.sqwLevelActive ? 1 : 0,
+                  module_ds3231._config.sqwEnabled ? 1 : 0,
+                  (module_ds3231._config.sqwMode == DS3231_SQW_MODE_INTERRUPT) ? "interrupt" : "polling",
+                  module_ds3231._config.sqwLevelActive ? 1 : 0,
                   DS3231_SQW_PIN);
     Serial.printf("SQW raw=%d\r\n", digitalRead(DS3231_SQW_PIN));
 #endif
@@ -1338,22 +1338,22 @@ void ds3231CmdSqr() {
 #if defined(ESP32)
     String arg1 = term.getNext();
     if (arg1 == "bbsqw") {
-        ModClassDs3231._config.ctrlBbsqw = true;
-        ModClassDs3231._config.ctrlIntcn = false;
-        ModClassDs3231.saveConfig();
-        ModClassDs3231._applyCtrlBits();
+        module_ds3231._config.ctrlBbsqw = true;
+        module_ds3231._config.ctrlIntcn = false;
+        module_ds3231.saveConfig();
+        module_ds3231._applyCtrlBits();
         Serial.println("SQW output: BBSQW=1 (меандр)");
         return;
     }
     if (arg1 == "intcn") {
-        ModClassDs3231._config.ctrlIntcn = true;
-        ModClassDs3231._config.ctrlBbsqw = false;
-        ModClassDs3231.saveConfig();
-        ModClassDs3231._applyCtrlBits();
+        module_ds3231._config.ctrlIntcn = true;
+        module_ds3231._config.ctrlBbsqw = false;
+        module_ds3231.saveConfig();
+        module_ds3231._applyCtrlBits();
         Serial.println("SQW output: INTCN=1 (INT# по будильникам)");
         return;
     }
-    uint8_t ctrl = ModClassDs3231._readReg(0x0E);
+    uint8_t ctrl = module_ds3231._readReg(0x0E);
     Serial.printf("Control=0x%02X BBSQW=%d RS=%d INTCN=%d A1IE=%d A2IE=%d\r\n",
                   ctrl,
                   (ctrl & 0x40) ? 1 : 0,

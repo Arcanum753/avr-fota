@@ -182,6 +182,6 @@ protected:
     int                 _sensorLedStateMIN;
 };
 
-extern CLASS_DEVICE_CLOCKMECH ModClassClockMech;
+extern CLASS_DEVICE_CLOCKMECH device_clock_mech;
 
 #endif

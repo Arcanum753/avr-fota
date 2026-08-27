@@ -81,6 +81,6 @@ protected:
     LiquidCrystal_I2C* _lcd;
 };
 
-extern CLASS_MODULE_I2C_LCD ModClassLcdI2c;
+extern CLASS_MODULE_I2C_LCD module_lcd_i2c;
 
 #endif

@@ -9,7 +9,7 @@
 #include "eertos.h"
 #include "version.h"
 
-CLASS_MODULE_I2C_LCD ModClassLcdI2c(false);
+CLASS_MODULE_I2C_LCD module_lcd_i2c(false);
 CLASS_MODULE_I2C_LCD::CLASS_MODULE_I2C_LCD(bool _in) { dumb = _in; _lcd = NULL; }
 
 #if defined(ESP32)
@@ -112,7 +112,7 @@ void CLASS_MODULE_I2C_LCD::_applyLines() {
 }
 
 void CLASS_MODULE_I2C_LCD::_lcdUpdateTask() {
-    ModClassLcdI2c._applyLines();
+    module_lcd_i2c._applyLines();
     SetTimerTask(_lcdUpdateTask, 1000);
 }
 
@@ -257,7 +257,7 @@ void CLASS_MODULE_I2C_LCD::defaultConfigLcd() {
 bool CLASS_MODULE_I2C_LCD::load_config() {
     DEBUGLCD("%s\r\n", __FUNCTION__);
     JsonDocument doc;
-    if (ModClassJson.jsonFileLoadDoc(CONFIG_FILE_LCD_I2C, doc) == false) { return false; }
+    if (core_json.jsonFileLoadDoc(CONFIG_FILE_LCD_I2C, doc) == false) { return false; }
 
     _config.i2cAddr   = doc["i2cAddr"].as<uint8_t>();
     _config.cols      = doc["cols"].as<uint8_t>();
@@ -286,7 +286,7 @@ bool CLASS_MODULE_I2C_LCD::load_config() {
 bool CLASS_MODULE_I2C_LCD::save_config() {
     DEBUGLCD("%s\r\n", __FUNCTION__);
     JsonDocument doc;
-    ModClassJson.jsonFileLoadDoc(CONFIG_FILE_LCD_I2C, doc);
+    core_json.jsonFileLoadDoc(CONFIG_FILE_LCD_I2C, doc);
     doc["i2cAddr"]   = _config.i2cAddr;
     doc["cols"]      = _config.cols;
     doc["rows"]      = _config.rows;
@@ -298,7 +298,7 @@ bool CLASS_MODULE_I2C_LCD::save_config() {
         arr.add(_displayLines[r]);
     }
 
-    return ModClassJson.jsonFileSaveDoc(CONFIG_FILE_LCD_I2C, doc);
+    return core_json.jsonFileSaveDoc(CONFIG_FILE_LCD_I2C, doc);
 }
 
 String CLASS_MODULE_I2C_LCD::getVersionStr() {

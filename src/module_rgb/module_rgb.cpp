@@ -7,7 +7,7 @@
 #include "common.h"
 #include "eertos.h"
 
-CLASS_MODULE_RGB ModClassRgb;
+CLASS_MODULE_RGB module_rgb;
 CLASS_MODULE_RGB::CLASS_MODULE_RGB() : _pendingReinit(false), _pendingSave(false), _pendingApply(false) {}
 
 #if defined(ESP32)
@@ -240,7 +240,7 @@ void CLASS_MODULE_RGB::defaultConfigRgb() {
 bool CLASS_MODULE_RGB::loadConfigRgb() {
     DEBUGRGB("%s\r\n", __FUNCTION__);
     JsonDocument doc;
-    if (ModClassJson.jsonFileLoadDoc(CONFIG_FILE_RGB, doc) == false) { return false; }
+    if (core_json.jsonFileLoadDoc(CONFIG_FILE_RGB, doc) == false) { return false; }
 
     _config.dataPin        = doc["dataPin"].as<int16_t>();
     _config.numLeds        = doc["numLeds"].as<uint8_t>();
@@ -273,7 +273,7 @@ bool CLASS_MODULE_RGB::loadConfigRgb() {
 bool CLASS_MODULE_RGB::saveConfigRgb() {
     DEBUGRGB("%s\r\n", __FUNCTION__);
     JsonDocument doc;
-    ModClassJson.jsonFileLoadDoc(CONFIG_FILE_RGB, doc);
+    core_json.jsonFileLoadDoc(CONFIG_FILE_RGB, doc);
     doc["dataPin"]        = _config.dataPin;
     doc["numLeds"]        = _config.numLeds;
     doc["brightness"]     = _config.brightness;
@@ -291,7 +291,7 @@ bool CLASS_MODULE_RGB::saveConfigRgb() {
         arr.add(_config.individualColors[i]);
     }
 
-    return ModClassJson.jsonFileSaveDoc(CONFIG_FILE_RGB, doc);
+    return core_json.jsonFileSaveDoc(CONFIG_FILE_RGB, doc);
 }
 
 // ========== РАБОТА С ЛЕНТОЙ ==========
@@ -430,50 +430,50 @@ void CLASS_MODULE_RGB::applyEqualizer() {
 }
 
 void CLASS_MODULE_RGB::animationTimerTask() {
-    if (ModClassRgb._strip == NULL || !ModClassRgb._animationRunning) { return; }
+    if (module_rgb._strip == NULL || !module_rgb._animationRunning) { return; }
 
-    switch (ModClassRgb._config.mode) {
+    switch (module_rgb._config.mode) {
         case 1:
-            ModClassRgb.applyRainbow();
-            SetTimerTask(animationTimerTask, ModClassRgb._config.effectSpeed);
+            module_rgb.applyRainbow();
+            SetTimerTask(animationTimerTask, module_rgb._config.effectSpeed);
             break;
         case 4:
-            ModClassRgb.applyEqualizer();
-            SetTimerTask(animationTimerTask, ModClassRgb._config.effectSpeed);
+            module_rgb.applyEqualizer();
+            SetTimerTask(animationTimerTask, module_rgb._config.effectSpeed);
             break;
         default:
-            ModClassRgb._animationRunning = false;
+            module_rgb._animationRunning = false;
             break;
     }
 }
 
 void CLASS_MODULE_RGB::deferredApplyTask() {
-    if (ModClassRgb._pendingReinit) {
-        if (ModClassRgb._pendingNumLeds < 1) { ModClassRgb._pendingNumLeds = ModClassRgb._config.numLeds; }
-        ModClassRgb._config.numLeds = ModClassRgb._pendingNumLeds;
-        ModClassRgb._config.dataPin = ModClassRgb._pendingDataPin;
-        ModClassRgb.deleteStrip();
-        ModClassRgb.initStrip();
-        ModClassRgb.saveConfigRgb();
-        ModClassRgb._pendingReinit = false;
-        ModClassRgb._pendingSave = false;
-        ModClassRgb._pendingApply = false;
+    if (module_rgb._pendingReinit) {
+        if (module_rgb._pendingNumLeds < 1) { module_rgb._pendingNumLeds = module_rgb._config.numLeds; }
+        module_rgb._config.numLeds = module_rgb._pendingNumLeds;
+        module_rgb._config.dataPin = module_rgb._pendingDataPin;
+        module_rgb.deleteStrip();
+        module_rgb.initStrip();
+        module_rgb.saveConfigRgb();
+        module_rgb._pendingReinit = false;
+        module_rgb._pendingSave = false;
+        module_rgb._pendingApply = false;
         return;
     }
-    if (ModClassRgb._pendingSave) {
-        ModClassRgb.saveConfigRgb();
-        ModClassRgb._pendingSave = false;
+    if (module_rgb._pendingSave) {
+        module_rgb.saveConfigRgb();
+        module_rgb._pendingSave = false;
     }
-    if (ModClassRgb._pendingApply) {
-        if (ModClassRgb._config.mode == 1 || ModClassRgb._config.mode == 4) {
-            ModClassRgb._animationRunning = true;
+    if (module_rgb._pendingApply) {
+        if (module_rgb._config.mode == 1 || module_rgb._config.mode == 4) {
+            module_rgb._animationRunning = true;
             DelTimerTask(animationTimerTask);
-            SetTimerTask(animationTimerTask, ModClassRgb._config.effectSpeed);
+            SetTimerTask(animationTimerTask, module_rgb._config.effectSpeed);
         } else {
-            ModClassRgb._animationRunning = false;
+            module_rgb._animationRunning = false;
         }
-        ModClassRgb.applyMode();
-        ModClassRgb._pendingApply = false;
+        module_rgb.applyMode();
+        module_rgb._pendingApply = false;
     }
 }
 

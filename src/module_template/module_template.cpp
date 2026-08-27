@@ -8,7 +8,7 @@
 #include "module_template_version.h"
 #include "eertos.h"
 
-CLASS_MODULE_TEMPLATE ModClassTemplate(false);
+CLASS_MODULE_TEMPLATE module_template(false);
 CLASS_MODULE_TEMPLATE::CLASS_MODULE_TEMPLATE(bool _in) { dumb = _in; }
 
 #if defined(ESP32)
@@ -48,18 +48,18 @@ void CLASS_MODULE_TEMPLATE::applyGpioState() {
 }
 
 void CLASS_MODULE_TEMPLATE::blinkTimerTask() {
-    if (ModClassTemplate._config.blinkInterval == 0) {
-        ModClassTemplate.applyGpioState();
+    if (module_template._config.blinkInterval == 0) {
+        module_template.applyGpioState();
         return;
     }
 
-    ModClassTemplate._blinkState = !ModClassTemplate._blinkState;
+    module_template._blinkState = !module_template._blinkState;
 
     digitalWrite(TEMPLATE_GPIO1,
-    (ModClassTemplate._blinkState && ModClassTemplate._config.gpio1State) ? HIGH : LOW);
+    (module_template._blinkState && module_template._config.gpio1State) ? HIGH : LOW);
     digitalWrite(TEMPLATE_GPIO2,
-    (ModClassTemplate._blinkState && ModClassTemplate._config.gpio2State) ? HIGH : LOW);
-    SetTimerTask(blinkTimerTask, ModClassTemplate._config.blinkInterval);
+    (module_template._blinkState && module_template._config.gpio2State) ? HIGH : LOW);
+    SetTimerTask(blinkTimerTask, module_template._config.blinkInterval);
 }
 
 void CLASS_MODULE_TEMPLATE::web_Init() {
@@ -206,7 +206,7 @@ void CLASS_MODULE_TEMPLATE::defaultConfigTemplate() {
 bool CLASS_MODULE_TEMPLATE::load_config_template() {
     DEBUGTEMPLATE("%s\r\n", __FUNCTION__);
     JsonDocument doc;
-    if (ModClassJson.jsonFileLoadDoc(CONFIG_FILE_TEMPLATE, doc) == false) { return false; }
+    if (core_json.jsonFileLoadDoc(CONFIG_FILE_TEMPLATE, doc) == false) { return false; }
 
     _config.gpio1State     = doc["gpio1State"].as<bool>();
     _config.gpio2State     = doc["gpio2State"].as<bool>();
@@ -235,7 +235,7 @@ bool CLASS_MODULE_TEMPLATE::load_config_template() {
 bool CLASS_MODULE_TEMPLATE::save_config_template() {
     DEBUGTEMPLATE("%s\r\n", __FUNCTION__);
     JsonDocument doc;
-    ModClassJson.jsonFileLoadDoc(CONFIG_FILE_TEMPLATE, doc);
+    core_json.jsonFileLoadDoc(CONFIG_FILE_TEMPLATE, doc);
     doc["gpio1State"]     = _config.gpio1State;
     doc["gpio2State"]     = _config.gpio2State;
     doc["blinkInterval"]  = _config.blinkInterval;
@@ -247,7 +247,7 @@ bool CLASS_MODULE_TEMPLATE::save_config_template() {
         arr.add(_config.demoArray[i]);
     }
 
-    return ModClassJson.jsonFileSaveDoc(CONFIG_FILE_TEMPLATE, doc);
+    return core_json.jsonFileSaveDoc(CONFIG_FILE_TEMPLATE, doc);
 }
 
 // ========== ВЕРСИОННЫЕ МЕТОДЫ ==========

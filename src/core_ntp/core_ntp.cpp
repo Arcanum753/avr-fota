@@ -12,7 +12,7 @@
 
 #include "common.h"
 #include "core_ntp_version.h"
-CLASS_CORE_NTP modNtpClass(false);
+CLASS_CORE_NTP core_ntp(false);
 
 
 CLASS_CORE_NTP :: CLASS_CORE_NTP (bool _in) { dumb = _in; }
@@ -94,7 +94,7 @@ void CLASS_CORE_NTP::ntpSwitchReserv (){
 
 bool CLASS_CORE_NTP::load_config_NTP() {
 	JsonDocument doc;
-	if (!ModClassJson.jsonFileLoadDoc(CONFIG_FILE_NTP, doc)) return false;
+	if (!core_json.jsonFileLoadDoc(CONFIG_FILE_NTP, doc)) return false;
 	_ntpConfig.ntpServerName0 = doc["ntp0"].as<String>();
 	_ntpConfig.ntpServerName1 = doc["ntp1"].as<String>();
 	_ntpConfig.ntpServerName2 = doc["ntp2"].as<String>();
@@ -111,14 +111,14 @@ bool CLASS_CORE_NTP::load_config_NTP() {
 bool CLASS_CORE_NTP::save_configNTP() {
 	DEBUGNTP("Save config NTP \r\n");
 	JsonDocument doc;
-	ModClassJson.jsonFileLoadDoc(CONFIG_FILE_NTP, doc);
+	core_json.jsonFileLoadDoc(CONFIG_FILE_NTP, doc);
 	doc["ntp0"] = _ntpConfig.ntpServerName0;
 	doc["ntp1"] = _ntpConfig.ntpServerName1;
 	doc["ntp2"] = _ntpConfig.ntpServerName2;
 	doc["NTPperiod"] = _ntpConfig.updateNTPTimeEvery;
 	doc["timeZone"] = _ntpConfig.timezone;
 	doc["daylight"] = _ntpConfig.daylight;
-	return ModClassJson.jsonFileSaveDoc(CONFIG_FILE_NTP, doc);
+	return core_json.jsonFileSaveDoc(CONFIG_FILE_NTP, doc);
 }
 
 void CLASS_CORE_NTP::defaultConfigNTP() {

@@ -148,6 +148,6 @@ protected:
     uint8_t             _timeMinReal;
 };
 
-extern CLASS_DEVICE_RINGMECH ModClassRingMech;
+extern CLASS_DEVICE_RINGMECH device_mech_ring;
 
 #endif

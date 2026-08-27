@@ -5,7 +5,7 @@
 
 #include <Wire.h>
 
-CLASS_MODULE_I2C_MAPPER ModClassI2cMapper(false);
+CLASS_MODULE_I2C_MAPPER module_i2c_mapper(false);
 CLASS_MODULE_I2C_MAPPER::CLASS_MODULE_I2C_MAPPER(bool _in) { dumb = _in; }
 
 void CLASS_MODULE_I2C_MAPPER::begin() {

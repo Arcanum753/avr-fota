@@ -82,6 +82,6 @@ protected:
     bool _blinkState;
 };
 
-extern CLASS_MODULE_TEMPLATE ModClassTemplate;
+extern CLASS_MODULE_TEMPLATE module_template;
 
 #endif // _MODULE_TEMPLATE_h

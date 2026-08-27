@@ -140,6 +140,6 @@ private:
     friend void otaclientTimer();
 };
 
-extern CLASS_MODULE_OTACLIENT otaClient;
+extern CLASS_MODULE_OTACLIENT module_otaclient;
 
 #endif // _MODOTACLIENT_h

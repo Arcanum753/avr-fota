@@ -24,46 +24,46 @@
 ModContext g_ctx;
 
 void core_begin(ModContext& ctx) {
-    ModClassJson.begin(ctx);
-    modWifiClass.begin(ctx);
-    modNtpClass.begin(ctx);
-    ModClassEdit.begin(ctx);
+    core_json.begin(ctx);
+    core_wifi.begin(ctx);
+    core_ntp.begin(ctx);
+    core_editor.begin(ctx);
     TerminalInit();
-    otaClient.begin(ctx);
+    module_otaclient.begin(ctx);
 }
 
 void modules_begin(ModContext& ctx) {
-    ModClassDs3231.begin(ctx);
-    ModClassI2cMapper.begin(ctx);
+    module_ds3231.begin(ctx);
+    module_i2c_mapper.begin(ctx);
 }
 
 void dev_begin(ModContext& ctx) {
-    ModClassClockMech.begin(ctx);
-    ModClassRingMech.begin(ctx);
+    device_clock_mech.begin(ctx);
+    device_mech_ring.begin(ctx);
 }
 
 void core_web_Init() {
-    modWifiClass.web_Init();
-    modNtpClass.web_Init();
-    ModClassJson.web_Init();
-    ModClassEdit.web_Init();
-    otaClient.web_Init();
+    core_wifi.web_Init();
+    core_ntp.web_Init();
+    core_json.web_Init();
+    core_editor.web_Init();
+    module_otaclient.web_Init();
 }
 
 void modules_web_Init() {
-    ModClassDs3231.web_Init();
-    ModClassI2cMapper.web_Init();
-    udpBroadcast.web_Init();
+    module_ds3231.web_Init();
+    module_i2c_mapper.web_Init();
+    module_udp.web_Init();
 }
 
 void dev_web_Init() {
-    ModClassClockMech.web_Init();
-    ModClassRingMech.web_Init();
+    device_clock_mech.web_Init();
+    device_mech_ring.web_Init();
 }
 
 void core_loop() {
     TerminalLoop();
-    otaClient.loop();
+    module_otaclient.loop();
 }
 
 void modules_loop() {

@@ -13,7 +13,7 @@
 #include "core_ota_version.h"
 #include "core_json/core_json.h"
 
-CLASS_CORE_OTA modOtaClass(false);
+CLASS_CORE_OTA core_ota(false);
 
 // Global flag to prevent double _fs->end() crashes
 bool _ota_fsEndCalled = false;
@@ -246,14 +246,14 @@ void CLASS_CORE_OTA::cacheFsVersionInfo() {
 }
 
 bool CLASS_CORE_OTA::parseVersionFromJson(const String& jsonStr, int64_t& date, int32_t& build, int32_t& major, int32_t& minor) {
-    if (!ModClassJson.jsonParseNestedInt(jsonStr, "filesystem|version|major", major)) return false;
-    if (!ModClassJson.jsonParseNestedInt(jsonStr, "filesystem|version|minor", minor)) return false;
+    if (!core_json.jsonParseNestedInt(jsonStr, "filesystem|version|major", major)) return false;
+    if (!core_json.jsonParseNestedInt(jsonStr, "filesystem|version|minor", minor)) return false;
     
-    if (!ModClassJson.jsonParseNestedInt64(jsonStr, "filesystem|version|date", date)) return false;
+    if (!core_json.jsonParseNestedInt64(jsonStr, "filesystem|version|date", date)) return false;
     
-    if (!ModClassJson.jsonParseNestedInt(jsonStr, "filesystem|version|build", build)) return false;
+    if (!core_json.jsonParseNestedInt(jsonStr, "filesystem|version|build", build)) return false;
     
-    ModClassJson.jsonParseNestedStr(jsonStr, "filesystem|version|full_string", _cachedFsVersionStr);
+    core_json.jsonParseNestedStr(jsonStr, "filesystem|version|full_string", _cachedFsVersionStr);
     
     DEBUGOTA("parseVersionFromJson: FS version %d.%d.%lld.%d (%s)\n", 
              major, minor, date, build, _cachedFsVersionStr.c_str());

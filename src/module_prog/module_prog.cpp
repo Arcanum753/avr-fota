@@ -66,7 +66,7 @@ void Class_ProgBase::cfg_SetDefault() {
 bool Class_ProgBase::cfg_FileLoad() {
 	DEBUGLOGPROG(__PRETTY_FUNCTION__); DEBUGLOGPROG("\r\n");
 	JsonDocument doc;
-	if (!ModClassJson.jsonFileLoadDoc(CONFIG_PROG_JSON, doc)) return false;
+	if (!core_json.jsonFileLoadDoc(CONFIG_PROG_JSON, doc)) return false;
 	CfgFile_Prog.project_name = doc["project"].as<String>();
 	CfgFile_Prog.chip_name = doc["chip_name"].as<String>();
 	return true;
@@ -75,10 +75,10 @@ bool Class_ProgBase::cfg_FileLoad() {
 bool Class_ProgBase::cfg_FileSave(){
 	DEBUGLOGPROG("Save config PROJ\r\n");
 	JsonDocument doc;
-	ModClassJson.jsonFileLoadDoc(CONFIG_PROG_JSON, doc);
+	core_json.jsonFileLoadDoc(CONFIG_PROG_JSON, doc);
 	doc["project"] = CfgFile_Prog.project_name;
 	doc["chip_name"] = CfgFile_Prog.chip_name;
-	return ModClassJson.jsonFileSaveDoc(CONFIG_PROG_JSON, doc);
+	return core_json.jsonFileSaveDoc(CONFIG_PROG_JSON, doc);
 }
 
 bool Class_ProgBase::web_GetDiskInfoExe(String &_str)	{
@@ -476,12 +476,12 @@ bool Class_ProgBase::filelist_EnsureLoaded(JsonDocument &doc) {
 	if (!_fs->exists(PROG_FILELIST_JSON)) {
 		doc.clear();
 		doc.to<JsonArray>();
-		return ModClassJson.jsonFileSaveDoc(PROG_FILELIST_JSON, doc);
+		return core_json.jsonFileSaveDoc(PROG_FILELIST_JSON, doc);
 	}
-	if (!ModClassJson.jsonFileLoadDoc(PROG_FILELIST_JSON, doc)) {
+	if (!core_json.jsonFileLoadDoc(PROG_FILELIST_JSON, doc)) {
 		doc.clear();
 		doc.to<JsonArray>();
-		ModClassJson.jsonFileSaveDoc(PROG_FILELIST_JSON, doc);
+		core_json.jsonFileSaveDoc(PROG_FILELIST_JSON, doc);
 		return false;
 	}
 	if (!doc.is<JsonArray>()) {
@@ -494,7 +494,7 @@ bool Class_ProgBase::filelist_EnsureLoaded(JsonDocument &doc) {
 void Class_ProgBase::filelist_Clear() {
 	JsonDocument doc;
 	doc.to<JsonArray>();
-	ModClassJson.jsonFileSaveDoc(PROG_FILELIST_JSON, doc);
+	core_json.jsonFileSaveDoc(PROG_FILELIST_JSON, doc);
 }
 
 bool Class_ProgBase::filelist_AddEntry(const String &filename, const String &upload_date, const String &md5) {
@@ -511,7 +511,7 @@ bool Class_ProgBase::filelist_AddEntry(const String &filename, const String &upl
 		if (strcmp(entry["filename"].as<const char*>(), normalizedName.c_str()) == 0) {
 			entry["upload_date"] = upload_date;
 			entry["md5"] = md5;
-			return ModClassJson.jsonFileSaveDoc(PROG_FILELIST_JSON, doc);
+			return core_json.jsonFileSaveDoc(PROG_FILELIST_JSON, doc);
 		}
 	}
 
@@ -520,7 +520,7 @@ bool Class_ProgBase::filelist_AddEntry(const String &filename, const String &upl
 	newEntry["upload_date"] = upload_date;
 	newEntry["md5"] = md5;
 
-	return ModClassJson.jsonFileSaveDoc(PROG_FILELIST_JSON, doc);
+	return core_json.jsonFileSaveDoc(PROG_FILELIST_JSON, doc);
 }
 
 bool Class_ProgBase::filelist_SetProgStatus(const String &filename, const String &prog_date, const String &prog_status, const String &prog_error, const String &prog_time, const String &prog_error_stage, const String &prog_error_percent, const String &prog_speed) {
@@ -562,7 +562,7 @@ bool Class_ProgBase::filelist_SetProgStatus(const String &filename, const String
 			} else {
 				entry.remove("prog_error_percent");
 			}
-			return ModClassJson.jsonFileSaveDoc(PROG_FILELIST_JSON, doc);
+			return core_json.jsonFileSaveDoc(PROG_FILELIST_JSON, doc);
 		}
 	}
 
@@ -586,7 +586,7 @@ bool Class_ProgBase::filelist_SetProgStatus(const String &filename, const String
 		newEntry["prog_speed"] = prog_speed;
 	}
 	DEBUGLOGPROG("filelist_SetProgStatus: created new entry for %s (was not in filelist)\r\n", normalizedName.c_str());
-	return ModClassJson.jsonFileSaveDoc(PROG_FILELIST_JSON, doc);
+	return core_json.jsonFileSaveDoc(PROG_FILELIST_JSON, doc);
 }
 
 String Class_ProgBase::filelist_GetLastSuccessFilename() {
@@ -632,7 +632,7 @@ bool Class_ProgBase::filelist_RemoveEntry(const String &filename) {
 	if (idx < 0) return false;
 
 	arr.remove(idx);
-	return ModClassJson.jsonFileSaveDoc(PROG_FILELIST_JSON, doc);
+	return core_json.jsonFileSaveDoc(PROG_FILELIST_JSON, doc);
 }
 
 bool Class_ProgBase::filelist_FileExists(const String &filename) {

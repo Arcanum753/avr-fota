@@ -44,11 +44,11 @@ typedef struct {
     bool  udpResponse;
 } strUdpConfig;
 
-void udpBroadcastSimple(void);
-void udpBroadcastTimer(void);
+void broadcastSimple(void);
+void broadcastTimer(void);
 
-void processUdpListenPacket(AsyncUDPPacket &packet);
-void udpResponseHandler(IPAddress ip);
+void processListenPacket(AsyncUDPPacket &packet);
+void responseHandler(IPAddress ip);
 
 class CLASS_MODULE_UDPBROADCAST {
 public:
@@ -56,20 +56,20 @@ public:
     
     void web_Init(void);
     void begin();
-    void udpStop();
-    void udpBroadcastSend(uint16_t _port, String _str);
-    void udpBroadcastTest(AsyncWebServerRequest *request);
+    void stop();
+    void broadcastSend(uint16_t _port, String _str);
+    void broadcastTest(AsyncWebServerRequest *request);
     
-    void send_udp_configuration_values_html(AsyncWebServerRequest *request);
-    void get_udp_configuration_html(AsyncWebServerRequest *request);
+    void send_configuration_values_html(AsyncWebServerRequest *request);
+    void get_configuration_html(AsyncWebServerRequest *request);
     
-    uint16_t getUpdPortTx();
-    uint16_t getUpdPortRx();
-    uint16_t getudpTimeOut();
-    String getudpKeyword();
-    bool udpPowerOnGet();
-    bool udpResponseGet();
-    String udpJsonGet();
+    uint16_t getPortTx();
+    uint16_t getPortRx();
+    uint16_t getTimeOut();
+    String getKeyword();
+    bool powerOnGet();
+    bool responseGet();
+    String jsonGet();
     uint8_t isStart();
     
     strUdpConfig _udpConfig; // UDP configuration
@@ -98,12 +98,12 @@ private:
     uint16_t _portRx;
     uint16_t _portTx;
     
-    friend void udpBroadcastTimer();
-    friend void processUdpListenPacket(AsyncUDPPacket &packet);
-    friend void udpResponseHandler(IPAddress ip);
-    friend void udpBroadcastSimple(void);
+    friend void broadcastTimer();
+    friend void processListenPacket(AsyncUDPPacket &packet);
+    friend void responseHandler(IPAddress ip);
+    friend void broadcastSimple(void);
 };
 
-extern CLASS_MODULE_UDPBROADCAST udpBroadcast;
+extern CLASS_MODULE_UDPBROADCAST module_udp;
 
 #endif // _MODUDP_h

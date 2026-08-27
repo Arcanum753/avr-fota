@@ -19,7 +19,7 @@
 #include "module_udp_version.h"
 
 // Единственный глобальный объект - сам класс
-CLASS_MODULE_UDPBROADCAST udpBroadcast(UDP_PORT);
+CLASS_MODULE_UDPBROADCAST module_udp(UDP_PORT);
 
 CLASS_MODULE_UDPBROADCAST::CLASS_MODULE_UDPBROADCAST(uint16_t portListen) {
     _portRx = portListen;
@@ -30,12 +30,12 @@ CLASS_MODULE_UDPBROADCAST::CLASS_MODULE_UDPBROADCAST(uint16_t portListen) {
     
 }
 
-uint16_t CLASS_MODULE_UDPBROADCAST::getUpdPortTx()    { return _udpConfig.udpPortTx; }
-uint16_t CLASS_MODULE_UDPBROADCAST::getUpdPortRx()    { return _udpConfig.udpPortRx; }
-uint16_t CLASS_MODULE_UDPBROADCAST::getudpTimeOut()   { return _udpConfig.udpTimeOut; }
-String CLASS_MODULE_UDPBROADCAST::getudpKeyword()     { return _udpConfig.keyword; }
-bool CLASS_MODULE_UDPBROADCAST::udpPowerOnGet()       { return _udpConfig.udpPowerOn; }
-bool CLASS_MODULE_UDPBROADCAST::udpResponseGet()       { return _udpConfig.udpResponse; }
+uint16_t CLASS_MODULE_UDPBROADCAST::getPortTx()    { return _udpConfig.udpPortTx; }
+uint16_t CLASS_MODULE_UDPBROADCAST::getPortRx()    { return _udpConfig.udpPortRx; }
+uint16_t CLASS_MODULE_UDPBROADCAST::getTimeOut()   { return _udpConfig.udpTimeOut; }
+String CLASS_MODULE_UDPBROADCAST::getKeyword()     { return _udpConfig.keyword; }
+bool CLASS_MODULE_UDPBROADCAST::powerOnGet()       { return _udpConfig.udpPowerOn; }
+bool CLASS_MODULE_UDPBROADCAST::responseGet()       { return _udpConfig.udpResponse; }
 uint8_t CLASS_MODULE_UDPBROADCAST::isStart()          { return _isStarted; }
 
 void CLASS_MODULE_UDPBROADCAST::begin() {
@@ -49,24 +49,24 @@ void CLASS_MODULE_UDPBROADCAST::begin() {
     if (_udp.listen(_portRx) == true) {
         DEBUGUDP("UDP Listening on IP: %s and port %u\n\r",  WiFi.localIP().toString().c_str(), _portRx);
         _isStarted = true;
-        _udp.onPacket(processUdpListenPacket);
+        _udp.onPacket(processListenPacket);
     }
-    SetTimerTask(udpBroadcastTimer, SEC * MINUTES * udpBroadcast.getudpTimeOut());
+    SetTimerTask(broadcastTimer, SEC * MINUTES * module_udp.getTimeOut());
 }
 
 // ========== STOP ==========
-void CLASS_MODULE_UDPBROADCAST::udpStop() {
+void CLASS_MODULE_UDPBROADCAST::stop() {
     DEBUGUDP("%s\r\n", __FUNCTION__);
     _isStarted = false;
     _udp.close();
 }
 
 // ========== SEND BROADCAST ==========
-void CLASS_MODULE_UDPBROADCAST::udpBroadcastSend(uint16_t _port, String _strin) {
+void CLASS_MODULE_UDPBROADCAST::broadcastSend(uint16_t _port, String _strin) {
     DEBUGUDP("%s\r\n", __FUNCTION__);
     if (_isStarted == false) {  return; }
     if (_strin.length() == 0 || _strin.length() >= UDP_DATA_MESSAGE_LEN) {  return; }
-    if (_port == getUpdPortRx()) { return; }
+    if (_port == getPortRx()) { return; }
     
     // Проверка на зависшую отправку
     if (_isSending) {
@@ -102,15 +102,15 @@ void CLASS_MODULE_UDPBROADCAST::udpBroadcastSend(uint16_t _port, String _strin) 
     _isSending = false;
 }
 
-void processUdpListenPacket(AsyncUDPPacket &packet) {
+void processListenPacket(AsyncUDPPacket &packet) {
     DEBUGUDP("%s\r\n", __FUNCTION__);
     if (packet.length() > UDP_DATA_LENGHT_MAX) { return; } // если пакет длинный
     
-    if (udpBroadcast.udpResponseGet() == false) { return; } // если мы не должны отвечать
+    if (module_udp.responseGet() == false) { return; } // если мы не должны отвечать
     
     if (packet.isBroadcast() == false) { return; } // если пакет не бродкаст
     
-    udpBroadcast._responseIp = packet.remoteIP();
+    module_udp._responseIp = packet.remoteIP();
     
     // Get data
     char udpDataBuf[UDP_DATA_LENGHT_MAX + 1]; // +1 для нуль-терминатора
@@ -121,44 +121,44 @@ void processUdpListenPacket(AsyncUDPPacket &packet) {
     udpDataBuf[dataLen] = '\0'; // Важно!
     
     // Compare with keyword
-    if (strncmp(udpDataBuf, udpBroadcast.getudpKeyword().c_str(), udpBroadcast.getudpKeyword().length()) == 0) {
-        udpResponseHandler(udpBroadcast._responseIp);
+    if (strncmp(udpDataBuf, module_udp.getKeyword().c_str(), module_udp.getKeyword().length()) == 0) {
+        responseHandler(module_udp._responseIp);
     }
 }
 
 // ========== RESPONSE HANDLER ==========
-void udpResponseHandler(IPAddress ip) {
+void responseHandler(IPAddress ip) {
     DEBUGUDP("%s\n\r", __FUNCTION__);
     
     // Создаем локальное сообщение для каждого ответа
     AsyncUDPMessage msg(UDP_DATA_MESSAGE_LEN);
-    msg.print(udpBroadcast.udpJsonGet());
+    msg.print(module_udp.jsonGet());
     
-    uint16_t portTx = udpBroadcast.getUpdPortTx();
-    udpBroadcast._udp.sendTo(msg, ip, portTx);
+    uint16_t portTx = module_udp.getPortTx();
+    module_udp._udp.sendTo(msg, ip, portTx);
 }
 
 // ========== SIMPLE BROADCAST (для вызова из других файлов) ==========
-void udpBroadcastSimple() {
-    udpBroadcast.udpBroadcastSend(udpBroadcast.getUpdPortTx(), udpBroadcast.udpJsonGet());
+void broadcastSimple() {
+    module_udp.broadcastSend(module_udp.getPortTx(), module_udp.jsonGet());
 }
 
 // ========== TIMER (для вызова из других файлов) ==========
-void udpBroadcastTimer() {
-    uint16_t timeout = udpBroadcast.getudpTimeOut();
-    if (udpBroadcast.isStart() == false){   return; }
+void broadcastTimer() {
+    uint16_t timeout = module_udp.getTimeOut();
+    if (module_udp.isStart() == false){   return; }
     if (timeout > 60){ timeout = 60;}
     if (timeout == 0) { return;  }
     
     DEBUGUDP("Udp timeout %d min. ", timeout);
-    SetTimerTask(udpBroadcastTimer, SEC * MINUTES * timeout);
-    udpBroadcastSimple();
+    SetTimerTask(broadcastTimer, SEC * MINUTES * timeout);
+    broadcastSimple();
 }
 
 // ========== TEST ==========
-void CLASS_MODULE_UDPBROADCAST::udpBroadcastTest(AsyncWebServerRequest *request) {
+void CLASS_MODULE_UDPBROADCAST::broadcastTest(AsyncWebServerRequest *request) {
     DEBUGUDP("%s\n\r", __FUNCTION__);
-    udpBroadcastSend(getUpdPortTx(), udpJsonGet());
+    broadcastSend(getPortTx(), jsonGet());
 }
 
 // ========== WEB INIT ==========
@@ -167,17 +167,17 @@ void CLASS_MODULE_UDPBROADCAST::web_Init(void) {
     
     ESPHTTPServer.on(HTML_FILE_UDP, HTTP_POST, [this](AsyncWebServerRequest *request) {
         if (!ESPHTTPServer.checkAuth(request)) {return request->requestAuthentication(); }
-        get_udp_configuration_html(request);
+        get_configuration_html(request);
     });
     
     ESPHTTPServer.on("/udp/info", HTTP_GET, [this](AsyncWebServerRequest *request) {
         if (!ESPHTTPServer.checkAuth(request)) {return request->requestAuthentication(); }
-        send_udp_configuration_values_html(request);
+        send_configuration_values_html(request);
     });
     
     ESPHTTPServer.on("/udp/test", [this](AsyncWebServerRequest *request) {
         if (!ESPHTTPServer.checkAuth(request)) {return request->requestAuthentication(); }
-        udpBroadcastTest(request);
+        broadcastTest(request);
     });
 
     ESPHTTPServer.on("/udp/ver", [this](AsyncWebServerRequest *request) {
@@ -186,7 +186,7 @@ void CLASS_MODULE_UDPBROADCAST::web_Init(void) {
 }
 
 // ========== SEND CONFIG HTML ==========
-void CLASS_MODULE_UDPBROADCAST::send_udp_configuration_values_html(AsyncWebServerRequest *request) {
+void CLASS_MODULE_UDPBROADCAST::send_configuration_values_html(AsyncWebServerRequest *request) {
     DEBUGUDP("%s\n\r", __FUNCTION__);
     String values = "";
     values += "udpporttx|"   + String(_udpConfig.udpPortTx) + "|input\n";
@@ -199,7 +199,7 @@ void CLASS_MODULE_UDPBROADCAST::send_udp_configuration_values_html(AsyncWebServe
 }
 
 // ========== GET CONFIG HTML ==========
-void CLASS_MODULE_UDPBROADCAST::get_udp_configuration_html(AsyncWebServerRequest *request) {
+void CLASS_MODULE_UDPBROADCAST::get_configuration_html(AsyncWebServerRequest *request) {
     DEBUGUDP("%s\n\r", __PRETTY_FUNCTION__);
     _udpConfig.udpPowerOn  = false; 
     _udpConfig.udpResponse = false;
@@ -219,7 +219,7 @@ void CLASS_MODULE_UDPBROADCAST::get_udp_configuration_html(AsyncWebServerRequest
         
         request->send_P(200, "text/html", Page_GeneralUdp);
         save_configUDP();
-        udpBroadcastTimer();
+        broadcastTimer();
     }
     else {
         ESPHTTPServer.handleFileRead(request->url(), request);
@@ -227,7 +227,7 @@ void CLASS_MODULE_UDPBROADCAST::get_udp_configuration_html(AsyncWebServerRequest
 }
 
 // ========== JSON GET ==========
-String CLASS_MODULE_UDPBROADCAST::udpJsonGet() {
+String CLASS_MODULE_UDPBROADCAST::jsonGet() {
     String ret = "";
     ret += "{\n";
     ret += "  \"deviceName\": \"" + ESPHTTPServer._sysConfig.deviceName + "\",\n";
@@ -263,21 +263,21 @@ void CLASS_MODULE_UDPBROADCAST::defaultConfigUDP() {
 bool CLASS_MODULE_UDPBROADCAST::save_configUDP() {
     DEBUGUDP("%s\n\r", __PRETTY_FUNCTION__);
     JsonDocument doc;
-    ModClassJson.jsonFileLoadDoc(CONFIG_FILE_UDP, doc);
+    core_json.jsonFileLoadDoc(CONFIG_FILE_UDP, doc);
     doc["udpPortTx"] = _udpConfig.udpPortTx;
     doc["udpPortRx"] = _udpConfig.udpPortRx;
     doc["udpTimeOut"] = _udpConfig.udpTimeOut;
     doc["udpkeyword"] = _udpConfig.keyword;
     doc["udpPowerOn"] = _udpConfig.udpPowerOn;
     doc["udpResponse"] = _udpConfig.udpResponse;
-    return ModClassJson.jsonFileSaveDoc(CONFIG_FILE_UDP, doc);
+    return core_json.jsonFileSaveDoc(CONFIG_FILE_UDP, doc);
 }
 
 // ========== LOAD CONFIG ==========
 bool CLASS_MODULE_UDPBROADCAST::load_config_UDP() {
     DEBUGUDP("%s\n\r", __PRETTY_FUNCTION__);
     JsonDocument doc;
-    if (!ModClassJson.jsonFileLoadDoc(CONFIG_FILE_UDP, doc)) return false;
+    if (!core_json.jsonFileLoadDoc(CONFIG_FILE_UDP, doc)) return false;
     _udpConfig.udpPortTx = doc["udpPortTx"].as<int>();
     _udpConfig.udpPortRx = doc["udpPortRx"].as<int>();
     _udpConfig.udpTimeOut = doc["udpTimeOut"].as<int>();

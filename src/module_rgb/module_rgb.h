@@ -100,6 +100,6 @@ protected:
     uint8_t _pendingNumLeds;
 };
 
-extern CLASS_MODULE_RGB ModClassRgb;
+extern CLASS_MODULE_RGB module_rgb;
 
 #endif

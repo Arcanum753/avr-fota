@@ -18,7 +18,7 @@
 #include "module_otaclient_version.h"
 
 // Single global object - the class itself
-CLASS_MODULE_OTACLIENT otaClient; 
+CLASS_MODULE_OTACLIENT module_otaclient; 
 
 // Static manifest entries buffer (avoid stack allocation)
 ManifestEntry CLASS_MODULE_OTACLIENT::_manifestEntries[OTACLIENT_MAX_MANIFEST_ENTRIES];
@@ -50,7 +50,7 @@ void CLASS_MODULE_OTACLIENT::begin(String _hostname, String _password) {
     if (_isStarted){    return;    }
     
     _isStarted = true;
-    SetTimerTask(otaclientTimer, SEC * MINUTES * otaClient.getTimeOut());
+    SetTimerTask(otaclientTimer, SEC * MINUTES * module_otaclient.getTimeOut());
     SetTimerTask(otaclientLoopTask, 50);
 }
 
@@ -60,8 +60,8 @@ void CLASS_MODULE_OTACLIENT::begin(ModContext& ctx) {
 
 // ========== TIMER (for calling from other files) ==========
 void otaclientTimer() {
-    uint16_t timeout = otaClient.getTimeOut();
-    if (otaClient.isStart() == false){   return; }
+    uint16_t timeout = module_otaclient.getTimeOut();
+    if (module_otaclient.isStart() == false){   return; }
     
     // timeOut == 0: timer runs at 1min interval, no update checks
     if (timeout == 0) {
@@ -72,7 +72,7 @@ void otaclientTimer() {
     if (timeout > 60){ timeout = 60;}
     
     // Don't start a new check if update is already in progress
-    if (otaClient._updateInProgress) {
+    if (module_otaclient._updateInProgress) {
         DEBUGOTACLIENT("OtaClient update in progress, rescheduling timer\n");
         SetTimerTask(otaclientTimer, SEC * MINUTES * timeout);
         return;
@@ -82,12 +82,12 @@ void otaclientTimer() {
     SetTimerTask(otaclientTimer, SEC * MINUTES * timeout);
     
     // Check for updates on each timer tick
-    otaClient.checkForUpdates();
+    module_otaclient.checkForUpdates();
 }
 
 // ========== LOOP TASK (called via eertos timer every 50ms) ==========
 void otaclientLoopTask() {
-    otaClient.loop();
+    module_otaclient.loop();
     SetTimerTask(otaclientLoopTask, 50);
 }
 
@@ -400,20 +400,20 @@ void CLASS_MODULE_OTACLIENT::defaultConfig() {
 bool CLASS_MODULE_OTACLIENT::save_config() {
     DEBUGOTACLIENT("%s\n\r", __PRETTY_FUNCTION__);
     JsonDocument doc;
-    ModClassJson.jsonFileLoadDoc(CONFIG_FILE_OTACLIENT, doc);
+    core_json.jsonFileLoadDoc(CONFIG_FILE_OTACLIENT, doc);
     doc["timeOut"] = _config.timeOut;
     doc["powerOn"] = _config.powerOn;
     doc["serverAddress"] = _config.serverAddress;
     doc["serverPort"] = _config.serverPort;
     doc["manifestPath"] = _config.manifestPath;
-    return ModClassJson.jsonFileSaveDoc(CONFIG_FILE_OTACLIENT, doc);
+    return core_json.jsonFileSaveDoc(CONFIG_FILE_OTACLIENT, doc);
 }
 
 // ========== LOAD CONFIG ==========
 bool CLASS_MODULE_OTACLIENT::load_config() {
     DEBUGOTACLIENT("%s\n\r", __PRETTY_FUNCTION__);
     JsonDocument doc;
-    if (!ModClassJson.jsonFileLoadDoc(CONFIG_FILE_OTACLIENT, doc)) return false;
+    if (!core_json.jsonFileLoadDoc(CONFIG_FILE_OTACLIENT, doc)) return false;
     _config.timeOut = doc["timeOut"].as<uint16_t>();
     _config.powerOn = doc["powerOn"].as<bool>();
     _config.serverAddress = doc["serverAddress"].as<String>();
@@ -544,12 +544,12 @@ bool CLASS_MODULE_OTACLIENT::fetchManifest(ManifestEntry* entries, int& count) {
     
     // Parse JSON
     bool hasFiles = false;
-    if (!ModClassJson.jsonParseNestedBool(payload, "has_files", hasFiles) || !hasFiles) {
+    if (!core_json.jsonParseNestedBool(payload, "has_files", hasFiles) || !hasFiles) {
         DEBUGOTACLIENT("fetchManifest: no files for target %s on server\n", BUILD_ENV);
         return false;
     }
     
-    int numFiles = ModClassJson.jsonGetArraySize(payload, "files");
+    int numFiles = core_json.jsonGetArraySize(payload, "files");
     if (numFiles <= 0) {
         DEBUGOTACLIENT("fetchManifest: no 'files' array in manifest\n");
         return false;
@@ -558,8 +558,8 @@ bool CLASS_MODULE_OTACLIENT::fetchManifest(ManifestEntry* entries, int& count) {
     int idx = 0;
     for (int i = 0; i < numFiles && idx < OTACLIENT_MAX_MANIFEST_ENTRIES; i++) {
         String name, type, md5;
-        ModClassJson.jsonGetArrayStr(payload, "files", i, "name", name);
-        ModClassJson.jsonGetArrayStr(payload, "files", i, "type", type);
+        core_json.jsonGetArrayStr(payload, "files", i, "name", name);
+        core_json.jsonGetArrayStr(payload, "files", i, "type", type);
         
         if (name.length() == 0 || type.length() == 0) {
             DEBUGOTACLIENT("  [%d] SKIPPED (missing name or type)\n", i);
@@ -570,8 +570,8 @@ bool CLASS_MODULE_OTACLIENT::fetchManifest(ManifestEntry* entries, int& count) {
         entries[idx].type = type;
         
         int32_t sizeVal = 0;
-        if (ModClassJson.jsonGetArrayInt(payload, "files", i, "size", sizeVal)) entries[idx].size = (size_t)sizeVal;
-        ModClassJson.jsonGetArrayStr(payload, "files", i, "md5", entries[idx].md5);
+        if (core_json.jsonGetArrayInt(payload, "files", i, "size", sizeVal)) entries[idx].size = (size_t)sizeVal;
+        core_json.jsonGetArrayStr(payload, "files", i, "md5", entries[idx].md5);
         
         DEBUGOTACLIENT("  [%d] %s (%s) %u bytes MD5:%s\n",
             idx, entries[idx].name.c_str(), entries[idx].type.c_str(),
