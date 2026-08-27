@@ -17,6 +17,9 @@ void CLASS_CORE_EDITOR::setFs(FS* fs)
     _fs = fs;
 }
 
+// ============================================================
+// begin()
+// ============================================================
 void CLASS_CORE_EDITOR::begin() {
     DEBUGEDIT(__FUNCTION__); DEBUGEDIT("\r\n");
 }
@@ -26,32 +29,9 @@ void CLASS_CORE_EDITOR::begin(ModContext& ctx) {
     begin();
 }
 
-String CLASS_CORE_EDITOR::escapeJsonStr(const String& s) {
-    String out;
-    out.reserve(s.length());
-    for (size_t i = 0; i < s.length(); i++) {
-        char c = s.charAt(i);
-        switch (c) {
-            case '"':  out += "\\\""; break;
-            case '\\': out += "\\\\"; break;
-            case '\b': out += "\\b";  break;
-            case '\f': out += "\\f";  break;
-            case '\n': out += "\\n";  break;
-            case '\r': out += "\\r";  break;
-            case '\t': out += "\\t";  break;
-            default:
-                if ((unsigned char)c < 0x20) {
-                    char buf[8];
-                    snprintf(buf, sizeof(buf), "\\u%04x", (unsigned char)c);
-                    out += buf;
-                } else {
-                    out += c;
-                }
-        }
-    }
-    return out;
-}
-
+// ============================================================
+// web_Init()
+// ============================================================
 void CLASS_CORE_EDITOR::web_Init() {
     DEBUGEDIT(__FUNCTION__); DEBUGEDIT("\r\n");
 
@@ -93,6 +73,9 @@ void CLASS_CORE_EDITOR::web_Init() {
     });
 }
 
+// ============================================================
+// Веб-обработчики
+// ============================================================
 void CLASS_CORE_EDITOR::handleFileUpload(AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final) {
     static File fsUploadFile;
     static size_t fileSize = 0;
@@ -202,27 +185,6 @@ void CLASS_CORE_EDITOR::handleFileDelete(AsyncWebServerRequest *request) {
     request->send(200, "text/plain", "");
 }
 
-String CLASS_CORE_EDITOR::getVersionStr() {
-    return String(CORE_EDITOR_VERSION);
-}
-
-String CLASS_CORE_EDITOR::getGeneratedTime() {
-    return String(CORE_EDITOR_GENERATED_TIME);
-}
-
-String CLASS_CORE_EDITOR::getCommitDateStr() {
-    return String(CORE_EDITOR_COMMIT_DATE_STR);
-}
-
-void CLASS_CORE_EDITOR::html_ver_get(AsyncWebServerRequest *request) {
-    DEBUGEDIT("%s\n\r", __FUNCTION__);
-    String values = "";
-    values += "edtversion|" + getVersionStr()    + "|div\n";
-    values += "edtgentime|" + getGeneratedTime() + "|div\n";
-    values += "edtgendate|" + getCommitDateStr() + "|div\n";
-    request->send(200, "text/plain", values);
-}
-
 void CLASS_CORE_EDITOR::handleFsInfo(AsyncWebServerRequest *request) {
     DEBUGEDIT("%s\n\r", __FUNCTION__);
     size_t totalBytes = 0;
@@ -247,4 +209,58 @@ void CLASS_CORE_EDITOR::handleFsInfo(AsyncWebServerRequest *request) {
     json += String(freeBytes);
     json += "}";
     request->send(200, "application/json", json);
+}
+
+// ============================================================
+// Версионные методы
+// ============================================================
+String CLASS_CORE_EDITOR::getVersionStr() {
+    return String(CORE_EDITOR_VERSION);
+}
+
+String CLASS_CORE_EDITOR::getGeneratedTime() {
+    return String(CORE_EDITOR_GENERATED_TIME);
+}
+
+String CLASS_CORE_EDITOR::getCommitDateStr() {
+    return String(CORE_EDITOR_COMMIT_DATE_STR);
+}
+
+void CLASS_CORE_EDITOR::html_ver_get(AsyncWebServerRequest *request) {
+    DEBUGEDIT("%s\n\r", __FUNCTION__);
+    String values = "";
+    values += "edtversion|" + getVersionStr()    + "|div\n";
+    values += "edtgentime|" + getGeneratedTime() + "|div\n";
+    values += "edtgendate|" + getCommitDateStr() + "|div\n";
+    request->send(200, "text/plain", values);
+}
+
+// ============================================================
+// Конкретная логика модуля
+// ============================================================
+
+String CLASS_CORE_EDITOR::escapeJsonStr(const String& s) {
+    String out;
+    out.reserve(s.length());
+    for (size_t i = 0; i < s.length(); i++) {
+        char c = s.charAt(i);
+        switch (c) {
+            case '"':  out += "\\\""; break;
+            case '\\': out += "\\\\"; break;
+            case '\b': out += "\\b";  break;
+            case '\f': out += "\\f";  break;
+            case '\n': out += "\\n";  break;
+            case '\r': out += "\\r";  break;
+            case '\t': out += "\\t";  break;
+            default:
+                if ((unsigned char)c < 0x20) {
+                    char buf[8];
+                    snprintf(buf, sizeof(buf), "\\u%04x", (unsigned char)c);
+                    out += buf;
+                } else {
+                    out += c;
+                }
+        }
+    }
+    return out;
 }

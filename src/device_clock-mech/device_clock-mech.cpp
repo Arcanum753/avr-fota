@@ -20,25 +20,9 @@ DPDR GoToTaskAfterStep = Idle_task;
 
 static uint16_t _nStepCount = 0;
 
-
-
 CLASS_DEVICE_CLOCKMECH device_clock_mech(false);
 CLASS_DEVICE_CLOCKMECH::CLASS_DEVICE_CLOCKMECH(bool _in) { dumb = _in; }
 void CLASS_DEVICE_CLOCKMECH::setFs(fs::LittleFSFS* fs)  {   _fs = fs;   }
-
-// ============================================================
-// Время из источника
-// ============================================================
-time_t CLASS_DEVICE_CLOCKMECH::getCurrentTime() {
-#if defined(MODULE_DS3231)
-    if (_config.timeSource == "ds3231") {
-        time_t t = module_ds3231.getTime();
-        if (t > 0) { return t; }
-        DEBUGCLOCKMECH("DS3231 error, fallback to NTP\r\n");
-    }
-#endif
-    return now();
-}
 
 // ============================================================
 // begin()
@@ -74,7 +58,7 @@ void CLASS_DEVICE_CLOCKMECH::begin(ModContext& ctx) {
 }
 
 // ============================================================
-// webInit()
+// web_Init()
 // ============================================================
 void CLASS_DEVICE_CLOCKMECH::web_Init() {
     DEBUGCLOCKMECH("%s\r\n", __FUNCTION__);
@@ -113,25 +97,6 @@ void CLASS_DEVICE_CLOCKMECH::web_Init() {
     ESPHTTPServer.on("/clock-mech/status", HTTP_GET, [](AsyncWebServerRequest *request) { if (ESPHTTPServer.checkAuth(request)) cmdStatusWeb(request); else request->requestAuthentication(); });
 
     ESPHTTPServer.on("/clock-mech/ver", HTTP_GET, [this](AsyncWebServerRequest *request) { this->html_ver_get(request);});
-}
-
-
-void clockMechTerminalRegister() {
-    term.addCommand("c-step",   CLASS_DEVICE_CLOCKMECH::cmdStep);
-    term.addCommand("c-dir",    CLASS_DEVICE_CLOCKMECH::cmdDir);
-    term.addCommand("c-enc",     CLASS_DEVICE_CLOCKMECH::cmdEn);
-    term.addCommand("c-sled",   CLASS_DEVICE_CLOCKMECH::cmdSled);
-    term.addCommand("c-sens",   CLASS_DEVICE_CLOCKMECH::cmdSens);
-    term.addCommand("c-n",      CLASS_DEVICE_CLOCKMECH::cmdN);
-    term.addCommand("c-12",     CLASS_DEVICE_CLOCKMECH::cmdSet1200);
-    term.addCommand("c-cnt",    CLASS_DEVICE_CLOCKMECH::cmdCount);
-    term.addCommand("c-mode",   CLASS_DEVICE_CLOCKMECH::cmdMode);
-    term.addCommand("c-pol",    CLASS_DEVICE_CLOCKMECH::cmdPoll);
-    term.addCommand("c-stat",   CLASS_DEVICE_CLOCKMECH::cmdStatus);
-    term.addCommand("c-set",   CLASS_DEVICE_CLOCKMECH::cmdSetArrows);
-    term.addCommand("c-save",   CLASS_DEVICE_CLOCKMECH::cmdSave);
-    term.addCommand("c-m00",   CLASS_DEVICE_CLOCKMECH::cmdSetxx00);
-    term.addCommand("c-h12",   CLASS_DEVICE_CLOCKMECH::cmdSet12xx);
 }
 
 // ============================================================
@@ -182,9 +147,7 @@ void CLASS_DEVICE_CLOCKMECH::handleSave(AsyncWebServerRequest *request) {
     }
 }
 
-// ============================================================
 // Эндпоинты ручного управления (GET, JSON)
-// ============================================================
 void CLASS_DEVICE_CLOCKMECH::cmdStepWeb(AsyncWebServerRequest *request) {
     if (device_clock_mech._config.enable_status == MODE_WORK) { request->send(403, "application/json", "{\"error\":\"Blocked: WORK mode\"}"); return; }
     cmdStep();
@@ -271,6 +234,126 @@ void CLASS_DEVICE_CLOCKMECH::cmdStatusWeb(AsyncWebServerRequest *request) {
     request->send(200, "application/json", json);
 }
 
+void CLASS_DEVICE_CLOCKMECH::handleReset(AsyncWebServerRequest *request) {
+    DEBUGCLOCKMECH("%s\r\n", __FUNCTION__);
+    if (_config.enable_status == MODE_WORK) { request->send(403, "application/json", "{\"error\":\"Blocked: WORK mode\"}"); return; }
+    SetTask(MechSet1200_Setup);
+    request->send(200, "text/plain", "OK");
+}
+
+void CLASS_DEVICE_CLOCKMECH::handleCount(AsyncWebServerRequest *request) {
+    DEBUGCLOCKMECH("%s\r\n", __FUNCTION__);
+    if (_config.enable_status == MODE_WORK) { request->send(403, "application/json", "{\"error\":\"Blocked: WORK mode\"}"); return; }
+    SetTask(MechCountStepsSetup);
+    request->send(200, "text/plain", "OK");
+}
+
+// ============================================================
+// Конфиг
+// ============================================================
+void CLASS_DEVICE_CLOCKMECH::defaultConfig() {
+    _config.enable_status      = MODE_DEBUG;
+    _config.timeSource         = "ds3231";
+    _config.stepsPerRevolution = 0;
+    _config.pollInterval       = 5;
+    _config.errorLimitSteps    = 500;
+    _config.sensorLedEnabled   = true;
+}
+
+bool CLASS_DEVICE_CLOCKMECH::loadConfig() {
+    DEBUGCLOCKMECH("%s\r\n", __FUNCTION__);
+    JsonDocument doc;
+    if (core_json.jsonFileLoadDoc(CONFIG_FILE_CLOCKMECH, doc) == false) { return false; }
+
+    _config.enable_status       = doc["enable_status"].as<uint8_t>();
+    _config.timeSource          = doc["timeSource"].as<String>();
+    _config.stepsPerRevolution  = doc["stepsPerRevolution"].as<uint16_t>();
+    _config.pollInterval        = doc["pollInterval"].as<uint16_t>();
+    _config.errorLimitSteps     = doc["errorLimitSteps"].as<uint16_t>();
+    _config.sensorLedEnabled    = doc["sensorLedEnabled"].as<bool>();
+
+    if (_config.timeSource != "ds3231" && _config.timeSource != "ntp") { _config.timeSource = "ds3231"; }
+    if (_config.pollInterval < 1)   { _config.pollInterval = 5; }
+    if (_config.stepsPerRevolution < 1) { _config.stepsPerRevolution = 400; }
+
+    return true;
+}
+
+bool CLASS_DEVICE_CLOCKMECH::saveConfig() {
+    DEBUGCLOCKMECH("%s\r\n", __FUNCTION__);
+    JsonDocument doc;
+    core_json.jsonFileLoadDoc(CONFIG_FILE_CLOCKMECH, doc);
+    doc["enable_status"]        = _config.enable_status;
+    doc["timeSource"]           = _config.timeSource;
+    doc["stepsPerRevolution"]   = _config.stepsPerRevolution;
+    doc["pollInterval"]         = _config.pollInterval;
+    doc["errorLimitSteps"]      = _config.errorLimitSteps;
+    doc["sensorLedEnabled"]     = _config.sensorLedEnabled;
+    return core_json.jsonFileSaveDoc(CONFIG_FILE_CLOCKMECH, doc);
+}
+
+// ============================================================
+// Версионные методы
+// ============================================================
+String CLASS_DEVICE_CLOCKMECH::getVersionStr() { return String(DEVICE_CLOCK_MECH_VERSION);  }
+String CLASS_DEVICE_CLOCKMECH::getGeneratedTime() { return String(DEVICE_CLOCK_MECH_GENERATED_TIME);    }
+String CLASS_DEVICE_CLOCKMECH::getCommitDateStr() { return String(DEVICE_CLOCK_MECH_COMMIT_DATE_STR);   }
+
+void CLASS_DEVICE_CLOCKMECH::html_ver_get(AsyncWebServerRequest *request) {
+    DEBUGCLOCKMECH("%s\r\n", __FUNCTION__);
+    String values = "";
+    values += "clockmechversion|" + getVersionStr()    + "|div\n";
+    values += "clockmechgentime|" + getGeneratedTime() + "|div\n";
+    values += "clockmechgendate|" + getCommitDateStr() + "|div\n";
+    request->send(200, "text/plain", values);
+}
+
+// ============================================================
+// Конкретная логика модуля
+// ============================================================
+
+// ============================================================
+// Регистрация терминальных команд
+// ============================================================
+void clockMechTerminalRegister() {
+    term.addCommand("c-step",   CLASS_DEVICE_CLOCKMECH::cmdStep);
+    term.addCommand("c-dir",    CLASS_DEVICE_CLOCKMECH::cmdDir);
+    term.addCommand("c-enc",     CLASS_DEVICE_CLOCKMECH::cmdEn);
+    term.addCommand("c-sled",   CLASS_DEVICE_CLOCKMECH::cmdSled);
+    term.addCommand("c-sens",   CLASS_DEVICE_CLOCKMECH::cmdSens);
+    term.addCommand("c-n",      CLASS_DEVICE_CLOCKMECH::cmdN);
+    term.addCommand("c-12",     CLASS_DEVICE_CLOCKMECH::cmdSet1200);
+    term.addCommand("c-cnt",    CLASS_DEVICE_CLOCKMECH::cmdCount);
+    term.addCommand("c-mode",   CLASS_DEVICE_CLOCKMECH::cmdMode);
+    term.addCommand("c-pol",    CLASS_DEVICE_CLOCKMECH::cmdPoll);
+    term.addCommand("c-stat",   CLASS_DEVICE_CLOCKMECH::cmdStatus);
+    term.addCommand("c-set",   CLASS_DEVICE_CLOCKMECH::cmdSetArrows);
+    term.addCommand("c-save",   CLASS_DEVICE_CLOCKMECH::cmdSave);
+    term.addCommand("c-m00",   CLASS_DEVICE_CLOCKMECH::cmdSetxx00);
+    term.addCommand("c-h12",   CLASS_DEVICE_CLOCKMECH::cmdSet12xx);
+}
+
+// ============================================================
+// Время из источника
+// ============================================================
+time_t CLASS_DEVICE_CLOCKMECH::getCurrentTime() {
+#if defined(MODULE_DS3231)
+    if (_config.timeSource == "ds3231") {
+        time_t t = module_ds3231.getTime();
+        if (t > 0) { return t; }
+        DEBUGCLOCKMECH("DS3231 error, fallback to NTP\r\n");
+    }
+#endif
+    return now();
+}
+
+// ============================================================
+// Вспомогательные макросы сенсоров
+// ============================================================
+#define SENS_MIN_SET    (digitalRead(CLOCKMECH_SENS_MIN) == LOW)
+#define SENS_HOUR_SET   (digitalRead(CLOCKMECH_SENS_HOUR) == LOW)
+#define SENS_ANY_SET    (SENS_MIN_SET || SENS_HOUR_SET)
+#define SENS_SET        (SENS_MIN_SET && SENS_HOUR_SET)
 
 // ============================================================
 // Инициализация GPIO
@@ -291,17 +374,6 @@ void CLASS_DEVICE_CLOCKMECH::MechInitGPIOs() {
 }
 
 // ============================================================
-// Вспомогательные макросы сенсоров
-// ============================================================
-#define SENS_MIN_SET    (digitalRead(CLOCKMECH_SENS_MIN) == LOW)
-#define SENS_HOUR_SET   (digitalRead(CLOCKMECH_SENS_HOUR) == LOW)
-#define SENS_ANY_SET    (SENS_MIN_SET || SENS_HOUR_SET)
-#define SENS_SET        (SENS_MIN_SET && SENS_HOUR_SET)
-
-
-
-
-// ============================================================
 // Генератор шага A4988 — эталонный паттерн из Clock_Mechanism.c
 // MechMoveStepDown: STEP=HIGH, через 2ms MechMoveStepUp
 // MechMoveStepUp: STEP=LOW, затем SetTask(GoToTaskAfterStep)
@@ -316,161 +388,11 @@ void CLASS_DEVICE_CLOCKMECH::MechMoveStepUp() {
     SetTimerTask(GoToTaskAfterStep, 2);
 }
 
-// ============================================================
-// Терминальные команды
-// ============================================================
-
-void CLASS_DEVICE_CLOCKMECH::cmdStep() {
-    GoToTaskAfterStep = Idle_task;
-    SetTask(MechMoveStepDown);
-}
-
-void CLASS_DEVICE_CLOCKMECH::cmdDir() {
-    uint8_t dir = digitalRead(CLOCKMECH_DIR);
-    if (dir == 1) { digitalWrite(CLOCKMECH_DIR, CLOCKMECH_ClockWise);}
-    if (dir == 0) { digitalWrite(CLOCKMECH_DIR, CLOCKMECH_CounterClockWise);}
-    Serial.printf("Direction: %s\r\n", dir == CLOCKMECH_ClockWise ? "CCW" : "CW");
-}
-
-void CLASS_DEVICE_CLOCKMECH::cmdEn() {
-    bool en = digitalRead(CLOCKMECH_EN);
-    digitalWrite(CLOCKMECH_EN, en == LOW ? HIGH : LOW);
-    Serial.printf("Driver: %s\r\n", en == LOW ? "OFF" : "ON");
-}
-
-
-void CLASS_DEVICE_CLOCKMECH::cmdSled() {
-    bool led = digitalRead(CLOCKMECH_SENS_LED);
-    digitalWrite(CLOCKMECH_SENS_LED, led == HIGH ? LOW : HIGH);
-    Serial.printf("Sensor LED: %s\r\n", led == HIGH ? "OFF" : "ON");
-}
-
-void CLASS_DEVICE_CLOCKMECH::cmdSens() {
-    
-    Serial.printf("SENS_HOUR=%d SENS_MIN=%d SENS_LED=%d\r\n",
-        digitalRead(CLOCKMECH_SENS_HOUR),
-        digitalRead(CLOCKMECH_SENS_MIN),
-        digitalRead(CLOCKMECH_SENS_LED));
-}
-
 void CLASS_DEVICE_CLOCKMECH::GetSens() {
     device_clock_mech._sensorLedState = digitalRead(CLOCKMECH_SENS_LED);
     device_clock_mech._sensorLedStateHOUR = digitalRead(CLOCKMECH_SENS_HOUR);
     device_clock_mech._sensorLedStateMIN = digitalRead(CLOCKMECH_SENS_MIN);
 }
-void CLASS_DEVICE_CLOCKMECH::MechNCmdStep() {
-    if (_nStepCount > 0) {
-        _nStepCount--;
-        GoToTaskAfterStep = MechNCmdStep; 
-        SetTimerTask(MechMoveStepDown, 2);
-    } else { GoToTaskAfterStep = Idle_task;  }
-}
-
-void CLASS_DEVICE_CLOCKMECH::cmdN() {
-    if (_nStepCount > 0) {
-        Serial.println("Busy: previous clock-n still running");
-        return;
-    }
-    char *arg = term.getNext();
-    if (arg == NULL) {
-        Serial.println("Usage: clock-n <N>");
-        return;
-    }
-    _nStepCount = atoi(arg);
-    if (_nStepCount == 0) return;
-    digitalWrite(CLOCKMECH_EN, LOW);
-    GoToTaskAfterStep = MechNCmdStep;
-    SetTask(MechMoveStepDown);
-}
-void CLASS_DEVICE_CLOCKMECH::cmdSet1200()   { SetTask(MechSet1200_Setup); }
-void CLASS_DEVICE_CLOCKMECH::cmdSetxx00()   { SetTask(MechSetxx00_Setup); }
-void CLASS_DEVICE_CLOCKMECH::cmdSet12xx()   { SetTask(MechSet12xx_Setup); }
-void CLASS_DEVICE_CLOCKMECH::cmdCount()     { SetTask(MechCountStepsSetup); }
-void CLASS_DEVICE_CLOCKMECH::cmdPoll()      { SetTask(PollTimeTask); }
-
-void CLASS_DEVICE_CLOCKMECH::cmdSave() {    device_clock_mech.saveConfig(); }
-void CLASS_DEVICE_CLOCKMECH::cmdMode() {
-    char *arg = term.getNext();
-    if (arg == NULL) {
-        device_clock_mech._config.enable_status = !device_clock_mech._config.enable_status;
-    } else {
-        String s(arg);
-        if (s == "dbg" || s == "debug")       { device_clock_mech._config.enable_status = MODE_DEBUG; }
-        else if (s == "work")                 { device_clock_mech._config.enable_status = MODE_WORK; }
-        else { Serial.println("Usage: c-mode [dbg|work]"); return; }
-    }
-    Serial.printf("Mode: %s\r\n", device_clock_mech._config.enable_status == MODE_WORK ? "WORK" : "DEBUG");
-}
-
-void CLASS_DEVICE_CLOCKMECH::cmdSetArrows() {
-    char *arg1 = term.getNext();
-    if (arg1 == NULL) {
-        Serial.println("Usage: c-set <hour> [min]");
-        return;
-    }
-    uint8_t h = (uint8_t)atoi(arg1);
-    if (h > 24) {
-        Serial.println("Error: hour must be 0-24");
-        return;
-    }
-    char *arg2 = term.getNext();
-    uint8_t m = 0;
-    if (arg2 != NULL) {
-        m = (uint8_t)atoi(arg2);
-        if (m > 60) {
-            Serial.println("Error: min must be 0-60");
-            return;
-        }
-    }
-    device_clock_mech.MechTimeSet(h, m);
-    Serial.printf("Set Arrows to: %02d:%02d\r\n",  device_clock_mech._timeHourReal, device_clock_mech._timeMinReal);
-    SetTask(MechSetArrows);
-}
-
-
-void CLASS_DEVICE_CLOCKMECH::cmdStatus() {
-
-    time_t t = device_clock_mech.getCurrentTime();
-  
-    Serial.printf("===== ClockMech Status =====\r\n");
-    Serial.printf("_Mech_Status:          %d\r\n", device_clock_mech._Mech_Status);
-    Serial.printf("_config.enable_status: %d\r\n", device_clock_mech._config.enable_status);
-    Serial.printf("_config.timeSource:    %s\r\n", device_clock_mech._config.timeSource.c_str());
-    Serial.printf("_config.stepsPerRevolution: %d\r\n", device_clock_mech._config.stepsPerRevolution);
-    Serial.printf("_config.pollInterval: %d\r\n", device_clock_mech._config.pollInterval);
-    Serial.printf("_config.errorLimitSteps: %d\r\n", device_clock_mech._config.errorLimitSteps);
-    Serial.printf("_config.sensorLedEnabled: %d\r\n", device_clock_mech._config.sensorLedEnabled);
-    Serial.printf("_mechControlSteps: %d\r\n", device_clock_mech._mechControlSteps);
-    Serial.printf("_timeMechHour: %d _timeMechMin: %d\r\n", device_clock_mech._timeMechHour, device_clock_mech._timeMechMin);
-    Serial.printf("_timeHourReal: %d _timeMinReal: %d\r\n", device_clock_mech._timeHourReal,  device_clock_mech._timeMinReal);
-    Serial.printf("_minPrev:          %d\r\n", device_clock_mech._minPrev);
-    Serial.printf("_sensorLedState:   %d\r\n", device_clock_mech._sensorLedState);
-    if (t > 0) {
-        char buf[12];
-        snprintf(buf, sizeof(buf), "%02d:%02d", hour(t), minute(t));
-        Serial.printf("time: %s\r\n", buf);
-    }
-    Serial.printf("SENS_HOUR=%d SENS_MIN=%d SENS_LED=%d\r\n",
-        digitalRead(CLOCKMECH_SENS_HOUR),
-        digitalRead(CLOCKMECH_SENS_MIN),
-        digitalRead(CLOCKMECH_SENS_LED));
-    Serial.printf("DIR=%d STEP=%d EN=%d\r\n",
-        digitalRead(CLOCKMECH_DIR),
-        digitalRead(CLOCKMECH_STEP),
-        digitalRead(CLOCKMECH_EN));
-    Serial.printf("=============================\r\n");
-}
-
-
-
-void CLASS_DEVICE_CLOCKMECH::handleReset(AsyncWebServerRequest *request) {
-    DEBUGCLOCKMECH("%s\r\n", __FUNCTION__);
-    if (_config.enable_status == MODE_WORK) { request->send(403, "application/json", "{\"error\":\"Blocked: WORK mode\"}"); return; }
-    SetTask(MechSet1200_Setup);
-    request->send(200, "text/plain", "OK");
-}
-
-
 
 // ============================================================
 // Периодический опрос времени. Основной рабочий цикл.
@@ -496,7 +418,6 @@ void CLASS_DEVICE_CLOCKMECH::MechTimeSet (uint8_t _inH, uint8_t _inM)	{
 	_timeMinReal = _inM;
 }
 
-
 // ============================================================
 // Постановка стрелок в нормальном режиме работы.
 // ============================================================
@@ -511,7 +432,6 @@ void CLASS_DEVICE_CLOCKMECH::MechSetArrows() {
         // }
     // }
 }
-
 
 // ============================================================
 // Сброс механизма в хх:00 (выставляем ТОЛЬКО МИНУТНУЮ стрелку)
@@ -667,13 +587,6 @@ void CLASS_DEVICE_CLOCKMECH::MechSet1200_endFail() {
 // Подсчёт шагов на оборот
 // ============================================================
 
-void CLASS_DEVICE_CLOCKMECH::handleCount(AsyncWebServerRequest *request) {
-    DEBUGCLOCKMECH("%s\r\n", __FUNCTION__);
-    if (_config.enable_status == MODE_WORK) { request->send(403, "application/json", "{\"error\":\"Blocked: WORK mode\"}"); return; }
-    SetTask(MechCountStepsSetup);
-    request->send(200, "text/plain", "OK");
-}
-
 void CLASS_DEVICE_CLOCKMECH::MechCountStepsSetup() {
     device_clock_mech._Mech_Status = STATUS_COUNTING;
     digitalWrite(CLOCKMECH_SENS_LED, HIGH);
@@ -729,7 +642,6 @@ void CLASS_DEVICE_CLOCKMECH::MechCountStepsFail() {
     digitalWrite(CLOCKMECH_SENS_LED, LOW);
     device_clock_mech._sensorLedState = digitalRead(CLOCKMECH_SENS_LED);
 }
-
 
 // ============================================================
 // Продвинуть часовую на +1 (12 оборотов минутной)
@@ -854,63 +766,140 @@ void CLASS_DEVICE_CLOCKMECH::MechSetArrowMinFail() {
     DEBUGCLOCKMECH("MechSetArrowMinFail\r\n");
 }
 
+// ============================================================
+// Терминальные команды
+// ============================================================
 
-// ============================================================
-// Конфиг
-// ============================================================
-void CLASS_DEVICE_CLOCKMECH::defaultConfig() {
-    _config.enable_status      = MODE_DEBUG;
-    _config.timeSource         = "ds3231";
-    _config.stepsPerRevolution = 0;
-    _config.pollInterval       = 5;
-    _config.errorLimitSteps    = 500;
-    _config.sensorLedEnabled   = true;
+void CLASS_DEVICE_CLOCKMECH::cmdStep() {
+    GoToTaskAfterStep = Idle_task;
+    SetTask(MechMoveStepDown);
 }
 
-bool CLASS_DEVICE_CLOCKMECH::loadConfig() {
-    DEBUGCLOCKMECH("%s\r\n", __FUNCTION__);
-    JsonDocument doc;
-    if (core_json.jsonFileLoadDoc(CONFIG_FILE_CLOCKMECH, doc) == false) { return false; }
-
-    _config.enable_status       = doc["enable_status"].as<uint8_t>();
-    _config.timeSource          = doc["timeSource"].as<String>();
-    _config.stepsPerRevolution  = doc["stepsPerRevolution"].as<uint16_t>();
-    _config.pollInterval        = doc["pollInterval"].as<uint16_t>();
-    _config.errorLimitSteps     = doc["errorLimitSteps"].as<uint16_t>();
-    _config.sensorLedEnabled    = doc["sensorLedEnabled"].as<bool>();
-
-    if (_config.timeSource != "ds3231" && _config.timeSource != "ntp") { _config.timeSource = "ds3231"; }
-    if (_config.pollInterval < 1)   { _config.pollInterval = 5; }
-    if (_config.stepsPerRevolution < 1) { _config.stepsPerRevolution = 400; }
-
-    return true;
+void CLASS_DEVICE_CLOCKMECH::cmdDir() {
+    uint8_t dir = digitalRead(CLOCKMECH_DIR);
+    if (dir == 1) { digitalWrite(CLOCKMECH_DIR, CLOCKMECH_ClockWise);}
+    if (dir == 0) { digitalWrite(CLOCKMECH_DIR, CLOCKMECH_CounterClockWise);}
+    Serial.printf("Direction: %s\r\n", dir == CLOCKMECH_ClockWise ? "CCW" : "CW");
 }
 
-bool CLASS_DEVICE_CLOCKMECH::saveConfig() {
-    DEBUGCLOCKMECH("%s\r\n", __FUNCTION__);
-    JsonDocument doc;
-    core_json.jsonFileLoadDoc(CONFIG_FILE_CLOCKMECH, doc);
-    doc["enable_status"]        = _config.enable_status;
-    doc["timeSource"]           = _config.timeSource;
-    doc["stepsPerRevolution"]   = _config.stepsPerRevolution;
-    doc["pollInterval"]         = _config.pollInterval;
-    doc["errorLimitSteps"]      = _config.errorLimitSteps;
-    doc["sensorLedEnabled"]     = _config.sensorLedEnabled;
-    return core_json.jsonFileSaveDoc(CONFIG_FILE_CLOCKMECH, doc);
+void CLASS_DEVICE_CLOCKMECH::cmdEn() {
+    bool en = digitalRead(CLOCKMECH_EN);
+    digitalWrite(CLOCKMECH_EN, en == LOW ? HIGH : LOW);
+    Serial.printf("Driver: %s\r\n", en == LOW ? "OFF" : "ON");
 }
 
-// ============================================================
-// Версионные методы
-// ============================================================
-String CLASS_DEVICE_CLOCKMECH::getVersionStr() { return String(DEVICE_CLOCK_MECH_VERSION);  }
-String CLASS_DEVICE_CLOCKMECH::getGeneratedTime() { return String(DEVICE_CLOCK_MECH_GENERATED_TIME);    }
-String CLASS_DEVICE_CLOCKMECH::getCommitDateStr() { return String(DEVICE_CLOCK_MECH_COMMIT_DATE_STR);   }
+void CLASS_DEVICE_CLOCKMECH::cmdSled() {
+    bool led = digitalRead(CLOCKMECH_SENS_LED);
+    digitalWrite(CLOCKMECH_SENS_LED, led == HIGH ? LOW : HIGH);
+    Serial.printf("Sensor LED: %s\r\n", led == HIGH ? "OFF" : "ON");
+}
 
-void CLASS_DEVICE_CLOCKMECH::html_ver_get(AsyncWebServerRequest *request) {
-    DEBUGCLOCKMECH("%s\r\n", __FUNCTION__);
-    String values = "";
-    values += "clockmechversion|" + getVersionStr()    + "|div\n";
-    values += "clockmechgentime|" + getGeneratedTime() + "|div\n";
-    values += "clockmechgendate|" + getCommitDateStr() + "|div\n";
-    request->send(200, "text/plain", values);
+void CLASS_DEVICE_CLOCKMECH::cmdSens() {
+    
+    Serial.printf("SENS_HOUR=%d SENS_MIN=%d SENS_LED=%d\r\n",
+        digitalRead(CLOCKMECH_SENS_HOUR),
+        digitalRead(CLOCKMECH_SENS_MIN),
+        digitalRead(CLOCKMECH_SENS_LED));
+}
+
+void CLASS_DEVICE_CLOCKMECH::MechNCmdStep() {
+    if (_nStepCount > 0) {
+        _nStepCount--;
+        GoToTaskAfterStep = MechNCmdStep; 
+        SetTimerTask(MechMoveStepDown, 2);
+    } else { GoToTaskAfterStep = Idle_task;  }
+}
+
+void CLASS_DEVICE_CLOCKMECH::cmdN() {
+    if (_nStepCount > 0) {
+        Serial.println("Busy: previous clock-n still running");
+        return;
+    }
+    char *arg = term.getNext();
+    if (arg == NULL) {
+        Serial.println("Usage: clock-n <N>");
+        return;
+    }
+    _nStepCount = atoi(arg);
+    if (_nStepCount == 0) return;
+    digitalWrite(CLOCKMECH_EN, LOW);
+    GoToTaskAfterStep = MechNCmdStep;
+    SetTask(MechMoveStepDown);
+}
+void CLASS_DEVICE_CLOCKMECH::cmdSet1200()   { SetTask(MechSet1200_Setup); }
+void CLASS_DEVICE_CLOCKMECH::cmdSetxx00()   { SetTask(MechSetxx00_Setup); }
+void CLASS_DEVICE_CLOCKMECH::cmdSet12xx()   { SetTask(MechSet12xx_Setup); }
+void CLASS_DEVICE_CLOCKMECH::cmdCount()     { SetTask(MechCountStepsSetup); }
+void CLASS_DEVICE_CLOCKMECH::cmdPoll()      { SetTask(PollTimeTask); }
+
+void CLASS_DEVICE_CLOCKMECH::cmdSave() {    device_clock_mech.saveConfig(); }
+void CLASS_DEVICE_CLOCKMECH::cmdMode() {
+    char *arg = term.getNext();
+    if (arg == NULL) {
+        device_clock_mech._config.enable_status = !device_clock_mech._config.enable_status;
+    } else {
+        String s(arg);
+        if (s == "dbg" || s == "debug")       { device_clock_mech._config.enable_status = MODE_DEBUG; }
+        else if (s == "work")                 { device_clock_mech._config.enable_status = MODE_WORK; }
+        else { Serial.println("Usage: c-mode [dbg|work]"); return; }
+    }
+    Serial.printf("Mode: %s\r\n", device_clock_mech._config.enable_status == MODE_WORK ? "WORK" : "DEBUG");
+}
+
+void CLASS_DEVICE_CLOCKMECH::cmdSetArrows() {
+    char *arg1 = term.getNext();
+    if (arg1 == NULL) {
+        Serial.println("Usage: c-set <hour> [min]");
+        return;
+    }
+    uint8_t h = (uint8_t)atoi(arg1);
+    if (h > 24) {
+        Serial.println("Error: hour must be 0-24");
+        return;
+    }
+    char *arg2 = term.getNext();
+    uint8_t m = 0;
+    if (arg2 != NULL) {
+        m = (uint8_t)atoi(arg2);
+        if (m > 60) {
+            Serial.println("Error: min must be 0-60");
+            return;
+        }
+    }
+    device_clock_mech.MechTimeSet(h, m);
+    Serial.printf("Set Arrows to: %02d:%02d\r\n",  device_clock_mech._timeHourReal, device_clock_mech._timeMinReal);
+    SetTask(MechSetArrows);
+}
+
+void CLASS_DEVICE_CLOCKMECH::cmdStatus() {
+
+    time_t t = device_clock_mech.getCurrentTime();
+  
+    Serial.printf("===== ClockMech Status =====\r\n");
+    Serial.printf("_Mech_Status:          %d\r\n", device_clock_mech._Mech_Status);
+    Serial.printf("_config.enable_status: %d\r\n", device_clock_mech._config.enable_status);
+    Serial.printf("_config.timeSource:    %s\r\n", device_clock_mech._config.timeSource.c_str());
+    Serial.printf("_config.stepsPerRevolution: %d\r\n", device_clock_mech._config.stepsPerRevolution);
+    Serial.printf("_config.pollInterval: %d\r\n", device_clock_mech._config.pollInterval);
+    Serial.printf("_config.errorLimitSteps: %d\r\n", device_clock_mech._config.errorLimitSteps);
+    Serial.printf("_config.sensorLedEnabled: %d\r\n", device_clock_mech._config.sensorLedEnabled);
+    Serial.printf("_mechControlSteps: %d\r\n", device_clock_mech._mechControlSteps);
+    Serial.printf("_timeMechHour: %d _timeMechMin: %d\r\n", device_clock_mech._timeMechHour, device_clock_mech._timeMechMin);
+    Serial.printf("_timeHourReal: %d _timeMinReal: %d\r\n", device_clock_mech._timeHourReal,  device_clock_mech._timeMinReal);
+    Serial.printf("_minPrev:          %d\r\n", device_clock_mech._minPrev);
+    Serial.printf("_sensorLedState:   %d\r\n", device_clock_mech._sensorLedState);
+    if (t > 0) {
+        char buf[12];
+        snprintf(buf, sizeof(buf), "%02d:%02d", hour(t), minute(t));
+        Serial.printf("time: %s\r\n", buf);
+    }
+    Serial.printf("SENS_HOUR=%d SENS_MIN=%d SENS_LED=%d\r\n",
+        digitalRead(CLOCKMECH_SENS_HOUR),
+        digitalRead(CLOCKMECH_SENS_MIN),
+        digitalRead(CLOCKMECH_SENS_LED));
+    Serial.printf("DIR=%d STEP=%d EN=%d\r\n",
+        digitalRead(CLOCKMECH_DIR),
+        digitalRead(CLOCKMECH_STEP),
+        digitalRead(CLOCKMECH_EN));
+    Serial.printf("=============================\r\n");
 }

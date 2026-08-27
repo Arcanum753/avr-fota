@@ -53,16 +53,15 @@ void responseHandler(IPAddress ip);
 class CLASS_MODULE_UDPBROADCAST {
 public:
     CLASS_MODULE_UDPBROADCAST(uint16_t portListen);
-    
-    void web_Init(void);
+
     void begin();
+    void web_Init(void);
+
+    // Публичное API
     void stop();
     void broadcastSend(uint16_t _port, String _str);
     void broadcastTest(AsyncWebServerRequest *request);
-    
-    void send_configuration_values_html(AsyncWebServerRequest *request);
-    void get_configuration_html(AsyncWebServerRequest *request);
-    
+
     uint16_t getPortTx();
     uint16_t getPortRx();
     uint16_t getTimeOut();
@@ -71,33 +70,39 @@ public:
     bool responseGet();
     String jsonGet();
     uint8_t isStart();
-    
+
     strUdpConfig _udpConfig; // UDP configuration
-   
 
 private:
-    AsyncUDP _udp;
-    IPAddress _responseIp;
-    
-    bool load_config_UDP();
-    bool save_configUDP();
-    void defaultConfigUDP();
-private:
+    // Версионные методы
     String getVersionStr();
     String getGeneratedTime();
     String getCommitDateStr();
     void  html_ver_get(AsyncWebServerRequest *request);
-    
+
+    // Веб-обработчики
+    void send_configuration_values_html(AsyncWebServerRequest *request);
+    void get_configuration_html(AsyncWebServerRequest *request);
+
+    // Конфиг
+    bool load_config_UDP();
+    bool save_configUDP();
+    void defaultConfigUDP();
+
+    // Поля
+    AsyncUDP _udp;
+    IPAddress _responseIp;
+
     char _sendBuffer[UDP_DATA_MESSAGE_LEN];
-    
+
     bool _isSending;
     unsigned long _lastSendTime;
     static const unsigned long SEND_TIMEOUT = 500; // 500ms
-    
+
     uint8_t _isStarted;
     uint16_t _portRx;
     uint16_t _portTx;
-    
+
     friend void broadcastTimer();
     friend void processListenPacket(AsyncUDPPacket &packet);
     friend void responseHandler(IPAddress ip);

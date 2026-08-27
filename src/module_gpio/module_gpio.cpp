@@ -17,7 +17,9 @@ void CLASS_MODULE_GPIO::setFs(FS* fs)	// esp8266 flash file system
 #endif
 {	_fs = fs;	}
 
-
+// ============================================================
+// begin()
+// ============================================================
 void  CLASS_MODULE_GPIO::begin(){
 	DEBUGGPIO(__FUNCTION__);	DEBUGGPIO("\r\n");
 }
@@ -27,7 +29,9 @@ void  CLASS_MODULE_GPIO::begin(ModContext& ctx){
 	begin();
 }
 
-
+// ============================================================
+// web_Init()
+// ============================================================
 void  CLASS_MODULE_GPIO::web_Init(){
     DEBUGGPIO(__FUNCTION__);	DEBUGGPIO("\r\n");
 
@@ -41,6 +45,9 @@ void  CLASS_MODULE_GPIO::web_Init(){
 
 }
 
+// ============================================================
+// Веб-обработчики
+// ============================================================
 
 // gpio.html vvv
 
@@ -81,10 +88,13 @@ void  CLASS_MODULE_GPIO::gpioGetArgs(AsyncWebServerRequest *request) {
 		}	
 		request->send(200, "text/plain", values);
 	}	
-}	
+}
 
 // gpio.html ^^^
 
+// ============================================================
+// Версионные методы
+// ============================================================
 
 String CLASS_MODULE_GPIO::getVersionStr(){
     return String(MODULE_GPIO_VERSION);

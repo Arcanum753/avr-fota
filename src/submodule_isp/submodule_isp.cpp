@@ -15,6 +15,10 @@
 Class_SubIsp progIsp(0);
 Class_SubIsp::Class_SubIsp(uint8_t in): Class_ProgBase(in){ }
 
+// ============================================================
+// Переопределения виртуальных методов Class_ProgBase
+// ============================================================
+
 bool Class_SubIsp::chipSpecificInit() {
 	avrprog.begin();
 	avrprog.setFs(_fs);
@@ -183,6 +187,37 @@ void Class_SubIsp::web_FileUpload2Chip(AsyncWebServerRequest *request) {
 	request->send(200, "text/plain", "ok");
 	DEBUGLOGISP("web_FileUpload2Chip: EERTOS flash started for %s\r\n", _flashPath.c_str());
 }
+
+void Class_SubIsp::registerCustomRoutes() {
+	ESPHTTPServer.on("/avr/fuseread", HTTP_GET, [this](AsyncWebServerRequest *request) {
+		if (!ESPHTTPServer.checkAuth(request)) { return request->requestAuthentication(); };
+		avrFusesRead(request);
+	});
+	ESPHTTPServer.on("/avr/fusewrite", HTTP_POST, [this](AsyncWebServerRequest *request) {
+		if (!ESPHTTPServer.checkAuth(request)) { return request->requestAuthentication(); };
+		avrWebFusesWrite(request);
+	});
+	ESPHTTPServer.on("/avr/info", [this](AsyncWebServerRequest *request) {
+		if (!ESPHTTPServer.checkAuth(request)) { return request->requestAuthentication(); };
+		web_AvrCfgInfo(request);
+	});
+	ESPHTTPServer.on("/avr/save", HTTP_POST, [this](AsyncWebServerRequest *request) {
+		if (!ESPHTTPServer.checkAuth(request)) { return request->requestAuthentication(); };
+		web_AvrCfgSave(request);
+	});
+	ESPHTTPServer.on("/avr/readsignature", HTTP_GET, [this](AsyncWebServerRequest *request) {
+		if (!ESPHTTPServer.checkAuth(request)) { return request->requestAuthentication(); };
+		web_AvrCfgReadSignature(request);
+	});
+	ESPHTTPServer.on("/avrcfg", HTTP_GET, [this](AsyncWebServerRequest *request) {
+		if (!ESPHTTPServer.checkAuth(request)) { return request->requestAuthentication(); };
+		ESPHTTPServer.handleFileRead("/web/avrcfg.html", request);
+	});
+}
+
+// ============================================================
+// Конкретная логика модуля (ISP)
+// ============================================================
 
 bool Class_SubIsp::chipCfg_FindBySignature(const String &signature, ChipConfigAvr_t &cfg) {
 	DEBUGLOGISP("%s: searching for signature=%s\n\r", __FUNCTION__, signature.c_str());
@@ -365,33 +400,6 @@ void Class_SubIsp::web_AvrCfgReadSignature(AsyncWebServerRequest *request) {
 	_chipIdstr = avrprog.chipSignRead();
 	values += "signature|" + _chipIdstr + "|div\n";
 	request->send(200, "text/plain", values);
-}
-
-void Class_SubIsp::registerCustomRoutes() {
-	ESPHTTPServer.on("/avr/fuseread", HTTP_GET, [this](AsyncWebServerRequest *request) {
-		if (!ESPHTTPServer.checkAuth(request)) { return request->requestAuthentication(); };
-		avrFusesRead(request);
-	});
-	ESPHTTPServer.on("/avr/fusewrite", HTTP_POST, [this](AsyncWebServerRequest *request) {
-		if (!ESPHTTPServer.checkAuth(request)) { return request->requestAuthentication(); };
-		avrWebFusesWrite(request);
-	});
-	ESPHTTPServer.on("/avr/info", [this](AsyncWebServerRequest *request) {
-		if (!ESPHTTPServer.checkAuth(request)) { return request->requestAuthentication(); };
-		web_AvrCfgInfo(request);
-	});
-	ESPHTTPServer.on("/avr/save", HTTP_POST, [this](AsyncWebServerRequest *request) {
-		if (!ESPHTTPServer.checkAuth(request)) { return request->requestAuthentication(); };
-		web_AvrCfgSave(request);
-	});
-	ESPHTTPServer.on("/avr/readsignature", HTTP_GET, [this](AsyncWebServerRequest *request) {
-		if (!ESPHTTPServer.checkAuth(request)) { return request->requestAuthentication(); };
-		web_AvrCfgReadSignature(request);
-	});
-	ESPHTTPServer.on("/avrcfg", HTTP_GET, [this](AsyncWebServerRequest *request) {
-		if (!ESPHTTPServer.checkAuth(request)) { return request->requestAuthentication(); };
-		ESPHTTPServer.handleFileRead("/web/avrcfg.html", request);
-	});
 }
 
 void Class_SubIsp::_chipInfoAppendFields(JsonObject &out, JsonObject &chip) {

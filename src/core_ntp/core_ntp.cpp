@@ -9,14 +9,16 @@
 #include "module_udp/module_udp.h"
 #endif
 
-
 #include "common.h"
 #include "core_ntp_version.h"
-CLASS_CORE_NTP core_ntp(false);
 
+CLASS_CORE_NTP core_ntp(false);
 
 CLASS_CORE_NTP :: CLASS_CORE_NTP (bool _in) { dumb = _in; }
 
+// ============================================================
+// begin()
+// ============================================================
 
 // init
 void CLASS_CORE_NTP::begin (){
@@ -37,101 +39,9 @@ void CLASS_CORE_NTP::begin (ModContext& ctx){
 	begin();
 }
 
-
-// on WiFi connect
-void CLASS_CORE_NTP::ntpOnConnected (){
-	DEBUGNTP(__PRETTY_FUNCTION__);	DEBUGNTP("\r\n");
-	if (updateTimeFromNTP == true) { // Enable NTP sync
-        NTP.setInterval ( _ntpConfig.updateNTPTimeEvery * MINUTES);
-        NTP.setNTPTimeout (NTP_TIMEOUT);
-		NTP.onNTPSyncEvent(	[this](NTPSyncEvent_t event)	{	ntpOnSyncHandler(event);	});
-		NTP.begin(_ntpServerNow, _ntpConfig.timezone / 10, _ntpConfig.daylight);
-	}
-}
-
-
-
-void CLASS_CORE_NTP::ntpOnDisconected () {
-	DEBUGNTP(__PRETTY_FUNCTION__);	DEBUGNTP("\r\n");
-	NTP.stop(); 
-}
-
-
-void CLASS_CORE_NTP::ntpOnSyncHandler(NTPSyncEvent_t event)	{
-	int _ntpevent = static_cast<int>(event);
-
-    if ( _ntpevent == timeSyncd) 		{ 
-		DEBUGNTP("NTP_timeSyncd: "); 	
-		DEBUGNTP(NTP.getTimeDateString(NTP.getLastNTPSync()).c_str() );	
-		DEBUGNTP(" \r\n");
-	}
-	if ( _ntpevent == noResponse) 		{ DEBUGNTP("NTP_noResponse \r\n"); 		}
-	if ( _ntpevent == invalidAddress) 	{ DEBUGNTP("NTP_invalidAddress \r\n"); 	}
-	if ( _ntpevent == requestSent) 		{ DEBUGNTP("NTP_requestSent \r\n"); 		}	
-	if ( _ntpevent == errorSending) 	{ DEBUGNTP("NTP_errorSending \r\n"); 	}
-	if ( _ntpevent == responseError) 	{ DEBUGNTP("NTP_responseError \r\n"); 	}
-
-	if ( _ntpevent == noResponse) 		{	ntpSwitchReserv();	}
-	if ( _ntpevent == invalidAddress) 	{	ntpSwitchReserv();	}
-	if ( _ntpevent == responseError) 	{	ntpSwitchReserv();	}
-				
-	if (WiFi.status() != WL_CONNECTED) 	{
-		NTP.stop(); 
-	}
-}
-
-void CLASS_CORE_NTP::ntpSwitchReserv (){
-
-	if  (_ntpServerCount == 0)	{_ntpServerNow = _ntpConfig.ntpServerName0;}
-	if  (_ntpServerCount == 1)	{_ntpServerNow = _ntpConfig.ntpServerName1;}
-	if  (_ntpServerCount == 2)	{_ntpServerNow = _ntpConfig.ntpServerName2;}
-	_ntpServerCount++;
-	if (_ntpServerCount > 2) _ntpServerCount = 0;
-}
-
-
-
-
-bool CLASS_CORE_NTP::load_config_NTP() {
-	JsonDocument doc;
-	if (!core_json.jsonFileLoadDoc(CONFIG_FILE_NTP, doc)) return false;
-	_ntpConfig.ntpServerName0 = doc["ntp0"].as<String>();
-	_ntpConfig.ntpServerName1 = doc["ntp1"].as<String>();
-	_ntpConfig.ntpServerName2 = doc["ntp2"].as<String>();
-	_ntpConfig.updateNTPTimeEvery = doc["NTPperiod"].as<int32_t>();
-	_ntpConfig.timezone = doc["timeZone"].as<int32_t>();
-	_ntpConfig.daylight = doc["daylight"].as<int32_t>();
-
-	DEBUGNTP("NTP Server0: %s\r\n", _ntpConfig.ntpServerName0.c_str());
-	DEBUGNTP("NTP Server1: %s\r\n", _ntpConfig.ntpServerName1.c_str());
-	DEBUGNTP("NTP Server2: %s\r\n", _ntpConfig.ntpServerName2.c_str());
-	return true;
-}
-
-bool CLASS_CORE_NTP::save_configNTP() {
-	DEBUGNTP("Save config NTP \r\n");
-	JsonDocument doc;
-	core_json.jsonFileLoadDoc(CONFIG_FILE_NTP, doc);
-	doc["ntp0"] = _ntpConfig.ntpServerName0;
-	doc["ntp1"] = _ntpConfig.ntpServerName1;
-	doc["ntp2"] = _ntpConfig.ntpServerName2;
-	doc["NTPperiod"] = _ntpConfig.updateNTPTimeEvery;
-	doc["timeZone"] = _ntpConfig.timezone;
-	doc["daylight"] = _ntpConfig.daylight;
-	return core_json.jsonFileSaveDoc(CONFIG_FILE_NTP, doc);
-}
-
-void CLASS_CORE_NTP::defaultConfigNTP() {
-	// DEFAULT CONFIG NTP
-	_ntpConfig.ntpServerName0 = NTPSERVER_DFLT0;
-	_ntpConfig.ntpServerName1 = NTPSERVER_DFLT1;
-	_ntpConfig.ntpServerName2 = NTPSERVER_DFLT2;
-	_ntpConfig.updateNTPTimeEvery = 15;
-	_ntpConfig.timezone = 10;  // Moscow
-	_ntpConfig.daylight = 0;
-	
-}
-
+// ============================================================
+// web_Init()
+// ============================================================
 void CLASS_CORE_NTP::web_Init ()	{
 	DEBUGNTP(__PRETTY_FUNCTION__);	DEBUGNTP("\r\n");
 	
@@ -152,6 +62,9 @@ void CLASS_CORE_NTP::web_Init ()	{
     });
 }
 
+// ============================================================
+// Веб-обработчики
+// ============================================================
 
 void CLASS_CORE_NTP::send_NTP_info_html(AsyncWebServerRequest *request) {
 	DEBUGNTP(__FUNCTION__);	DEBUGNTP("\r\n");
@@ -170,7 +83,6 @@ void CLASS_CORE_NTP::send_NTP_info_html(AsyncWebServerRequest *request) {
 
 	request->send(200, "text/plain", values);
 }
-
 
 // ntp.html vvv
 void CLASS_CORE_NTP::html2ntp_configuration(AsyncWebServerRequest *request) {
@@ -212,7 +124,6 @@ void CLASS_CORE_NTP::html2ntp_configuration(AsyncWebServerRequest *request) {
 	ESPHTTPServer.handleFileRead("/ntp.html", request);
 }
 
-
 void CLASS_CORE_NTP::send_NTP_configuration_values_html(AsyncWebServerRequest *request) {
 	DEBUGNTP(__FUNCTION__);	DEBUGNTP("\r\n");
 	String values = "";
@@ -230,14 +141,55 @@ void CLASS_CORE_NTP::send_NTP_configuration_values_html(AsyncWebServerRequest *r
 	request->send(200, "text/plain", values);
 }
 
-
 // ntp.html ^^^
 
+// ============================================================
+// Конфиг
+// ============================================================
 
-void CLASS_CORE_NTP::sendTimeData() {
-	// DEBUGNTP(__PRETTY_FUNCTION__);	DEBUGNTP("\r\n");
-	DEBUGNTP("sendTimeData %s\r\n", NTP.getTimeDateString().c_str());
+void CLASS_CORE_NTP::defaultConfigNTP() {
+	// DEFAULT CONFIG NTP
+	_ntpConfig.ntpServerName0 = NTPSERVER_DFLT0;
+	_ntpConfig.ntpServerName1 = NTPSERVER_DFLT1;
+	_ntpConfig.ntpServerName2 = NTPSERVER_DFLT2;
+	_ntpConfig.updateNTPTimeEvery = 15;
+	_ntpConfig.timezone = 10;  // Moscow
+	_ntpConfig.daylight = 0;
+	
 }
+
+bool CLASS_CORE_NTP::load_config_NTP() {
+	JsonDocument doc;
+	if (!core_json.jsonFileLoadDoc(CONFIG_FILE_NTP, doc)) return false;
+	_ntpConfig.ntpServerName0 = doc["ntp0"].as<String>();
+	_ntpConfig.ntpServerName1 = doc["ntp1"].as<String>();
+	_ntpConfig.ntpServerName2 = doc["ntp2"].as<String>();
+	_ntpConfig.updateNTPTimeEvery = doc["NTPperiod"].as<int32_t>();
+	_ntpConfig.timezone = doc["timeZone"].as<int32_t>();
+	_ntpConfig.daylight = doc["daylight"].as<int32_t>();
+
+	DEBUGNTP("NTP Server0: %s\r\n", _ntpConfig.ntpServerName0.c_str());
+	DEBUGNTP("NTP Server1: %s\r\n", _ntpConfig.ntpServerName1.c_str());
+	DEBUGNTP("NTP Server2: %s\r\n", _ntpConfig.ntpServerName2.c_str());
+	return true;
+}
+
+bool CLASS_CORE_NTP::save_configNTP() {
+	DEBUGNTP("Save config NTP \r\n");
+	JsonDocument doc;
+	core_json.jsonFileLoadDoc(CONFIG_FILE_NTP, doc);
+	doc["ntp0"] = _ntpConfig.ntpServerName0;
+	doc["ntp1"] = _ntpConfig.ntpServerName1;
+	doc["ntp2"] = _ntpConfig.ntpServerName2;
+	doc["NTPperiod"] = _ntpConfig.updateNTPTimeEvery;
+	doc["timeZone"] = _ntpConfig.timezone;
+	doc["daylight"] = _ntpConfig.daylight;
+	return core_json.jsonFileSaveDoc(CONFIG_FILE_NTP, doc);
+}
+
+// ============================================================
+// Версионные методы
+// ============================================================
 
 String CLASS_CORE_NTP::getVersionStr(){
     return String(CORE_NTP_VERSION);
@@ -260,4 +212,59 @@ void CLASS_CORE_NTP::html_ver_get(AsyncWebServerRequest *request) {
     request->send(200, "text/plain", values);
 }
 
+// ============================================================
+// Конкретная логика модуля
+// ============================================================
 
+// on WiFi connect
+void CLASS_CORE_NTP::ntpOnConnected (){
+	DEBUGNTP(__PRETTY_FUNCTION__);	DEBUGNTP("\r\n");
+	if (updateTimeFromNTP == true) { // Enable NTP sync
+        NTP.setInterval ( _ntpConfig.updateNTPTimeEvery * MINUTES);
+        NTP.setNTPTimeout (NTP_TIMEOUT);
+		NTP.onNTPSyncEvent(	[this](NTPSyncEvent_t event)	{	ntpOnSyncHandler(event);	});
+		NTP.begin(_ntpServerNow, _ntpConfig.timezone / 10, _ntpConfig.daylight);
+	}
+}
+
+void CLASS_CORE_NTP::ntpOnDisconected () {
+	DEBUGNTP(__PRETTY_FUNCTION__);	DEBUGNTP("\r\n");
+	NTP.stop(); 
+}
+
+void CLASS_CORE_NTP::ntpOnSyncHandler(NTPSyncEvent_t event)	{
+	int _ntpevent = static_cast<int>(event);
+
+    if ( _ntpevent == timeSyncd) 		{ 
+		DEBUGNTP("NTP_timeSyncd: "); 	
+		DEBUGNTP(NTP.getTimeDateString(NTP.getLastNTPSync()).c_str() );	
+		DEBUGNTP(" \r\n");
+	}
+	if ( _ntpevent == noResponse) 		{ DEBUGNTP("NTP_noResponse \r\n"); 		}
+	if ( _ntpevent == invalidAddress) 	{ DEBUGNTP("NTP_invalidAddress \r\n"); 	}
+	if ( _ntpevent == requestSent) 		{ DEBUGNTP("NTP_requestSent \r\n"); 		}	
+	if ( _ntpevent == errorSending) 	{ DEBUGNTP("NTP_errorSending \r\n"); 	}
+	if ( _ntpevent == responseError) 	{ DEBUGNTP("NTP_responseError \r\n"); 	}
+
+	if ( _ntpevent == noResponse) 		{	ntpSwitchReserv();	}
+	if ( _ntpevent == invalidAddress) 	{	ntpSwitchReserv();	}
+	if ( _ntpevent == responseError) 	{	ntpSwitchReserv();	}
+				
+	if (WiFi.status() != WL_CONNECTED) 	{
+		NTP.stop(); 
+	}
+}
+
+void CLASS_CORE_NTP::ntpSwitchReserv (){
+
+	if  (_ntpServerCount == 0)	{_ntpServerNow = _ntpConfig.ntpServerName0;}
+	if  (_ntpServerCount == 1)	{_ntpServerNow = _ntpConfig.ntpServerName1;}
+	if  (_ntpServerCount == 2)	{_ntpServerNow = _ntpConfig.ntpServerName2;}
+	_ntpServerCount++;
+	if (_ntpServerCount > 2) _ntpServerCount = 0;
+}
+
+void CLASS_CORE_NTP::sendTimeData() {
+	// DEBUGNTP(__PRETTY_FUNCTION__);	DEBUGNTP("\r\n");
+	DEBUGNTP("sendTimeData %s\r\n", NTP.getTimeDateString().c_str());
+}

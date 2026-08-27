@@ -100,13 +100,22 @@ public:
     static void cmdStatusWeb(AsyncWebServerRequest *request);
     static void cmdResetWeb(AsyncWebServerRequest *request);
 private:
+    // Версионные методы
     String getVersionStr();
     String getGeneratedTime();
     String getCommitDateStr();
     void html_ver_get(AsyncWebServerRequest *request);
 
+    // Веб-обработчики
     void handleInfo_ring(AsyncWebServerRequest *request);
     void handleSave(AsyncWebServerRequest *request);
+
+    // Конфиг
+    void defaultConfig();
+    bool loadConfig();
+    bool saveConfig();
+
+    // Логика устройства
     void CheckTime (uint8_t _inH);
 
     void MechInitGPIOs();
@@ -132,10 +141,6 @@ private:
 
     static void RingPollTask();
 
-    void defaultConfig();
-    bool loadConfig();
-    bool saveConfig();
-
 protected:
     bool dumb;
     fs::LittleFSFS*     _fs;
@@ -145,6 +150,7 @@ protected:
     uint8_t             _ringStatus;
     int                 _sensorState;
     uint8_t             _timeHourReal;
+    uint8_t             _timeHourPrev;
     uint8_t             _timeMinReal;
 };
 

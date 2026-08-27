@@ -29,6 +29,9 @@ CLASS_CORE_OTA :: CLASS_CORE_OTA (bool _in) {
 #endif
 {	_fs = fs;	}
 
+// ============================================================
+// begin()
+// ============================================================
 
 void CLASS_CORE_OTA::begin(String _hostname, String _password){
 	DEBUGOTA(__FUNCTION__);	DEBUGOTA("\r\n");
@@ -41,96 +44,9 @@ void CLASS_CORE_OTA::begin(ModContext& ctx){
 	begin(ctx.hostname, ctx.password);
 }
 
-void CLASS_CORE_OTA::prepareSizesForUpdate (){
-	DEBUGOTA(__FUNCTION__);	DEBUGOTA("\r\n");
-	maxSketchSpace   = (ESP.getSketchSize() - 0x1000) & 0xFFFFF000;
-	freeSketchSpace  = ESP.getFreeSketchSpace();
-}
-
-
-bool  CLASS_CORE_OTA::ConfigureOTA( String _hostname, String _password) {
-	DEBUGOTA(__FUNCTION__);	DEBUGOTA("\r\n");
-	
-	if (_hostname != "") {
-	ArduinoOTA.setHostname(_hostname.c_str());
-	DEBUGOTA("OTA password set %s\n", _password.c_str());
-	} else { return false;	}
-
-	if (_password != "") {
-		ArduinoOTA.setPassword(_password.c_str());
-		DEBUGOTA("OTA password set %s\n", _password.c_str());
-	} else { return false;	}	
-
-
-#ifndef RELEASE
-	ArduinoOTA.onStart([]() {
-		DEBUGOTA("\r\n ArduinoOTA start. \r\n");
-	});
-
-#if defined(ESP32)
-	ArduinoOTA.onEnd(std::bind([](fs::LittleFSFS* fs)
-#elif defined(ESP8266)
-	ArduinoOTA.onEnd(std::bind([](FS* fs)
-#endif
-	{
-		fs->end();
-		DEBUGOTA("\r\n ArduinoOTA end. \r\n");
-	}, _fs));
-	ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
-		DEBUGOTA("\t OTA update progress: %u%% \r\n", (progress / (total / 100)));
-	});
-	ArduinoOTA.onError([](ota_error_t error) {
-		DEBUGOTA("Error[%u]: ", error);
-		if (error == OTA_AUTH_ERROR) 			{DEBUGOTA("Auth Failed\r\n");		}
-		else if (error == OTA_BEGIN_ERROR) 		{DEBUGOTA("Begin Failed\r\n");		}
-		else if (error == OTA_CONNECT_ERROR)	{DEBUGOTA("Connect Failed\r\n");	}
-		else if (error == OTA_RECEIVE_ERROR) 	{DEBUGOTA("Receive Failed\r\n");	}
-		else if (error == OTA_END_ERROR) 		{DEBUGOTA("End Failed\r\n");		}
-	});
-	DEBUGOTA("\r\n ArduinoOTA Ready \r\n");
-#endif // RELEASE
-	ArduinoOTA.begin();
-
-	return true;
-}
-
-
-void CLASS_CORE_OTA::fsEnd() {
-    if (_fs) {
-        DEBUGOTA("Ending filesystem...\n");
-        _fs->end();
-        _ota_fsEndCalled = true;
-        delay(100);
-    }
-}
-
-void CLASS_CORE_OTA::fsRemount() {
-    if (_fs) {
-        DEBUGOTA("Remounting filesystem...\n");
-#if defined(ESP32)
-        _fs->begin(true);
-#elif defined(ESP8266)
-        _fs->begin();
-#endif
-    }
-}
-
-int8_t CLASS_CORE_OTA::compareVersionDiffs(int32_t majorDiff, int32_t minorDiff, int64_t dateDiff, int32_t buildDiff) {
-    if (majorDiff > 0) return 1;
-    if (majorDiff < 0) return -1;
-    if (minorDiff > 0) return 1;
-    if (minorDiff < 0) return -1;
-    if (dateDiff > 0) return 1;
-    if (dateDiff < 0) return -1;
-    if (buildDiff > 0) return 1;
-    if (buildDiff < 0) return -1;
-    return 0;
-}
-
- void CLASS_CORE_OTA::loop(){
-	 ArduinoOTA.handle();
- }
-
+// ============================================================
+// web_Init()
+// ============================================================
 
  void CLASS_CORE_OTA::registerCommonRoutes() {
 	DEBUGOTA(__FUNCTION__);	DEBUGOTA("\r\n");
@@ -175,13 +91,16 @@ int8_t CLASS_CORE_OTA::compareVersionDiffs(int32_t majorDiff, int32_t minorDiff,
     registerCustomRoutes();
  }
 
+// ============================================================
+// Веб-обработчики
+// ============================================================
+
 void CLASS_CORE_OTA::html_fileuploadProgress(AsyncWebServerRequest *request) {
 	DEBUGOTA(__FUNCTION__);	DEBUGOTA("\r\n");
 	String values = "";
     values += "percent|"    + (String)fileUpadedpercent + "|div\n";
     request->send(200, "text/plain", values);
 }
-
 
 void CLASS_CORE_OTA::html_md5_set(AsyncWebServerRequest *request) {
 	DEBUGOTA(__FUNCTION__);	DEBUGOTA("\r\n");
@@ -211,92 +130,6 @@ void CLASS_CORE_OTA::html_md5_set(AsyncWebServerRequest *request) {
 	}
 
 }
-
-// ============================================================
-// NEW: Cache FS version info from version_fs.json
-// ============================================================
-
-void CLASS_CORE_OTA::cacheFsVersionInfo() {
-    if (_fsVersionCached) return;
-    
-    if (!_fs) {
-        DEBUGOTA("cacheFsVersionInfo: No FS mounted\n");
-        _fsVersionValid = false;
-        return;
-    }
-    
-    File jsonFile = _fs->open(FS_VERSION_JSON_PATH, "r");
-    if (!jsonFile) {
-        DEBUGOTA("cacheFsVersionInfo: version_fs.json not found\n");
-        _fsVersionCached = true;
-        _fsVersionValid = false;
-        return;
-    }
-    
-    String jsonStr;
-    while (jsonFile.available()) {
-        jsonStr += (char)jsonFile.read();
-    }
-    jsonFile.close();
-    
-    DEBUGOTA("cacheFsVersionInfo: Read %d bytes\n", jsonStr.length());
-    
-    _fsVersionValid = parseVersionFromJson(jsonStr, _cachedFsDate, _cachedFsBuild, _cachedFsMajor, _cachedFsMinor);
-    _fsVersionCached = true;
-}
-
-bool CLASS_CORE_OTA::parseVersionFromJson(const String& jsonStr, int64_t& date, int32_t& build, int32_t& major, int32_t& minor) {
-    if (!core_json.jsonParseNestedInt(jsonStr, "filesystem|version|major", major)) return false;
-    if (!core_json.jsonParseNestedInt(jsonStr, "filesystem|version|minor", minor)) return false;
-    
-    if (!core_json.jsonParseNestedInt64(jsonStr, "filesystem|version|date", date)) return false;
-    
-    if (!core_json.jsonParseNestedInt(jsonStr, "filesystem|version|build", build)) return false;
-    
-    core_json.jsonParseNestedStr(jsonStr, "filesystem|version|full_string", _cachedFsVersionStr);
-    
-    DEBUGOTA("parseVersionFromJson: FS version %d.%d.%lld.%d (%s)\n", 
-             major, minor, date, build, _cachedFsVersionStr.c_str());
-    
-    return true;
-}
-
-// ============================================================
-// NEW: Compare file version with current FS JSON or firmware
-// ============================================================
-
-int8_t CLASS_CORE_OTA::compareWithCurrentFsVersion(fileCompareResult* result, const String& filename) {
-    if (result->fileType == FILE_TYPE_FIRMWARE) {
-        result->fsCurrentMajor = VERSION_MAJOR;
-        result->fsCurrentMinor = VERSION_MINOR;
-        result->fsCurrentDate = VERSION_DATE;
-        result->fsCurrentBuild = VERSION_BUILD;
-    } else {
-        if (!_fsVersionCached) {
-            cacheFsVersionInfo();
-        }
-        if (!_fsVersionValid) {
-            result->fsVersionCompare = -2;
-            DEBUGOTA("compareWithCurrentFsVersion: FS version data invalid\n");
-            return result->fsVersionCompare;
-        }
-        result->fsCurrentMajor = _cachedFsMajor;
-        result->fsCurrentMinor = _cachedFsMinor;
-        result->fsCurrentDate = _cachedFsDate;
-        result->fsCurrentBuild = _cachedFsBuild;
-    }
-    
-    result->fsVersionCompare = compareVersionDiffs(result->majorDiff, result->minorDiff, result->dateDiff, result->buildDiff);
-    
-    DEBUGOTA("compareWithCurrentFsVersion (%s): current %d.%d.%lld.%d, diff %d\n",
-             (result->fileType == FILE_TYPE_FIRMWARE) ? "Firmware" : "FS",
-             result->fsCurrentMajor, result->fsCurrentMinor,
-             (long long)result->fsCurrentDate, result->fsCurrentBuild,
-             result->fsVersionCompare);
-    
-    return result->fsVersionCompare;
-}
-
 
 void CLASS_CORE_OTA::html_filename_check(AsyncWebServerRequest *request) {
     DEBUGOTA(__FUNCTION__); DEBUGOTA("\r\n");
@@ -402,8 +235,6 @@ void CLASS_CORE_OTA::html_filename_check(AsyncWebServerRequest *request) {
     request->send(200, "text/plain", values);
 }
 
-
-
 void CLASS_CORE_OTA::updateFileExecute (AsyncWebServerRequest *request) {
 	DEBUGOTA(__FUNCTION__);	DEBUGOTA("\r\n");
 	
@@ -434,6 +265,376 @@ void CLASS_CORE_OTA::updateFileExecute (AsyncWebServerRequest *request) {
 	}
 }
 
+void CLASS_CORE_OTA::html_uploadUpdateFile(AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final) {
+    String values = "";
+    static long totalSize = 0;
+    static bool errorOccurred = false;
+    static bool responseSent = false;  
+    int updatePartition = 1;
+    
+    DEBUGLOAD("index=%u, len=%u, final=%d\r\n", index, len, final);
+    
+    if (index == 0) {
+        DEBUGOTA("===== UPLOAD START =====\r\n");
+        DEBUGOTA("File: %s\r\n", filename.c_str());
+        
+        errorOccurred = false;
+        responseSent = false;  
+        totalSize = 0;
+        
+        prepareSizesForUpdate();
+        
+        if (typeOTAfile == FILE_TYPE_UNSUPPORTED) {
+            values = "OTA Update error UNSUPPORTED file!";
+            DEBUGOTA("%s\n", values.c_str());
+            request->send(500, "text/plain", values);
+            errorOccurred = true;
+            return;
+        }
+        
+        if (!isValidFilename(filename)) {
+            values = "Invalid filename";
+            DEBUGOTA("%s: %s\n", values.c_str(), filename.c_str());
+            request->send(500, "text/plain", values);
+            errorOccurred = true;
+            return;
+        }
+
+        if (typeOTAfile == FILE_TYPE_FIRMWARE) {
+            if (_updateFileSize > freeSketchSpace) {
+                values = "Firmware too large for available space!";
+                DEBUGOTA("%s %u > %u\n", values.c_str(), _updateFileSize, freeSketchSpace);
+                request->send(500, "text/plain", values);
+                errorOccurred = true;
+                return;
+            }
+        }
+
+        DEBUGOTA("Update start: %s\r\n", filename.c_str());
+        DEBUGOTA("Free sketch space: %u\r\n", freeSketchSpace);
+        DEBUGOTA("New sketch size: %u\r\n", _updateFileSize);
+
+        if (_browserFileMD5 == NULL || _browserFileMD5 == "") {
+            values = "OTA Update error no MD5 hash!";
+            DEBUGOTA("%s\n", values.c_str());
+            request->send(500, "text/plain", values);
+            errorOccurred = true;
+            return;
+        }
+        
+#if defined(ESP32)
+        if (typeOTAfile == FILE_TYPE_FILESYSTEM) { updatePartition = U_SPIFFS; }
+#elif defined(ESP8266)
+        if (typeOTAfile == FILE_TYPE_FILESYSTEM) { updatePartition = U_FS; }
+#endif
+        if (typeOTAfile == FILE_TYPE_FIRMWARE) { updatePartition = U_FLASH; }
+        
+        DEBUGOTA("Update partition: %d\r\n", updatePartition);
+        
+        fsEnd();
+        
+#if defined(ESP8266)
+        DEBUGOTA("Enabling async mode for ESP8266\n");
+        Update.runAsync(true);
+#endif
+        
+        if (Update.begin(_updateFileSize, updatePartition) == false) {
+#ifdef DEBUG_OTA
+            Update.printError(DEBUGOTASER);
+#endif
+            values = "OTA Update error at begin";
+            DEBUGOTA("%s\n", values.c_str());
+            request->send(500, "text/plain", values);
+            errorOccurred = true;
+            
+            fsRemount();
+            return;
+        }
+        
+        // Set MD5 AFTER Update.begin() - begin() resets the MD5 internally!
+        // Setting it before was useless - it was always cleared by begin()
+        Update.setMD5(_browserFileMD5.c_str());
+        DEBUGOTA("Hash from browser: %s\r\n", _browserFileMD5.c_str());
+    }
+    
+    if (errorOccurred)  { return; }
+    if (responseSent)   { return; }
+    
+    totalSize += len;
+    
+    uint16_t percentLoaded = (totalSize * 100) / _updateFileSize;
+    fileUpadedpercent = percentLoaded;
+    if ((percentLoaded % 5) == 0 && (percentLoaded != percentLoadedPrev)) {
+        percentLoadedPrev = percentLoaded;
+        DEBUGOTA("Uploaded: %ld bytes %u %%\r\n", totalSize, percentLoaded);
+    }
+
+    size_t written = Update.write(data, len);
+    if (written != len) {
+        values = "OTA Update error data load!";
+        DEBUGOTA("%s len=%d written=%d total=%ld\n", values.c_str(), len, written, totalSize);
+        request->send(500, "text/plain", values);
+        errorOccurred = true;
+        responseSent = true;  
+        
+#if defined(ESP32)
+        Update.abort();
+#elif defined(ESP8266)
+        Update.end();
+#endif
+        
+        fsRemount();
+        return;
+    }
+    
+    if (final) {
+        if (errorOccurred) {
+            return;
+        }
+        
+        String updateHash;
+        DEBUGOTA("Applying update...\n");
+        if (Update.end(true)) {
+            updateHash = Update.md5String();
+            DEBUGOTA("Upload finished. Calculated MD5: %s\r\n", updateHash.c_str());
+            
+#if defined(ESP32)
+            if (typeOTAfile == FILE_TYPE_FILESYSTEM) {
+                DEBUGOTA("FS update on ESP32: will reboot\n");
+                _fsVersionCached = false;
+            }
+#endif
+            // FIX: use _updateFileSize instead of request->contentLength()
+            // request->contentLength() includes HTTP overhead, not just the file size
+            DEBUGOTA("Update Success: %u\nRebooting...\r\n", _updateFileSize);
+            // Do NOT send response here - updateFileExecute() will handle it
+            // request->send() removed to prevent double-response with updateFileExecute()
+        } else {
+            updateHash = Update.md5String();
+            DEBUGOTA("Upload failed. Calculated MD5: %s\r\n", updateHash.c_str());
+#ifdef DEBUG_OTA
+            Update.printError(DEBUGOTASER);
+#endif
+            fsRemount();
+        }
+    }
+}
+
+// ============================================================
+// Версионные методы
+// ============================================================
+
+String CLASS_CORE_OTA::getVersionStr(){
+    return String(CORE_OTA_VERSION);
+}
+
+String CLASS_CORE_OTA::getGeneratedTime(){
+    return String(CORE_OTA_GENERATED_TIME);
+}
+
+String CLASS_CORE_OTA::getCommitDateStr(){
+    return String(CORE_OTA_COMMIT_DATE_STR);
+}
+
+void CLASS_CORE_OTA::html_ver_get(AsyncWebServerRequest *request) {
+    DEBUGOTA("%s\n\r", __FUNCTION__);
+    String values = "";
+    values += "otaversion|"     + getVersionStr()    + "|div\n";
+    values += "otagentime|"     + getGeneratedTime() + "|div\n";
+    values += "otagendate|"     + getCommitDateStr() + "|div\n";
+    
+    // Current firmware version (from version.h macros)
+    values += "fwVersion|"      + String(FIRMWARE_VERSION) + "|div\n";
+    
+    // Current filesystem version (from cache or version_fs.json)
+    if (!_fsVersionCached) {
+        cacheFsVersionInfo();
+    }
+    if (_cachedFsVersionStr != "") {
+        values += "fsVersion|"  + _cachedFsVersionStr + "|div\n";
+    } else {
+        values += "fsVersion|"  + String((int)_cachedFsMajor) + "." + String((int)_cachedFsMinor) + "." + String((long long)_cachedFsDate) + "." + String((long)_cachedFsBuild) + "|div\n";
+    }
+    
+    request->send(200, "text/plain", values);
+}
+
+// ============================================================
+// Конкретная логика модуля
+// ============================================================
+
+void CLASS_CORE_OTA::prepareSizesForUpdate (){
+	DEBUGOTA(__FUNCTION__);	DEBUGOTA("\r\n");
+	maxSketchSpace   = (ESP.getSketchSize() - 0x1000) & 0xFFFFF000;
+	freeSketchSpace  = ESP.getFreeSketchSpace();
+}
+
+bool  CLASS_CORE_OTA::ConfigureOTA( String _hostname, String _password) {
+	DEBUGOTA(__FUNCTION__);	DEBUGOTA("\r\n");
+	
+	if (_hostname != "") {
+	ArduinoOTA.setHostname(_hostname.c_str());
+	DEBUGOTA("OTA password set %s\n", _password.c_str());
+	} else { return false;	}
+
+	if (_password != "") {
+		ArduinoOTA.setPassword(_password.c_str());
+		DEBUGOTA("OTA password set %s\n", _password.c_str());
+	} else { return false;	}	
+
+
+#ifndef RELEASE
+	ArduinoOTA.onStart([]() {
+		DEBUGOTA("\r\n ArduinoOTA start. \r\n");
+	});
+
+#if defined(ESP32)
+	ArduinoOTA.onEnd(std::bind([](fs::LittleFSFS* fs)
+#elif defined(ESP8266)
+	ArduinoOTA.onEnd(std::bind([](FS* fs)
+#endif
+	{
+		fs->end();
+		DEBUGOTA("\r\n ArduinoOTA end. \r\n");
+	}, _fs));
+	ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
+		DEBUGOTA("\t OTA update progress: %u%% \r\n", (progress / (total / 100)));
+	});
+	ArduinoOTA.onError([](ota_error_t error) {
+		DEBUGOTA("Error[%u]: ", error);
+		if (error == OTA_AUTH_ERROR) 			{DEBUGOTA("Auth Failed\r\n");		}
+		else if (error == OTA_BEGIN_ERROR) 		{DEBUGOTA("Begin Failed\r\n");		}
+		else if (error == OTA_CONNECT_ERROR)	{DEBUGOTA("Connect Failed\r\n");	}
+		else if (error == OTA_RECEIVE_ERROR) 	{DEBUGOTA("Receive Failed\r\n");	}
+		else if (error == OTA_END_ERROR) 		{DEBUGOTA("End Failed\r\n");		}
+	});
+	DEBUGOTA("\r\n ArduinoOTA Ready \r\n");
+#endif // RELEASE
+	ArduinoOTA.begin();
+
+	return true;
+}
+
+void CLASS_CORE_OTA::fsEnd() {
+    if (_fs) {
+        DEBUGOTA("Ending filesystem...\n");
+        _fs->end();
+        _ota_fsEndCalled = true;
+        delay(100);
+    }
+}
+
+void CLASS_CORE_OTA::fsRemount() {
+    if (_fs) {
+        DEBUGOTA("Remounting filesystem...\n");
+#if defined(ESP32)
+        _fs->begin(true);
+#elif defined(ESP8266)
+        _fs->begin();
+#endif
+    }
+}
+
+int8_t CLASS_CORE_OTA::compareVersionDiffs(int32_t majorDiff, int32_t minorDiff, int64_t dateDiff, int32_t buildDiff) {
+    if (majorDiff > 0) return 1;
+    if (majorDiff < 0) return -1;
+    if (minorDiff > 0) return 1;
+    if (minorDiff < 0) return -1;
+    if (dateDiff > 0) return 1;
+    if (dateDiff < 0) return -1;
+    if (buildDiff > 0) return 1;
+    if (buildDiff < 0) return -1;
+    return 0;
+}
+
+ void CLASS_CORE_OTA::loop(){
+	 ArduinoOTA.handle();
+ }
+
+// ============================================================
+// NEW: Cache FS version info from version_fs.json
+// ============================================================
+
+void CLASS_CORE_OTA::cacheFsVersionInfo() {
+    if (_fsVersionCached) return;
+    
+    if (!_fs) {
+        DEBUGOTA("cacheFsVersionInfo: No FS mounted\n");
+        _fsVersionValid = false;
+        return;
+    }
+    
+    File jsonFile = _fs->open(FS_VERSION_JSON_PATH, "r");
+    if (!jsonFile) {
+        DEBUGOTA("cacheFsVersionInfo: version_fs.json not found\n");
+        _fsVersionCached = true;
+        _fsVersionValid = false;
+        return;
+    }
+    
+    String jsonStr;
+    while (jsonFile.available()) {
+        jsonStr += (char)jsonFile.read();
+    }
+    jsonFile.close();
+    
+    DEBUGOTA("cacheFsVersionInfo: Read %d bytes\n", jsonStr.length());
+    
+    _fsVersionValid = parseVersionFromJson(jsonStr, _cachedFsDate, _cachedFsBuild, _cachedFsMajor, _cachedFsMinor);
+    _fsVersionCached = true;
+}
+
+bool CLASS_CORE_OTA::parseVersionFromJson(const String& jsonStr, int64_t& date, int32_t& build, int32_t& major, int32_t& minor) {
+    if (!core_json.jsonParseNestedInt(jsonStr, "filesystem|version|major", major)) return false;
+    if (!core_json.jsonParseNestedInt(jsonStr, "filesystem|version|minor", minor)) return false;
+    
+    if (!core_json.jsonParseNestedInt64(jsonStr, "filesystem|version|date", date)) return false;
+    
+    if (!core_json.jsonParseNestedInt(jsonStr, "filesystem|version|build", build)) return false;
+    
+    core_json.jsonParseNestedStr(jsonStr, "filesystem|version|full_string", _cachedFsVersionStr);
+    
+    DEBUGOTA("parseVersionFromJson: FS version %d.%d.%lld.%d (%s)\n", 
+             major, minor, date, build, _cachedFsVersionStr.c_str());
+    
+    return true;
+}
+
+// ============================================================
+// NEW: Compare file version with current FS JSON or firmware
+// ============================================================
+
+int8_t CLASS_CORE_OTA::compareWithCurrentFsVersion(fileCompareResult* result, const String& filename) {
+    if (result->fileType == FILE_TYPE_FIRMWARE) {
+        result->fsCurrentMajor = VERSION_MAJOR;
+        result->fsCurrentMinor = VERSION_MINOR;
+        result->fsCurrentDate = VERSION_DATE;
+        result->fsCurrentBuild = VERSION_BUILD;
+    } else {
+        if (!_fsVersionCached) {
+            cacheFsVersionInfo();
+        }
+        if (!_fsVersionValid) {
+            result->fsVersionCompare = -2;
+            DEBUGOTA("compareWithCurrentFsVersion: FS version data invalid\n");
+            return result->fsVersionCompare;
+        }
+        result->fsCurrentMajor = _cachedFsMajor;
+        result->fsCurrentMinor = _cachedFsMinor;
+        result->fsCurrentDate = _cachedFsDate;
+        result->fsCurrentBuild = _cachedFsBuild;
+    }
+    
+    result->fsVersionCompare = compareVersionDiffs(result->majorDiff, result->minorDiff, result->dateDiff, result->buildDiff);
+    
+    DEBUGOTA("compareWithCurrentFsVersion (%s): current %d.%d.%lld.%d, diff %d\n",
+             (result->fileType == FILE_TYPE_FIRMWARE) ? "Firmware" : "FS",
+             result->fsCurrentMajor, result->fsCurrentMinor,
+             (long long)result->fsCurrentDate, result->fsCurrentBuild,
+             result->fsVersionCompare);
+    
+    return result->fsVersionCompare;
+}
 
 int8_t CLASS_CORE_OTA::fileNameCheck(String filename, fileCompareResult* result) {
     DEBUGOTA(__FUNCTION__); DEBUGOTA("\r\n");
@@ -618,200 +819,4 @@ bool CLASS_CORE_OTA::isValidFilename(const String& filename) {
         }
     }
     return true;
-}
-
-
-
-void CLASS_CORE_OTA::html_uploadUpdateFile(AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final) {
-    String values = "";
-    static long totalSize = 0;
-    static bool errorOccurred = false;
-    static bool responseSent = false;  
-    int updatePartition = 1;
-    
-    DEBUGLOAD("index=%u, len=%u, final=%d\r\n", index, len, final);
-    
-    if (index == 0) {
-        DEBUGOTA("===== UPLOAD START =====\r\n");
-        DEBUGOTA("File: %s\r\n", filename.c_str());
-        
-        errorOccurred = false;
-        responseSent = false;  
-        totalSize = 0;
-        
-        prepareSizesForUpdate();
-        
-        if (typeOTAfile == FILE_TYPE_UNSUPPORTED) {
-            values = "OTA Update error UNSUPPORTED file!";
-            DEBUGOTA("%s\n", values.c_str());
-            request->send(500, "text/plain", values);
-            errorOccurred = true;
-            return;
-        }
-        
-        if (!isValidFilename(filename)) {
-            values = "Invalid filename";
-            DEBUGOTA("%s: %s\n", values.c_str(), filename.c_str());
-            request->send(500, "text/plain", values);
-            errorOccurred = true;
-            return;
-        }
-
-        if (typeOTAfile == FILE_TYPE_FIRMWARE) {
-            if (_updateFileSize > freeSketchSpace) {
-                values = "Firmware too large for available space!";
-                DEBUGOTA("%s %u > %u\n", values.c_str(), _updateFileSize, freeSketchSpace);
-                request->send(500, "text/plain", values);
-                errorOccurred = true;
-                return;
-            }
-        }
-
-        DEBUGOTA("Update start: %s\r\n", filename.c_str());
-        DEBUGOTA("Free sketch space: %u\r\n", freeSketchSpace);
-        DEBUGOTA("New sketch size: %u\r\n", _updateFileSize);
-
-        if (_browserFileMD5 == NULL || _browserFileMD5 == "") {
-            values = "OTA Update error no MD5 hash!";
-            DEBUGOTA("%s\n", values.c_str());
-            request->send(500, "text/plain", values);
-            errorOccurred = true;
-            return;
-        }
-        
-#if defined(ESP32)
-        if (typeOTAfile == FILE_TYPE_FILESYSTEM) { updatePartition = U_SPIFFS; }
-#elif defined(ESP8266)
-        if (typeOTAfile == FILE_TYPE_FILESYSTEM) { updatePartition = U_FS; }
-#endif
-        if (typeOTAfile == FILE_TYPE_FIRMWARE) { updatePartition = U_FLASH; }
-        
-        DEBUGOTA("Update partition: %d\r\n", updatePartition);
-        
-        fsEnd();
-        
-#if defined(ESP8266)
-        DEBUGOTA("Enabling async mode for ESP8266\n");
-        Update.runAsync(true);
-#endif
-        
-        if (Update.begin(_updateFileSize, updatePartition) == false) {
-#ifdef DEBUG_OTA
-            Update.printError(DEBUGOTASER);
-#endif
-            values = "OTA Update error at begin";
-            DEBUGOTA("%s\n", values.c_str());
-            request->send(500, "text/plain", values);
-            errorOccurred = true;
-            
-            fsRemount();
-            return;
-        }
-        
-        // Set MD5 AFTER Update.begin() - begin() resets the MD5 internally!
-        // Setting it before was useless - it was always cleared by begin()
-        Update.setMD5(_browserFileMD5.c_str());
-        DEBUGOTA("Hash from browser: %s\r\n", _browserFileMD5.c_str());
-    }
-    
-    if (errorOccurred)  { return; }
-    if (responseSent)   { return; }
-    
-    totalSize += len;
-    
-    uint16_t percentLoaded = (totalSize * 100) / _updateFileSize;
-    fileUpadedpercent = percentLoaded;
-    if ((percentLoaded % 5) == 0 && (percentLoaded != percentLoadedPrev)) {
-        percentLoadedPrev = percentLoaded;
-        DEBUGOTA("Uploaded: %ld bytes %u %%\r\n", totalSize, percentLoaded);
-    }
-
-    size_t written = Update.write(data, len);
-    if (written != len) {
-        values = "OTA Update error data load!";
-        DEBUGOTA("%s len=%d written=%d total=%ld\n", values.c_str(), len, written, totalSize);
-        request->send(500, "text/plain", values);
-        errorOccurred = true;
-        responseSent = true;  
-        
-#if defined(ESP32)
-        Update.abort();
-#elif defined(ESP8266)
-        Update.end();
-#endif
-        
-        fsRemount();
-        return;
-    }
-    
-    if (final) {
-        if (errorOccurred) {
-            return;
-        }
-        
-        String updateHash;
-        DEBUGOTA("Applying update...\n");
-        if (Update.end(true)) {
-            updateHash = Update.md5String();
-            DEBUGOTA("Upload finished. Calculated MD5: %s\r\n", updateHash.c_str());
-            
-#if defined(ESP32)
-            if (typeOTAfile == FILE_TYPE_FILESYSTEM) {
-                DEBUGOTA("FS update on ESP32: will reboot\n");
-                _fsVersionCached = false;
-            }
-#endif
-            // FIX: use _updateFileSize instead of request->contentLength()
-            // request->contentLength() includes HTTP overhead, not just the file size
-            DEBUGOTA("Update Success: %u\nRebooting...\r\n", _updateFileSize);
-            // Do NOT send response here - updateFileExecute() will handle it
-            // request->send() removed to prevent double-response with updateFileExecute()
-        } else {
-            updateHash = Update.md5String();
-            DEBUGOTA("Upload failed. Calculated MD5: %s\r\n", updateHash.c_str());
-#ifdef DEBUG_OTA
-            Update.printError(DEBUGOTASER);
-#endif
-            fsRemount();
-        }
-    }
-}
-
-
-
-String CLASS_CORE_OTA::getVersionStr(){
-    return String(CORE_OTA_VERSION);
-}
-
-String CLASS_CORE_OTA::getGeneratedTime(){
-    return String(CORE_OTA_GENERATED_TIME);
-}
-
-String CLASS_CORE_OTA::getCommitDateStr(){
-    return String(CORE_OTA_COMMIT_DATE_STR);
-}
-
-
-
-void CLASS_CORE_OTA::html_ver_get(AsyncWebServerRequest *request) {
-    DEBUGOTA("%s\n\r", __FUNCTION__);
-    String values = "";
-    values += "otaversion|"     + getVersionStr()    + "|div\n";
-    values += "otagentime|"     + getGeneratedTime() + "|div\n";
-    values += "otagendate|"     + getCommitDateStr() + "|div\n";
-    
-    // Current firmware version (from version.h macros)
-    values += "fwVersion|"      + String(FIRMWARE_VERSION) + "|div\n";
-    
-    // Current filesystem version (from cache or version_fs.json)
-    if (!_fsVersionCached) {
-        cacheFsVersionInfo();
-    }
-    if (_cachedFsVersionStr != "") {
-        values += "fsVersion|"  + _cachedFsVersionStr + "|div\n";
-    } else {
-        values += "fsVersion|"  + String((int)_cachedFsMajor) + "." + String((int)_cachedFsMinor) + "." + String((long long)_cachedFsDate) + "." + String((long)_cachedFsBuild) + "|div\n";
-    }
-    
-    request->send(200, "text/plain", values);
 }

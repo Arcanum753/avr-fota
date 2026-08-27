@@ -8,6 +8,9 @@
 CLASS_MODULE_I2C_MAPPER module_i2c_mapper(false);
 CLASS_MODULE_I2C_MAPPER::CLASS_MODULE_I2C_MAPPER(bool _in) { dumb = _in; }
 
+// ============================================================
+// begin()
+// ============================================================
 void CLASS_MODULE_I2C_MAPPER::begin() {
     DEBUGI2CMAPPER("%s\r\n", __FUNCTION__);
 }
@@ -17,6 +20,9 @@ void CLASS_MODULE_I2C_MAPPER::begin(ModContext& ctx) {
     begin();
 }
 
+// ============================================================
+// web_Init()
+// ============================================================
 void CLASS_MODULE_I2C_MAPPER::web_Init() {
     DEBUGI2CMAPPER("%s\r\n", __FUNCTION__);
 
@@ -30,6 +36,9 @@ void CLASS_MODULE_I2C_MAPPER::web_Init() {
     });
 }
 
+// ============================================================
+// Веб-обработчики
+// ============================================================
 void CLASS_MODULE_I2C_MAPPER::handleScan(AsyncWebServerRequest *request) {
     DEBUGI2CMAPPER("%s\r\n", __FUNCTION__);
 
@@ -67,6 +76,9 @@ void CLASS_MODULE_I2C_MAPPER::handleScan(AsyncWebServerRequest *request) {
     request->send(200, "application/json", result);
 }
 
+// ============================================================
+// Версионные методы
+// ============================================================
 String CLASS_MODULE_I2C_MAPPER::getVersionStr() {
     return String(MODULE_I2C_MAPPER_VERSION);
 }

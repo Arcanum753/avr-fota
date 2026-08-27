@@ -42,6 +42,8 @@ typedef struct {
     uint8_t eqLedsPerBand;
 } strRgbConfig;
 
+uint32_t hexStringToUint32(const String& hexStr);
+
 class CLASS_MODULE_RGB {
 public:
     CLASS_MODULE_RGB();

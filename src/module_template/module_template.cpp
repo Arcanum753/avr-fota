@@ -20,6 +20,9 @@ void CLASS_MODULE_TEMPLATE::setFs(FS* fs)
     _fs = fs;
 }
 
+// ============================================================
+// begin()
+// ============================================================
 void CLASS_MODULE_TEMPLATE::begin() {
     DEBUGTEMPLATE("%s\r\n", __FUNCTION__);
 
@@ -41,27 +44,9 @@ void CLASS_MODULE_TEMPLATE::begin(ModContext& ctx) {
     begin();
 }
 
-void CLASS_MODULE_TEMPLATE::applyGpioState() {
-
-    digitalWrite(TEMPLATE_GPIO1, _config.gpio1State ? HIGH : LOW);
-    digitalWrite(TEMPLATE_GPIO2, _config.gpio2State ? HIGH : LOW);
-}
-
-void CLASS_MODULE_TEMPLATE::blinkTimerTask() {
-    if (module_template._config.blinkInterval == 0) {
-        module_template.applyGpioState();
-        return;
-    }
-
-    module_template._blinkState = !module_template._blinkState;
-
-    digitalWrite(TEMPLATE_GPIO1,
-    (module_template._blinkState && module_template._config.gpio1State) ? HIGH : LOW);
-    digitalWrite(TEMPLATE_GPIO2,
-    (module_template._blinkState && module_template._config.gpio2State) ? HIGH : LOW);
-    SetTimerTask(blinkTimerTask, module_template._config.blinkInterval);
-}
-
+// ============================================================
+// web_Init()
+// ============================================================
 void CLASS_MODULE_TEMPLATE::web_Init() {
     DEBUGTEMPLATE("%s\r\n", __FUNCTION__);
 
@@ -95,7 +80,9 @@ void CLASS_MODULE_TEMPLATE::web_Init() {
     });
 }
 
-// ========== ВЕБ-ОБРАБОТЧИКИ ==========
+// ============================================================
+// Веб-обработчики
+// ============================================================
 void CLASS_MODULE_TEMPLATE::handleInfo(AsyncWebServerRequest *request) {
     DEBUGTEMPLATE("%s\r\n", __FUNCTION__);
     String values = "";
@@ -192,7 +179,9 @@ void CLASS_MODULE_TEMPLATE::handleConfigDemo(AsyncWebServerRequest *request) {
     }
 }
 
-// ========== РАБОТА С КОНФИГОМ ==========
+// ============================================================
+// Конфиг
+// ============================================================
 
 void CLASS_MODULE_TEMPLATE::defaultConfigTemplate() {
     _config.gpio1State     = false;
@@ -250,7 +239,9 @@ bool CLASS_MODULE_TEMPLATE::save_config_template() {
     return core_json.jsonFileSaveDoc(CONFIG_FILE_TEMPLATE, doc);
 }
 
-// ========== ВЕРСИОННЫЕ МЕТОДЫ ==========
+// ============================================================
+// Версионные методы
+// ============================================================
 
 String CLASS_MODULE_TEMPLATE::getVersionStr() {
     return String(MODULE_TEMPLATE_VERSION);
@@ -271,4 +262,29 @@ void CLASS_MODULE_TEMPLATE::html_ver_get(AsyncWebServerRequest *request) {
     values += "templategentime|" + getGeneratedTime() + "|div\n";
     values += "templategendate|" + getCommitDateStr() + "|div\n";
     request->send(200, "text/plain", values);
+}
+
+// ============================================================
+// Конкретная логика модуля
+// ============================================================
+
+void CLASS_MODULE_TEMPLATE::applyGpioState() {
+
+    digitalWrite(TEMPLATE_GPIO1, _config.gpio1State ? HIGH : LOW);
+    digitalWrite(TEMPLATE_GPIO2, _config.gpio2State ? HIGH : LOW);
+}
+
+void CLASS_MODULE_TEMPLATE::blinkTimerTask() {
+    if (module_template._config.blinkInterval == 0) {
+        module_template.applyGpioState();
+        return;
+    }
+
+    module_template._blinkState = !module_template._blinkState;
+
+    digitalWrite(TEMPLATE_GPIO1,
+    (module_template._blinkState && module_template._config.gpio1State) ? HIGH : LOW);
+    digitalWrite(TEMPLATE_GPIO2,
+    (module_template._blinkState && module_template._config.gpio2State) ? HIGH : LOW);
+    SetTimerTask(blinkTimerTask, module_template._config.blinkInterval);
 }

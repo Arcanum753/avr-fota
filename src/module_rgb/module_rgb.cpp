@@ -26,6 +26,9 @@ void CLASS_MODULE_RGB::setFs(FS* fs)
     _pendingApply = false;
 }
 
+// ============================================================
+// begin()
+// ============================================================
 void CLASS_MODULE_RGB::begin() {
     DEBUGRGB("%s\r\n", __FUNCTION__);
 
@@ -45,6 +48,9 @@ void CLASS_MODULE_RGB::begin(ModContext& ctx) {
     begin();
 }
 
+// ============================================================
+// web_Init()
+// ============================================================
 void CLASS_MODULE_RGB::web_Init() {
     DEBUGRGB("%s\r\n", __FUNCTION__);
 
@@ -68,7 +74,9 @@ void CLASS_MODULE_RGB::web_Init() {
     });
 }
 
-// ========== ВЕБ-ОБРАБОТЧИКИ ==========
+// ============================================================
+// Веб-обработчики
+// ============================================================
 
 void CLASS_MODULE_RGB::handleInfo(AsyncWebServerRequest *request) {
     DEBUGRGB("%s\r\n", __FUNCTION__);
@@ -101,15 +109,6 @@ void CLASS_MODULE_RGB::handleInfo(AsyncWebServerRequest *request) {
     values += "eqLedsPerBand|" + String(_config.eqLedsPerBand)          + "|input\n";
 
     request->send(200, "text/plain", values);
-}
-
-uint32_t hexStringToUint32(const String& hexStr) {
-    if (hexStr.length() == 0) return 0;
-    String clean = hexStr;
-    clean.replace("#", "");
-    clean.replace("0x", "");
-    clean.replace("0X", "");
-    return (uint32_t)strtoul(clean.c_str(), NULL, 16);
 }
 
 void CLASS_MODULE_RGB::handleSave(AsyncWebServerRequest *request) {
@@ -218,7 +217,9 @@ void CLASS_MODULE_RGB::handleSetPixel(AsyncWebServerRequest *request) {
     request->send(200, "text/plain", "OK");
 }
 
-// ========== РАБОТА С КОНФИГОМ ==========
+// ============================================================
+// Конфиг
+// ============================================================
 
 void CLASS_MODULE_RGB::defaultConfigRgb() {
     _config.dataPin        = 16;
@@ -294,7 +295,43 @@ bool CLASS_MODULE_RGB::saveConfigRgb() {
     return core_json.jsonFileSaveDoc(CONFIG_FILE_RGB, doc);
 }
 
-// ========== РАБОТА С ЛЕНТОЙ ==========
+// ============================================================
+// Версионные методы
+// ============================================================
+
+String CLASS_MODULE_RGB::getVersionStr() {
+    return String(MODULE_RGB_VERSION);
+}
+
+String CLASS_MODULE_RGB::getGeneratedTime() {
+    return String(MODULE_RGB_GENERATED_TIME);
+}
+
+String CLASS_MODULE_RGB::getCommitDateStr() {
+    return String(MODULE_RGB_COMMIT_DATE_STR);
+}
+
+void CLASS_MODULE_RGB::html_ver_get(AsyncWebServerRequest *request) {
+    DEBUGRGB("%s\r\n", __FUNCTION__);
+    String values = "";
+    values += "rgbversion|" + getVersionStr()    + "|div\n";
+    values += "rgbgentime|" + getGeneratedTime() + "|div\n";
+    values += "rbggendate|" + getCommitDateStr() + "|div\n";
+    request->send(200, "text/plain", values);
+}
+
+// ============================================================
+// Конкретная логика модуля
+// ============================================================
+
+uint32_t hexStringToUint32(const String& hexStr) {
+    if (hexStr.length() == 0) return 0;
+    String clean = hexStr;
+    clean.replace("#", "");
+    clean.replace("0x", "");
+    clean.replace("0X", "");
+    return (uint32_t)strtoul(clean.c_str(), NULL, 16);
+}
 
 void CLASS_MODULE_RGB::initStrip() {
     DEBUGRGB("%s: numLeds=%d\r\n", __FUNCTION__, _config.numLeds);
@@ -475,27 +512,4 @@ void CLASS_MODULE_RGB::deferredApplyTask() {
         module_rgb.applyMode();
         module_rgb._pendingApply = false;
     }
-}
-
-// ========== ВЕРСИОННЫЕ МЕТОДЫ ==========
-
-String CLASS_MODULE_RGB::getVersionStr() {
-    return String(MODULE_RGB_VERSION);
-}
-
-String CLASS_MODULE_RGB::getGeneratedTime() {
-    return String(MODULE_RGB_GENERATED_TIME);
-}
-
-String CLASS_MODULE_RGB::getCommitDateStr() {
-    return String(MODULE_RGB_COMMIT_DATE_STR);
-}
-
-void CLASS_MODULE_RGB::html_ver_get(AsyncWebServerRequest *request) {
-    DEBUGRGB("%s\r\n", __FUNCTION__);
-    String values = "";
-    values += "rgbversion|" + getVersionStr()    + "|div\n";
-    values += "rgbgentime|" + getGeneratedTime() + "|div\n";
-    values += "rbggendate|" + getCommitDateStr() + "|div\n";
-    request->send(200, "text/plain", values);
 }

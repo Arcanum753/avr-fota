@@ -18,20 +18,6 @@ void CLASS_DEVICE_RINGMECH::setFs(fs::LittleFSFS* fs)  {   _fs = fs;   }
 volatile uint16_t step_time = RINGMECH_SPEED_DEFAULT;
 
 // ============================================================
-// Время из источника
-// ============================================================
-time_t CLASS_DEVICE_RINGMECH::getCurrentTime() {
-#if defined(MODULE_DS3231)
-    if (_config.timeSource == "ds3231") {
-        time_t t = module_ds3231.getTime();
-        if (t > 0) { return t; }
-        DEBUGRINGMECH("DS3231 error, fallback to NTP\r\n");
-    }
-#endif
-    return now();
-}
-
-// ============================================================
 // begin()
 // ============================================================
 void CLASS_DEVICE_RINGMECH::begin() {
@@ -40,6 +26,7 @@ void CLASS_DEVICE_RINGMECH::begin() {
     _mechControlSteps = 0;
     _ringStatus = RING_STATUS_IDLE;
     _sensorState = digitalRead(RINGMECH_SENS);
+    _timeHourPrev = 0xFF;
 
     defaultConfig();
     if (loadConfig() == false) { saveConfig(); }
@@ -59,7 +46,7 @@ void CLASS_DEVICE_RINGMECH::begin(ModContext& ctx) {
 }
 
 // ============================================================
-// webInit()
+// web_Init()
 // ============================================================
 void CLASS_DEVICE_RINGMECH::web_Init() {
     DEBUGRINGMECH("%s\r\n", __FUNCTION__);
@@ -82,19 +69,6 @@ void CLASS_DEVICE_RINGMECH::web_Init() {
     ESPHTTPServer.on("/ring-mech/status", HTTP_GET, [](AsyncWebServerRequest *request) { if (ESPHTTPServer.checkAuth(request)) cmdStatusWeb(request); else request->requestAuthentication(); });
     ESPHTTPServer.on("/ring-mech/reset",  HTTP_GET, [](AsyncWebServerRequest *request) { if (ESPHTTPServer.checkAuth(request)) cmdResetWeb(request);  else request->requestAuthentication(); });
     ESPHTTPServer.on("/ring-mech/ver",    HTTP_GET, [this](AsyncWebServerRequest *request) { this->html_ver_get(request);});
-}
-
-void ringMechTerminalRegister() {
-    term.addCommand("r-enc",   CLASS_DEVICE_RINGMECH::cmdEn);
-    term.addCommand("r-sens",  CLASS_DEVICE_RINGMECH::cmdSens);
-    term.addCommand("r-home",  CLASS_DEVICE_RINGMECH::cmdHome);
-    term.addCommand("r-cnt",   CLASS_DEVICE_RINGMECH::cmdCount);
-    term.addCommand("r-mode",  CLASS_DEVICE_RINGMECH::cmdMode);
-    term.addCommand("r-stat",  CLASS_DEVICE_RINGMECH::cmdStatus);
-    term.addCommand("r-save",  CLASS_DEVICE_RINGMECH::cmdSave);
-    term.addCommand("r-trn",   CLASS_DEVICE_RINGMECH::cmdTurn);
-    term.addCommand("r-time",  CLASS_DEVICE_RINGMECH::cmdTime);
-    term.addCommand("r-src",   CLASS_DEVICE_RINGMECH::cmdSource);
 }
 
 // ============================================================
@@ -162,9 +136,7 @@ void CLASS_DEVICE_RINGMECH::handleSave(AsyncWebServerRequest *request) {
     }
 }
 
-// ============================================================
 // Эндпоинты ручного управления (GET, JSON)
-// ============================================================
 
 void CLASS_DEVICE_RINGMECH::cmdEnWeb(AsyncWebServerRequest *request) {
     cmdEn();
@@ -223,6 +195,118 @@ void CLASS_DEVICE_RINGMECH::cmdResetWeb(AsyncWebServerRequest *request) {
 }
 
 // ============================================================
+// Конфиг
+// ============================================================
+void CLASS_DEVICE_RINGMECH::defaultConfig() {
+    _config.enable_status      = RING_MODE_DEBUG;
+    _config.stepsPerRevolution = 0;
+    _config.pollInterval       = 5;
+    _config.errorLimitSteps    = 500;
+    _config.ringPauseOne        = RINGMECH_RING_FIRST_PAUSE_DEFAULT ;
+    _config.ringPauseTwo        = RINGMECH_RING_SECON_PAUSE_DEFAULT;
+    _config.firstPosition       = RINGMECH_FIRST_POSITION_DEFAULT;
+    _config.time_begin          = RINGMECH_TIME_BEGIN_DEFAULT;
+    _config.time_end            = RINGMECH_TIME_END_DEFAULT;
+    _config.timeSource          = "ds3231";
+}
+
+bool CLASS_DEVICE_RINGMECH::loadConfig() {
+    DEBUGRINGMECH("%s\r\n", __FUNCTION__);
+    JsonDocument doc;
+    if (core_json.jsonFileLoadDoc(CONFIG_FILE_RINGMECH, doc) == false) { return false; }
+
+    _config.enable_status       = doc["enable_status"].as<uint8_t>();
+    _config.stepsPerRevolution  = doc["stepsPerRevolution"].as<uint16_t>();
+    _config.pollInterval        = doc["pollInterval"].as<uint16_t>();
+    _config.errorLimitSteps     = doc["errorLimitSteps"].as<uint16_t>();
+    _config.ringPauseOne           = doc["ringPauseOne"].as<uint16_t>();
+    _config.ringPauseTwo           = doc["ringPauseTwo"].as<uint16_t>();
+    _config.firstPosition       = doc["firstPosition"].as<uint8_t>();
+    _config.time_begin           = doc["time_begin"].as<uint8_t>();
+    _config.time_end             = doc["time_end"].as<uint8_t>();
+    _config.timeSource           = doc["timeSource"].as<String>();
+
+    if (_config.timeSource != "ds3231" && _config.timeSource != "ntp") { _config.timeSource = "ds3231"; }
+    if (_config.time_begin > 23) _config.time_begin = RINGMECH_TIME_BEGIN_DEFAULT;
+    if (_config.time_end   > 23) _config.time_end   = RINGMECH_TIME_END_DEFAULT;
+    if (_config.time_begin > _config.time_end && !(_config.time_begin == 0 && _config.time_end == 0)) { _config.time_begin = RINGMECH_TIME_BEGIN_DEFAULT; _config.time_end = RINGMECH_TIME_END_DEFAULT; }
+
+    if (_config.pollInterval < 1)   { _config.pollInterval = 5; }
+    if (_config.stepsPerRevolution < 1) { _config.stepsPerRevolution = 400; }
+    if (_config.ringPauseOne < 1)      { _config.ringPauseOne = RINGMECH_RING_FIRST_PAUSE_DEFAULT; }
+    if (_config.ringPauseTwo < 1)      { _config.ringPauseTwo = RINGMECH_RING_SECON_PAUSE_DEFAULT; }
+
+    return true;
+}
+
+bool CLASS_DEVICE_RINGMECH::saveConfig() {
+    DEBUGRINGMECH("%s\r\n", __FUNCTION__);
+    JsonDocument doc;
+    core_json.jsonFileLoadDoc(CONFIG_FILE_RINGMECH, doc);
+    doc["enable_status"]        = _config.enable_status;
+    doc["stepsPerRevolution"]   = _config.stepsPerRevolution;
+    doc["pollInterval"]         = _config.pollInterval;
+    doc["errorLimitSteps"]      = _config.errorLimitSteps;
+    doc["ringPauseOne"]         = _config.ringPauseOne;
+    doc["ringPauseTwo"]         = _config.ringPauseTwo;
+    doc["firstPosition"]        = _config.firstPosition;
+    doc["time_begin"]           = _config.time_begin;
+    doc["time_end"]             = _config.time_end;
+    doc["timeSource"]           = _config.timeSource;
+    return core_json.jsonFileSaveDoc(CONFIG_FILE_RINGMECH, doc);
+}
+
+// ============================================================
+// Версионные методы
+// ============================================================
+String CLASS_DEVICE_RINGMECH::getVersionStr() { return String(DEVICE_MECH_RING_VERSION);  }
+String CLASS_DEVICE_RINGMECH::getGeneratedTime() { return String(DEVICE_MECH_RING_GENERATED_TIME);    }
+String CLASS_DEVICE_RINGMECH::getCommitDateStr() { return String(DEVICE_MECH_RING_COMMIT_DATE_STR);   }
+
+void CLASS_DEVICE_RINGMECH::html_ver_get(AsyncWebServerRequest *request) {
+    DEBUGRINGMECH("%s\r\n", __FUNCTION__);
+    String values = "";
+    values += "ringmechversion|" + getVersionStr()    + "|div\n";
+    values += "ringmechgentime|" + getGeneratedTime() + "|div\n";
+    values += "ringmechgendate|" + getCommitDateStr() + "|div\n";
+    request->send(200, "text/plain", values);
+}
+
+// ============================================================
+// Конкретная логика модуля
+// ============================================================
+
+// ============================================================
+// Регистрация терминальных команд
+// ============================================================
+void ringMechTerminalRegister() {
+    term.addCommand("r-enc",   CLASS_DEVICE_RINGMECH::cmdEn);
+    term.addCommand("r-sens",  CLASS_DEVICE_RINGMECH::cmdSens);
+    term.addCommand("r-home",  CLASS_DEVICE_RINGMECH::cmdHome);
+    term.addCommand("r-cnt",   CLASS_DEVICE_RINGMECH::cmdCount);
+    term.addCommand("r-mode",  CLASS_DEVICE_RINGMECH::cmdMode);
+    term.addCommand("r-stat",  CLASS_DEVICE_RINGMECH::cmdStatus);
+    term.addCommand("r-save",  CLASS_DEVICE_RINGMECH::cmdSave);
+    term.addCommand("r-trn",   CLASS_DEVICE_RINGMECH::cmdTurn);
+    term.addCommand("r-time",  CLASS_DEVICE_RINGMECH::cmdTime);
+    term.addCommand("r-src",   CLASS_DEVICE_RINGMECH::cmdSource);
+}
+
+// ============================================================
+// Время из источника
+// ============================================================
+time_t CLASS_DEVICE_RINGMECH::getCurrentTime() {
+#if defined(MODULE_DS3231)
+    if (_config.timeSource == "ds3231") {
+        time_t t = module_ds3231.getTime();
+        if (t > 0) { return t; }
+        DEBUGRINGMECH("DS3231 error, fallback to NTP\r\n");
+    }
+#endif
+    return now();
+}
+
+// ============================================================
 // Инициализация GPIO
 // ============================================================
 void CLASS_DEVICE_RINGMECH::MechInitGPIOs() {
@@ -247,111 +331,8 @@ void CLASS_DEVICE_RINGMECH::MechMoveStepUp() {
 }
 
 // ============================================================
-// Терминальные команды
-// ============================================================
-
-
-void CLASS_DEVICE_RINGMECH::cmdEn() {
-    bool en = digitalRead(RINGMECH_EN);
-    digitalWrite(RINGMECH_EN, en == LOW ? HIGH : LOW);
-    Serial.printf("Driver: %s\r\n", en == LOW ? "OFF" : "ON");
-}
-
-void CLASS_DEVICE_RINGMECH::cmdSens() { Serial.printf("SENS=%d\r\n", digitalRead(RINGMECH_SENS)); }
-void CLASS_DEVICE_RINGMECH::cmdHome() { SetTask(MechHomeSetup); }
-void CLASS_DEVICE_RINGMECH::cmdCount() { SetTask(MechCountStepsSetup); }
-void CLASS_DEVICE_RINGMECH::cmdSave() { device_mech_ring.saveConfig(); }
-
-
-
-void CLASS_DEVICE_RINGMECH::cmdTurn() {
-    if (device_mech_ring._mechTurnTarget != 0) { Serial.println("Busy: previous r-turn still running"); return; }
-    if (device_mech_ring._config.enable_status == RING_MODE_WORK) { Serial.println("Blocked: WORK mode"); return; }
-    char *arg = term.getNext();
-    if (arg == NULL) { Serial.println("Usage: r-turn <N>"); return; }
-    device_mech_ring._mechTurnTarget = (uint16_t)atoi(arg);
-    if (device_mech_ring._mechTurnTarget == 0) return;
-    SetTask(MechTurnNCount);
-}
-
-void CLASS_DEVICE_RINGMECH::cmdMode() {
-    char *arg = term.getNext();
-    if (arg == NULL) { device_mech_ring._config.enable_status = !device_mech_ring._config.enable_status; } 
-    else {
-        String s(arg);
-        if (s == "dbg" || s == "debug")       { device_mech_ring._config.enable_status = RING_MODE_DEBUG; }
-        else if (s == "work")                 { device_mech_ring._config.enable_status = RING_MODE_WORK; }
-        else { Serial.println("Usage: c-mode [dbg|work]"); return; }
-    }
-    Serial.printf("Mode: %s\r\n", device_mech_ring._config.enable_status == RING_MODE_WORK ? "WORK" : "DEBUG");
-}
-
-void CLASS_DEVICE_RINGMECH::cmdStatus() {
-    Serial.printf("===== RingMech Status =====\r\n");
-    Serial.printf("_ringStatus:           %d\r\n",      device_mech_ring._ringStatus);
-    Serial.printf("_config.enable_status: %d\r\n",      device_mech_ring._config.enable_status);
-    Serial.printf("_config.stepsPerRevolution: %d\r\n", device_mech_ring._config.stepsPerRevolution);
-    Serial.printf("_config.pollInterval:  %d\r\n",      device_mech_ring._config.pollInterval);
-    Serial.printf("_config.errorLimitSteps: %d\r\n",    device_mech_ring._config.errorLimitSteps);
-    Serial.printf("_config.ringPauseOne:     %d\r\n",      device_mech_ring._config.ringPauseOne);
-    Serial.printf("_config.ringPauseTwo:     %d\r\n",      device_mech_ring._config.ringPauseTwo);
-    Serial.printf("_config.firstPosition: %d\r\n",      device_mech_ring._config.firstPosition);
-    Serial.printf("_config.time_begin:    %d\r\n",      device_mech_ring._config.time_begin);
-    Serial.printf("_config.time_end:      %d\r\n",      device_mech_ring._config.time_end);
-    Serial.printf("_config.timeSource:    %s\r\n",      device_mech_ring._config.timeSource.c_str());
-    Serial.printf("_mechControlSteps:     %d\r\n",      device_mech_ring._mechControlSteps);
-    Serial.printf("_mechTurnTarget:       %d\r\n",      device_mech_ring._mechTurnTarget);
-    Serial.printf("_sensorState:          %d\r\n",      device_mech_ring._sensorState);
-    time_t t = device_mech_ring.getCurrentTime();
-    if (t > 0) {
-        char buf[12];
-        snprintf(buf, sizeof(buf), "%02d:%02d", hour(t), minute(t));
-        Serial.printf("time: %s\r\n", buf);
-    }
-    Serial.printf("SENS=%d STEP=%d EN=%d\r\n",
-        digitalRead(RINGMECH_SENS),
-        digitalRead(RINGMECH_STEP),
-        digitalRead(RINGMECH_EN));
-    Serial.printf("=============================\r\n");
-}
-
-void CLASS_DEVICE_RINGMECH::cmdTime() {
-    char *arg1 = term.getNext();
-    if (arg1 == NULL) {
-        Serial.printf("time_begin=%d time_end=%d\r\n", device_mech_ring._config.time_begin, device_mech_ring._config.time_end);
-        return;
-    }
-    uint8_t b = (uint8_t)atoi(arg1);
-    if (b > 23) { Serial.println("Error: value must be 0-23"); return; }
-    char *arg2 = term.getNext();
-    if (arg2 == NULL) { Serial.println("Usage: r-time <begin> <end>"); return; }
-    uint8_t e = (uint8_t)atoi(arg2);
-    if (e > 23) { Serial.println("Error: value must be 0-23"); return; }
-    if (b > e) { Serial.println("Error: begin must be <= end"); return; }
-    device_mech_ring._config.time_begin = b;
-    device_mech_ring._config.time_end   = e;
-    Serial.println("OK");
-}
-
-void CLASS_DEVICE_RINGMECH::cmdSource() {
-    char *arg = term.getNext();
-    if (arg == NULL) {
-        Serial.printf("timeSource=%s\r\n", device_mech_ring._config.timeSource.c_str());
-        return;
-    }
-    String s(arg);
-    if (s == "ds3231" || s == "ntp") {
-        device_mech_ring._config.timeSource = s;
-        Serial.println("OK");
-    } else {
-        Serial.println("Usage: r-src [ds3231|ntp]");
-    }
-}
-
-// ============================================================
 // Хоминг — поиск метки сенсора
 // ============================================================
-
 
 void CLASS_DEVICE_RINGMECH::MechHomeSetup() {
     digitalWrite(RINGMECH_SENS_LED, HIGH);
@@ -403,11 +384,9 @@ void CLASS_DEVICE_RINGMECH::MechHomeEndFail() {
     device_mech_ring._mechControlSteps = 0;
 }
 
-
 // ============================================================
 // Подсчёт шагов на оборот (калибровка)
 // ============================================================
-
 
 void CLASS_DEVICE_RINGMECH::MechCountStepsSetup() {
     device_mech_ring._ringStatus = RING_STATUS_COUNTING;
@@ -536,14 +515,15 @@ void CLASS_DEVICE_RINGMECH::RingPollTask() {
     uint8_t hourEnd = device_mech_ring._config.time_end;
     uint8_t timeNowHour = (uint8_t)hour(t) ;
     uint8_t timeNowMin = (uint8_t)minute(t) ;
-    uint8_t timeNowSec = (uint8_t)second(t) ;
 
-    // if ((hourBegin > timeNowHour) && (timeNowHour > hourEnd  )  ){ return; } 
     if (timeNowHour < hourBegin || timeNowHour > hourEnd) { return; } // мы НЕ в рабочем диапазоне
-    
-    if ( timeNowMin == 0 && timeNowSec <= 6 ){ // в начале часа
+    if (device_mech_ring._timeHourPrev == timeNowHour){ return; } // час новый.
+    if ( timeNowMin == 0  ){ // в начале часа, ноль минут.
+       
+            device_mech_ring._timeHourPrev = timeNowHour;
             device_mech_ring.CheckTime(timeNowHour);
             SetTask(MechTurnNCount);
+        
     }
 }
 
@@ -552,81 +532,101 @@ void CLASS_DEVICE_RINGMECH::CheckTime (uint8_t _inH)	{
 	_mechTurnTarget = _inH;
 }
 
+// ============================================================
+// Терминальные команды
+// ============================================================
 
-// ============================================================
-// Конфиг
-// ============================================================
-void CLASS_DEVICE_RINGMECH::defaultConfig() {
-    _config.enable_status      = RING_MODE_DEBUG;
-    _config.stepsPerRevolution = 0;
-    _config.pollInterval       = 5;
-    _config.errorLimitSteps    = 500;
-    _config.ringPauseOne        = RINGMECH_RING_FIRST_PAUSE_DEFAULT ;
-    _config.ringPauseTwo        = RINGMECH_RING_SECON_PAUSE_DEFAULT;
-    _config.firstPosition       = RINGMECH_FIRST_POSITION_DEFAULT;
-    _config.time_begin          = RINGMECH_TIME_BEGIN_DEFAULT;
-    _config.time_end            = RINGMECH_TIME_END_DEFAULT;
-    _config.timeSource          = "ds3231";
+void CLASS_DEVICE_RINGMECH::cmdEn() {
+    bool en = digitalRead(RINGMECH_EN);
+    digitalWrite(RINGMECH_EN, en == LOW ? HIGH : LOW);
+    Serial.printf("Driver: %s\r\n", en == LOW ? "OFF" : "ON");
 }
 
-bool CLASS_DEVICE_RINGMECH::loadConfig() {
-    DEBUGRINGMECH("%s\r\n", __FUNCTION__);
-    JsonDocument doc;
-    if (core_json.jsonFileLoadDoc(CONFIG_FILE_RINGMECH, doc) == false) { return false; }
+void CLASS_DEVICE_RINGMECH::cmdSens() { Serial.printf("SENS=%d\r\n", digitalRead(RINGMECH_SENS)); }
+void CLASS_DEVICE_RINGMECH::cmdHome() { SetTask(MechHomeSetup); }
+void CLASS_DEVICE_RINGMECH::cmdCount() { SetTask(MechCountStepsSetup); }
+void CLASS_DEVICE_RINGMECH::cmdSave() { device_mech_ring.saveConfig(); }
 
-    _config.enable_status       = doc["enable_status"].as<uint8_t>();
-    _config.stepsPerRevolution  = doc["stepsPerRevolution"].as<uint16_t>();
-    _config.pollInterval        = doc["pollInterval"].as<uint16_t>();
-    _config.errorLimitSteps     = doc["errorLimitSteps"].as<uint16_t>();
-    _config.ringPauseOne           = doc["ringPauseOne"].as<uint16_t>();
-    _config.ringPauseTwo           = doc["ringPauseTwo"].as<uint16_t>();
-    _config.firstPosition       = doc["firstPosition"].as<uint8_t>();
-    _config.time_begin           = doc["time_begin"].as<uint8_t>();
-    _config.time_end             = doc["time_end"].as<uint8_t>();
-    _config.timeSource           = doc["timeSource"].as<String>();
-
-    if (_config.timeSource != "ds3231" && _config.timeSource != "ntp") { _config.timeSource = "ds3231"; }
-    if (_config.time_begin > 23) _config.time_begin = RINGMECH_TIME_BEGIN_DEFAULT;
-    if (_config.time_end   > 23) _config.time_end   = RINGMECH_TIME_END_DEFAULT;
-    if (_config.time_begin > _config.time_end && !(_config.time_begin == 0 && _config.time_end == 0)) { _config.time_begin = RINGMECH_TIME_BEGIN_DEFAULT; _config.time_end = RINGMECH_TIME_END_DEFAULT; }
-
-    if (_config.pollInterval < 1)   { _config.pollInterval = 5; }
-    if (_config.stepsPerRevolution < 1) { _config.stepsPerRevolution = 400; }
-    if (_config.ringPauseOne < 1)      { _config.ringPauseOne = RINGMECH_RING_FIRST_PAUSE_DEFAULT; }
-    if (_config.ringPauseTwo < 1)      { _config.ringPauseTwo = RINGMECH_RING_SECON_PAUSE_DEFAULT; }
-
-    return true;
+void CLASS_DEVICE_RINGMECH::cmdTurn() {
+    if (device_mech_ring._mechTurnTarget != 0) { Serial.println("Busy: previous r-turn still running"); return; }
+    if (device_mech_ring._config.enable_status == RING_MODE_WORK) { Serial.println("Blocked: WORK mode"); return; }
+    char *arg = term.getNext();
+    if (arg == NULL) { Serial.println("Usage: r-turn <N>"); return; }
+    device_mech_ring._mechTurnTarget = (uint16_t)atoi(arg);
+    if (device_mech_ring._mechTurnTarget == 0) return;
+    SetTask(MechTurnNCount);
 }
 
-bool CLASS_DEVICE_RINGMECH::saveConfig() {
-    DEBUGRINGMECH("%s\r\n", __FUNCTION__);
-    JsonDocument doc;
-    core_json.jsonFileLoadDoc(CONFIG_FILE_RINGMECH, doc);
-    doc["enable_status"]        = _config.enable_status;
-    doc["stepsPerRevolution"]   = _config.stepsPerRevolution;
-    doc["pollInterval"]         = _config.pollInterval;
-    doc["errorLimitSteps"]      = _config.errorLimitSteps;
-    doc["ringPauseOne"]         = _config.ringPauseOne;
-    doc["ringPauseTwo"]         = _config.ringPauseTwo;
-    doc["firstPosition"]        = _config.firstPosition;
-    doc["time_begin"]           = _config.time_begin;
-    doc["time_end"]             = _config.time_end;
-    doc["timeSource"]           = _config.timeSource;
-    return core_json.jsonFileSaveDoc(CONFIG_FILE_RINGMECH, doc);
+void CLASS_DEVICE_RINGMECH::cmdMode() {
+    char *arg = term.getNext();
+    if (arg == NULL) { device_mech_ring._config.enable_status = !device_mech_ring._config.enable_status; } 
+    else {
+        String s(arg);
+        if (s == "dbg" || s == "debug")       { device_mech_ring._config.enable_status = RING_MODE_DEBUG; }
+        else if (s == "work")                 { device_mech_ring._config.enable_status = RING_MODE_WORK; }
+        else { Serial.println("Usage: c-mode [dbg|work]"); return; }
+    }
+    Serial.printf("Mode: %s\r\n", device_mech_ring._config.enable_status == RING_MODE_WORK ? "WORK" : "DEBUG");
 }
 
-// ============================================================
-// Версионные методы
-// ============================================================
-String CLASS_DEVICE_RINGMECH::getVersionStr() { return String(DEVICE_MECH_RING_VERSION);  }
-String CLASS_DEVICE_RINGMECH::getGeneratedTime() { return String(DEVICE_MECH_RING_GENERATED_TIME);    }
-String CLASS_DEVICE_RINGMECH::getCommitDateStr() { return String(DEVICE_MECH_RING_COMMIT_DATE_STR);   }
+void CLASS_DEVICE_RINGMECH::cmdStatus() {
+    Serial.printf("===== RingMech Status =====\r\n");
+    Serial.printf("_ringStatus:           %d\r\n",      device_mech_ring._ringStatus);
+    Serial.printf("_config.enable_status: %d\r\n",      device_mech_ring._config.enable_status);
+    Serial.printf("_config.stepsPerRevolution: %d\r\n", device_mech_ring._config.stepsPerRevolution);
+    Serial.printf("_config.pollInterval:  %d\r\n",      device_mech_ring._config.pollInterval);
+    Serial.printf("_config.errorLimitSteps: %d\r\n",    device_mech_ring._config.errorLimitSteps);
+    Serial.printf("_config.ringPauseOne:     %d\r\n",      device_mech_ring._config.ringPauseOne);
+    Serial.printf("_config.ringPauseTwo:     %d\r\n",      device_mech_ring._config.ringPauseTwo);
+    Serial.printf("_config.firstPosition: %d\r\n",      device_mech_ring._config.firstPosition);
+    Serial.printf("_config.time_begin:    %d\r\n",      device_mech_ring._config.time_begin);
+    Serial.printf("_config.time_end:      %d\r\n",      device_mech_ring._config.time_end);
+    Serial.printf("_config.timeSource:    %s\r\n",      device_mech_ring._config.timeSource.c_str());
+    Serial.printf("_mechControlSteps:     %d\r\n",      device_mech_ring._mechControlSteps);
+    Serial.printf("_mechTurnTarget:       %d\r\n",      device_mech_ring._mechTurnTarget);
+    Serial.printf("_sensorState:          %d\r\n",      device_mech_ring._sensorState);
+    time_t t = device_mech_ring.getCurrentTime();
+    if (t > 0) {
+        char buf[12];
+        snprintf(buf, sizeof(buf), "%02d:%02d", hour(t), minute(t));
+        Serial.printf("time: %s\r\n", buf);
+    }
+    Serial.printf("SENS=%d STEP=%d EN=%d\r\n",
+        digitalRead(RINGMECH_SENS),
+        digitalRead(RINGMECH_STEP),
+        digitalRead(RINGMECH_EN));
+    Serial.printf("=============================\r\n");
+}
 
-void CLASS_DEVICE_RINGMECH::html_ver_get(AsyncWebServerRequest *request) {
-    DEBUGRINGMECH("%s\r\n", __FUNCTION__);
-    String values = "";
-    values += "ringmechversion|" + getVersionStr()    + "|div\n";
-    values += "ringmechgentime|" + getGeneratedTime() + "|div\n";
-    values += "ringmechgendate|" + getCommitDateStr() + "|div\n";
-    request->send(200, "text/plain", values);
+void CLASS_DEVICE_RINGMECH::cmdTime() {
+    char *arg1 = term.getNext();
+    if (arg1 == NULL) {
+        Serial.printf("time_begin=%d time_end=%d\r\n", device_mech_ring._config.time_begin, device_mech_ring._config.time_end);
+        return;
+    }
+    uint8_t b = (uint8_t)atoi(arg1);
+    if (b > 23) { Serial.println("Error: value must be 0-23"); return; }
+    char *arg2 = term.getNext();
+    if (arg2 == NULL) { Serial.println("Usage: r-time <begin> <end>"); return; }
+    uint8_t e = (uint8_t)atoi(arg2);
+    if (e > 23) { Serial.println("Error: value must be 0-23"); return; }
+    if (b > e) { Serial.println("Error: begin must be <= end"); return; }
+    device_mech_ring._config.time_begin = b;
+    device_mech_ring._config.time_end   = e;
+    Serial.println("OK");
+}
+
+void CLASS_DEVICE_RINGMECH::cmdSource() {
+    char *arg = term.getNext();
+    if (arg == NULL) {
+        Serial.printf("timeSource=%s\r\n", device_mech_ring._config.timeSource.c_str());
+        return;
+    }
+    String s(arg);
+    if (s == "ds3231" || s == "ntp") {
+        device_mech_ring._config.timeSource = s;
+        Serial.println("OK");
+    } else {
+        Serial.println("Usage: r-src [ds3231|ntp]");
+    }
 }

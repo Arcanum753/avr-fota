@@ -115,6 +115,12 @@ private:
     void handleReset(AsyncWebServerRequest *request);
     void handleCount(AsyncWebServerRequest *request);
 
+    // Конфиг
+    void defaultConfig();
+    bool loadConfig();
+    bool saveConfig();
+
+    // Логика устройства
     void MechTimeSet (uint8_t _inH, uint8_t _inM);
     //work
     void MechInitGPIOs();
@@ -160,11 +166,6 @@ private:
     static void MechSetArrowMinTask();
     static void MechSetArrowMinOk();
     static void MechSetArrowMinFail();
-    
-
-    void defaultConfig();
-    bool loadConfig();
-    bool saveConfig();
 
 protected:
     bool dumb;

@@ -16,6 +16,10 @@
 Class_SubSwd progSwd(0);
 Class_SubSwd::Class_SubSwd(uint8_t in): Class_ProgBase(in){ }
 
+// ============================================================
+// Переопределения виртуальных методов Class_ProgBase
+// ============================================================
+
 bool Class_SubSwd::chipSpecificInit() {
 	swd_gpio_init();
 	swdprog.setFs(_fs);
@@ -64,26 +68,6 @@ void Class_SubSwd::onFlashComplete() {
 
 		DEBUGLOGSWD("Programming end \r\n");
 	}
-}
-
-int Class_SubSwd::prog_Programm(String path, String fwTime) {
-	DEBUGLOGSWD(__PRETTY_FUNCTION__); DEBUGLOGSWD("\r\n");
-	DEBUGLOGSWD(" file %s time %s \r\n", path.c_str(), fwTime.c_str());
-
-	if (!_fs) { return ERR_CFG; }
-	if (!_fs->exists(path)) { return ERR_NOFILE; }
-
-	int _res = ERR_OPENFILE;
-	swdprog.stm32Fx_begin();
-	_res = swdprog.stm32_ChipProgrammMain(path);
-
-	String progStatus = (_res == 0) ? "ok" : "error";
-	filelist_SetProgStatus(path, fwTime, progStatus);
-	DEBUGLOGSWD("Programming %s, saved prog status to filelist: %s date=%s\r\n",
-		(_res == 0) ? "success" : "failed", path.c_str(), fwTime.c_str());
-
-	DEBUGLOGSWD("Programming end \r\n");
-	return _res;
 }
 
 bool Class_SubSwd::chip_IsConnected() {
@@ -233,6 +217,33 @@ void Class_SubSwd::web_FileUpload2Chip(AsyncWebServerRequest *request) {
 	DEBUGLOGSWD("web_FileUpload2Chip: EERTOS flash started for %s\r\n", _flashPath.c_str());
 }
 
+void Class_SubSwd::registerCustomRoutes() {
+}
+
+// ============================================================
+// Конкретная логика модуля (SWD)
+// ============================================================
+
+int Class_SubSwd::prog_Programm(String path, String fwTime) {
+	DEBUGLOGSWD(__PRETTY_FUNCTION__); DEBUGLOGSWD("\r\n");
+	DEBUGLOGSWD(" file %s time %s \r\n", path.c_str(), fwTime.c_str());
+
+	if (!_fs) { return ERR_CFG; }
+	if (!_fs->exists(path)) { return ERR_NOFILE; }
+
+	int _res = ERR_OPENFILE;
+	swdprog.stm32Fx_begin();
+	_res = swdprog.stm32_ChipProgrammMain(path);
+
+	String progStatus = (_res == 0) ? "ok" : "error";
+	filelist_SetProgStatus(path, fwTime, progStatus);
+	DEBUGLOGSWD("Programming %s, saved prog status to filelist: %s date=%s\r\n",
+		(_res == 0) ? "success" : "failed", path.c_str(), fwTime.c_str());
+
+	DEBUGLOGSWD("Programming end \r\n");
+	return _res;
+}
+
 bool Class_SubSwd::chipCfg_FindById(uint32_t idcode, ChipConfig_t &cfg) {
 	DEBUGLOGSWD("%s: searching for ID=0x%08x\n\r", __FUNCTION__, idcode);
 
@@ -314,7 +325,4 @@ void Class_SubSwd::_chipInfoAppendFields(JsonObject &out, JsonObject &chip) {
 	out["flash_start"] = chip["flash_start"].as<const char*>();
 	out["word_size"] = chip["word_size"].as<uint32_t>();
 	out["csw_value"] = chip["csw_value"].as<const char*>();
-}
-
-void Class_SubSwd::registerCustomRoutes() {
 }
