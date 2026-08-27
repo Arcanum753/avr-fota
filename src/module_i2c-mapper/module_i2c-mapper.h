@@ -3,6 +3,8 @@
 
 #include "main.h"
 
+#include "mod_context.h"
+
 #ifdef DEBUG_I2C_MAPPER
 #define DEBUGI2CMAPPER(...) Serial.printf(__VA_ARGS__)
 #else
@@ -24,11 +26,12 @@
 #define I2C_MAPPER_SCL  5
 #endif
 
-class MODULE_CLASS_I2C_MAPPER {
+class CLASS_MODULE_I2C_MAPPER {
 public:
-    MODULE_CLASS_I2C_MAPPER(bool _in);
+    CLASS_MODULE_I2C_MAPPER(bool _in);
     void begin();
-    void webInit();
+    void begin(ModContext& ctx);
+    void web_Init();
 
 private:
     String getVersionStr();
@@ -42,6 +45,6 @@ protected:
     bool dumb;
 };
 
-extern MODULE_CLASS_I2C_MAPPER ModClassI2cMapper;
+extern CLASS_MODULE_I2C_MAPPER ModClassI2cMapper;
 
 #endif // _MODULE_I2C_MAPPER_h

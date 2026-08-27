@@ -9,19 +9,19 @@
 #include "eertos.h"
 #include "version.h"
 
-MODULE_CLASS_LCD_I2C ModClassLcdI2c(false);
-MODULE_CLASS_LCD_I2C::MODULE_CLASS_LCD_I2C(bool _in) { dumb = _in; _lcd = NULL; }
+CLASS_MODULE_I2C_LCD ModClassLcdI2c(false);
+CLASS_MODULE_I2C_LCD::CLASS_MODULE_I2C_LCD(bool _in) { dumb = _in; _lcd = NULL; }
 
 #if defined(ESP32)
-void MODULE_CLASS_LCD_I2C::setFs(fs::LittleFSFS* fs)
+void CLASS_MODULE_I2C_LCD::setFs(fs::LittleFSFS* fs)
 #elif defined(ESP8266)
-void MODULE_CLASS_LCD_I2C::setFs(FS* fs)
+void CLASS_MODULE_I2C_LCD::setFs(FS* fs)
 #endif
 {
     _fs = fs;
 }
 
-void MODULE_CLASS_LCD_I2C::begin() {
+void CLASS_MODULE_I2C_LCD::begin() {
     DEBUGLCD("%s\r\n", __FUNCTION__);
 
     defaultConfigLcd();
@@ -38,7 +38,12 @@ void MODULE_CLASS_LCD_I2C::begin() {
     SetTimerTask(_lcdUpdateTask, 1000);
 }
 
-void MODULE_CLASS_LCD_I2C::_initDisplay() {
+void CLASS_MODULE_I2C_LCD::begin(ModContext& ctx) {
+    _fs = ctx.fs;
+    begin();
+}
+
+void CLASS_MODULE_I2C_LCD::_initDisplay() {
     DEBUGLCD("%s: addr=0x%02X, cols=%d, rows=%d, bl=%d\r\n",
              __FUNCTION__, _config.i2cAddr, _config.cols, _config.rows, _config.backlight);
 
@@ -54,7 +59,7 @@ void MODULE_CLASS_LCD_I2C::_initDisplay() {
     _applyLines();
 }
 
-void MODULE_CLASS_LCD_I2C::_applyLines() {
+void CLASS_MODULE_I2C_LCD::_applyLines() {
     if (!_lcd) { return; }
 
     bool ntpSynced = (NTP.getLastNTPSync() > 0);
@@ -106,12 +111,12 @@ void MODULE_CLASS_LCD_I2C::_applyLines() {
     }
 }
 
-void MODULE_CLASS_LCD_I2C::_lcdUpdateTask() {
+void CLASS_MODULE_I2C_LCD::_lcdUpdateTask() {
     ModClassLcdI2c._applyLines();
     SetTimerTask(_lcdUpdateTask, 1000);
 }
 
-void MODULE_CLASS_LCD_I2C::webInit() {
+void CLASS_MODULE_I2C_LCD::web_Init() {
     DEBUGLCD("%s\r\n", __FUNCTION__);
 
     ESPHTTPServer.on("/lcd-i2c/info", HTTP_GET, [this](AsyncWebServerRequest *request) {
@@ -151,7 +156,7 @@ void MODULE_CLASS_LCD_I2C::webInit() {
     });
 }
 
-void MODULE_CLASS_LCD_I2C::handleInfo(AsyncWebServerRequest *request) {
+void CLASS_MODULE_I2C_LCD::handleInfo(AsyncWebServerRequest *request) {
     DEBUGLCD("%s\r\n", __FUNCTION__);
     String values = "";
     values += "trgt|"   + String(BUILD_ENV)                              + "|div\n";
@@ -172,7 +177,7 @@ void MODULE_CLASS_LCD_I2C::handleInfo(AsyncWebServerRequest *request) {
     request->send(200, "text/plain", values);
 }
 
-void MODULE_CLASS_LCD_I2C::handleSysInfo(AsyncWebServerRequest *request) {
+void CLASS_MODULE_I2C_LCD::handleSysInfo(AsyncWebServerRequest *request) {
     DEBUGLCD("%s\r\n", __FUNCTION__);
     String values = "";
     values += "trgt|"   + String(BUILD_ENV)        + "|div\n";
@@ -183,7 +188,7 @@ void MODULE_CLASS_LCD_I2C::handleSysInfo(AsyncWebServerRequest *request) {
     request->send(200, "text/plain", values);
 }
 
-void MODULE_CLASS_LCD_I2C::handleSaveContent(AsyncWebServerRequest *request) {
+void CLASS_MODULE_I2C_LCD::handleSaveContent(AsyncWebServerRequest *request) {
     DEBUGLCD("%s\r\n", __FUNCTION__);
 
     if (request->args() > 0) {
@@ -205,7 +210,7 @@ void MODULE_CLASS_LCD_I2C::handleSaveContent(AsyncWebServerRequest *request) {
     }
 }
 
-void MODULE_CLASS_LCD_I2C::handleSaveConfig(AsyncWebServerRequest *request) {
+void CLASS_MODULE_I2C_LCD::handleSaveConfig(AsyncWebServerRequest *request) {
     DEBUGLCD("%s\r\n", __FUNCTION__);
 
     if (request->args() > 0) {
@@ -238,7 +243,7 @@ void MODULE_CLASS_LCD_I2C::handleSaveConfig(AsyncWebServerRequest *request) {
     }
 }
 
-void MODULE_CLASS_LCD_I2C::defaultConfigLcd() {
+void CLASS_MODULE_I2C_LCD::defaultConfigLcd() {
     _config.i2cAddr    = 0x27;
     _config.cols       = 8;
     _config.rows       = 1;
@@ -249,7 +254,7 @@ void MODULE_CLASS_LCD_I2C::defaultConfigLcd() {
     }
 }
 
-bool MODULE_CLASS_LCD_I2C::load_config() {
+bool CLASS_MODULE_I2C_LCD::load_config() {
     DEBUGLCD("%s\r\n", __FUNCTION__);
     JsonDocument doc;
     if (ModClassJson.jsonFileLoadDoc(CONFIG_FILE_LCD_I2C, doc) == false) { return false; }
@@ -278,7 +283,7 @@ bool MODULE_CLASS_LCD_I2C::load_config() {
     return true;
 }
 
-bool MODULE_CLASS_LCD_I2C::save_config() {
+bool CLASS_MODULE_I2C_LCD::save_config() {
     DEBUGLCD("%s\r\n", __FUNCTION__);
     JsonDocument doc;
     ModClassJson.jsonFileLoadDoc(CONFIG_FILE_LCD_I2C, doc);
@@ -296,19 +301,19 @@ bool MODULE_CLASS_LCD_I2C::save_config() {
     return ModClassJson.jsonFileSaveDoc(CONFIG_FILE_LCD_I2C, doc);
 }
 
-String MODULE_CLASS_LCD_I2C::getVersionStr() {
+String CLASS_MODULE_I2C_LCD::getVersionStr() {
     return String(MODULE_LCD_I2C_VERSION);
 }
 
-String MODULE_CLASS_LCD_I2C::getGeneratedTime() {
+String CLASS_MODULE_I2C_LCD::getGeneratedTime() {
     return String(MODULE_LCD_I2C_GENERATED_TIME);
 }
 
-String MODULE_CLASS_LCD_I2C::getCommitDateStr() {
+String CLASS_MODULE_I2C_LCD::getCommitDateStr() {
     return String(MODULE_LCD_I2C_COMMIT_DATE_STR);
 }
 
-void MODULE_CLASS_LCD_I2C::html_ver_get(AsyncWebServerRequest *request) {
+void CLASS_MODULE_I2C_LCD::html_ver_get(AsyncWebServerRequest *request) {
     DEBUGLCD("%s\r\n", __FUNCTION__);
     String values = "";
     values += "lcdi2cversion|" + getVersionStr()    + "|div\n";

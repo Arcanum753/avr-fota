@@ -4,24 +4,29 @@
 #include "main.h"
 #include "core_editor_version.h"
 
-CORE_CLASS_EDITOR ModClassEdit;
+CLASS_CORE_EDITOR ModClassEdit;
 
-CORE_CLASS_EDITOR::CORE_CLASS_EDITOR() {}
+CLASS_CORE_EDITOR::CLASS_CORE_EDITOR() {}
 
 #if defined(ESP32)
-void CORE_CLASS_EDITOR::setFs(fs::LittleFSFS* fs)
+void CLASS_CORE_EDITOR::setFs(fs::LittleFSFS* fs)
 #elif defined(ESP8266)
-void CORE_CLASS_EDITOR::setFs(FS* fs)
+void CLASS_CORE_EDITOR::setFs(FS* fs)
 #endif
 {
     _fs = fs;
 }
 
-void CORE_CLASS_EDITOR::begin() {
+void CLASS_CORE_EDITOR::begin() {
     DEBUGEDIT(__FUNCTION__); DEBUGEDIT("\r\n");
 }
 
-String CORE_CLASS_EDITOR::escapeJsonStr(const String& s) {
+void CLASS_CORE_EDITOR::begin(ModContext& ctx) {
+    _fs = ctx.fs;
+    begin();
+}
+
+String CLASS_CORE_EDITOR::escapeJsonStr(const String& s) {
     String out;
     out.reserve(s.length());
     for (size_t i = 0; i < s.length(); i++) {
@@ -47,7 +52,7 @@ String CORE_CLASS_EDITOR::escapeJsonStr(const String& s) {
     return out;
 }
 
-void CORE_CLASS_EDITOR::webInit() {
+void CLASS_CORE_EDITOR::web_Init() {
     DEBUGEDIT(__FUNCTION__); DEBUGEDIT("\r\n");
 
     ESPHTTPServer.on("/list", HTTP_GET, [this](AsyncWebServerRequest *request) {
@@ -88,7 +93,7 @@ void CORE_CLASS_EDITOR::webInit() {
     });
 }
 
-void CORE_CLASS_EDITOR::handleFileUpload(AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final) {
+void CLASS_CORE_EDITOR::handleFileUpload(AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final) {
     static File fsUploadFile;
     static size_t fileSize = 0;
 
@@ -126,7 +131,7 @@ void CORE_CLASS_EDITOR::handleFileUpload(AsyncWebServerRequest *request, String 
     }
 }
 
-void CORE_CLASS_EDITOR::handleFileList(AsyncWebServerRequest *request) {
+void CLASS_CORE_EDITOR::handleFileList(AsyncWebServerRequest *request) {
     if (!request->hasArg("dir")) { request->send(500, "text/plain", "BAD ARGS"); return; }
     String path = request->arg("dir");
     DEBUGEDIT("handleFileList: %s\r\n", path.c_str());
@@ -173,7 +178,7 @@ void CORE_CLASS_EDITOR::handleFileList(AsyncWebServerRequest *request) {
     request->send(200, "text/json", output);
 }
 
-void CORE_CLASS_EDITOR::handleFileCreate(AsyncWebServerRequest *request) {
+void CLASS_CORE_EDITOR::handleFileCreate(AsyncWebServerRequest *request) {
     if (request->args() == 0) { return request->send(500, "text/plain", "BAD ARGS"); }
     String path = request->arg(0U);
     DEBUGEDIT("handleFileCreate: %s\r\n", path.c_str());
@@ -186,7 +191,7 @@ void CORE_CLASS_EDITOR::handleFileCreate(AsyncWebServerRequest *request) {
     request->send(200, "text/plain", "");
 }
 
-void CORE_CLASS_EDITOR::handleFileDelete(AsyncWebServerRequest *request) {
+void CLASS_CORE_EDITOR::handleFileDelete(AsyncWebServerRequest *request) {
     if (request->args() == 0) { return request->send(500, "text/plain", "BAD ARGS"); }
     String path = request->arg(0U);
     DEBUGEDIT("handleFileDelete: %s\r\n", path.c_str());
@@ -197,19 +202,19 @@ void CORE_CLASS_EDITOR::handleFileDelete(AsyncWebServerRequest *request) {
     request->send(200, "text/plain", "");
 }
 
-String CORE_CLASS_EDITOR::getVersionStr() {
+String CLASS_CORE_EDITOR::getVersionStr() {
     return String(CORE_EDITOR_VERSION);
 }
 
-String CORE_CLASS_EDITOR::getGeneratedTime() {
+String CLASS_CORE_EDITOR::getGeneratedTime() {
     return String(CORE_EDITOR_GENERATED_TIME);
 }
 
-String CORE_CLASS_EDITOR::getCommitDateStr() {
+String CLASS_CORE_EDITOR::getCommitDateStr() {
     return String(CORE_EDITOR_COMMIT_DATE_STR);
 }
 
-void CORE_CLASS_EDITOR::html_ver_get(AsyncWebServerRequest *request) {
+void CLASS_CORE_EDITOR::html_ver_get(AsyncWebServerRequest *request) {
     DEBUGEDIT("%s\n\r", __FUNCTION__);
     String values = "";
     values += "edtversion|" + getVersionStr()    + "|div\n";
@@ -218,7 +223,7 @@ void CORE_CLASS_EDITOR::html_ver_get(AsyncWebServerRequest *request) {
     request->send(200, "text/plain", values);
 }
 
-void CORE_CLASS_EDITOR::handleFsInfo(AsyncWebServerRequest *request) {
+void CLASS_CORE_EDITOR::handleFsInfo(AsyncWebServerRequest *request) {
     DEBUGEDIT("%s\n\r", __FUNCTION__);
     size_t totalBytes = 0;
     size_t usedBytes = 0;

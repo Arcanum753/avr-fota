@@ -12,14 +12,14 @@
 
 #include "common.h"
 #include "core_ntp_version.h"
-CORE_CLASS_NTP modNtpClass(false);
+CLASS_CORE_NTP modNtpClass(false);
 
 
-CORE_CLASS_NTP :: CORE_CLASS_NTP (bool _in) { dumb = _in; }
+CLASS_CORE_NTP :: CLASS_CORE_NTP (bool _in) { dumb = _in; }
 
 
 // init
-void CORE_CLASS_NTP::begin (){
+void CLASS_CORE_NTP::begin (){
 
 	DEBUGNTP(__PRETTY_FUNCTION__);	DEBUGNTP("\r\n");
 	_ntpServerCount = 0;
@@ -31,9 +31,15 @@ void CORE_CLASS_NTP::begin (){
 	if (_ntpConfig.updateNTPTimeEvery > 0) { updateTimeFromNTP = true;	}		
 }
 
+// унифицированный конструктор контекста
+void CLASS_CORE_NTP::begin (ModContext& ctx){
+	_fs = ctx.fs;
+	begin();
+}
+
 
 // on WiFi connect
-void CORE_CLASS_NTP::ntpOnConnected (){
+void CLASS_CORE_NTP::ntpOnConnected (){
 	DEBUGNTP(__PRETTY_FUNCTION__);	DEBUGNTP("\r\n");
 	if (updateTimeFromNTP == true) { // Enable NTP sync
         NTP.setInterval ( _ntpConfig.updateNTPTimeEvery * MINUTES);
@@ -45,13 +51,13 @@ void CORE_CLASS_NTP::ntpOnConnected (){
 
 
 
-void CORE_CLASS_NTP::ntpOnDisconected () {
+void CLASS_CORE_NTP::ntpOnDisconected () {
 	DEBUGNTP(__PRETTY_FUNCTION__);	DEBUGNTP("\r\n");
 	NTP.stop(); 
 }
 
 
-void CORE_CLASS_NTP::ntpOnSyncHandler(NTPSyncEvent_t event)	{
+void CLASS_CORE_NTP::ntpOnSyncHandler(NTPSyncEvent_t event)	{
 	int _ntpevent = static_cast<int>(event);
 
     if ( _ntpevent == timeSyncd) 		{ 
@@ -74,7 +80,7 @@ void CORE_CLASS_NTP::ntpOnSyncHandler(NTPSyncEvent_t event)	{
 	}
 }
 
-void CORE_CLASS_NTP::ntpSwitchReserv (){
+void CLASS_CORE_NTP::ntpSwitchReserv (){
 
 	if  (_ntpServerCount == 0)	{_ntpServerNow = _ntpConfig.ntpServerName0;}
 	if  (_ntpServerCount == 1)	{_ntpServerNow = _ntpConfig.ntpServerName1;}
@@ -86,7 +92,7 @@ void CORE_CLASS_NTP::ntpSwitchReserv (){
 
 
 
-bool CORE_CLASS_NTP::load_config_NTP() {
+bool CLASS_CORE_NTP::load_config_NTP() {
 	JsonDocument doc;
 	if (!ModClassJson.jsonFileLoadDoc(CONFIG_FILE_NTP, doc)) return false;
 	_ntpConfig.ntpServerName0 = doc["ntp0"].as<String>();
@@ -102,7 +108,7 @@ bool CORE_CLASS_NTP::load_config_NTP() {
 	return true;
 }
 
-bool CORE_CLASS_NTP::save_configNTP() {
+bool CLASS_CORE_NTP::save_configNTP() {
 	DEBUGNTP("Save config NTP \r\n");
 	JsonDocument doc;
 	ModClassJson.jsonFileLoadDoc(CONFIG_FILE_NTP, doc);
@@ -115,7 +121,7 @@ bool CORE_CLASS_NTP::save_configNTP() {
 	return ModClassJson.jsonFileSaveDoc(CONFIG_FILE_NTP, doc);
 }
 
-void CORE_CLASS_NTP::defaultConfigNTP() {
+void CLASS_CORE_NTP::defaultConfigNTP() {
 	// DEFAULT CONFIG NTP
 	_ntpConfig.ntpServerName0 = NTPSERVER_DFLT0;
 	_ntpConfig.ntpServerName1 = NTPSERVER_DFLT1;
@@ -126,7 +132,7 @@ void CORE_CLASS_NTP::defaultConfigNTP() {
 	
 }
 
-void CORE_CLASS_NTP::webInit ()	{
+void CLASS_CORE_NTP::web_Init ()	{
 	DEBUGNTP(__PRETTY_FUNCTION__);	DEBUGNTP("\r\n");
 	
 	ESPHTTPServer.on("/ntp/info", HTTP_GET, [this](AsyncWebServerRequest *request) {
@@ -147,7 +153,7 @@ void CORE_CLASS_NTP::webInit ()	{
 }
 
 
-void CORE_CLASS_NTP::send_NTP_info_html(AsyncWebServerRequest *request) {
+void CLASS_CORE_NTP::send_NTP_info_html(AsyncWebServerRequest *request) {
 	DEBUGNTP(__FUNCTION__);	DEBUGNTP("\r\n");
 	String values = "";
 
@@ -167,7 +173,7 @@ void CORE_CLASS_NTP::send_NTP_info_html(AsyncWebServerRequest *request) {
 
 
 // ntp.html vvv
-void CORE_CLASS_NTP::html2ntp_configuration(AsyncWebServerRequest *request) {
+void CLASS_CORE_NTP::html2ntp_configuration(AsyncWebServerRequest *request) {
 	DEBUGNTP(__PRETTY_FUNCTION__);	DEBUGNTP("\r\n");
 	if (request->args() > 0)  {// Save Settings
 		_ntpConfig.daylight = false;
@@ -207,7 +213,7 @@ void CORE_CLASS_NTP::html2ntp_configuration(AsyncWebServerRequest *request) {
 }
 
 
-void CORE_CLASS_NTP::send_NTP_configuration_values_html(AsyncWebServerRequest *request) {
+void CLASS_CORE_NTP::send_NTP_configuration_values_html(AsyncWebServerRequest *request) {
 	DEBUGNTP(__FUNCTION__);	DEBUGNTP("\r\n");
 	String values = "";
 	values += "ntpserver0|" 	+ (String)_ntpConfig.ntpServerName0 			+ "|input\n";
@@ -228,24 +234,24 @@ void CORE_CLASS_NTP::send_NTP_configuration_values_html(AsyncWebServerRequest *r
 // ntp.html ^^^
 
 
-void CORE_CLASS_NTP::sendTimeData() {
+void CLASS_CORE_NTP::sendTimeData() {
 	// DEBUGNTP(__PRETTY_FUNCTION__);	DEBUGNTP("\r\n");
 	DEBUGNTP("sendTimeData %s\r\n", NTP.getTimeDateString().c_str());
 }
 
-String CORE_CLASS_NTP::getVersionStr(){
+String CLASS_CORE_NTP::getVersionStr(){
     return String(CORE_NTP_VERSION);
 }
 
-String CORE_CLASS_NTP::getGeneratedTime(){
+String CLASS_CORE_NTP::getGeneratedTime(){
     return String(CORE_NTP_GENERATED_TIME);
 }
 
-String CORE_CLASS_NTP::getCommitDateStr(){
+String CLASS_CORE_NTP::getCommitDateStr(){
     return String(CORE_NTP_COMMIT_DATE_STR);
 }
 
-void CORE_CLASS_NTP::html_ver_get(AsyncWebServerRequest *request) {
+void CLASS_CORE_NTP::html_ver_get(AsyncWebServerRequest *request) {
     DEBUGNTP("%s\n\r", __FUNCTION__);
     String values = "";
     values += "ntpversion|"     + getVersionStr()    + "|div\n";

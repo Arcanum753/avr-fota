@@ -24,5 +24,4 @@
 
 void printGitInfo() ;
 
-void loop_user();
 bool isFsMounted() ;

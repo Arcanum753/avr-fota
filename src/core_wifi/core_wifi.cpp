@@ -34,15 +34,15 @@
 
 
 
-CORE_CLASS_WIFI 	modWifiClass(false);
+CLASS_CORE_WIFI 	modWifiClass(false);
 DNSServer 		dnsServer;
 
-CORE_CLASS_WIFI :: CORE_CLASS_WIFI (bool _in) {
+CLASS_CORE_WIFI :: CLASS_CORE_WIFI (bool _in) {
 	 dumb = _in;
  }
 
-void CORE_CLASS_WIFI::s_secondTick(void* arg) {
-	CORE_CLASS_WIFI* self = reinterpret_cast<CORE_CLASS_WIFI*>(arg);
+void CLASS_CORE_WIFI::s_secondTick(void* arg) {
+	CLASS_CORE_WIFI* self = reinterpret_cast<CLASS_CORE_WIFI*>(arg);
 
 	//DNS captive
 	if (self->wifiStatus == FS_STAT_APMODE) {	dnsServer.processNextRequest();	}
@@ -131,10 +131,10 @@ void CORE_CLASS_WIFI::s_secondTick(void* arg) {
 }
 
 #if defined(ESP32)
-void CORE_CLASS_WIFI::begin(fs::LittleFSFS* fs)
+void CLASS_CORE_WIFI::begin(fs::LittleFSFS* fs)
 #endif
 #if defined(ESP8266)
-    void CORE_CLASS_WIFI::begin(FS* fs)                         // esp8266/esp32 flash file system
+    void CLASS_CORE_WIFI::begin(FS* fs)                         // esp8266/esp32 flash file system
 #endif
 {
 	_fs = fs;
@@ -158,7 +158,7 @@ void CORE_CLASS_WIFI::begin(fs::LittleFSFS* fs)
 	}
 	// Set WiFi config
 	else {	configureWifi(); 	}
-	_secondTk.attach(1.0f, &CORE_CLASS_WIFI::s_secondTick, static_cast<void*>(this)); // Task to run periodic things every second
+	_secondTk.attach(1.0f, &CLASS_CORE_WIFI::s_secondTick, static_cast<void*>(this)); // Task to run periodic things every second
 
 	// Try to load configuration from file system// Load defaults if any error
 	if (!load_configWifi(3)) { defaultConfigWifi(3); _apConfig.APenable = true; 	}
@@ -186,8 +186,13 @@ void CORE_CLASS_WIFI::begin(fs::LittleFSFS* fs)
 
 }
 
+void CLASS_CORE_WIFI::begin(ModContext& ctx) {
+	_fs = ctx.fs;
+	begin(ctx.fs);
+}
 
-bool CORE_CLASS_WIFI::load_configWifi(int _in) {
+
+bool CLASS_CORE_WIFI::load_configWifi(int _in) {
 	if (_in < 0){ return false; }
 	char filename[40];
 	sprintf(filename, "/%s%d.json", WIFI_CONFIG_FILE_NAME, _in);
@@ -204,7 +209,7 @@ bool CORE_CLASS_WIFI::load_configWifi(int _in) {
 }
 
 
-bool CORE_CLASS_WIFI::save_configWifi(int _in) {
+bool CLASS_CORE_WIFI::save_configWifi(int _in) {
 	//flag_config = false;
 	DEBUGLOGWIFI("Save config\r\n");
 	char filename[40];
@@ -215,7 +220,7 @@ bool CORE_CLASS_WIFI::save_configWifi(int _in) {
 
 
 
-void CORE_CLASS_WIFI::defaultConfigWifi(int _in) {
+void CLASS_CORE_WIFI::defaultConfigWifi(int _in) {
 	// DEFAULT CONFIG
 	_wifiConfig.ssid 		= "YOUR_DEFAULT_WIFI_SSID";
 	_wifiConfig.password 	= "YOUR_DEFAULT_WIFI_PASSWD";
@@ -230,13 +235,13 @@ void CORE_CLASS_WIFI::defaultConfigWifi(int _in) {
 }
 
 
-void CORE_CLASS_WIFI::startDNSCaptive() {
+void CLASS_CORE_WIFI::startDNSCaptive() {
     // Перехватываем все DNS запросы и направляем на IP точки доступа
     dnsServer.start(53, "*", WiFi.softAPIP());
     DEBUGLOGWIFI("DNS captive portal started on port 53\n");
 }
 
-void CORE_CLASS_WIFI::configureWifiAP() {
+void CLASS_CORE_WIFI::configureWifiAP() {
 	DEBUGLOGWIFI(__PRETTY_FUNCTION__);	DEBUGLOGWIFI("\r\n");
 	modNtpClass.ntpOnDisconected();
 #if defined(MODULE_UDP)
@@ -263,7 +268,7 @@ void CORE_CLASS_WIFI::configureWifiAP() {
 	_apClientActivity = false;
 }
 
-int CORE_CLASS_WIFI::scanWifi() {
+int CLASS_CORE_WIFI::scanWifi() {
 	int _scanNum = -1;
 
 	int nets = WiFi.scanComplete();
@@ -298,7 +303,7 @@ int CORE_CLASS_WIFI::scanWifi() {
 }
 
 
-void CORE_CLASS_WIFI::configureWifi() { // set esp8266 as wifi client
+void CLASS_CORE_WIFI::configureWifi() { // set esp8266 as wifi client
 	if (wifiStatus == FS_STAT_APMODE) {return;}
 	DEBUGLOGWIFI(__PRETTY_FUNCTION__);	DEBUGLOGWIFI("\r\n");
 	//disconnect required here
@@ -324,10 +329,10 @@ void CORE_CLASS_WIFI::configureWifi() { // set esp8266 as wifi client
 
 
 #if defined(ESP32)
-void CORE_CLASS_WIFI::onWiFiConnected()
+void CLASS_CORE_WIFI::onWiFiConnected()
 #endif
 #if defined(ESP8266)
-void CORE_CLASS_WIFI::onWiFiConnected(WiFiEventStationModeConnected data)
+void CLASS_CORE_WIFI::onWiFiConnected(WiFiEventStationModeConnected data)
 #endif
 {
 	DEBUGLOGWIFI("WiFi Connected: Waiting for DHCP\n\r");
@@ -342,10 +347,10 @@ void CORE_CLASS_WIFI::onWiFiConnected(WiFiEventStationModeConnected data)
 // Do functions when we get IP.
 //means we get nor,al connection 	
 #if defined(ESP32)
-void CORE_CLASS_WIFI::onWiFiConnectedGotIP() {
+void CLASS_CORE_WIFI::onWiFiConnectedGotIP() {
 #endif
 #if defined(ESP8266)
-void CORE_CLASS_WIFI::onWiFiConnectedGotIP(WiFiEventStationModeGotIP data) {
+void CLASS_CORE_WIFI::onWiFiConnectedGotIP(WiFiEventStationModeGotIP data) {
 #endif
 	if (CONNECTION_LED >= 0) { espLedOn(); 	} // Turn LED on
 
@@ -358,7 +363,6 @@ void CORE_CLASS_WIFI::onWiFiConnectedGotIP(WiFiEventStationModeGotIP data) {
 #if defined(MODULE_UDP)
 //udp start to listen
 	udpBroadcast.begin();
-	udpBroadcast.webInit();
 	//udp broadcast - we are online!
     if (udpBroadcast.udpPowerOnGet() == true ) {  udpBroadcastSimple(); }
 #endif
@@ -372,10 +376,10 @@ void CORE_CLASS_WIFI::onWiFiConnectedGotIP(WiFiEventStationModeGotIP data) {
 }
 
 #if defined(ESP32)
-void CORE_CLASS_WIFI::onWiFiDisconnected(WiFiEventInfo_t info) {
+void CLASS_CORE_WIFI::onWiFiDisconnected(WiFiEventInfo_t info) {
 #endif
 #if defined(ESP8266)
-void CORE_CLASS_WIFI::onWiFiDisconnected(WiFiEventStationModeDisconnected data) {
+void CLASS_CORE_WIFI::onWiFiDisconnected(WiFiEventStationModeDisconnected data) {
 #endif
 
 
@@ -422,7 +426,7 @@ DEBUGLOGWIFI(" case STA_DISCONNECTED \r\n");
 
 }
 
-void CORE_CLASS_WIFI::wifiSsidSetPSWDwrong(String _str) {
+void CLASS_CORE_WIFI::wifiSsidSetPSWDwrong(String _str) {
 	DEBUGLOGWIFI("wifi ssid wrong password: %s \n", _str.c_str());
 	// Вместо безвозвратного удаления SSID — инкрементируем счётчик неудач
 	if (strcmp( _strWifi3,  _str.c_str()) == 0)	{	_wifiFailCount[3]++; }
@@ -431,7 +435,7 @@ void CORE_CLASS_WIFI::wifiSsidSetPSWDwrong(String _str) {
 	if (strcmp( _strWifi0,  _str.c_str()) == 0)	{	_wifiFailCount[0]++; }
 }
 
-void CORE_CLASS_WIFI::resetWifiFailCounters() {
+void CLASS_CORE_WIFI::resetWifiFailCounters() {
 	DEBUGLOGWIFI("resetWifiFailCounters\n");
 	for (int i = 0; i < 4; i++) {
 		_wifiFailCount[i] = 0;
@@ -439,7 +443,7 @@ void CORE_CLASS_WIFI::resetWifiFailCounters() {
 }
  
 
-void CORE_CLASS_WIFI::send_info_values_html(AsyncWebServerRequest *request) {
+void CLASS_CORE_WIFI::send_info_values_html(AsyncWebServerRequest *request) {
 	DEBUGLOGWIFI(__FUNCTION__);	DEBUGLOGWIFI("\r\n");
 	String state = "N/A";
 	String Networks = "";
@@ -467,7 +471,7 @@ void CORE_CLASS_WIFI::send_info_values_html(AsyncWebServerRequest *request) {
 	Networks = "";
 }
 
-String CORE_CLASS_WIFI::getMacAddress() {
+String CLASS_CORE_WIFI::getMacAddress() {
 	uint8_t mac[6];
 	char macStr[18] = { 0 };
 	WiFi.macAddress(mac);
@@ -478,12 +482,12 @@ String CORE_CLASS_WIFI::getMacAddress() {
 
 
 
-void CORE_CLASS_WIFI::send_scanwifi(AsyncWebServerRequest *request) {
+void CLASS_CORE_WIFI::send_scanwifi(AsyncWebServerRequest *request) {
     String json = buildNetworksJson();
     request->send(200, "text/json", json);
 }
 
-void CORE_CLASS_WIFI::send_scanwifi_trigger(AsyncWebServerRequest *request) {
+void CLASS_CORE_WIFI::send_scanwifi_trigger(AsyncWebServerRequest *request) {
     DEBUGLOGWIFI(__FUNCTION__); DEBUGLOGWIFI("\r\n");
     int scanStatus = WiFi.scanComplete();
     String json = "{";
@@ -501,7 +505,7 @@ void CORE_CLASS_WIFI::send_scanwifi_trigger(AsyncWebServerRequest *request) {
     request->send(200, "application/json", json);
 }
 
-String CORE_CLASS_WIFI::buildNetworksJson() {
+String CLASS_CORE_WIFI::buildNetworksJson() {
     String json = "[";
     int n = WiFi.scanComplete();
     
@@ -532,7 +536,7 @@ String CORE_CLASS_WIFI::buildNetworksJson() {
 }
 
 
-void CORE_CLASS_WIFI::send_network_configuration_html(AsyncWebServerRequest *request) {
+void CLASS_CORE_WIFI::send_network_configuration_html(AsyncWebServerRequest *request) {
 	// DEBUGLOGWIFI(__FUNCTION__);	DEBUGLOGWIFI("\r\n");
 	int _saveIn = 0;
 	if (request->args() > 0)  // Save Settings
@@ -579,7 +583,7 @@ void CORE_CLASS_WIFI::send_network_configuration_html(AsyncWebServerRequest *req
 // wifi.html ^^^
 
 
-void CORE_CLASS_WIFI::webInit () {
+void CLASS_CORE_WIFI::web_Init () {
     ESPHTTPServer.on("/wifi.html", [this](AsyncWebServerRequest *request) {
         if (!ESPHTTPServer.checkAuth(request)) { return request->requestAuthentication(); };
         this->send_network_configuration_html(request);
@@ -663,7 +667,7 @@ void CORE_CLASS_WIFI::webInit () {
     );
 }
 
-void CORE_CLASS_WIFI::send_slot_json(AsyncWebServerRequest *request, int slot) {
+void CLASS_CORE_WIFI::send_slot_json(AsyncWebServerRequest *request, int slot) {
     DEBUGLOGWIFI("Sending slot %d data as JSON\n", slot);
     load_configWifi(slot);
 
@@ -673,7 +677,7 @@ void CORE_CLASS_WIFI::send_slot_json(AsyncWebServerRequest *request, int slot) {
     );
     request->send(200, "application/json", response);
 }
-void CORE_CLASS_WIFI::handle_slot_post(AsyncWebServerRequest *request, int slot) {
+void CLASS_CORE_WIFI::handle_slot_post(AsyncWebServerRequest *request, int slot) {
     if (!ESPHTTPServer.checkAuth(request)) {
         // Освобождаем память перед возвратом
         if (request->_tempObject) {
@@ -736,7 +740,7 @@ void CORE_CLASS_WIFI::handle_slot_post(AsyncWebServerRequest *request, int slot)
     }
 }
 // Обработчик для загрузки тела запроса (добавьте эту функцию)
-void CORE_CLASS_WIFI::handle_slot_upload(AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total) {
+void CLASS_CORE_WIFI::handle_slot_upload(AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total) {
     if (!request->_tempObject) {
         char *buff = (char*)malloc(total + 1);
         request->_tempObject = buff;
@@ -748,19 +752,19 @@ void CORE_CLASS_WIFI::handle_slot_upload(AsyncWebServerRequest *request, uint8_t
     if (index + len == total) { buff[total] = '\0'; }
 }
 
-String CORE_CLASS_WIFI::getVersionStr(){
+String CLASS_CORE_WIFI::getVersionStr(){
     return String(CORE_WIFI_VERSION);
 }
 
-String CORE_CLASS_WIFI::getGeneratedTime(){
+String CLASS_CORE_WIFI::getGeneratedTime(){
     return String(CORE_WIFI_GENERATED_TIME);
 }
 
-String CORE_CLASS_WIFI::getCommitDateStr(){
+String CLASS_CORE_WIFI::getCommitDateStr(){
     return String(CORE_WIFI_COMMIT_DATE_STR);
 }
 
-void CORE_CLASS_WIFI::html_ver_get(AsyncWebServerRequest *request) {
+void CLASS_CORE_WIFI::html_ver_get(AsyncWebServerRequest *request) {
     DEBUGLOGWIFI("%s\n\r", __FUNCTION__);
     String values = "";
     values += "wifiversion|"     + getVersionStr()    + "|div\n";
@@ -769,7 +773,7 @@ void CORE_CLASS_WIFI::html_ver_get(AsyncWebServerRequest *request) {
     request->send(200, "text/plain", values);
 }
 
-bool CORE_CLASS_WIFI::load_configWifiSys() {
+bool CLASS_CORE_WIFI::load_configWifiSys() {
     DEBUGLOGWIFI("Loading WiFi sys config\n");
     JsonDocument doc;
     if (!ModClassJson.jsonFileLoadDoc(WIFI_CONFIG_SYS, doc)) return false;
@@ -778,7 +782,7 @@ bool CORE_CLASS_WIFI::load_configWifiSys() {
     return true;
 }
 
-bool CORE_CLASS_WIFI::save_configWifiSys() {
+bool CLASS_CORE_WIFI::save_configWifiSys() {
     DEBUGLOGWIFI("Saving WiFi sys config\n");
     JsonDocument doc;
     ModClassJson.jsonFileLoadDoc(WIFI_CONFIG_SYS, doc);
@@ -787,13 +791,13 @@ bool CORE_CLASS_WIFI::save_configWifiSys() {
     return ModClassJson.jsonFileSaveDoc(WIFI_CONFIG_SYS, doc);
 }
 
-void CORE_CLASS_WIFI::defaultConfigWifiSys() {
+void CLASS_CORE_WIFI::defaultConfigWifiSys() {
     DEBUGLOGWIFI("defaultConfigWifiSys\n");
     _wifiScanTime = 1;
     _wifiAPLifeTime = 10;
 }
 
-void CORE_CLASS_WIFI::send_wifi_sysconf_json(AsyncWebServerRequest *request) {
+void CLASS_CORE_WIFI::send_wifi_sysconf_json(AsyncWebServerRequest *request) {
     DEBUGLOGWIFI("send_wifi_sysconf_json\n");
     String values = "";
     values += "scantime_hours|" + String(_wifiScanTime / 60) + "|input\n";
@@ -802,7 +806,7 @@ void CORE_CLASS_WIFI::send_wifi_sysconf_json(AsyncWebServerRequest *request) {
     request->send(200, "text/plain", values);
 }
 
-void CORE_CLASS_WIFI::handle_wifi_sysconf_post(AsyncWebServerRequest *request) {
+void CLASS_CORE_WIFI::handle_wifi_sysconf_post(AsyncWebServerRequest *request) {
     DEBUGLOGWIFI("handle_wifi_sysconf_post\n");
     if (!ESPHTTPServer.checkAuth(request)) {
         if (request->_tempObject) { free(request->_tempObject); request->_tempObject = NULL; }

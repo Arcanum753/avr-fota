@@ -22,14 +22,14 @@ static uint16_t _nStepCount = 0;
 
 
 
-MODULE_CLASS_CLOCKMECH ModClassClockMech(false);
-MODULE_CLASS_CLOCKMECH::MODULE_CLASS_CLOCKMECH(bool _in) { dumb = _in; }
-void MODULE_CLASS_CLOCKMECH::setFs(fs::LittleFSFS* fs)  {   _fs = fs;   }
+CLASS_DEVICE_CLOCKMECH ModClassClockMech(false);
+CLASS_DEVICE_CLOCKMECH::CLASS_DEVICE_CLOCKMECH(bool _in) { dumb = _in; }
+void CLASS_DEVICE_CLOCKMECH::setFs(fs::LittleFSFS* fs)  {   _fs = fs;   }
 
 // ============================================================
 // Время из источника
 // ============================================================
-time_t MODULE_CLASS_CLOCKMECH::getCurrentTime() {
+time_t CLASS_DEVICE_CLOCKMECH::getCurrentTime() {
 #if defined(MODULE_DS3231)
     if (_config.timeSource == "ds3231") {
         time_t t = ModClassDs3231.getTime();
@@ -43,7 +43,7 @@ time_t MODULE_CLASS_CLOCKMECH::getCurrentTime() {
 // ============================================================
 // begin()
 // ============================================================
-void MODULE_CLASS_CLOCKMECH::begin() {
+void CLASS_DEVICE_CLOCKMECH::begin() {
     //общий сброс
     DEBUGCLOCKMECH("%s\r\n", __FUNCTION__);
     GoToTaskAfterStep = Idle_task;
@@ -54,7 +54,7 @@ void MODULE_CLASS_CLOCKMECH::begin() {
     _timeHourReal = 0;
     _Mech_Status = STATUS_IDLE;
     _minPrev = 0;
-    _sensorLedState = digitalRead(CLOCKMECH_SENS_LED);
+    GetSens();
     
     defaultConfig(); //конфиги
     if (loadConfig() == false) { saveConfig(); }
@@ -66,10 +66,17 @@ void MODULE_CLASS_CLOCKMECH::begin() {
     SetTask(PollTimeTask);
 }
 
+void CLASS_DEVICE_CLOCKMECH::begin(ModContext& ctx) {
+#if defined(ESP32)
+    _fs = ctx.fs;
+#endif
+    begin();
+}
+
 // ============================================================
 // webInit()
 // ============================================================
-void MODULE_CLASS_CLOCKMECH::webInit() {
+void CLASS_DEVICE_CLOCKMECH::web_Init() {
     DEBUGCLOCKMECH("%s\r\n", __FUNCTION__);
 
     ESPHTTPServer.on("/clock-mech/save", HTTP_POST, [this](AsyncWebServerRequest *request) {
@@ -110,27 +117,27 @@ void MODULE_CLASS_CLOCKMECH::webInit() {
 
 
 void clockMechTerminalRegister() {
-    term.addCommand("c-step",   MODULE_CLASS_CLOCKMECH::cmdStep);
-    term.addCommand("c-dir",    MODULE_CLASS_CLOCKMECH::cmdDir);
-    term.addCommand("c-enc",     MODULE_CLASS_CLOCKMECH::cmdEn);
-    term.addCommand("c-sled",   MODULE_CLASS_CLOCKMECH::cmdSled);
-    term.addCommand("c-sens",   MODULE_CLASS_CLOCKMECH::cmdSens);
-    term.addCommand("c-n",      MODULE_CLASS_CLOCKMECH::cmdN);
-    term.addCommand("c-12",     MODULE_CLASS_CLOCKMECH::cmdSet1200);
-    term.addCommand("c-cnt",    MODULE_CLASS_CLOCKMECH::cmdCount);
-    term.addCommand("c-mode",   MODULE_CLASS_CLOCKMECH::cmdMode);
-    term.addCommand("c-pol",    MODULE_CLASS_CLOCKMECH::cmdPoll);
-    term.addCommand("c-stat",   MODULE_CLASS_CLOCKMECH::cmdStatus);
-    term.addCommand("c-set",   MODULE_CLASS_CLOCKMECH::cmdSetArrows);
-    term.addCommand("c-save",   MODULE_CLASS_CLOCKMECH::cmdSave);
-    term.addCommand("c-m00",   MODULE_CLASS_CLOCKMECH::cmdSetxx00);
-    term.addCommand("c-h12",   MODULE_CLASS_CLOCKMECH::cmdSet12xx);
+    term.addCommand("c-step",   CLASS_DEVICE_CLOCKMECH::cmdStep);
+    term.addCommand("c-dir",    CLASS_DEVICE_CLOCKMECH::cmdDir);
+    term.addCommand("c-enc",     CLASS_DEVICE_CLOCKMECH::cmdEn);
+    term.addCommand("c-sled",   CLASS_DEVICE_CLOCKMECH::cmdSled);
+    term.addCommand("c-sens",   CLASS_DEVICE_CLOCKMECH::cmdSens);
+    term.addCommand("c-n",      CLASS_DEVICE_CLOCKMECH::cmdN);
+    term.addCommand("c-12",     CLASS_DEVICE_CLOCKMECH::cmdSet1200);
+    term.addCommand("c-cnt",    CLASS_DEVICE_CLOCKMECH::cmdCount);
+    term.addCommand("c-mode",   CLASS_DEVICE_CLOCKMECH::cmdMode);
+    term.addCommand("c-pol",    CLASS_DEVICE_CLOCKMECH::cmdPoll);
+    term.addCommand("c-stat",   CLASS_DEVICE_CLOCKMECH::cmdStatus);
+    term.addCommand("c-set",   CLASS_DEVICE_CLOCKMECH::cmdSetArrows);
+    term.addCommand("c-save",   CLASS_DEVICE_CLOCKMECH::cmdSave);
+    term.addCommand("c-m00",   CLASS_DEVICE_CLOCKMECH::cmdSetxx00);
+    term.addCommand("c-h12",   CLASS_DEVICE_CLOCKMECH::cmdSet12xx);
 }
 
 // ============================================================
 // Веб-обработчики
 // ============================================================
-void MODULE_CLASS_CLOCKMECH::handleInfo(AsyncWebServerRequest *request) {
+void CLASS_DEVICE_CLOCKMECH::handleInfo(AsyncWebServerRequest *request) {
     DEBUGCLOCKMECH("%s\r\n", __FUNCTION__);
     JsonDocument doc;
     doc["enable_status"]        = _config.enable_status;
@@ -155,7 +162,7 @@ void MODULE_CLASS_CLOCKMECH::handleInfo(AsyncWebServerRequest *request) {
     request->send(200, "application/json", json);
 }
 
-void MODULE_CLASS_CLOCKMECH::handleSave(AsyncWebServerRequest *request) {
+void CLASS_DEVICE_CLOCKMECH::handleSave(AsyncWebServerRequest *request) {
     DEBUGCLOCKMECH("%s\r\n", __FUNCTION__);
 
     if (request->args() > 0) {
@@ -178,25 +185,25 @@ void MODULE_CLASS_CLOCKMECH::handleSave(AsyncWebServerRequest *request) {
 // ============================================================
 // Эндпоинты ручного управления (GET, JSON)
 // ============================================================
-void MODULE_CLASS_CLOCKMECH::cmdStepWeb(AsyncWebServerRequest *request) {
+void CLASS_DEVICE_CLOCKMECH::cmdStepWeb(AsyncWebServerRequest *request) {
     if (ModClassClockMech._config.enable_status == MODE_WORK) { request->send(403, "application/json", "{\"error\":\"Blocked: WORK mode\"}"); return; }
     cmdStep();
     request->send(200, "application/json", "{\"ok\":true}");
 }
-void MODULE_CLASS_CLOCKMECH::cmdDirWeb(AsyncWebServerRequest *request) {
+void CLASS_DEVICE_CLOCKMECH::cmdDirWeb(AsyncWebServerRequest *request) {
     if (ModClassClockMech._config.enable_status == MODE_WORK) { request->send(403, "application/json", "{\"error\":\"Blocked: WORK mode\"}"); return; }
     cmdDir();
     request->send(200, "application/json", "{\"ok\":true}");
 }
-void MODULE_CLASS_CLOCKMECH::cmdEnWeb(AsyncWebServerRequest *request) {
+void CLASS_DEVICE_CLOCKMECH::cmdEnWeb(AsyncWebServerRequest *request) {
     cmdEn();
     request->send(200, "application/json", "{\"ok\":true}");
 }
-void MODULE_CLASS_CLOCKMECH::cmdSledWeb(AsyncWebServerRequest *request) {
+void CLASS_DEVICE_CLOCKMECH::cmdSledWeb(AsyncWebServerRequest *request) {
     cmdSled();
     request->send(200, "application/json", "{\"ok\":true}");
 }
-void MODULE_CLASS_CLOCKMECH::cmdSensWeb(AsyncWebServerRequest *request) {
+void CLASS_DEVICE_CLOCKMECH::cmdSensWeb(AsyncWebServerRequest *request) {
     JsonDocument doc;
     doc["SENS_HOUR"] = digitalRead(CLOCKMECH_SENS_HOUR);
     doc["SENS_MIN"]  = digitalRead(CLOCKMECH_SENS_MIN);
@@ -205,7 +212,7 @@ void MODULE_CLASS_CLOCKMECH::cmdSensWeb(AsyncWebServerRequest *request) {
     serializeJson(doc, json);
     request->send(200, "application/json", json);
 }
-void MODULE_CLASS_CLOCKMECH::cmdNWeb(AsyncWebServerRequest *request) {
+void CLASS_DEVICE_CLOCKMECH::cmdNWeb(AsyncWebServerRequest *request) {
     if (ModClassClockMech._config.enable_status == MODE_WORK) { request->send(403, "application/json", "{\"error\":\"Blocked: WORK mode\"}"); return; }
     if (!request->hasArg("count")) { request->send(400, "application/json", "{\"error\":\"Missing count\"}"); return; }
     _nStepCount = (uint16_t)request->arg("count").toInt();
@@ -215,27 +222,27 @@ void MODULE_CLASS_CLOCKMECH::cmdNWeb(AsyncWebServerRequest *request) {
     MechMoveStepDown();
     request->send(200, "application/json", "{\"ok\":true}");
 }
-void MODULE_CLASS_CLOCKMECH::cmdResetWeb(AsyncWebServerRequest *request) {
+void CLASS_DEVICE_CLOCKMECH::cmdResetWeb(AsyncWebServerRequest *request) {
     if (ModClassClockMech._config.enable_status == MODE_WORK) { request->send(403, "application/json", "{\"error\":\"Blocked: WORK mode\"}"); return; }
     SetTask(MechSet1200_Setup);
     request->send(200, "application/json", "{\"ok\":true}");
 }
-void MODULE_CLASS_CLOCKMECH::cmdSetxx00Web(AsyncWebServerRequest *request) {
+void CLASS_DEVICE_CLOCKMECH::cmdSetxx00Web(AsyncWebServerRequest *request) {
     if (ModClassClockMech._config.enable_status == MODE_WORK) { request->send(403, "application/json", "{\"error\":\"Blocked: WORK mode\"}"); return; }
     SetTask(MechSetxx00_Setup);
     request->send(200, "application/json", "{\"ok\":true}");
 }
-void MODULE_CLASS_CLOCKMECH::cmdSet12xxWeb(AsyncWebServerRequest *request) {
+void CLASS_DEVICE_CLOCKMECH::cmdSet12xxWeb(AsyncWebServerRequest *request) {
     if (ModClassClockMech._config.enable_status == MODE_WORK) { request->send(403, "application/json", "{\"error\":\"Blocked: WORK mode\"}"); return; }
     SetTask(MechSet12xx_Setup);
     request->send(200, "application/json", "{\"ok\":true}");
 }
-void MODULE_CLASS_CLOCKMECH::cmdCountWeb(AsyncWebServerRequest *request) {
+void CLASS_DEVICE_CLOCKMECH::cmdCountWeb(AsyncWebServerRequest *request) {
     if (ModClassClockMech._config.enable_status == MODE_WORK) { request->send(403, "application/json", "{\"error\":\"Blocked: WORK mode\"}"); return; }
     SetTask(MechCountStepsSetup);
     request->send(200, "application/json", "{\"ok\":true}");
 }
-void MODULE_CLASS_CLOCKMECH::cmdStatusWeb(AsyncWebServerRequest *request) {
+void CLASS_DEVICE_CLOCKMECH::cmdStatusWeb(AsyncWebServerRequest *request) {
     JsonDocument doc;
     doc["_Mech_Status"]            = ModClassClockMech._Mech_Status;
     doc["enable_status"]           = ModClassClockMech._config.enable_status;
@@ -268,7 +275,7 @@ void MODULE_CLASS_CLOCKMECH::cmdStatusWeb(AsyncWebServerRequest *request) {
 // ============================================================
 // Инициализация GPIO
 // ============================================================
-void MODULE_CLASS_CLOCKMECH::MechInitGPIOs() {
+void CLASS_DEVICE_CLOCKMECH::MechInitGPIOs() {
     pinMode(CLOCKMECH_DIR,  OUTPUT);
     pinMode(CLOCKMECH_STEP, OUTPUT);
     pinMode(CLOCKMECH_EN,   OUTPUT);
@@ -300,11 +307,11 @@ void MODULE_CLASS_CLOCKMECH::MechInitGPIOs() {
 // MechMoveStepUp: STEP=LOW, затем SetTask(GoToTaskAfterStep)
 // ============================================================
 
-void MODULE_CLASS_CLOCKMECH::MechMoveStepDown() {
+void CLASS_DEVICE_CLOCKMECH::MechMoveStepDown() {
     digitalWrite(CLOCKMECH_STEP, HIGH);
     SetTimerTask(MechMoveStepUp, 2);
 }
-void MODULE_CLASS_CLOCKMECH::MechMoveStepUp() {
+void CLASS_DEVICE_CLOCKMECH::MechMoveStepUp() {
     digitalWrite(CLOCKMECH_STEP, LOW);
     SetTimerTask(GoToTaskAfterStep, 2);
 }
@@ -313,32 +320,32 @@ void MODULE_CLASS_CLOCKMECH::MechMoveStepUp() {
 // Терминальные команды
 // ============================================================
 
-void MODULE_CLASS_CLOCKMECH::cmdStep() {
+void CLASS_DEVICE_CLOCKMECH::cmdStep() {
     GoToTaskAfterStep = Idle_task;
     SetTask(MechMoveStepDown);
 }
 
-void MODULE_CLASS_CLOCKMECH::cmdDir() {
+void CLASS_DEVICE_CLOCKMECH::cmdDir() {
     uint8_t dir = digitalRead(CLOCKMECH_DIR);
     if (dir == 1) { digitalWrite(CLOCKMECH_DIR, CLOCKMECH_ClockWise);}
     if (dir == 0) { digitalWrite(CLOCKMECH_DIR, CLOCKMECH_CounterClockWise);}
     Serial.printf("Direction: %s\r\n", dir == CLOCKMECH_ClockWise ? "CCW" : "CW");
 }
 
-void MODULE_CLASS_CLOCKMECH::cmdEn() {
+void CLASS_DEVICE_CLOCKMECH::cmdEn() {
     bool en = digitalRead(CLOCKMECH_EN);
     digitalWrite(CLOCKMECH_EN, en == LOW ? HIGH : LOW);
     Serial.printf("Driver: %s\r\n", en == LOW ? "OFF" : "ON");
 }
 
 
-void MODULE_CLASS_CLOCKMECH::cmdSled() {
+void CLASS_DEVICE_CLOCKMECH::cmdSled() {
     bool led = digitalRead(CLOCKMECH_SENS_LED);
     digitalWrite(CLOCKMECH_SENS_LED, led == HIGH ? LOW : HIGH);
     Serial.printf("Sensor LED: %s\r\n", led == HIGH ? "OFF" : "ON");
 }
 
-void MODULE_CLASS_CLOCKMECH::cmdSens() {
+void CLASS_DEVICE_CLOCKMECH::cmdSens() {
     
     Serial.printf("SENS_HOUR=%d SENS_MIN=%d SENS_LED=%d\r\n",
         digitalRead(CLOCKMECH_SENS_HOUR),
@@ -346,12 +353,12 @@ void MODULE_CLASS_CLOCKMECH::cmdSens() {
         digitalRead(CLOCKMECH_SENS_LED));
 }
 
-void MODULE_CLASS_CLOCKMECH::GetSens() {
+void CLASS_DEVICE_CLOCKMECH::GetSens() {
     ModClassClockMech._sensorLedState = digitalRead(CLOCKMECH_SENS_LED);
     ModClassClockMech._sensorLedStateHOUR = digitalRead(CLOCKMECH_SENS_HOUR);
     ModClassClockMech._sensorLedStateMIN = digitalRead(CLOCKMECH_SENS_MIN);
 }
-void MODULE_CLASS_CLOCKMECH::MechNCmdStep() {
+void CLASS_DEVICE_CLOCKMECH::MechNCmdStep() {
     if (_nStepCount > 0) {
         _nStepCount--;
         GoToTaskAfterStep = MechNCmdStep; 
@@ -359,7 +366,7 @@ void MODULE_CLASS_CLOCKMECH::MechNCmdStep() {
     } else { GoToTaskAfterStep = Idle_task;  }
 }
 
-void MODULE_CLASS_CLOCKMECH::cmdN() {
+void CLASS_DEVICE_CLOCKMECH::cmdN() {
     if (_nStepCount > 0) {
         Serial.println("Busy: previous clock-n still running");
         return;
@@ -375,14 +382,14 @@ void MODULE_CLASS_CLOCKMECH::cmdN() {
     GoToTaskAfterStep = MechNCmdStep;
     SetTask(MechMoveStepDown);
 }
-void MODULE_CLASS_CLOCKMECH::cmdSet1200()   { SetTask(MechSet1200_Setup); }
-void MODULE_CLASS_CLOCKMECH::cmdSetxx00()   { SetTask(MechSetxx00_Setup); }
-void MODULE_CLASS_CLOCKMECH::cmdSet12xx()   { SetTask(MechSet12xx_Setup); }
-void MODULE_CLASS_CLOCKMECH::cmdCount()     { SetTask(MechCountStepsSetup); }
-void MODULE_CLASS_CLOCKMECH::cmdPoll()      { SetTask(PollTimeTask); }
+void CLASS_DEVICE_CLOCKMECH::cmdSet1200()   { SetTask(MechSet1200_Setup); }
+void CLASS_DEVICE_CLOCKMECH::cmdSetxx00()   { SetTask(MechSetxx00_Setup); }
+void CLASS_DEVICE_CLOCKMECH::cmdSet12xx()   { SetTask(MechSet12xx_Setup); }
+void CLASS_DEVICE_CLOCKMECH::cmdCount()     { SetTask(MechCountStepsSetup); }
+void CLASS_DEVICE_CLOCKMECH::cmdPoll()      { SetTask(PollTimeTask); }
 
-void MODULE_CLASS_CLOCKMECH::cmdSave() {    ModClassClockMech.saveConfig(); }
-void MODULE_CLASS_CLOCKMECH::cmdMode() {
+void CLASS_DEVICE_CLOCKMECH::cmdSave() {    ModClassClockMech.saveConfig(); }
+void CLASS_DEVICE_CLOCKMECH::cmdMode() {
     char *arg = term.getNext();
     if (arg == NULL) {
         ModClassClockMech._config.enable_status = !ModClassClockMech._config.enable_status;
@@ -395,7 +402,7 @@ void MODULE_CLASS_CLOCKMECH::cmdMode() {
     Serial.printf("Mode: %s\r\n", ModClassClockMech._config.enable_status == MODE_WORK ? "WORK" : "DEBUG");
 }
 
-void MODULE_CLASS_CLOCKMECH::cmdSetArrows() {
+void CLASS_DEVICE_CLOCKMECH::cmdSetArrows() {
     char *arg1 = term.getNext();
     if (arg1 == NULL) {
         Serial.println("Usage: c-set <hour> [min]");
@@ -421,7 +428,7 @@ void MODULE_CLASS_CLOCKMECH::cmdSetArrows() {
 }
 
 
-void MODULE_CLASS_CLOCKMECH::cmdStatus() {
+void CLASS_DEVICE_CLOCKMECH::cmdStatus() {
 
     time_t t = ModClassClockMech.getCurrentTime();
   
@@ -456,7 +463,7 @@ void MODULE_CLASS_CLOCKMECH::cmdStatus() {
 
 
 
-void MODULE_CLASS_CLOCKMECH::handleReset(AsyncWebServerRequest *request) {
+void CLASS_DEVICE_CLOCKMECH::handleReset(AsyncWebServerRequest *request) {
     DEBUGCLOCKMECH("%s\r\n", __FUNCTION__);
     if (_config.enable_status == MODE_WORK) { request->send(403, "application/json", "{\"error\":\"Blocked: WORK mode\"}"); return; }
     SetTask(MechSet1200_Setup);
@@ -469,7 +476,7 @@ void MODULE_CLASS_CLOCKMECH::handleReset(AsyncWebServerRequest *request) {
 // Периодический опрос времени. Основной рабочий цикл.
 // ============================================================
 
-void MODULE_CLASS_CLOCKMECH::PollTimeTask() {
+void CLASS_DEVICE_CLOCKMECH::PollTimeTask() {
     SetTimerTask(PollTimeTask, ModClassClockMech._config.pollInterval * 1000UL);
     if (ModClassClockMech._config.enable_status != MODE_WORK) { return; }
     if (ModClassClockMech._Mech_Status != STATUS_IDLE) { return; }
@@ -480,7 +487,7 @@ void MODULE_CLASS_CLOCKMECH::PollTimeTask() {
     }
 }
 
-void MODULE_CLASS_CLOCKMECH::MechTimeSet (uint8_t _inH, uint8_t _inM)	{
+void CLASS_DEVICE_CLOCKMECH::MechTimeSet (uint8_t _inH, uint8_t _inM)	{
 	if (_inH >= HOURINCIRCLE)   { _inH -= HOURINCIRCLE; }
 	if (_inH >= HOURINCIRCLE)   { _inH = 0; }
 	if (_inM >= MININHOUR)      { _inM = MINMAX; }
@@ -493,27 +500,25 @@ void MODULE_CLASS_CLOCKMECH::MechTimeSet (uint8_t _inH, uint8_t _inM)	{
 // ============================================================
 // Постановка стрелок в нормальном режиме работы.
 // ============================================================
-void MODULE_CLASS_CLOCKMECH::MechSetArrows() {
-    // if ( ModClassClockMech._timeMinReal == MINMAX ){  }
-    // if ( ModClassClockMech._timeHourReal == HOURINCIRCLE - 1 ){  }
+void CLASS_DEVICE_CLOCKMECH::MechSetArrows() {
     if (ModClassClockMech._Mech_Status != STATUS_IDLE) { return; }
     if (ModClassClockMech._timeMechHour > ModClassClockMech._timeHourReal) { SetTask(MechSet1200_Setup); return; }
     if (ModClassClockMech._timeMechHour < ModClassClockMech._timeHourReal) { SetTask(MechSetArrowHourSetup); return; }
-    if (ModClassClockMech._timeMechHour == ModClassClockMech._timeHourReal) {
-        if (ModClassClockMech._minPrev != ModClassClockMech._timeMinReal) {
-            ModClassClockMech._minPrev = ModClassClockMech._timeMinReal;
+    // if (ModClassClockMech._timeMechHour == ModClassClockMech._timeHourReal) {
+        // if (ModClassClockMech._minPrev != ModClassClockMech._timeMinReal) {
+            // ModClassClockMech._minPrev = ModClassClockMech._timeMinReal;
             SetTask(MechSetArrowMinSetup);
-        }
-    }
+        // }
+    // }
 }
 
 
 // ============================================================
 // Сброс механизма в хх:00 (выставляем ТОЛЬКО МИНУТНУЮ стрелку)
 // ============================================================
-void MODULE_CLASS_CLOCKMECH::MechSetxx00_Setup() {
+void CLASS_DEVICE_CLOCKMECH::MechSetxx00_Setup() {
     digitalWrite(CLOCKMECH_SENS_LED, HIGH);
-    ModClassClockMech._sensorLedState = digitalRead(CLOCKMECH_SENS_LED);
+    GetSens();
     if (SENS_MIN_SET) {  MechSetxx00_endOk(); return; }
     ModClassClockMech._Mech_Status = STATUS_SETXX00;
     digitalWrite(CLOCKMECH_EN, LOW);
@@ -522,7 +527,7 @@ void MODULE_CLASS_CLOCKMECH::MechSetxx00_Setup() {
     SetTask(MechMoveStepDown);
 }
 
-void MODULE_CLASS_CLOCKMECH::MechSetxx00_Task() {
+void CLASS_DEVICE_CLOCKMECH::MechSetxx00_Task() {
     if (ModClassClockMech._Mech_Status != STATUS_SETXX00) {return;}
     // Нашли положение xx:00
     if (SENS_MIN_SET) { MechSetxx00_endOk(); return; }
@@ -534,7 +539,7 @@ void MODULE_CLASS_CLOCKMECH::MechSetxx00_Task() {
     SetTask(MechMoveStepDown);
 }
 
-void MODULE_CLASS_CLOCKMECH::MechSetxx00_endOk() {
+void CLASS_DEVICE_CLOCKMECH::MechSetxx00_endOk() {
     ModClassClockMech._Mech_Status = STATUS_IDLE;
     GoToTaskAfterStep = Idle_task;
     ModClassClockMech._timeMechMin = 0;
@@ -542,17 +547,17 @@ void MODULE_CLASS_CLOCKMECH::MechSetxx00_endOk() {
     ModClassClockMech._mechControlSteps = 0;
     digitalWrite(CLOCKMECH_EN, HIGH);
     digitalWrite(CLOCKMECH_SENS_LED, LOW);
-    ModClassClockMech._sensorLedState = digitalRead(CLOCKMECH_SENS_LED);
+    GetSens();
 
     DEBUGCLOCKMECH("MechSetXX00_Task: done, position XX:00\r\n");
 }
 
-void MODULE_CLASS_CLOCKMECH::MechSetxx00_endFail() {
+void CLASS_DEVICE_CLOCKMECH::MechSetxx00_endFail() {
     ModClassClockMech._Mech_Status = ERROR_NO_MIN;
     GoToTaskAfterStep = Idle_task;
     digitalWrite(CLOCKMECH_EN, HIGH);
     digitalWrite(CLOCKMECH_SENS_LED, LOW);
-    ModClassClockMech._sensorLedState = digitalRead(CLOCKMECH_SENS_LED);
+    GetSens();
     DEBUGCLOCKMECH("MechSet1200_Task: ERROR_NO_MIN (%d)\r\n", ModClassClockMech._mechControlSteps);
     ModClassClockMech._mechControlSteps = 0;
 }
@@ -560,9 +565,9 @@ void MODULE_CLASS_CLOCKMECH::MechSetxx00_endFail() {
 // ============================================================
 // Сброс механизма в 12:хх
 // ============================================================
-void MODULE_CLASS_CLOCKMECH::MechSet12xx_Setup() {
+void CLASS_DEVICE_CLOCKMECH::MechSet12xx_Setup() {
     digitalWrite(CLOCKMECH_SENS_LED, HIGH);
-    ModClassClockMech._sensorLedState = digitalRead(CLOCKMECH_SENS_LED);
+    GetSens();
     if (SENS_HOUR_SET) { MechSet12xx_endOk(); return; }
     ModClassClockMech._Mech_Status = STATUS_SET12XX;
     digitalWrite(CLOCKMECH_EN, LOW);
@@ -571,7 +576,7 @@ void MODULE_CLASS_CLOCKMECH::MechSet12xx_Setup() {
     SetTask(MechMoveStepDown);
 }
 
-void MODULE_CLASS_CLOCKMECH::MechSet12xx_Task() {
+void CLASS_DEVICE_CLOCKMECH::MechSet12xx_Task() {
     if (ModClassClockMech._Mech_Status != STATUS_SET12XX) {return;}
     // Нашли положение xx:00
     if (SENS_HOUR_SET) { MechSet12xx_endOk(); return; }
@@ -583,7 +588,7 @@ void MODULE_CLASS_CLOCKMECH::MechSet12xx_Task() {
     SetTask(MechMoveStepDown);
 }
 
-void MODULE_CLASS_CLOCKMECH::MechSet12xx_endOk() {
+void CLASS_DEVICE_CLOCKMECH::MechSet12xx_endOk() {
     ModClassClockMech._Mech_Status = STATUS_IDLE;
     GoToTaskAfterStep = Idle_task;
     ModClassClockMech._timeMechMin = 0;
@@ -591,16 +596,16 @@ void MODULE_CLASS_CLOCKMECH::MechSet12xx_endOk() {
     ModClassClockMech._mechControlSteps = 0;
     digitalWrite(CLOCKMECH_EN, HIGH);
     digitalWrite(CLOCKMECH_SENS_LED, LOW);
-    ModClassClockMech._sensorLedState = digitalRead(CLOCKMECH_SENS_LED);
+    GetSens();
     DEBUGCLOCKMECH("MechSet12xx_Task: done, position 12:xx\r\n");
 }
 
-void MODULE_CLASS_CLOCKMECH::MechSet12xx_endFail() {
+void CLASS_DEVICE_CLOCKMECH::MechSet12xx_endFail() {
     ModClassClockMech._Mech_Status = ERROR_NO_HOUR;
     GoToTaskAfterStep = Idle_task;
     digitalWrite(CLOCKMECH_EN, HIGH);
     digitalWrite(CLOCKMECH_SENS_LED, LOW);
-    ModClassClockMech._sensorLedState = digitalRead(CLOCKMECH_SENS_LED);
+    GetSens();
     DEBUGCLOCKMECH("MechSet12xx_Task: ERROR_NO_HOUR (%d)\r\n", ModClassClockMech._mechControlSteps);
     ModClassClockMech._mechControlSteps = 0;
 }
@@ -608,18 +613,18 @@ void MODULE_CLASS_CLOCKMECH::MechSet12xx_endFail() {
 // ============================================================
 // Сброс механизма в 12:00  (work)
 // ============================================================
-void MODULE_CLASS_CLOCKMECH::MechSet1200_Setup() {
+void CLASS_DEVICE_CLOCKMECH::MechSet1200_Setup() {
     digitalWrite(CLOCKMECH_SENS_LED, HIGH);
+    GetSens();
     if (SENS_SET) {  MechSet1200_endOk(); return; }
     ModClassClockMech._Mech_Status = STATUS_SET1200;
-    ModClassClockMech._sensorLedState = digitalRead(CLOCKMECH_SENS_LED);
     digitalWrite(CLOCKMECH_EN, LOW);
     // digitalWrite(CLOCKMECH_DIR, CLOCKMECH_CounterClockWise);
     ModClassClockMech._mechControlSteps = 0;
     GoToTaskAfterStep = MechSet1200_Task;
     SetTask(MechMoveStepDown);
 }
-void MODULE_CLASS_CLOCKMECH::MechSet1200_Task() {
+void CLASS_DEVICE_CLOCKMECH::MechSet1200_Task() {
     if (ModClassClockMech._Mech_Status != STATUS_SET1200) {return;}
     // Нашли положение 12:00
     if (SENS_SET) { MechSet1200_endOk(); return; }
@@ -631,7 +636,7 @@ void MODULE_CLASS_CLOCKMECH::MechSet1200_Task() {
     SetTask(MechMoveStepDown);
 }
 
-void MODULE_CLASS_CLOCKMECH::MechSet1200_endOk() {
+void CLASS_DEVICE_CLOCKMECH::MechSet1200_endOk() {
     ModClassClockMech._Mech_Status = STATUS_IDLE;
     GoToTaskAfterStep = Idle_task;
     ModClassClockMech._timeMechMin = 0;
@@ -639,7 +644,7 @@ void MODULE_CLASS_CLOCKMECH::MechSet1200_endOk() {
     ModClassClockMech._mechControlSteps = 0;
     digitalWrite(CLOCKMECH_EN, HIGH);
     digitalWrite(CLOCKMECH_SENS_LED, LOW);
-    ModClassClockMech._sensorLedState = digitalRead(CLOCKMECH_SENS_LED);
+    GetSens();
 
     if (ModClassClockMech._config.enable_status == MODE_WORK) {
         if (ModClassClockMech._config.stepsPerRevolution == 0)  {  SetTask(MechCountStepsSetup); }
@@ -648,12 +653,12 @@ void MODULE_CLASS_CLOCKMECH::MechSet1200_endOk() {
     DEBUGCLOCKMECH("MechSet1200_Task: done, position 12:00\r\n");
 }
 
-void MODULE_CLASS_CLOCKMECH::MechSet1200_endFail() {
+void CLASS_DEVICE_CLOCKMECH::MechSet1200_endFail() {
     ModClassClockMech._Mech_Status = ERROR_NO_MECH;
     GoToTaskAfterStep = Idle_task;
     digitalWrite(CLOCKMECH_EN, HIGH);
     digitalWrite(CLOCKMECH_SENS_LED, LOW);
-    ModClassClockMech._sensorLedState = digitalRead(CLOCKMECH_SENS_LED);
+    GetSens();
     DEBUGCLOCKMECH("MechSet1200_Task: ERROR_NO_MECH (%d)\r\n", ModClassClockMech._mechControlSteps);
     ModClassClockMech._mechControlSteps = 0;
 }
@@ -662,26 +667,26 @@ void MODULE_CLASS_CLOCKMECH::MechSet1200_endFail() {
 // Подсчёт шагов на оборот
 // ============================================================
 
-void MODULE_CLASS_CLOCKMECH::handleCount(AsyncWebServerRequest *request) {
+void CLASS_DEVICE_CLOCKMECH::handleCount(AsyncWebServerRequest *request) {
     DEBUGCLOCKMECH("%s\r\n", __FUNCTION__);
     if (_config.enable_status == MODE_WORK) { request->send(403, "application/json", "{\"error\":\"Blocked: WORK mode\"}"); return; }
     SetTask(MechCountStepsSetup);
     request->send(200, "text/plain", "OK");
 }
 
-void MODULE_CLASS_CLOCKMECH::MechCountStepsSetup() {
+void CLASS_DEVICE_CLOCKMECH::MechCountStepsSetup() {
     ModClassClockMech._Mech_Status = STATUS_COUNTING;
     digitalWrite(CLOCKMECH_SENS_LED, HIGH);
+    GetSens();
     digitalWrite(CLOCKMECH_EN, LOW);
     digitalWrite(CLOCKMECH_DIR, CLOCKMECH_ClockWise);
-    GetSens();
 
     ModClassClockMech._mechControlSteps = 0;
     GoToTaskAfterStep = MechCountStepsTask;
     SetTask(MechCountStepsTask);
 }
 
-void MODULE_CLASS_CLOCKMECH::MechCountStepsTask() {
+void CLASS_DEVICE_CLOCKMECH::MechCountStepsTask() {
     if (ModClassClockMech._Mech_Status != STATUS_COUNTING) {return;}
     if (ModClassClockMech._mechControlSteps >= ModClassClockMech._config.errorLimitSteps) {
         MechCountStepsFail();
@@ -696,7 +701,7 @@ void MODULE_CLASS_CLOCKMECH::MechCountStepsTask() {
     SetTask(MechMoveStepDown);
 }
 
-void MODULE_CLASS_CLOCKMECH::MechCountStepsOk() {
+void CLASS_DEVICE_CLOCKMECH::MechCountStepsOk() {
     DEBUGCLOCKMECH("%s\r\n", __FUNCTION__);
     GetSens(); cmdSens();
     digitalWrite(CLOCKMECH_EN, HIGH);
@@ -713,7 +718,7 @@ void MODULE_CLASS_CLOCKMECH::MechCountStepsOk() {
     if (ModClassClockMech._config.enable_status == MODE_WORK) { SetTask(PollTimeTask); } 
 }
 
-void MODULE_CLASS_CLOCKMECH::MechCountStepsFail() {
+void CLASS_DEVICE_CLOCKMECH::MechCountStepsFail() {
     DEBUGCLOCKMECH("MechCountSteps: ERROR_NO_MECH\r\n");
     ModClassClockMech._Mech_Status = ERROR_NO_MECH;
     GoToTaskAfterStep = Idle_task;
@@ -730,29 +735,28 @@ void MODULE_CLASS_CLOCKMECH::MechCountStepsFail() {
 // Продвинуть часовую на +1 (12 оборотов минутной)
 // ============================================================
 
-void MODULE_CLASS_CLOCKMECH::MechSetArrowHourSetup() {
+void CLASS_DEVICE_CLOCKMECH::MechSetArrowHourSetup() {
     ModClassClockMech._Mech_Status = STATUS_SETHOUR;
     digitalWrite(CLOCKMECH_SENS_LED, HIGH);
+    GetSens();
     digitalWrite(CLOCKMECH_EN, LOW);
     digitalWrite(CLOCKMECH_DIR, CLOCKMECH_ClockWise);
-    GetSens();
     GoToTaskAfterStep = MechSetArrowHourTask;
     SetTask(MechSetArrowHourTask);
 }
 
-void MODULE_CLASS_CLOCKMECH::MechSetArrowHourTask() {
+void CLASS_DEVICE_CLOCKMECH::MechSetArrowHourTask() {
     if (ModClassClockMech._Mech_Status != STATUS_SETHOUR) {return;}
+    if (SENS_MIN_SET == true && (ModClassClockMech._mechControlSteps > CLOCKMECH_MIN_STEPS_GAP) ) { MechSetArrowHourEndOk(); return; }
     if (ModClassClockMech._mechControlSteps > ModClassClockMech._config.errorLimitSteps) { MechSetArrowHourEndFail(); return; }
-    if (SENS_MIN_SET && (ModClassClockMech._mechControlSteps > CLOCKMECH_MIN_STEPS_GAP) ) { MechSetArrowHourEndOk(); return; }
     ModClassClockMech._mechControlSteps++;
     GoToTaskAfterStep = MechSetArrowHourTask;
     SetTask(MechMoveStepDown);
     
 }
 
-void MODULE_CLASS_CLOCKMECH::MechSetArrowHourEndOk() {
+void CLASS_DEVICE_CLOCKMECH::MechSetArrowHourEndOk() {
     GoToTaskAfterStep = Idle_task;
-    ModClassClockMech._Mech_Status = STATUS_IDLE;
     GetSens();
     if (ModClassClockMech._timeMechHour == ModClassClockMech._timeHourReal) { DEBUGCLOCKMECH("tH_M == tH_R \r\n"); }
     ModClassClockMech._timeMechMin = 0;
@@ -763,10 +767,11 @@ void MODULE_CLASS_CLOCKMECH::MechSetArrowHourEndOk() {
     SetTask(MechSetArrows); // set all arows
     digitalWrite(CLOCKMECH_EN, HIGH);
     digitalWrite(CLOCKMECH_SENS_LED, LOW);
+    ModClassClockMech._Mech_Status = STATUS_IDLE;
 
 }
 
-void MODULE_CLASS_CLOCKMECH::MechSetArrowHourEndFail() {
+void CLASS_DEVICE_CLOCKMECH::MechSetArrowHourEndFail() {
     DEBUGCLOCKMECH("%s\r\n", __FUNCTION__);
     ModClassClockMech._Mech_Status = ERROR_NO_MECH;
     GetSens();
@@ -779,7 +784,7 @@ void MODULE_CLASS_CLOCKMECH::MechSetArrowHourEndFail() {
 // ============================================================
 // Довернуть минуты до целевого положения
 // ============================================================
-// void MODULE_CLASS_CLOCKMECH::MechSetArrowMinback() {
+// void CLASS_DEVICE_CLOCKMECH::MechSetArrowMinback() {
 //     digitalWrite(CLOCKMECH_SENS_LED, HIGH);
 //     digitalWrite(CLOCKMECH_EN, LOW);
 //     digitalWrite(CLOCKMECH_DIR, CLOCKMECH_CounterClockWise);
@@ -805,17 +810,17 @@ void MODULE_CLASS_CLOCKMECH::MechSetArrowHourEndFail() {
 //     }
 // }
 
-void MODULE_CLASS_CLOCKMECH::MechSetArrowMinSetup() {
+void CLASS_DEVICE_CLOCKMECH::MechSetArrowMinSetup() {
     ModClassClockMech._Mech_Status = STATUS_SETMIN;
     digitalWrite(CLOCKMECH_SENS_LED, HIGH);
+    GetSens();
     digitalWrite(CLOCKMECH_EN, LOW);
     digitalWrite(CLOCKMECH_DIR, CLOCKMECH_ClockWise);
-    GetSens();
     GoToTaskAfterStep = MechSetArrowMinTask;
     SetTask(MechSetArrowMinTask);
 }
 
-void MODULE_CLASS_CLOCKMECH::MechSetArrowMinTask() {
+void CLASS_DEVICE_CLOCKMECH::MechSetArrowMinTask() {
     if (ModClassClockMech._Mech_Status != STATUS_SETMIN) {return;}
     if (ModClassClockMech._mechControlSteps >= ModClassClockMech._config.errorLimitSteps) { MechSetArrowMinFail(); return; }
 
@@ -830,17 +835,17 @@ void MODULE_CLASS_CLOCKMECH::MechSetArrowMinTask() {
     if ( MinPosSteps >= MinTimeSteps ) { SetTask(MechSetArrowMinOk); return; }
 }
 
-void MODULE_CLASS_CLOCKMECH::MechSetArrowMinOk() {
+void CLASS_DEVICE_CLOCKMECH::MechSetArrowMinOk() {
     ModClassClockMech._Mech_Status = STATUS_IDLE;
     GoToTaskAfterStep = Idle_task;
-    GetSens();
     digitalWrite(CLOCKMECH_EN, HIGH);
     digitalWrite(CLOCKMECH_SENS_LED, LOW);
+    GetSens();
     SetTask(MechSetArrows); // set all arows
     DEBUGCLOCKMECH("ctrlSteps: %02d, MinReal: %d, stepsPerHour %d\r\n", ModClassClockMech._mechControlSteps, ModClassClockMech._timeMinReal , ModClassClockMech._config.stepsPerRevolution);
 }
 
-void MODULE_CLASS_CLOCKMECH::MechSetArrowMinFail() {
+void CLASS_DEVICE_CLOCKMECH::MechSetArrowMinFail() {
     ModClassClockMech._Mech_Status = ERROR_NO_MECH;
     GoToTaskAfterStep = Idle_task;
     GetSens(); cmdSens();
@@ -853,7 +858,7 @@ void MODULE_CLASS_CLOCKMECH::MechSetArrowMinFail() {
 // ============================================================
 // Конфиг
 // ============================================================
-void MODULE_CLASS_CLOCKMECH::defaultConfig() {
+void CLASS_DEVICE_CLOCKMECH::defaultConfig() {
     _config.enable_status      = MODE_DEBUG;
     _config.timeSource         = "ds3231";
     _config.stepsPerRevolution = 0;
@@ -862,7 +867,7 @@ void MODULE_CLASS_CLOCKMECH::defaultConfig() {
     _config.sensorLedEnabled   = true;
 }
 
-bool MODULE_CLASS_CLOCKMECH::loadConfig() {
+bool CLASS_DEVICE_CLOCKMECH::loadConfig() {
     DEBUGCLOCKMECH("%s\r\n", __FUNCTION__);
     JsonDocument doc;
     if (ModClassJson.jsonFileLoadDoc(CONFIG_FILE_CLOCKMECH, doc) == false) { return false; }
@@ -881,7 +886,7 @@ bool MODULE_CLASS_CLOCKMECH::loadConfig() {
     return true;
 }
 
-bool MODULE_CLASS_CLOCKMECH::saveConfig() {
+bool CLASS_DEVICE_CLOCKMECH::saveConfig() {
     DEBUGCLOCKMECH("%s\r\n", __FUNCTION__);
     JsonDocument doc;
     ModClassJson.jsonFileLoadDoc(CONFIG_FILE_CLOCKMECH, doc);
@@ -897,11 +902,11 @@ bool MODULE_CLASS_CLOCKMECH::saveConfig() {
 // ============================================================
 // Версионные методы
 // ============================================================
-String MODULE_CLASS_CLOCKMECH::getVersionStr() { return String(DEVICE_CLOCK_MECH_VERSION);  }
-String MODULE_CLASS_CLOCKMECH::getGeneratedTime() { return String(DEVICE_CLOCK_MECH_GENERATED_TIME);    }
-String MODULE_CLASS_CLOCKMECH::getCommitDateStr() { return String(DEVICE_CLOCK_MECH_COMMIT_DATE_STR);   }
+String CLASS_DEVICE_CLOCKMECH::getVersionStr() { return String(DEVICE_CLOCK_MECH_VERSION);  }
+String CLASS_DEVICE_CLOCKMECH::getGeneratedTime() { return String(DEVICE_CLOCK_MECH_GENERATED_TIME);    }
+String CLASS_DEVICE_CLOCKMECH::getCommitDateStr() { return String(DEVICE_CLOCK_MECH_COMMIT_DATE_STR);   }
 
-void MODULE_CLASS_CLOCKMECH::html_ver_get(AsyncWebServerRequest *request) {
+void CLASS_DEVICE_CLOCKMECH::html_ver_get(AsyncWebServerRequest *request) {
     DEBUGCLOCKMECH("%s\r\n", __FUNCTION__);
     String values = "";
     values += "clockmechversion|" + getVersionStr()    + "|div\n";

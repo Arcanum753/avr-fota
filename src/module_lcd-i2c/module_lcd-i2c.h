@@ -4,6 +4,8 @@
 #include "main.h"
 #include <LiquidCrystal_I2C.h>
 
+#include "mod_context.h"
+
 #ifdef DEBUG_LCD
 #define DEBUGLCD(...) Serial.printf(__VA_ARGS__)
 #else
@@ -35,16 +37,17 @@ typedef struct {
     bool    backlight;
 } strLcdConfig;
 
-class MODULE_CLASS_LCD_I2C {
+class CLASS_MODULE_I2C_LCD {
 public:
-    MODULE_CLASS_LCD_I2C(bool _in);
+    CLASS_MODULE_I2C_LCD(bool _in);
 #if ESP32
     void setFs(fs::LittleFSFS* fs);
 #elif defined(ESP8266)
     void setFs(FS* fs);
 #endif
     void begin();
-    void webInit();
+    void begin(ModContext& ctx);
+    void web_Init();
 
 private:
     String getVersionStr();
@@ -78,6 +81,6 @@ protected:
     LiquidCrystal_I2C* _lcd;
 };
 
-extern MODULE_CLASS_LCD_I2C ModClassLcdI2c;
+extern CLASS_MODULE_I2C_LCD ModClassLcdI2c;
 
 #endif

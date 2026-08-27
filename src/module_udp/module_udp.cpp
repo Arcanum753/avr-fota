@@ -19,9 +19,9 @@
 #include "module_udp_version.h"
 
 // Единственный глобальный объект - сам класс
-UDPBROADCAST_CLASS udpBroadcast(UDP_PORT);
+CLASS_MODULE_UDPBROADCAST udpBroadcast(UDP_PORT);
 
-UDPBROADCAST_CLASS::UDPBROADCAST_CLASS(uint16_t portListen) {
+CLASS_MODULE_UDPBROADCAST::CLASS_MODULE_UDPBROADCAST(uint16_t portListen) {
     _portRx = portListen;
     _portTx = portListen + 1;
     _isStarted = false;
@@ -30,15 +30,15 @@ UDPBROADCAST_CLASS::UDPBROADCAST_CLASS(uint16_t portListen) {
     
 }
 
-uint16_t UDPBROADCAST_CLASS::getUpdPortTx()    { return _udpConfig.udpPortTx; }
-uint16_t UDPBROADCAST_CLASS::getUpdPortRx()    { return _udpConfig.udpPortRx; }
-uint16_t UDPBROADCAST_CLASS::getudpTimeOut()   { return _udpConfig.udpTimeOut; }
-String UDPBROADCAST_CLASS::getudpKeyword()     { return _udpConfig.keyword; }
-bool UDPBROADCAST_CLASS::udpPowerOnGet()       { return _udpConfig.udpPowerOn; }
-bool UDPBROADCAST_CLASS::udpResponseGet()       { return _udpConfig.udpResponse; }
-uint8_t UDPBROADCAST_CLASS::isStart()          { return _isStarted; }
+uint16_t CLASS_MODULE_UDPBROADCAST::getUpdPortTx()    { return _udpConfig.udpPortTx; }
+uint16_t CLASS_MODULE_UDPBROADCAST::getUpdPortRx()    { return _udpConfig.udpPortRx; }
+uint16_t CLASS_MODULE_UDPBROADCAST::getudpTimeOut()   { return _udpConfig.udpTimeOut; }
+String CLASS_MODULE_UDPBROADCAST::getudpKeyword()     { return _udpConfig.keyword; }
+bool CLASS_MODULE_UDPBROADCAST::udpPowerOnGet()       { return _udpConfig.udpPowerOn; }
+bool CLASS_MODULE_UDPBROADCAST::udpResponseGet()       { return _udpConfig.udpResponse; }
+uint8_t CLASS_MODULE_UDPBROADCAST::isStart()          { return _isStarted; }
 
-void UDPBROADCAST_CLASS::begin() {
+void CLASS_MODULE_UDPBROADCAST::begin() {
     defaultConfigUDP();
     if ( load_config_UDP() == false) {save_configUDP();}
     DEBUGUDP("%s\r\n", __FUNCTION__);
@@ -55,14 +55,14 @@ void UDPBROADCAST_CLASS::begin() {
 }
 
 // ========== STOP ==========
-void UDPBROADCAST_CLASS::udpStop() {
+void CLASS_MODULE_UDPBROADCAST::udpStop() {
     DEBUGUDP("%s\r\n", __FUNCTION__);
     _isStarted = false;
     _udp.close();
 }
 
 // ========== SEND BROADCAST ==========
-void UDPBROADCAST_CLASS::udpBroadcastSend(uint16_t _port, String _strin) {
+void CLASS_MODULE_UDPBROADCAST::udpBroadcastSend(uint16_t _port, String _strin) {
     DEBUGUDP("%s\r\n", __FUNCTION__);
     if (_isStarted == false) {  return; }
     if (_strin.length() == 0 || _strin.length() >= UDP_DATA_MESSAGE_LEN) {  return; }
@@ -156,13 +156,13 @@ void udpBroadcastTimer() {
 }
 
 // ========== TEST ==========
-void UDPBROADCAST_CLASS::udpBroadcastTest(AsyncWebServerRequest *request) {
+void CLASS_MODULE_UDPBROADCAST::udpBroadcastTest(AsyncWebServerRequest *request) {
     DEBUGUDP("%s\n\r", __FUNCTION__);
     udpBroadcastSend(getUpdPortTx(), udpJsonGet());
 }
 
 // ========== WEB INIT ==========
-void UDPBROADCAST_CLASS::webInit(void) {
+void CLASS_MODULE_UDPBROADCAST::web_Init(void) {
 
     
     ESPHTTPServer.on(HTML_FILE_UDP, HTTP_POST, [this](AsyncWebServerRequest *request) {
@@ -186,7 +186,7 @@ void UDPBROADCAST_CLASS::webInit(void) {
 }
 
 // ========== SEND CONFIG HTML ==========
-void UDPBROADCAST_CLASS::send_udp_configuration_values_html(AsyncWebServerRequest *request) {
+void CLASS_MODULE_UDPBROADCAST::send_udp_configuration_values_html(AsyncWebServerRequest *request) {
     DEBUGUDP("%s\n\r", __FUNCTION__);
     String values = "";
     values += "udpporttx|"   + String(_udpConfig.udpPortTx) + "|input\n";
@@ -199,7 +199,7 @@ void UDPBROADCAST_CLASS::send_udp_configuration_values_html(AsyncWebServerReques
 }
 
 // ========== GET CONFIG HTML ==========
-void UDPBROADCAST_CLASS::get_udp_configuration_html(AsyncWebServerRequest *request) {
+void CLASS_MODULE_UDPBROADCAST::get_udp_configuration_html(AsyncWebServerRequest *request) {
     DEBUGUDP("%s\n\r", __PRETTY_FUNCTION__);
     _udpConfig.udpPowerOn  = false; 
     _udpConfig.udpResponse = false;
@@ -227,7 +227,7 @@ void UDPBROADCAST_CLASS::get_udp_configuration_html(AsyncWebServerRequest *reque
 }
 
 // ========== JSON GET ==========
-String UDPBROADCAST_CLASS::udpJsonGet() {
+String CLASS_MODULE_UDPBROADCAST::udpJsonGet() {
     String ret = "";
     ret += "{\n";
     ret += "  \"deviceName\": \"" + ESPHTTPServer._sysConfig.deviceName + "\",\n";
@@ -250,7 +250,7 @@ String UDPBROADCAST_CLASS::udpJsonGet() {
 }
 
 // ========== DEFAULT CONFIG ==========
-void UDPBROADCAST_CLASS::defaultConfigUDP() {
+void CLASS_MODULE_UDPBROADCAST::defaultConfigUDP() {
     _udpConfig.udpPortTx = UDP_BROADCAST_PORT_DFLT;
     _udpConfig.udpPortRx = UDP_BROADCAST_PORT_DFLT + 1;
     _udpConfig.udpTimeOut = UDP_BROADCAST_TIME_DFLT;
@@ -260,7 +260,7 @@ void UDPBROADCAST_CLASS::defaultConfigUDP() {
 }
 
 // ========== SAVE CONFIG ==========
-bool UDPBROADCAST_CLASS::save_configUDP() {
+bool CLASS_MODULE_UDPBROADCAST::save_configUDP() {
     DEBUGUDP("%s\n\r", __PRETTY_FUNCTION__);
     JsonDocument doc;
     ModClassJson.jsonFileLoadDoc(CONFIG_FILE_UDP, doc);
@@ -274,7 +274,7 @@ bool UDPBROADCAST_CLASS::save_configUDP() {
 }
 
 // ========== LOAD CONFIG ==========
-bool UDPBROADCAST_CLASS::load_config_UDP() {
+bool CLASS_MODULE_UDPBROADCAST::load_config_UDP() {
     DEBUGUDP("%s\n\r", __PRETTY_FUNCTION__);
     JsonDocument doc;
     if (!ModClassJson.jsonFileLoadDoc(CONFIG_FILE_UDP, doc)) return false;
@@ -295,19 +295,19 @@ bool UDPBROADCAST_CLASS::load_config_UDP() {
     return true;
 }
 
-String UDPBROADCAST_CLASS::getVersionStr(){
+String CLASS_MODULE_UDPBROADCAST::getVersionStr(){
     return String(MODULE_UDP_VERSION);
 }
 
-String UDPBROADCAST_CLASS::getGeneratedTime(){
+String CLASS_MODULE_UDPBROADCAST::getGeneratedTime(){
     return String(MODULE_UDP_GENERATED_TIME);
 }
 
-String UDPBROADCAST_CLASS::getCommitDateStr(){
+String CLASS_MODULE_UDPBROADCAST::getCommitDateStr(){
     return String(MODULE_UDP_COMMIT_DATE_STR);
 }
 
-void UDPBROADCAST_CLASS::html_ver_get(AsyncWebServerRequest *request) {
+void CLASS_MODULE_UDPBROADCAST::html_ver_get(AsyncWebServerRequest *request) {
     DEBUGUDP("%s\n\r", __FUNCTION__);
     String values = "";
     values += "udpversion|"     + getVersionStr()    + "|div\n";

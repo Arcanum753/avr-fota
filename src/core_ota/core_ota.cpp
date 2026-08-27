@@ -13,37 +13,42 @@
 #include "core_ota_version.h"
 #include "core_json/core_json.h"
 
-CORE_OTA_CLASS modOtaClass(false);
+CLASS_CORE_OTA modOtaClass(false);
 
 // Global flag to prevent double _fs->end() crashes
 bool _ota_fsEndCalled = false;
 
-CORE_OTA_CLASS :: CORE_OTA_CLASS (bool _in) {
+CLASS_CORE_OTA :: CLASS_CORE_OTA (bool _in) {
 	 dumb = _in;
  }
  
 #if ESP32
-    void CORE_OTA_CLASS::setFs(fs::LittleFSFS* fs)
+    void CLASS_CORE_OTA::setFs(fs::LittleFSFS* fs)
 #elif defined(ESP8266)
-    void CORE_OTA_CLASS::setFs(FS* fs)
+    void CLASS_CORE_OTA::setFs(FS* fs)
 #endif
 {	_fs = fs;	}
 
 
-void CORE_OTA_CLASS::begin(String _hostname, String _password){
+void CLASS_CORE_OTA::begin(String _hostname, String _password){
 	DEBUGOTA(__FUNCTION__);	DEBUGOTA("\r\n");
 	prepareSizesForUpdate();
 	ConfigureOTA(_hostname, _password);
  }
 
-void CORE_OTA_CLASS::prepareSizesForUpdate (){
+void CLASS_CORE_OTA::begin(ModContext& ctx){
+	_fs = ctx.fs;
+	begin(ctx.hostname, ctx.password);
+}
+
+void CLASS_CORE_OTA::prepareSizesForUpdate (){
 	DEBUGOTA(__FUNCTION__);	DEBUGOTA("\r\n");
 	maxSketchSpace   = (ESP.getSketchSize() - 0x1000) & 0xFFFFF000;
 	freeSketchSpace  = ESP.getFreeSketchSpace();
 }
 
 
-bool  CORE_OTA_CLASS::ConfigureOTA( String _hostname, String _password) {
+bool  CLASS_CORE_OTA::ConfigureOTA( String _hostname, String _password) {
 	DEBUGOTA(__FUNCTION__);	DEBUGOTA("\r\n");
 	
 	if (_hostname != "") {
@@ -90,7 +95,7 @@ bool  CORE_OTA_CLASS::ConfigureOTA( String _hostname, String _password) {
 }
 
 
-void CORE_OTA_CLASS::fsEnd() {
+void CLASS_CORE_OTA::fsEnd() {
     if (_fs) {
         DEBUGOTA("Ending filesystem...\n");
         _fs->end();
@@ -99,7 +104,7 @@ void CORE_OTA_CLASS::fsEnd() {
     }
 }
 
-void CORE_OTA_CLASS::fsRemount() {
+void CLASS_CORE_OTA::fsRemount() {
     if (_fs) {
         DEBUGOTA("Remounting filesystem...\n");
 #if defined(ESP32)
@@ -110,7 +115,7 @@ void CORE_OTA_CLASS::fsRemount() {
     }
 }
 
-int8_t CORE_OTA_CLASS::compareVersionDiffs(int32_t majorDiff, int32_t minorDiff, int64_t dateDiff, int32_t buildDiff) {
+int8_t CLASS_CORE_OTA::compareVersionDiffs(int32_t majorDiff, int32_t minorDiff, int64_t dateDiff, int32_t buildDiff) {
     if (majorDiff > 0) return 1;
     if (majorDiff < 0) return -1;
     if (minorDiff > 0) return 1;
@@ -122,12 +127,12 @@ int8_t CORE_OTA_CLASS::compareVersionDiffs(int32_t majorDiff, int32_t minorDiff,
     return 0;
 }
 
- void CORE_OTA_CLASS::loopHandler(){
+ void CLASS_CORE_OTA::loop(){
 	 ArduinoOTA.handle();
  }
 
 
- void CORE_OTA_CLASS::registerCommonRoutes() {
+ void CLASS_CORE_OTA::registerCommonRoutes() {
 	DEBUGOTA(__FUNCTION__);	DEBUGOTA("\r\n");
 
     ESPHTTPServer.on("/update/setmd5", [this](AsyncWebServerRequest *request) {
@@ -165,12 +170,12 @@ int8_t CORE_OTA_CLASS::compareVersionDiffs(int32_t majorDiff, int32_t minorDiff,
 
  }
 
- void CORE_OTA_CLASS::webInit() {
+ void CLASS_CORE_OTA::web_Init() {
     registerCommonRoutes();
     registerCustomRoutes();
  }
 
-void CORE_OTA_CLASS::html_fileuploadProgress(AsyncWebServerRequest *request) {
+void CLASS_CORE_OTA::html_fileuploadProgress(AsyncWebServerRequest *request) {
 	DEBUGOTA(__FUNCTION__);	DEBUGOTA("\r\n");
 	String values = "";
     values += "percent|"    + (String)fileUpadedpercent + "|div\n";
@@ -178,7 +183,7 @@ void CORE_OTA_CLASS::html_fileuploadProgress(AsyncWebServerRequest *request) {
 }
 
 
-void CORE_OTA_CLASS::html_md5_set(AsyncWebServerRequest *request) {
+void CLASS_CORE_OTA::html_md5_set(AsyncWebServerRequest *request) {
 	DEBUGOTA(__FUNCTION__);	DEBUGOTA("\r\n");
 	_browserFileMD5 = "";
 	
@@ -211,7 +216,7 @@ void CORE_OTA_CLASS::html_md5_set(AsyncWebServerRequest *request) {
 // NEW: Cache FS version info from version_fs.json
 // ============================================================
 
-void CORE_OTA_CLASS::cacheFsVersionInfo() {
+void CLASS_CORE_OTA::cacheFsVersionInfo() {
     if (_fsVersionCached) return;
     
     if (!_fs) {
@@ -240,7 +245,7 @@ void CORE_OTA_CLASS::cacheFsVersionInfo() {
     _fsVersionCached = true;
 }
 
-bool CORE_OTA_CLASS::parseVersionFromJson(const String& jsonStr, int64_t& date, int32_t& build, int32_t& major, int32_t& minor) {
+bool CLASS_CORE_OTA::parseVersionFromJson(const String& jsonStr, int64_t& date, int32_t& build, int32_t& major, int32_t& minor) {
     if (!ModClassJson.jsonParseNestedInt(jsonStr, "filesystem|version|major", major)) return false;
     if (!ModClassJson.jsonParseNestedInt(jsonStr, "filesystem|version|minor", minor)) return false;
     
@@ -260,7 +265,7 @@ bool CORE_OTA_CLASS::parseVersionFromJson(const String& jsonStr, int64_t& date, 
 // NEW: Compare file version with current FS JSON or firmware
 // ============================================================
 
-int8_t CORE_OTA_CLASS::compareWithCurrentFsVersion(fileCompareResult* result, const String& filename) {
+int8_t CLASS_CORE_OTA::compareWithCurrentFsVersion(fileCompareResult* result, const String& filename) {
     if (result->fileType == FILE_TYPE_FIRMWARE) {
         result->fsCurrentMajor = VERSION_MAJOR;
         result->fsCurrentMinor = VERSION_MINOR;
@@ -293,7 +298,7 @@ int8_t CORE_OTA_CLASS::compareWithCurrentFsVersion(fileCompareResult* result, co
 }
 
 
-void CORE_OTA_CLASS::html_filename_check(AsyncWebServerRequest *request) {
+void CLASS_CORE_OTA::html_filename_check(AsyncWebServerRequest *request) {
     DEBUGOTA(__FUNCTION__); DEBUGOTA("\r\n");
     String values = "";
     String updateOKstr = "";
@@ -399,7 +404,7 @@ void CORE_OTA_CLASS::html_filename_check(AsyncWebServerRequest *request) {
 
 
 
-void CORE_OTA_CLASS::updateFileExecute (AsyncWebServerRequest *request) {
+void CLASS_CORE_OTA::updateFileExecute (AsyncWebServerRequest *request) {
 	DEBUGOTA(__FUNCTION__);	DEBUGOTA("\r\n");
 	
 	String message;
@@ -430,7 +435,7 @@ void CORE_OTA_CLASS::updateFileExecute (AsyncWebServerRequest *request) {
 }
 
 
-int8_t CORE_OTA_CLASS::fileNameCheck(String filename, fileCompareResult* result) {
+int8_t CLASS_CORE_OTA::fileNameCheck(String filename, fileCompareResult* result) {
     DEBUGOTA(__FUNCTION__); DEBUGOTA("\r\n");
     int8_t _ret = -1;
     
@@ -600,7 +605,7 @@ int8_t CORE_OTA_CLASS::fileNameCheck(String filename, fileCompareResult* result)
     return _ret;
 }
 
-bool CORE_OTA_CLASS::isValidFilename(const String& filename) {
+bool CLASS_CORE_OTA::isValidFilename(const String& filename) {
     if (filename.length() == 0 || filename.length() > 100) return false;
     
     for (size_t i = 0; i < filename.length(); i++) {
@@ -617,7 +622,7 @@ bool CORE_OTA_CLASS::isValidFilename(const String& filename) {
 
 
 
-void CORE_OTA_CLASS::html_uploadUpdateFile(AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final) {
+void CLASS_CORE_OTA::html_uploadUpdateFile(AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final) {
     String values = "";
     static long totalSize = 0;
     static bool errorOccurred = false;
@@ -774,21 +779,21 @@ void CORE_OTA_CLASS::html_uploadUpdateFile(AsyncWebServerRequest *request, Strin
 
 
 
-String CORE_OTA_CLASS::getVersionStr(){
+String CLASS_CORE_OTA::getVersionStr(){
     return String(CORE_OTA_VERSION);
 }
 
-String CORE_OTA_CLASS::getGeneratedTime(){
+String CLASS_CORE_OTA::getGeneratedTime(){
     return String(CORE_OTA_GENERATED_TIME);
 }
 
-String CORE_OTA_CLASS::getCommitDateStr(){
+String CLASS_CORE_OTA::getCommitDateStr(){
     return String(CORE_OTA_COMMIT_DATE_STR);
 }
 
 
 
-void CORE_OTA_CLASS::html_ver_get(AsyncWebServerRequest *request) {
+void CLASS_CORE_OTA::html_ver_get(AsyncWebServerRequest *request) {
     DEBUGOTA("%s\n\r", __FUNCTION__);
     String values = "";
     values += "otaversion|"     + getVersionStr()    + "|div\n";

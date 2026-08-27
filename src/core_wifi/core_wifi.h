@@ -5,6 +5,8 @@
 
 #include "main.h"
 
+#include "mod_context.h"
+
 #ifdef DEBUGLOG_WIFI
 #define DEBUGLOGWIFI(...) DEBUGLOG(__VA_ARGS__)
 #else
@@ -76,9 +78,9 @@ typedef enum {
 
 
 
-class  CORE_CLASS_WIFI    {
+class  CLASS_CORE_WIFI    {
     public:
-    CORE_CLASS_WIFI (bool _in);
+    CLASS_CORE_WIFI (bool _in);
     #if ESP32
     fs::LittleFSFS*               _fs;
     #elif defined(ESP8266)
@@ -89,7 +91,9 @@ class  CORE_CLASS_WIFI    {
     #elif defined(ESP8266)
     void begin(FS* fs) ;                        // esp8266/esp32 flash file system
     #endif
-    
+
+    void begin(ModContext& ctx);
+
     #if defined(ESP32)
     // WiFiEventId_t eventID;
     WiFiEventId_t onStationModeConnectedHandler
@@ -120,7 +124,7 @@ class  CORE_CLASS_WIFI    {
     void notifyApClientActivity() { _apClientActivity = true; }
     
     static void s_secondTick(void* arg);
-    void webInit();
+    void web_Init();
     String getMacAddress();
     int scanWifi();
     bool load_configWifi(int _in);
@@ -167,7 +171,7 @@ protected:
 };
 
 
-extern CORE_CLASS_WIFI modWifiClass; 
+extern CLASS_CORE_WIFI modWifiClass; 
 
 
 

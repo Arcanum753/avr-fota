@@ -3,6 +3,8 @@
 
 #include "main.h"
 
+#include "mod_context.h"
+
 #include <math.h>
 
 #ifdef DEBUG_RGB
@@ -40,9 +42,9 @@ typedef struct {
     uint8_t eqLedsPerBand;
 } strRgbConfig;
 
-class MODULE_CLASS_RGB {
+class CLASS_MODULE_RGB {
 public:
-    MODULE_CLASS_RGB();
+    CLASS_MODULE_RGB();
 #if defined(ESP32)
     void setFs(fs::LittleFSFS* fs);
 #endif
@@ -50,7 +52,8 @@ public:
     void setFs(FS* fs);
 #endif
     void begin();
-    void webInit();
+    void begin(ModContext& ctx);
+    void web_Init();
 
 private:
     String getVersionStr();
@@ -97,6 +100,6 @@ protected:
     uint8_t _pendingNumLeds;
 };
 
-extern MODULE_CLASS_RGB ModClassRgb;
+extern CLASS_MODULE_RGB ModClassRgb;
 
 #endif

@@ -12,15 +12,15 @@
 
 DPDR GoToTaskAfterStepRing = Idle_task;
 
-MODULE_CLASS_RINGMECH ModClassRingMech(false);
-MODULE_CLASS_RINGMECH::MODULE_CLASS_RINGMECH(bool _in) { dumb = _in; }
-void MODULE_CLASS_RINGMECH::setFs(fs::LittleFSFS* fs)  {   _fs = fs;   }
+CLASS_DEVICE_RINGMECH ModClassRingMech(false);
+CLASS_DEVICE_RINGMECH::CLASS_DEVICE_RINGMECH(bool _in) { dumb = _in; }
+void CLASS_DEVICE_RINGMECH::setFs(fs::LittleFSFS* fs)  {   _fs = fs;   }
 volatile uint16_t step_time = RINGMECH_SPEED_DEFAULT;
 
 // ============================================================
 // Время из источника
 // ============================================================
-time_t MODULE_CLASS_RINGMECH::getCurrentTime() {
+time_t CLASS_DEVICE_RINGMECH::getCurrentTime() {
 #if defined(MODULE_DS3231)
     if (_config.timeSource == "ds3231") {
         time_t t = ModClassDs3231.getTime();
@@ -34,7 +34,7 @@ time_t MODULE_CLASS_RINGMECH::getCurrentTime() {
 // ============================================================
 // begin()
 // ============================================================
-void MODULE_CLASS_RINGMECH::begin() {
+void CLASS_DEVICE_RINGMECH::begin() {
     DEBUGRINGMECH("%s\r\n", __FUNCTION__);
     GoToTaskAfterStepRing = Idle_task;
     _mechControlSteps = 0;
@@ -51,10 +51,17 @@ void MODULE_CLASS_RINGMECH::begin() {
     SetTask(RingPollTask);
 }
 
+void CLASS_DEVICE_RINGMECH::begin(ModContext& ctx) {
+#if defined(ESP32)
+    _fs = ctx.fs;
+#endif
+    begin();
+}
+
 // ============================================================
 // webInit()
 // ============================================================
-void MODULE_CLASS_RINGMECH::webInit() {
+void CLASS_DEVICE_RINGMECH::web_Init() {
     DEBUGRINGMECH("%s\r\n", __FUNCTION__);
 
     ESPHTTPServer.on("/ring-mech/save", HTTP_POST, [this](AsyncWebServerRequest *request) {
@@ -78,22 +85,22 @@ void MODULE_CLASS_RINGMECH::webInit() {
 }
 
 void ringMechTerminalRegister() {
-    term.addCommand("r-enc",   MODULE_CLASS_RINGMECH::cmdEn);
-    term.addCommand("r-sens",  MODULE_CLASS_RINGMECH::cmdSens);
-    term.addCommand("r-home",  MODULE_CLASS_RINGMECH::cmdHome);
-    term.addCommand("r-cnt",   MODULE_CLASS_RINGMECH::cmdCount);
-    term.addCommand("r-mode",  MODULE_CLASS_RINGMECH::cmdMode);
-    term.addCommand("r-stat",  MODULE_CLASS_RINGMECH::cmdStatus);
-    term.addCommand("r-save",  MODULE_CLASS_RINGMECH::cmdSave);
-    term.addCommand("r-trn",   MODULE_CLASS_RINGMECH::cmdTurn);
-    term.addCommand("r-time",  MODULE_CLASS_RINGMECH::cmdTime);
-    term.addCommand("r-src",   MODULE_CLASS_RINGMECH::cmdSource);
+    term.addCommand("r-enc",   CLASS_DEVICE_RINGMECH::cmdEn);
+    term.addCommand("r-sens",  CLASS_DEVICE_RINGMECH::cmdSens);
+    term.addCommand("r-home",  CLASS_DEVICE_RINGMECH::cmdHome);
+    term.addCommand("r-cnt",   CLASS_DEVICE_RINGMECH::cmdCount);
+    term.addCommand("r-mode",  CLASS_DEVICE_RINGMECH::cmdMode);
+    term.addCommand("r-stat",  CLASS_DEVICE_RINGMECH::cmdStatus);
+    term.addCommand("r-save",  CLASS_DEVICE_RINGMECH::cmdSave);
+    term.addCommand("r-trn",   CLASS_DEVICE_RINGMECH::cmdTurn);
+    term.addCommand("r-time",  CLASS_DEVICE_RINGMECH::cmdTime);
+    term.addCommand("r-src",   CLASS_DEVICE_RINGMECH::cmdSource);
 }
 
 // ============================================================
 // Веб-обработчики
 // ============================================================
-void MODULE_CLASS_RINGMECH::handleInfo_ring(AsyncWebServerRequest *request) {
+void CLASS_DEVICE_RINGMECH::handleInfo_ring(AsyncWebServerRequest *request) {
     DEBUGRINGMECH("%s\r\n", __FUNCTION__);
     JsonDocument doc;
     doc["enable_status"]        = _config.enable_status;
@@ -123,7 +130,7 @@ void MODULE_CLASS_RINGMECH::handleInfo_ring(AsyncWebServerRequest *request) {
     request->send(200, "application/json", json);
 }
 
-void MODULE_CLASS_RINGMECH::handleSave(AsyncWebServerRequest *request) {
+void CLASS_DEVICE_RINGMECH::handleSave(AsyncWebServerRequest *request) {
     DEBUGRINGMECH("%s\r\n", __FUNCTION__);
 
     if (request->args() > 0) {
@@ -159,11 +166,11 @@ void MODULE_CLASS_RINGMECH::handleSave(AsyncWebServerRequest *request) {
 // Эндпоинты ручного управления (GET, JSON)
 // ============================================================
 
-void MODULE_CLASS_RINGMECH::cmdEnWeb(AsyncWebServerRequest *request) {
+void CLASS_DEVICE_RINGMECH::cmdEnWeb(AsyncWebServerRequest *request) {
     cmdEn();
     request->send(200, "application/json", "{\"ok\":true}");
 }
-void MODULE_CLASS_RINGMECH::cmdSensWeb(AsyncWebServerRequest *request) {
+void CLASS_DEVICE_RINGMECH::cmdSensWeb(AsyncWebServerRequest *request) {
     JsonDocument doc;
     doc["SENS"]  = digitalRead(RINGMECH_SENS);
     String json;
@@ -171,17 +178,17 @@ void MODULE_CLASS_RINGMECH::cmdSensWeb(AsyncWebServerRequest *request) {
     request->send(200, "application/json", json);
 }
 
-void MODULE_CLASS_RINGMECH::cmdHomeWeb(AsyncWebServerRequest *request) {
+void CLASS_DEVICE_RINGMECH::cmdHomeWeb(AsyncWebServerRequest *request) {
     if (ModClassRingMech._config.enable_status == RING_MODE_WORK) { request->send(403, "application/json", "{\"error\":\"Blocked: WORK mode\"}"); return; }
     SetTask(MechHomeSetup);
     request->send(200, "application/json", "{\"ok\":true}");
 }
-void MODULE_CLASS_RINGMECH::cmdCountWeb(AsyncWebServerRequest *request) {
+void CLASS_DEVICE_RINGMECH::cmdCountWeb(AsyncWebServerRequest *request) {
     if (ModClassRingMech._config.enable_status == RING_MODE_WORK) { request->send(403, "application/json", "{\"error\":\"Blocked: WORK mode\"}"); return; }
     SetTask(MechCountStepsSetup);
     request->send(200, "application/json", "{\"ok\":true}");
 }
-void MODULE_CLASS_RINGMECH::cmdTurnWeb(AsyncWebServerRequest *request) {
+void CLASS_DEVICE_RINGMECH::cmdTurnWeb(AsyncWebServerRequest *request) {
     if (ModClassRingMech._config.enable_status == RING_MODE_WORK) { request->send(403, "application/json", "{\"error\":\"Blocked: WORK mode\"}"); return; }
     if (!request->hasArg("count")) { request->send(400, "application/json", "{\"error\":\"Missing count\"}"); return; }
     if (ModClassRingMech._mechTurnTarget != 0) { request->send(429, "application/json", "{\"error\":\"Busy\"}"); return; }
@@ -191,7 +198,7 @@ void MODULE_CLASS_RINGMECH::cmdTurnWeb(AsyncWebServerRequest *request) {
     request->send(200, "application/json", "{\"ok\":true}");
 }
 
-void MODULE_CLASS_RINGMECH::cmdStatusWeb(AsyncWebServerRequest *request) {
+void CLASS_DEVICE_RINGMECH::cmdStatusWeb(AsyncWebServerRequest *request) {
     JsonDocument doc;
     doc["_ringStatus"]            = ModClassRingMech._ringStatus;
     doc["enable_status"]          = ModClassRingMech._config.enable_status;
@@ -208,7 +215,7 @@ void MODULE_CLASS_RINGMECH::cmdStatusWeb(AsyncWebServerRequest *request) {
     request->send(200, "application/json", json);
 }
 
-void MODULE_CLASS_RINGMECH::cmdResetWeb(AsyncWebServerRequest *request) {
+void CLASS_DEVICE_RINGMECH::cmdResetWeb(AsyncWebServerRequest *request) {
     ModClassRingMech._mechControlSteps = 0;
     ModClassRingMech._mechTurnTarget = 0;
     ModClassRingMech._ringStatus = RING_STATUS_IDLE;
@@ -218,7 +225,7 @@ void MODULE_CLASS_RINGMECH::cmdResetWeb(AsyncWebServerRequest *request) {
 // ============================================================
 // Инициализация GPIO
 // ============================================================
-void MODULE_CLASS_RINGMECH::MechInitGPIOs() {
+void CLASS_DEVICE_RINGMECH::MechInitGPIOs() {
     pinMode(RINGMECH_STEP, OUTPUT);
     pinMode(RINGMECH_EN,   OUTPUT);
 
@@ -230,11 +237,11 @@ void MODULE_CLASS_RINGMECH::MechInitGPIOs() {
 // ============================================================
 // Генератор шага A4988
 // ============================================================
-void MODULE_CLASS_RINGMECH::MechMoveStepDown() {
+void CLASS_DEVICE_RINGMECH::MechMoveStepDown() {
     digitalWrite(RINGMECH_STEP, HIGH);
     SetTimerTask(MechMoveStepUp, step_time);
 }
-void MODULE_CLASS_RINGMECH::MechMoveStepUp() {
+void CLASS_DEVICE_RINGMECH::MechMoveStepUp() {
     digitalWrite(RINGMECH_STEP, LOW);
     SetTimerTask(GoToTaskAfterStepRing, step_time);
 }
@@ -244,20 +251,20 @@ void MODULE_CLASS_RINGMECH::MechMoveStepUp() {
 // ============================================================
 
 
-void MODULE_CLASS_RINGMECH::cmdEn() {
+void CLASS_DEVICE_RINGMECH::cmdEn() {
     bool en = digitalRead(RINGMECH_EN);
     digitalWrite(RINGMECH_EN, en == LOW ? HIGH : LOW);
     Serial.printf("Driver: %s\r\n", en == LOW ? "OFF" : "ON");
 }
 
-void MODULE_CLASS_RINGMECH::cmdSens() { Serial.printf("SENS=%d\r\n", digitalRead(RINGMECH_SENS)); }
-void MODULE_CLASS_RINGMECH::cmdHome() { SetTask(MechHomeSetup); }
-void MODULE_CLASS_RINGMECH::cmdCount() { SetTask(MechCountStepsSetup); }
-void MODULE_CLASS_RINGMECH::cmdSave() { ModClassRingMech.saveConfig(); }
+void CLASS_DEVICE_RINGMECH::cmdSens() { Serial.printf("SENS=%d\r\n", digitalRead(RINGMECH_SENS)); }
+void CLASS_DEVICE_RINGMECH::cmdHome() { SetTask(MechHomeSetup); }
+void CLASS_DEVICE_RINGMECH::cmdCount() { SetTask(MechCountStepsSetup); }
+void CLASS_DEVICE_RINGMECH::cmdSave() { ModClassRingMech.saveConfig(); }
 
 
 
-void MODULE_CLASS_RINGMECH::cmdTurn() {
+void CLASS_DEVICE_RINGMECH::cmdTurn() {
     if (ModClassRingMech._mechTurnTarget != 0) { Serial.println("Busy: previous r-turn still running"); return; }
     if (ModClassRingMech._config.enable_status == RING_MODE_WORK) { Serial.println("Blocked: WORK mode"); return; }
     char *arg = term.getNext();
@@ -267,7 +274,7 @@ void MODULE_CLASS_RINGMECH::cmdTurn() {
     SetTask(MechTurnNCount);
 }
 
-void MODULE_CLASS_RINGMECH::cmdMode() {
+void CLASS_DEVICE_RINGMECH::cmdMode() {
     char *arg = term.getNext();
     if (arg == NULL) { ModClassRingMech._config.enable_status = !ModClassRingMech._config.enable_status; } 
     else {
@@ -279,7 +286,7 @@ void MODULE_CLASS_RINGMECH::cmdMode() {
     Serial.printf("Mode: %s\r\n", ModClassRingMech._config.enable_status == RING_MODE_WORK ? "WORK" : "DEBUG");
 }
 
-void MODULE_CLASS_RINGMECH::cmdStatus() {
+void CLASS_DEVICE_RINGMECH::cmdStatus() {
     Serial.printf("===== RingMech Status =====\r\n");
     Serial.printf("_ringStatus:           %d\r\n",      ModClassRingMech._ringStatus);
     Serial.printf("_config.enable_status: %d\r\n",      ModClassRingMech._config.enable_status);
@@ -308,7 +315,7 @@ void MODULE_CLASS_RINGMECH::cmdStatus() {
     Serial.printf("=============================\r\n");
 }
 
-void MODULE_CLASS_RINGMECH::cmdTime() {
+void CLASS_DEVICE_RINGMECH::cmdTime() {
     char *arg1 = term.getNext();
     if (arg1 == NULL) {
         Serial.printf("time_begin=%d time_end=%d\r\n", ModClassRingMech._config.time_begin, ModClassRingMech._config.time_end);
@@ -326,7 +333,7 @@ void MODULE_CLASS_RINGMECH::cmdTime() {
     Serial.println("OK");
 }
 
-void MODULE_CLASS_RINGMECH::cmdSource() {
+void CLASS_DEVICE_RINGMECH::cmdSource() {
     char *arg = term.getNext();
     if (arg == NULL) {
         Serial.printf("timeSource=%s\r\n", ModClassRingMech._config.timeSource.c_str());
@@ -346,7 +353,7 @@ void MODULE_CLASS_RINGMECH::cmdSource() {
 // ============================================================
 
 
-void MODULE_CLASS_RINGMECH::MechHomeSetup() {
+void CLASS_DEVICE_RINGMECH::MechHomeSetup() {
     digitalWrite(RINGMECH_SENS_LED, HIGH);
     if (SENS_TRIGGERED) { MechHomeEndOk(); return; }
     ModClassRingMech._ringStatus = RING_STATUS_HOMING;
@@ -358,7 +365,7 @@ void MODULE_CLASS_RINGMECH::MechHomeSetup() {
     step_time = RINGMECH_SPEED_DEFAULT;
 }
 
-void MODULE_CLASS_RINGMECH::MechHomeTask() {
+void CLASS_DEVICE_RINGMECH::MechHomeTask() {
     if (ModClassRingMech._ringStatus != RING_STATUS_HOMING) { return; }
 
     // Светодиод сенсоров общий с часовым механизмом (GPIO 27).
@@ -372,7 +379,7 @@ void MODULE_CLASS_RINGMECH::MechHomeTask() {
     SetTask(MechMoveStepDown);
 }
 
-void MODULE_CLASS_RINGMECH::MechHomeEndOk() {
+void CLASS_DEVICE_RINGMECH::MechHomeEndOk() {
     ModClassRingMech._ringStatus = RING_STATUS_IDLE;
     GoToTaskAfterStepRing = Idle_task;
     ModClassRingMech._mechControlSteps = 0;
@@ -386,7 +393,7 @@ void MODULE_CLASS_RINGMECH::MechHomeEndOk() {
     DEBUGRINGMECH("MechHome: done, sensor found\r\n");
 }
 
-void MODULE_CLASS_RINGMECH::MechHomeEndFail() {
+void CLASS_DEVICE_RINGMECH::MechHomeEndFail() {
     ModClassRingMech._ringStatus = RING_ERROR_NO_MECH;
     GoToTaskAfterStepRing = Idle_task;
     digitalWrite(RINGMECH_EN, HIGH);
@@ -402,7 +409,7 @@ void MODULE_CLASS_RINGMECH::MechHomeEndFail() {
 // ============================================================
 
 
-void MODULE_CLASS_RINGMECH::MechCountStepsSetup() {
+void CLASS_DEVICE_RINGMECH::MechCountStepsSetup() {
     ModClassRingMech._ringStatus = RING_STATUS_COUNTING;
     digitalWrite(RINGMECH_SENS_LED, HIGH);
     ModClassRingMech._sensorState = digitalRead(RINGMECH_SENS);
@@ -413,7 +420,7 @@ void MODULE_CLASS_RINGMECH::MechCountStepsSetup() {
     step_time = RINGMECH_SPEED_DEFAULT;
 }
 
-void MODULE_CLASS_RINGMECH::MechCountStepsTask() {
+void CLASS_DEVICE_RINGMECH::MechCountStepsTask() {
     if (ModClassRingMech._ringStatus != RING_STATUS_COUNTING) { return; }
 
     // Светодиод сенсоров общий с часовым механизмом (GPIO 27).
@@ -427,7 +434,7 @@ void MODULE_CLASS_RINGMECH::MechCountStepsTask() {
     SetTask(MechMoveStepDown);
 }
 
-void MODULE_CLASS_RINGMECH::MechCountStepsOk() {
+void CLASS_DEVICE_RINGMECH::MechCountStepsOk() {
     DEBUGRINGMECH("%s\r\n", __FUNCTION__);
     digitalWrite(RINGMECH_EN, HIGH);
     ModClassRingMech._sensorState = digitalRead(RINGMECH_SENS);
@@ -441,7 +448,7 @@ void MODULE_CLASS_RINGMECH::MechCountStepsOk() {
     
 }
 
-void MODULE_CLASS_RINGMECH::MechCountStepsFail() {
+void CLASS_DEVICE_RINGMECH::MechCountStepsFail() {
     DEBUGRINGMECH("MechCountSteps: RING_ERROR_NO_MECH\r\n");
     ModClassRingMech._ringStatus = RING_ERROR_NO_MECH;
     GoToTaskAfterStepRing = Idle_task;
@@ -455,7 +462,7 @@ void MODULE_CLASS_RINGMECH::MechCountStepsFail() {
 // Вращение на N оборотов (r-turn)
 // ============================================================
 
-void MODULE_CLASS_RINGMECH::MechTurnNCount() {
+void CLASS_DEVICE_RINGMECH::MechTurnNCount() {
     if (ModClassRingMech._ringStatus != RING_STATUS_IDLE ) { return; }
     if (ModClassRingMech._mechTurnTarget == 0) { return; }
     DEBUGRINGMECH("MechTurn: %d \r\n", ModClassRingMech._mechTurnTarget);
@@ -463,7 +470,7 @@ void MODULE_CLASS_RINGMECH::MechTurnNCount() {
     ModClassRingMech._mechTurnTarget --;
 }
 
-void MODULE_CLASS_RINGMECH::MechTurnNSetup() {
+void CLASS_DEVICE_RINGMECH::MechTurnNSetup() {
     ModClassRingMech._ringStatus = RING_STATUS_TURN;
     digitalWrite(RINGMECH_SENS_LED, HIGH);
     ModClassRingMech._sensorState = digitalRead(RINGMECH_SENS);
@@ -475,7 +482,7 @@ void MODULE_CLASS_RINGMECH::MechTurnNSetup() {
 }
 
 
-void MODULE_CLASS_RINGMECH::MechTurnNTask() {
+void CLASS_DEVICE_RINGMECH::MechTurnNTask() {
     if (ModClassRingMech._ringStatus != RING_STATUS_TURN) { return; }
 
     // Светодиод сенсоров общий с часовым механизмом (GPIO 27).
@@ -494,7 +501,7 @@ void MODULE_CLASS_RINGMECH::MechTurnNTask() {
     else { SetTask(MechMoveStepDown); }
 }
 
-void MODULE_CLASS_RINGMECH::MechTurnNEndOk() {
+void CLASS_DEVICE_RINGMECH::MechTurnNEndOk() {
     digitalWrite(RINGMECH_EN, HIGH);
     ModClassRingMech._sensorState = digitalRead(RINGMECH_SENS);
     digitalWrite(RINGMECH_SENS_LED, LOW);
@@ -504,7 +511,7 @@ void MODULE_CLASS_RINGMECH::MechTurnNEndOk() {
     SetTimerTask(MechTurnNCount, ModClassRingMech._config.ringPauseTwo);
 }
 
-void MODULE_CLASS_RINGMECH::MechTurnNEndFail() {
+void CLASS_DEVICE_RINGMECH::MechTurnNEndFail() {
     DEBUGRINGMECH("MechTurn: fail at step %d, turn %d\r\n", ModClassRingMech._mechControlSteps, ModClassRingMech._mechTurnTarget);
     digitalWrite(RINGMECH_EN, HIGH);
     ModClassRingMech._sensorState = digitalRead(RINGMECH_SENS);
@@ -517,7 +524,7 @@ void MODULE_CLASS_RINGMECH::MechTurnNEndFail() {
 // ============================================================
 // Периодический опрос (Wheel rotation in WORK mode)
 // ============================================================
-void MODULE_CLASS_RINGMECH::RingPollTask() {
+void CLASS_DEVICE_RINGMECH::RingPollTask() {
     SetTimerTask(RingPollTask, ModClassRingMech._config.pollInterval * 1000UL);
     if (ModClassRingMech._config.enable_status != RING_MODE_WORK) { return; }
     if (ModClassRingMech._ringStatus != RING_STATUS_IDLE) { return; }
@@ -540,7 +547,7 @@ void MODULE_CLASS_RINGMECH::RingPollTask() {
     }
 }
 
-void MODULE_CLASS_RINGMECH::CheckTime (uint8_t _inH)	{
+void CLASS_DEVICE_RINGMECH::CheckTime (uint8_t _inH)	{
 	if (_inH >= HOURINCIRCLE)   { _inH -= HOURINCIRCLE; }
 	_mechTurnTarget = _inH;
 }
@@ -549,7 +556,7 @@ void MODULE_CLASS_RINGMECH::CheckTime (uint8_t _inH)	{
 // ============================================================
 // Конфиг
 // ============================================================
-void MODULE_CLASS_RINGMECH::defaultConfig() {
+void CLASS_DEVICE_RINGMECH::defaultConfig() {
     _config.enable_status      = RING_MODE_DEBUG;
     _config.stepsPerRevolution = 0;
     _config.pollInterval       = 5;
@@ -562,7 +569,7 @@ void MODULE_CLASS_RINGMECH::defaultConfig() {
     _config.timeSource          = "ds3231";
 }
 
-bool MODULE_CLASS_RINGMECH::loadConfig() {
+bool CLASS_DEVICE_RINGMECH::loadConfig() {
     DEBUGRINGMECH("%s\r\n", __FUNCTION__);
     JsonDocument doc;
     if (ModClassJson.jsonFileLoadDoc(CONFIG_FILE_RINGMECH, doc) == false) { return false; }
@@ -591,7 +598,7 @@ bool MODULE_CLASS_RINGMECH::loadConfig() {
     return true;
 }
 
-bool MODULE_CLASS_RINGMECH::saveConfig() {
+bool CLASS_DEVICE_RINGMECH::saveConfig() {
     DEBUGRINGMECH("%s\r\n", __FUNCTION__);
     JsonDocument doc;
     ModClassJson.jsonFileLoadDoc(CONFIG_FILE_RINGMECH, doc);
@@ -611,11 +618,11 @@ bool MODULE_CLASS_RINGMECH::saveConfig() {
 // ============================================================
 // Версионные методы
 // ============================================================
-String MODULE_CLASS_RINGMECH::getVersionStr() { return String(DEVICE_MECH_RING_VERSION);  }
-String MODULE_CLASS_RINGMECH::getGeneratedTime() { return String(DEVICE_MECH_RING_GENERATED_TIME);    }
-String MODULE_CLASS_RINGMECH::getCommitDateStr() { return String(DEVICE_MECH_RING_COMMIT_DATE_STR);   }
+String CLASS_DEVICE_RINGMECH::getVersionStr() { return String(DEVICE_MECH_RING_VERSION);  }
+String CLASS_DEVICE_RINGMECH::getGeneratedTime() { return String(DEVICE_MECH_RING_GENERATED_TIME);    }
+String CLASS_DEVICE_RINGMECH::getCommitDateStr() { return String(DEVICE_MECH_RING_COMMIT_DATE_STR);   }
 
-void MODULE_CLASS_RINGMECH::html_ver_get(AsyncWebServerRequest *request) {
+void CLASS_DEVICE_RINGMECH::html_ver_get(AsyncWebServerRequest *request) {
     DEBUGRINGMECH("%s\r\n", __FUNCTION__);
     String values = "";
     values += "ringmechversion|" + getVersionStr()    + "|div\n";

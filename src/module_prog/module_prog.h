@@ -9,6 +9,7 @@
 #include "debug.h"
 #include "core_ntp/core_ntp.h"
 #include "core_json/core_json.h"
+#include "mod_context.h"
 
 #ifdef DEBUG_PROG
 #define DEBUGLOGPROG(...)  Serial.printf(__VA_ARGS__)
@@ -63,6 +64,7 @@ class Class_ProgBase {
 public:
 	Class_ProgBase(uint8_t in);
 	virtual bool begin();
+	void begin(ModContext& ctx);
 #if defined(ESP32)
 	void setFs(fs::LittleFSFS* fs);
 #endif

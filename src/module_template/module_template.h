@@ -3,6 +3,8 @@
 
 #include "main.h"
 
+#include "mod_context.h"
+
 #ifdef DEBUG_TEMPLATE
 #define DEBUGTEMPLATE(...) Serial.printf(__VA_ARGS__)
 #else
@@ -35,16 +37,17 @@ typedef struct {
     String demoArray[3];      // пример массива строк — см. load_config_template()
 } strTmplConfig;
 
-class MODULE_CLASS_TEMPLATE {
+class CLASS_MODULE_TEMPLATE {
 public:
-    MODULE_CLASS_TEMPLATE(bool _in);
+    CLASS_MODULE_TEMPLATE(bool _in);
 #if ESP32
     void setFs(fs::LittleFSFS* fs);
 #elif defined(ESP8266)
     void setFs(FS* fs);
 #endif
     void begin();
-    void webInit();
+    void begin(ModContext& ctx);
+    void web_Init();
 
 private:
     String getVersionStr();
@@ -79,6 +82,6 @@ protected:
     bool _blinkState;
 };
 
-extern MODULE_CLASS_TEMPLATE ModClassTemplate;
+extern CLASS_MODULE_TEMPLATE ModClassTemplate;
 
 #endif // _MODULE_TEMPLATE_h

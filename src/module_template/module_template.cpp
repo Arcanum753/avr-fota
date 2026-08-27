@@ -8,19 +8,19 @@
 #include "module_template_version.h"
 #include "eertos.h"
 
-MODULE_CLASS_TEMPLATE ModClassTemplate(false);
-MODULE_CLASS_TEMPLATE::MODULE_CLASS_TEMPLATE(bool _in) { dumb = _in; }
+CLASS_MODULE_TEMPLATE ModClassTemplate(false);
+CLASS_MODULE_TEMPLATE::CLASS_MODULE_TEMPLATE(bool _in) { dumb = _in; }
 
 #if defined(ESP32)
-void MODULE_CLASS_TEMPLATE::setFs(fs::LittleFSFS* fs)
+void CLASS_MODULE_TEMPLATE::setFs(fs::LittleFSFS* fs)
 #elif defined(ESP8266)
-void MODULE_CLASS_TEMPLATE::setFs(FS* fs)
+void CLASS_MODULE_TEMPLATE::setFs(FS* fs)
 #endif
 {
     _fs = fs;
 }
 
-void MODULE_CLASS_TEMPLATE::begin() {
+void CLASS_MODULE_TEMPLATE::begin() {
     DEBUGTEMPLATE("%s\r\n", __FUNCTION__);
 
     // Инициализация пинов
@@ -36,13 +36,18 @@ void MODULE_CLASS_TEMPLATE::begin() {
     if (_config.blinkInterval > 0) { SetTimerTask(blinkTimerTask, _config.blinkInterval); }
 }
 
-void MODULE_CLASS_TEMPLATE::applyGpioState() {
+void CLASS_MODULE_TEMPLATE::begin(ModContext& ctx) {
+    _fs = ctx.fs;
+    begin();
+}
+
+void CLASS_MODULE_TEMPLATE::applyGpioState() {
 
     digitalWrite(TEMPLATE_GPIO1, _config.gpio1State ? HIGH : LOW);
     digitalWrite(TEMPLATE_GPIO2, _config.gpio2State ? HIGH : LOW);
 }
 
-void MODULE_CLASS_TEMPLATE::blinkTimerTask() {
+void CLASS_MODULE_TEMPLATE::blinkTimerTask() {
     if (ModClassTemplate._config.blinkInterval == 0) {
         ModClassTemplate.applyGpioState();
         return;
@@ -57,7 +62,7 @@ void MODULE_CLASS_TEMPLATE::blinkTimerTask() {
     SetTimerTask(blinkTimerTask, ModClassTemplate._config.blinkInterval);
 }
 
-void MODULE_CLASS_TEMPLATE::webInit() {
+void CLASS_MODULE_TEMPLATE::web_Init() {
     DEBUGTEMPLATE("%s\r\n", __FUNCTION__);
 
     // AJAX — сохранение GPIO конфига (POST /template/save)
@@ -91,7 +96,7 @@ void MODULE_CLASS_TEMPLATE::webInit() {
 }
 
 // ========== ВЕБ-ОБРАБОТЧИКИ ==========
-void MODULE_CLASS_TEMPLATE::handleInfo(AsyncWebServerRequest *request) {
+void CLASS_MODULE_TEMPLATE::handleInfo(AsyncWebServerRequest *request) {
     DEBUGTEMPLATE("%s\r\n", __FUNCTION__);
     String values = "";
     values += "gpio1State|"      + String(_config.gpio1State ? "checked" : "")      + "|chk\n";
@@ -112,7 +117,7 @@ void MODULE_CLASS_TEMPLATE::handleInfo(AsyncWebServerRequest *request) {
 }
 
 // Отдаёт только время и дату — для每秒ного опроса без перезаписи формы
-void MODULE_CLASS_TEMPLATE::handleTime(AsyncWebServerRequest *request) {
+void CLASS_MODULE_TEMPLATE::handleTime(AsyncWebServerRequest *request) {
     String timeDate = "NTP not synced";
     if (NTP.getLastNTPSync() > 0) { timeDate = NTP.getTimeDateString(); }
     String values = "";
@@ -120,7 +125,7 @@ void MODULE_CLASS_TEMPLATE::handleTime(AsyncWebServerRequest *request) {
     request->send(200, "text/plain", values);
 }
 
-void MODULE_CLASS_TEMPLATE::handleConfigGpio(AsyncWebServerRequest *request) {
+void CLASS_MODULE_TEMPLATE::handleConfigGpio(AsyncWebServerRequest *request) {
     DEBUGTEMPLATE("%s\r\n", __FUNCTION__);
 
     _config.gpio1State = false;
@@ -161,7 +166,7 @@ void MODULE_CLASS_TEMPLATE::handleConfigGpio(AsyncWebServerRequest *request) {
     }
 }
 
-void MODULE_CLASS_TEMPLATE::handleConfigDemo(AsyncWebServerRequest *request) {
+void CLASS_MODULE_TEMPLATE::handleConfigDemo(AsyncWebServerRequest *request) {
     DEBUGTEMPLATE("%s\r\n", __FUNCTION__);
 
     if (request->args() > 0) {
@@ -189,7 +194,7 @@ void MODULE_CLASS_TEMPLATE::handleConfigDemo(AsyncWebServerRequest *request) {
 
 // ========== РАБОТА С КОНФИГОМ ==========
 
-void MODULE_CLASS_TEMPLATE::defaultConfigTemplate() {
+void CLASS_MODULE_TEMPLATE::defaultConfigTemplate() {
     _config.gpio1State     = false;
     _config.gpio2State     = false;
     _config.blinkInterval  = 0;
@@ -198,7 +203,7 @@ void MODULE_CLASS_TEMPLATE::defaultConfigTemplate() {
     for (uint8_t i = 0; i < 3; i++) { _config.demoArray[i] = ""; }
 }
 
-bool MODULE_CLASS_TEMPLATE::load_config_template() {
+bool CLASS_MODULE_TEMPLATE::load_config_template() {
     DEBUGTEMPLATE("%s\r\n", __FUNCTION__);
     JsonDocument doc;
     if (ModClassJson.jsonFileLoadDoc(CONFIG_FILE_TEMPLATE, doc) == false) { return false; }
@@ -227,7 +232,7 @@ bool MODULE_CLASS_TEMPLATE::load_config_template() {
     return true;
 }
 
-bool MODULE_CLASS_TEMPLATE::save_config_template() {
+bool CLASS_MODULE_TEMPLATE::save_config_template() {
     DEBUGTEMPLATE("%s\r\n", __FUNCTION__);
     JsonDocument doc;
     ModClassJson.jsonFileLoadDoc(CONFIG_FILE_TEMPLATE, doc);
@@ -247,19 +252,19 @@ bool MODULE_CLASS_TEMPLATE::save_config_template() {
 
 // ========== ВЕРСИОННЫЕ МЕТОДЫ ==========
 
-String MODULE_CLASS_TEMPLATE::getVersionStr() {
+String CLASS_MODULE_TEMPLATE::getVersionStr() {
     return String(MODULE_TEMPLATE_VERSION);
 }
 
-String MODULE_CLASS_TEMPLATE::getGeneratedTime() {
+String CLASS_MODULE_TEMPLATE::getGeneratedTime() {
     return String(MODULE_TEMPLATE_GENERATED_TIME);
 }
 
-String MODULE_CLASS_TEMPLATE::getCommitDateStr() {
+String CLASS_MODULE_TEMPLATE::getCommitDateStr() {
     return String(MODULE_TEMPLATE_COMMIT_DATE_STR);
 }
 
-void MODULE_CLASS_TEMPLATE::html_ver_get(AsyncWebServerRequest *request) {
+void CLASS_MODULE_TEMPLATE::html_ver_get(AsyncWebServerRequest *request) {
     DEBUGTEMPLATE("%s\r\n", __FUNCTION__);
     String values = "";
     values += "templateversion|" + getVersionStr()    + "|div\n";

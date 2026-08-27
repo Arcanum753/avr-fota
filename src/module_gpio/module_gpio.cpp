@@ -4,26 +4,31 @@
 #include "common.h"
 #include "module_gpio_version.h"
 
-MODULE_CLASS_GPIO ModClassGpio(false);
+CLASS_MODULE_GPIO ModClassGpio(false);
 
-MODULE_CLASS_GPIO :: MODULE_CLASS_GPIO (bool _in) {
+CLASS_MODULE_GPIO :: CLASS_MODULE_GPIO (bool _in) {
 	dumb = _in;
 }
 
 #if defined(ESP32)
-void MODULE_CLASS_GPIO::setFs(fs::LittleFSFS* fs) //esp32 flash file system
+void CLASS_MODULE_GPIO::setFs(fs::LittleFSFS* fs) //esp32 flash file system
 #elif defined(ESP8266)
-void MODULE_CLASS_GPIO::setFs(FS* fs)	// esp8266 flash file system
+void CLASS_MODULE_GPIO::setFs(FS* fs)	// esp8266 flash file system
 #endif
 {	_fs = fs;	}
 
 
-void  MODULE_CLASS_GPIO::begin(){
+void  CLASS_MODULE_GPIO::begin(){
 	DEBUGGPIO(__FUNCTION__);	DEBUGGPIO("\r\n");
 }
 
+void  CLASS_MODULE_GPIO::begin(ModContext& ctx){
+	_fs = ctx.fs;
+	begin();
+}
 
-void  MODULE_CLASS_GPIO::webInit(){
+
+void  CLASS_MODULE_GPIO::web_Init(){
     DEBUGGPIO(__FUNCTION__);	DEBUGGPIO("\r\n");
 
 
@@ -39,7 +44,7 @@ void  MODULE_CLASS_GPIO::webInit(){
 
 // gpio.html vvv
 
-void  MODULE_CLASS_GPIO::gpioGetArgs(AsyncWebServerRequest *request) {
+void  CLASS_MODULE_GPIO::gpioGetArgs(AsyncWebServerRequest *request) {
 	DEBUGGPIO(__PRETTY_FUNCTION__);	DEBUGGPIO("\r\n");
 	String values = "";
 	String uartStr = "";
@@ -81,20 +86,20 @@ void  MODULE_CLASS_GPIO::gpioGetArgs(AsyncWebServerRequest *request) {
 // gpio.html ^^^
 
 
-String MODULE_CLASS_GPIO::getVersionStr(){
+String CLASS_MODULE_GPIO::getVersionStr(){
     return String(MODULE_GPIO_VERSION);
 }
 
-String MODULE_CLASS_GPIO::getGeneratedTime(){
+String CLASS_MODULE_GPIO::getGeneratedTime(){
     return String(MODULE_GPIO_GENERATED_TIME);
 }
 
-String MODULE_CLASS_GPIO::getCommitDateStr(){
+String CLASS_MODULE_GPIO::getCommitDateStr(){
     return String(MODULE_GPIO_COMMIT_DATE_STR);
 }
 
 
-void MODULE_CLASS_GPIO::html_ver_get(AsyncWebServerRequest *request) {
+void CLASS_MODULE_GPIO::html_ver_get(AsyncWebServerRequest *request) {
     DEBUGGPIO("%s\n\r", __FUNCTION__);
     String values = "";
     values += "gpioversion|"     + getVersionStr()    + "|div\n";

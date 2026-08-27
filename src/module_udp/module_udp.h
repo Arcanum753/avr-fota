@@ -50,11 +50,11 @@ void udpBroadcastTimer(void);
 void processUdpListenPacket(AsyncUDPPacket &packet);
 void udpResponseHandler(IPAddress ip);
 
-class UDPBROADCAST_CLASS {
+class CLASS_MODULE_UDPBROADCAST {
 public:
-    UDPBROADCAST_CLASS(uint16_t portListen);
+    CLASS_MODULE_UDPBROADCAST(uint16_t portListen);
     
-    void webInit(void);
+    void web_Init(void);
     void begin();
     void udpStop();
     void udpBroadcastSend(uint16_t _port, String _str);
@@ -104,6 +104,6 @@ private:
     friend void udpBroadcastSimple(void);
 };
 
-extern UDPBROADCAST_CLASS udpBroadcast;
+extern CLASS_MODULE_UDPBROADCAST udpBroadcast;
 
 #endif // _MODUDP_h

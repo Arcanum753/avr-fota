@@ -3,6 +3,8 @@
 
 #include "main.h"
 
+#include "mod_context.h"
+
 #ifdef DEBUG_RINGMECH
 #define DEBUGRINGMECH(...) Serial.printf(__VA_ARGS__)
 #else
@@ -70,12 +72,13 @@ typedef struct {
     String   timeSource;
 } strRingMechConfig;
 
-class MODULE_CLASS_RINGMECH {
+class CLASS_DEVICE_RINGMECH {
 public:
-    MODULE_CLASS_RINGMECH(bool _in);
+    CLASS_DEVICE_RINGMECH(bool _in);
     void setFs(fs::LittleFSFS* fs);
     void begin();
-    void webInit();
+    void begin(ModContext& ctx);
+    void web_Init();
     time_t getCurrentTime();
 
     static void cmdEn();
@@ -145,6 +148,6 @@ protected:
     uint8_t             _timeMinReal;
 };
 
-extern MODULE_CLASS_RINGMECH ModClassRingMech;
+extern CLASS_DEVICE_RINGMECH ModClassRingMech;
 
 #endif

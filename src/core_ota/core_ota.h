@@ -3,6 +3,8 @@
 
 #include "main.h"
 
+#include "mod_context.h"
+
 #ifdef DEBUG_OTA
 #define DEBUGOTASER Serial
 #define DEBUGOTA(...) Serial.printf(__VA_ARGS__)
@@ -59,9 +61,9 @@ struct fileCompareResult {
 };
 
 
-class  CORE_OTA_CLASS    {
+class  CLASS_CORE_OTA    {
 public:
-    CORE_OTA_CLASS (bool _in);
+    CLASS_CORE_OTA (bool _in);
 
 #if ESP32
     fs::LittleFSFS*               _fs;
@@ -76,8 +78,9 @@ public:
 #endif
 
     void begin(String _hostname, String _password);
-    virtual void webInit();
-    void loopHandler() ;
+    void begin(ModContext& ctx);
+    virtual void web_Init();
+    void loop();
     
     void html_md5_set(AsyncWebServerRequest *request);
     
@@ -105,7 +108,7 @@ public:
     
     void updateFileExecute (AsyncWebServerRequest *request) ;
     
-    // Common routes registration (split from webInit for submodule override)
+    // Регистрация общих маршрутов (выделена из web_Init для переопределения в субмодуле)
     void registerCommonRoutes();
     virtual void registerCustomRoutes() {}
 
@@ -143,7 +146,7 @@ protected:
 
 };
 
-extern CORE_OTA_CLASS modOtaClass;
+extern CLASS_CORE_OTA modOtaClass;
 
 // Global flag: set to true when FS has been ended by OTA update process
 // Prevents double _fs->end() in restart_esp() which causes crash (LoadStoreAlignmentCause)

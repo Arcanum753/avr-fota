@@ -13,9 +13,7 @@
 #include "FSWebServerLib.h"
 #include "eertos.h"
 
-#include "core_ota/core_ota.h"
-#include "core_terminal/ErriezSerialTerminal.h"
-#include "core_terminal/core_terminal.h"
+#include "modules_registry.h"
 
 #include "version.h"
 #include "core_led/core_led.h"
@@ -43,7 +41,6 @@ void setup() {
     printGitInfo();
 	// WiFi is started inside library
     ESPHTTPServer.begin(&LittleFS);
-    TerminalInit();
     ledInit(); 
     // flashLED(CONNECTION_LED, 25, 150);
     ledMacroTimerTask();
@@ -72,15 +69,9 @@ void loop() {
 #if defined(ESP8266)
     ESP.wdtFeed();
 #endif
-    
-    loop_user();
-    TerminalLoop();
-    modOtaClass.loopHandler();
-
-}
-
-void loop_user(){
-
+    core_loop();
+    modules_loop();
+    dev_loop();
 }
 
 void printGitInfo() {
@@ -95,8 +86,6 @@ void printGitInfo() {
     
     Serial.println("Chip firmware ver: " + String(FIRMWARE_VERSION));
     Serial.println("File system ver: " + ESPHTTPServer.getFsVersionStr());
-    
-    
     
     Serial.println("Git Branch: " + String(GIT_BRANCH));
     Serial.println("Git Commit: " + String(GIT_COMMIT));

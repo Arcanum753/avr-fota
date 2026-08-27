@@ -3,6 +3,8 @@
 
 #include "main.h"
 
+#include "mod_context.h"
+
 #ifdef DEBUG_CLOCKMECH
 #define DEBUGCLOCKMECH(...) Serial.printf(__VA_ARGS__)
 #else
@@ -64,12 +66,13 @@ typedef struct {
     bool     sensorLedEnabled;
 } strClockMechConfig;
 
-class MODULE_CLASS_CLOCKMECH {
+class CLASS_DEVICE_CLOCKMECH {
 public:
-    MODULE_CLASS_CLOCKMECH(bool _in);
+    CLASS_DEVICE_CLOCKMECH(bool _in);
     void setFs(fs::LittleFSFS* fs);
     void begin();
-    void webInit();
+    void begin(ModContext& ctx);
+    void web_Init();
     time_t getCurrentTime();
     
     
@@ -179,6 +182,6 @@ protected:
     int                 _sensorLedStateMIN;
 };
 
-extern MODULE_CLASS_CLOCKMECH ModClassClockMech;
+extern CLASS_DEVICE_CLOCKMECH ModClassClockMech;
 
 #endif

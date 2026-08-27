@@ -7,14 +7,14 @@
 #include "common.h"
 #include "eertos.h"
 
-MODULE_CLASS_RGB ModClassRgb;
-MODULE_CLASS_RGB::MODULE_CLASS_RGB() : _pendingReinit(false), _pendingSave(false), _pendingApply(false) {}
+CLASS_MODULE_RGB ModClassRgb;
+CLASS_MODULE_RGB::CLASS_MODULE_RGB() : _pendingReinit(false), _pendingSave(false), _pendingApply(false) {}
 
 #if defined(ESP32)
-void MODULE_CLASS_RGB::setFs(fs::LittleFSFS* fs)
+void CLASS_MODULE_RGB::setFs(fs::LittleFSFS* fs)
 #endif
 #if defined(ESP8266)
-void MODULE_CLASS_RGB::setFs(FS* fs)
+void CLASS_MODULE_RGB::setFs(FS* fs)
 #endif
 {
     _fs = fs;
@@ -26,7 +26,7 @@ void MODULE_CLASS_RGB::setFs(FS* fs)
     _pendingApply = false;
 }
 
-void MODULE_CLASS_RGB::begin() {
+void CLASS_MODULE_RGB::begin() {
     DEBUGRGB("%s\r\n", __FUNCTION__);
 
     defaultConfigRgb();
@@ -40,7 +40,12 @@ void MODULE_CLASS_RGB::begin() {
     }
 }
 
-void MODULE_CLASS_RGB::webInit() {
+void CLASS_MODULE_RGB::begin(ModContext& ctx) {
+    _fs = ctx.fs;
+    begin();
+}
+
+void CLASS_MODULE_RGB::web_Init() {
     DEBUGRGB("%s\r\n", __FUNCTION__);
 
     ESPHTTPServer.on("/rgb/save", HTTP_POST, [this](AsyncWebServerRequest *request) {
@@ -65,7 +70,7 @@ void MODULE_CLASS_RGB::webInit() {
 
 // ========== ВЕБ-ОБРАБОТЧИКИ ==========
 
-void MODULE_CLASS_RGB::handleInfo(AsyncWebServerRequest *request) {
+void CLASS_MODULE_RGB::handleInfo(AsyncWebServerRequest *request) {
     DEBUGRGB("%s\r\n", __FUNCTION__);
     String values = "";
 
@@ -107,7 +112,7 @@ uint32_t hexStringToUint32(const String& hexStr) {
     return (uint32_t)strtoul(clean.c_str(), NULL, 16);
 }
 
-void MODULE_CLASS_RGB::handleSave(AsyncWebServerRequest *request) {
+void CLASS_MODULE_RGB::handleSave(AsyncWebServerRequest *request) {
     DEBUGRGB("%s\r\n", __FUNCTION__);
 
     if (request->args() == 0) { request->send(400, "text/plain", "No args"); return; }
@@ -190,7 +195,7 @@ void MODULE_CLASS_RGB::handleSave(AsyncWebServerRequest *request) {
     }
 }
 
-void MODULE_CLASS_RGB::handleSetPixel(AsyncWebServerRequest *request) {
+void CLASS_MODULE_RGB::handleSetPixel(AsyncWebServerRequest *request) {
     if (!request->hasParam("index") || !request->hasParam("color")) {
         request->send(400, "text/plain", "Missing index or color");
         return;
@@ -215,7 +220,7 @@ void MODULE_CLASS_RGB::handleSetPixel(AsyncWebServerRequest *request) {
 
 // ========== РАБОТА С КОНФИГОМ ==========
 
-void MODULE_CLASS_RGB::defaultConfigRgb() {
+void CLASS_MODULE_RGB::defaultConfigRgb() {
     _config.dataPin        = 16;
     _config.numLeds        = RGB_DEFAULT_LEDS;
     _config.brightness     = 128;
@@ -232,7 +237,7 @@ void MODULE_CLASS_RGB::defaultConfigRgb() {
     }
 }
 
-bool MODULE_CLASS_RGB::loadConfigRgb() {
+bool CLASS_MODULE_RGB::loadConfigRgb() {
     DEBUGRGB("%s\r\n", __FUNCTION__);
     JsonDocument doc;
     if (ModClassJson.jsonFileLoadDoc(CONFIG_FILE_RGB, doc) == false) { return false; }
@@ -265,7 +270,7 @@ bool MODULE_CLASS_RGB::loadConfigRgb() {
     return true;
 }
 
-bool MODULE_CLASS_RGB::saveConfigRgb() {
+bool CLASS_MODULE_RGB::saveConfigRgb() {
     DEBUGRGB("%s\r\n", __FUNCTION__);
     JsonDocument doc;
     ModClassJson.jsonFileLoadDoc(CONFIG_FILE_RGB, doc);
@@ -291,7 +296,7 @@ bool MODULE_CLASS_RGB::saveConfigRgb() {
 
 // ========== РАБОТА С ЛЕНТОЙ ==========
 
-void MODULE_CLASS_RGB::initStrip() {
+void CLASS_MODULE_RGB::initStrip() {
     DEBUGRGB("%s: numLeds=%d\r\n", __FUNCTION__, _config.numLeds);
 
 #if defined(ESP32)
@@ -312,14 +317,14 @@ void MODULE_CLASS_RGB::initStrip() {
     applyMode();
 }
 
-void MODULE_CLASS_RGB::deleteStrip() {
+void CLASS_MODULE_RGB::deleteStrip() {
     if (_strip != NULL) {
         delete _strip;
         _strip = NULL;
     }
 }
 
-void MODULE_CLASS_RGB::applyMode() {
+void CLASS_MODULE_RGB::applyMode() {
     if (_strip == NULL) { return; }
 
     switch (_config.mode) {
@@ -331,7 +336,7 @@ void MODULE_CLASS_RGB::applyMode() {
     }
 }
 
-void MODULE_CLASS_RGB::applySolid() {
+void CLASS_MODULE_RGB::applySolid() {
     uint16_t r = ((_config.solidColor >> 16) & 0xFF) * _config.brightness / 255;
     uint16_t g = ((_config.solidColor >> 8) & 0xFF) * _config.brightness / 255;
     uint16_t b = (_config.solidColor & 0xFF) * _config.brightness / 255;
@@ -342,7 +347,7 @@ void MODULE_CLASS_RGB::applySolid() {
     _strip->Show();
 }
 
-void MODULE_CLASS_RGB::applyRainbow() {
+void CLASS_MODULE_RGB::applyRainbow() {
     float bright = _config.brightness / 255.0f;
     for (uint8_t i = 0; i < _config.numLeds; i++) {
         uint8_t hue = _hue + (i * 256 / _config.numLeds);
@@ -352,7 +357,7 @@ void MODULE_CLASS_RGB::applyRainbow() {
     _hue++;
 }
 
-void MODULE_CLASS_RGB::applyGradient() {
+void CLASS_MODULE_RGB::applyGradient() {
     float bright = _config.brightness / 255.0f;
     uint16_t r1 = ((_config.gradStartColor >> 16) & 0xFF) * bright;
     uint16_t g1 = ((_config.gradStartColor >> 8) & 0xFF) * bright;
@@ -372,7 +377,7 @@ void MODULE_CLASS_RGB::applyGradient() {
     _strip->Show();
 }
 
-void MODULE_CLASS_RGB::applyIndividual() {
+void CLASS_MODULE_RGB::applyIndividual() {
     float bright = _config.brightness / 255.0f;
     for (uint8_t i = 0; i < _config.numLeds; i++) {
         uint32_t c = _config.individualColors[i];
@@ -384,7 +389,7 @@ void MODULE_CLASS_RGB::applyIndividual() {
     _strip->Show();
 }
 
-void MODULE_CLASS_RGB::applyEqualizer() {
+void CLASS_MODULE_RGB::applyEqualizer() {
     float bright = _config.brightness / 255.0f;
     uint8_t totalBands = _config.eqBands;
     uint8_t ledsPerBand = _config.eqLedsPerBand;
@@ -424,7 +429,7 @@ void MODULE_CLASS_RGB::applyEqualizer() {
     _hue++;
 }
 
-void MODULE_CLASS_RGB::animationTimerTask() {
+void CLASS_MODULE_RGB::animationTimerTask() {
     if (ModClassRgb._strip == NULL || !ModClassRgb._animationRunning) { return; }
 
     switch (ModClassRgb._config.mode) {
@@ -442,7 +447,7 @@ void MODULE_CLASS_RGB::animationTimerTask() {
     }
 }
 
-void MODULE_CLASS_RGB::deferredApplyTask() {
+void CLASS_MODULE_RGB::deferredApplyTask() {
     if (ModClassRgb._pendingReinit) {
         if (ModClassRgb._pendingNumLeds < 1) { ModClassRgb._pendingNumLeds = ModClassRgb._config.numLeds; }
         ModClassRgb._config.numLeds = ModClassRgb._pendingNumLeds;
@@ -474,19 +479,19 @@ void MODULE_CLASS_RGB::deferredApplyTask() {
 
 // ========== ВЕРСИОННЫЕ МЕТОДЫ ==========
 
-String MODULE_CLASS_RGB::getVersionStr() {
+String CLASS_MODULE_RGB::getVersionStr() {
     return String(MODULE_RGB_VERSION);
 }
 
-String MODULE_CLASS_RGB::getGeneratedTime() {
+String CLASS_MODULE_RGB::getGeneratedTime() {
     return String(MODULE_RGB_GENERATED_TIME);
 }
 
-String MODULE_CLASS_RGB::getCommitDateStr() {
+String CLASS_MODULE_RGB::getCommitDateStr() {
     return String(MODULE_RGB_COMMIT_DATE_STR);
 }
 
-void MODULE_CLASS_RGB::html_ver_get(AsyncWebServerRequest *request) {
+void CLASS_MODULE_RGB::html_ver_get(AsyncWebServerRequest *request) {
     DEBUGRGB("%s\r\n", __FUNCTION__);
     String values = "";
     values += "rgbversion|" + getVersionStr()    + "|div\n";

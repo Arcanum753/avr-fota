@@ -11,6 +11,7 @@
 #include <ArduinoJson.h>
 
 #include "FSWebServerLib.h"
+#include "mod_context.h"
 
 
 #if defined(ESP32)
@@ -20,11 +21,12 @@
 #endif
 
 
-class  CORE_CLASS_JSON    {
+class  CLASS_CORE_JSON    {
     
 public:    
-    CORE_CLASS_JSON (bool _in);
-    void webInit(void);
+    CLASS_CORE_JSON (bool _in);
+    void web_Init(void);
+    void begin(ModContext& ctx);
 private:
     String getVersionStr();
     String getGeneratedTime();
@@ -107,7 +109,7 @@ protected:
 
 };
 
-extern CORE_CLASS_JSON ModClassJson;
+extern CLASS_CORE_JSON ModClassJson;
 
 
 #endif // _MODULE_JSON_h

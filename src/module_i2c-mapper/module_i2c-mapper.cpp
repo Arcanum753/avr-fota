@@ -5,14 +5,19 @@
 
 #include <Wire.h>
 
-MODULE_CLASS_I2C_MAPPER ModClassI2cMapper(false);
-MODULE_CLASS_I2C_MAPPER::MODULE_CLASS_I2C_MAPPER(bool _in) { dumb = _in; }
+CLASS_MODULE_I2C_MAPPER ModClassI2cMapper(false);
+CLASS_MODULE_I2C_MAPPER::CLASS_MODULE_I2C_MAPPER(bool _in) { dumb = _in; }
 
-void MODULE_CLASS_I2C_MAPPER::begin() {
+void CLASS_MODULE_I2C_MAPPER::begin() {
     DEBUGI2CMAPPER("%s\r\n", __FUNCTION__);
 }
 
-void MODULE_CLASS_I2C_MAPPER::webInit() {
+void CLASS_MODULE_I2C_MAPPER::begin(ModContext& ctx) {
+    (void)ctx;
+    begin();
+}
+
+void CLASS_MODULE_I2C_MAPPER::web_Init() {
     DEBUGI2CMAPPER("%s\r\n", __FUNCTION__);
 
     ESPHTTPServer.on("/i2cmapper/scan", HTTP_POST, [this](AsyncWebServerRequest *request) {
@@ -25,7 +30,7 @@ void MODULE_CLASS_I2C_MAPPER::webInit() {
     });
 }
 
-void MODULE_CLASS_I2C_MAPPER::handleScan(AsyncWebServerRequest *request) {
+void CLASS_MODULE_I2C_MAPPER::handleScan(AsyncWebServerRequest *request) {
     DEBUGI2CMAPPER("%s\r\n", __FUNCTION__);
 
 #if defined(ESP32)
@@ -62,19 +67,19 @@ void MODULE_CLASS_I2C_MAPPER::handleScan(AsyncWebServerRequest *request) {
     request->send(200, "application/json", result);
 }
 
-String MODULE_CLASS_I2C_MAPPER::getVersionStr() {
+String CLASS_MODULE_I2C_MAPPER::getVersionStr() {
     return String(MODULE_I2C_MAPPER_VERSION);
 }
 
-String MODULE_CLASS_I2C_MAPPER::getGeneratedTime() {
+String CLASS_MODULE_I2C_MAPPER::getGeneratedTime() {
     return String(MODULE_I2C_MAPPER_GENERATED_TIME);
 }
 
-String MODULE_CLASS_I2C_MAPPER::getCommitDateStr() {
+String CLASS_MODULE_I2C_MAPPER::getCommitDateStr() {
     return String(MODULE_I2C_MAPPER_COMMIT_DATE_STR);
 }
 
-void MODULE_CLASS_I2C_MAPPER::html_ver_get(AsyncWebServerRequest *request) {
+void CLASS_MODULE_I2C_MAPPER::html_ver_get(AsyncWebServerRequest *request) {
     DEBUGI2CMAPPER("%s\r\n", __FUNCTION__);
     String values = "";
     values += "i2cmapperversion|" + getVersionStr()    + "|div\n";

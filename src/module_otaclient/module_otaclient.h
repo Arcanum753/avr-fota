@@ -60,12 +60,13 @@ struct ManifestEntry {
 void otaclientTimer(void);
 void otaclientLoopTask(void);
 
-class MODULE_CLASS_OTACLIENT : public CORE_OTA_CLASS {
+class CLASS_MODULE_OTACLIENT : public CLASS_CORE_OTA {
 public:
-    MODULE_CLASS_OTACLIENT();
+    CLASS_MODULE_OTACLIENT();
     
-    void webInit() override;
+    void web_Init() override;
     void begin(String _hostname, String _password);
+    void begin(ModContext& ctx);
     void test(AsyncWebServerRequest *request);
     void loop();
     
@@ -139,6 +140,6 @@ private:
     friend void otaclientTimer();
 };
 
-extern MODULE_CLASS_OTACLIENT otaClient;
+extern CLASS_MODULE_OTACLIENT otaClient;
 
 #endif // _MODOTACLIENT_h

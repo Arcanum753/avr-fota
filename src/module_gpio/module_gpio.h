@@ -2,6 +2,8 @@
 #define _MODULE_GPIO_h
 #include "main.h"
 
+#include "mod_context.h"
+
 #ifdef DEBUG_GPIO
 #define DEBUGGPIO(...) Serial.printf(__VA_ARGS__)
 #else
@@ -16,16 +18,17 @@
 
 
 
-class  MODULE_CLASS_GPIO    {
+class  CLASS_MODULE_GPIO    {
 public:    
-    MODULE_CLASS_GPIO (bool _in);
+    CLASS_MODULE_GPIO (bool _in);
 #if ESP32
     void setFs(fs::LittleFSFS* fs);
 #elif defined(ESP8266)
     void setFs(FS* fs)  ;                       // esp8266/esp32 flash file system
 #endif
     void begin();
-    void webInit();
+    void begin(ModContext& ctx);
+    void web_Init();
 private:
     String getVersionStr();
     String getGeneratedTime();
@@ -46,7 +49,7 @@ void  gpioGetArgs(AsyncWebServerRequest *request) ;
 
 };
 
-extern MODULE_CLASS_GPIO ModClassGpio;
+extern CLASS_MODULE_GPIO ModClassGpio;
 
 
 

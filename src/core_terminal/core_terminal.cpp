@@ -42,6 +42,8 @@ void TerminalRegisterModule(TerminalModuleInit initFn) {
     }
 }
 
+static bool _slotsApplied = false;
+
 void TerminalInit(){
     term.addCommand("help",  TerminalHelp );    // показать все команды
     term.addCommand("reset", EspReset );        // ресет мк
@@ -64,17 +66,23 @@ void TerminalInit(){
     // term.addCommand("swdf", termSwdFlash1 );
     // term.addCommand("avr",  avr );
 
-    for (uint8_t i = 0; i < _moduleSlotCount; i++) {
-        _moduleSlots[i]();
-    }
-
     Serial.println("\n\r Serial terminal inited.");
     term.setSerialEcho(true);
     term.helpShow();
 }
 
 // main Loop func for Terminal
-void TerminalLoop() {    term.readSerial(); }
+// Слоты модулей применяются лениво при первом вызове loop(): к этому моменту
+// все begin() ядер/модулей/устройств уже выполнены и команды зарегистрированы.
+void TerminalLoop() {
+    if (!_slotsApplied) {
+        _slotsApplied = true;
+        for (uint8_t i = 0; i < _moduleSlotCount; i++) {
+            _moduleSlots[i]();
+        }
+    }
+    term.readSerial();
+}
 // function for Terminal to show available commands
 void TerminalHelp (void)    {   term.helpShow();    }
 void TerminalEcho (void)    {   term.EchoOnOff();  }

@@ -16,54 +16,8 @@
 #include <ESP8266mDNS.h>
 #endif
 
-#if defined(MODULE_GPIO)
-#include "module_gpio/module_gpio.h"
-#endif
-
-#if defined(MODULE_TEMPLATE)
-#include "module_template/module_template.h"
-#endif
-
-#if defined(MODULE_I2C_MAPPER)
-#include "module_i2c-mapper/module_i2c-mapper.h"
-#endif
-
-#if defined(MODULE_RGB)
-#include "module_rgb/module_rgb.h"
-#endif
-
-#if defined(MODULE_DS3231)
-#include "module_ds3231/module_ds3231.h"
-#endif
-
-#if defined(MODULE_LCD_I2C)
-#include "module_lcd-i2c/module_lcd-i2c.h"
-#endif
-
-#if defined(DEVICE_CLOCKMECH)
-#include "device_clock-mech/device_clock-mech.h"
-#endif
-#if defined(DEVICE_RINGMECH)
-#include "device_mech-ring/device_mech-ring.h"
-#endif
-
-#if defined(MODULE_UDP)
-#include "module_udp/module_udp.h"
-#endif
-
-#if (MODULE_OTACLIENT == 1)
-#include "module_otaclient/module_otaclient.h"
-#endif
-
-#ifdef PROGTYPE_SWD
-#include "submodule_swd/submodule_swd.h"
-#endif
-
-#ifdef PROGTYPE_ISP
-#include "submodule_isp/submodule_isp.h"
-#endif
-
-
+// Заголовки модулей (module_*/submodule_*/device_*) подключаются автоматически
+// в сгенерированном файле src/modules_registry.cpp (генератор python/module_registry_gen.py).
 
 // GZIP_ENABLED — включает поддержку .gz версий статических файлов.
 // При включении сервер ищет и отдаёт файлы с расширением .gz (например index.html.gz),
@@ -79,6 +33,8 @@
 #include "core_editor/core_editor.h"
 #include "core_json/core_json.h"
 #include "core_wifi/core_wifi.h"
+
+#include "modules_registry.h"
 
 #include "core_led/core_led.h"
 
@@ -113,97 +69,36 @@ AsyncFSWebServer::AsyncFSWebServer(uint16_t port) : AsyncWebServer(port) {}
 
     if (!_fs) { _fs->begin();  }// If LittleFS is not started
 
-	ModClassJson.setFs(&LittleFS); // !!!MUST!!! be set as first as possible!
+	// JSON-ядро должно быть инициализировано первым (используется loadHTTPAuth/load_config_Sys
+	// и всеми begin(ctx) через ModClassJson). Это соответствует старому // !!!MUST!!! be set as first.
+	g_ctx.fs = fs;
+	ModClassJson.begin(g_ctx);
 
 	loadHTTPAuth();
 	defaultConfigSys();
 	if (load_config_Sys() == false) {  save_configSys(); 	}
 
-	modWifiClass.begin(&LittleFS); // wifi load cfg and set callback hooks
-	
+	// Заполняем остальные поля глобального контекста модулей (hostname, password)
+	g_ctx.hostname = getHostName();
+	g_ctx.password = _httpAuth.wwwPassword;
+
+	// Инициализация ядер/модулей/устройств через сгенерированный registry
+	core_begin(g_ctx);
+	modules_begin(g_ctx);
+	dev_begin(g_ctx);
+
 	serialShowAbout();
 	AsyncWebServer::begin();
 	serverInit(); // Configure and start Web server
 
-	modWifiClass.webInit();	//WIFI INIT start here
-	
-	modNtpClass.begin();
-	modNtpClass.webInit();
-	
+	// Регистрация веб-путей ядер/модулей/устройств
+	core_web_Init();
+	modules_web_Init();
+	dev_web_Init();
+
 	String mdnsName =  getHostName();
 	MDNS.begin(mdnsName.c_str()); // I've not got this to work. Need some investigation. // TODO
 	MDNS.addService("http", "tcp", 80);
-	
-#if (MODULE_OTACLIENT == 1)
-	otaClient.setFs(&LittleFS);
-	otaClient.begin(getHostName(), _httpAuth.wwwPassword );
-	otaClient.webInit();
-#else
-	modOtaClass.setFs(&LittleFS);
-	modOtaClass.begin(getHostName(), _httpAuth.wwwPassword );
-	modOtaClass.webInit();
-#endif
-	
-	ModClassEdit.setFs(&LittleFS);
-	ModClassEdit.webInit();
-
-#if defined(MODULE_GPIO)
-	ModClassGpio.setFs(&LittleFS);
-	ModClassGpio.webInit();
-#endif
-
-#if defined(MODULE_TEMPLATE)
-	ModClassTemplate.setFs(&LittleFS);
-	ModClassTemplate.begin();
-	ModClassTemplate.webInit();
-#endif
-
-#if defined(MODULE_I2C_MAPPER)
-	ModClassI2cMapper.begin();
-	ModClassI2cMapper.webInit();
-#endif
-
-#if defined(MODULE_LCD_I2C)
-	ModClassLcdI2c.setFs(&LittleFS);
-	ModClassLcdI2c.begin();
-	ModClassLcdI2c.webInit();
-#endif
-
-#if defined(MODULE_DS3231)
-	ModClassDs3231.setFs(&LittleFS);
-	ModClassDs3231.begin();
-	ModClassDs3231.webInit();
-#endif
-
-#if defined(MODULE_RGB)
-	ModClassRgb.setFs(&LittleFS);
-	ModClassRgb.begin();
-	ModClassRgb.webInit();
-#endif
-
-#if defined(DEVICE_CLOCKMECH)
-	ModClassClockMech.setFs(&LittleFS);
-	ModClassClockMech.begin();
-	ModClassClockMech.webInit();
-#endif
-	
-#if defined(DEVICE_RINGMECH)
-	ModClassRingMech.setFs(&LittleFS);
-	ModClassRingMech.begin();
-	ModClassRingMech.webInit();
-#endif
-	
-#ifdef PROGTYPE_SWD
-	progSwd.setFs(&LittleFS);
-	progSwd.begin();
-	progSwd.web_Init();
-#endif
-
-#ifdef PROGTYPE_ISP
-	progIsp.setFs(&LittleFS);
-	progIsp.begin();
-	progIsp.web_Init();
-#endif
 }
 
 bool AsyncFSWebServer::loadHTTPAuth() {

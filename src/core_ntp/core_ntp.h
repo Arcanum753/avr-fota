@@ -5,6 +5,8 @@
 #include <WiFiClient.h>
 #include <TimeLib.h>
 
+#include "mod_context.h"
+
 
 #include "core_ntp/NtpClientLib.h"
 
@@ -40,9 +42,9 @@ typedef struct {
 } strNtpConfig;
 
 
-class  CORE_CLASS_NTP    {
+class  CLASS_CORE_NTP    {
     public:
-    CORE_CLASS_NTP (bool _in);
+    CLASS_CORE_NTP (bool _in);
 
     #if ESP32
     fs::LittleFSFS*               _fs;
@@ -54,9 +56,10 @@ class  CORE_CLASS_NTP    {
     strNtpConfig    _ntpConfig; // NTP configuration
     
     void begin ();
+    void begin(ModContext& ctx);
     void ntpOnConnected ();
     void ntpOnDisconected ();
-    void webInit();
+    void web_Init();
     
     void ntpSwitchReserv ();
     void ntpOnSyncHandler(NTPSyncEvent_t event);
@@ -86,7 +89,7 @@ private:
     bool  dumb = false;
 };
 
-extern CORE_CLASS_NTP modNtpClass;
+extern CLASS_CORE_NTP modNtpClass;
 
 
 

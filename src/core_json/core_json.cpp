@@ -8,27 +8,31 @@
 #include "debug.h"
 #include "core_json.h"
 #include "core_json_version.h"
-CORE_CLASS_JSON ModClassJson(false);
+CLASS_CORE_JSON ModClassJson(false);
 
-CORE_CLASS_JSON :: CORE_CLASS_JSON (bool _in) {
+CLASS_CORE_JSON :: CLASS_CORE_JSON (bool _in) {
 	dumb = _in;
 }
 
 #if defined(ESP32)
-    void CORE_CLASS_JSON::setFs(fs::LittleFSFS* fs)
+    void CLASS_CORE_JSON::setFs(fs::LittleFSFS* fs)
 #elif defined(ESP8266)
-    void CORE_CLASS_JSON::setFs(FS* fs)	// esp8266/esp32 flash file system
+    void CLASS_CORE_JSON::setFs(FS* fs)	// esp8266/esp32 flash file system
 #endif
 {	_fs = fs;	}
 
-void CORE_CLASS_JSON::webInit(void) {
+void CLASS_CORE_JSON::begin(ModContext& ctx) {
+    _fs = ctx.fs;
+}
+
+void CLASS_CORE_JSON::web_Init(void) {
     ESPHTTPServer.on("/json/ver", [this](AsyncWebServerRequest *request) {
         html_ver_get(request);
     });
 
 }
 
-bool CORE_CLASS_JSON::load_jsonDoc(const String& file, JsonDocument& jsonDoc){
+bool CLASS_CORE_JSON::load_jsonDoc(const String& file, JsonDocument& jsonDoc){
 	if (!_fs) return false;
 	File configFile = _fs->open(file, "r");
 
@@ -57,7 +61,7 @@ bool CORE_CLASS_JSON::load_jsonDoc(const String& file, JsonDocument& jsonDoc){
 }
 
 
-bool CORE_CLASS_JSON::save_jsonDoc(const JsonDocument& jsonDoc,	const String& file) {
+bool CLASS_CORE_JSON::save_jsonDoc(const JsonDocument& jsonDoc,	const String& file) {
 	if (!_fs) return false;
 	File configFile  = _fs->open(file, "w");
 	if (configFile == false) {
@@ -78,56 +82,56 @@ bool CORE_CLASS_JSON::save_jsonDoc(const JsonDocument& jsonDoc,	const String& fi
 
 // ========== New public API ==========
 
-bool CORE_CLASS_JSON::jsonFileReadStr(const String& file, const String& key, String& out) {
+bool CLASS_CORE_JSON::jsonFileReadStr(const String& file, const String& key, String& out) {
     JsonDocument doc;
     if (!load_jsonDoc(file, doc)) return false;
     out = doc[key].as<const char *>();
     return true;
 }
 
-bool CORE_CLASS_JSON::jsonFileReadInt(const String& file, const String& key, int32_t& out) {
+bool CLASS_CORE_JSON::jsonFileReadInt(const String& file, const String& key, int32_t& out) {
     JsonDocument doc;
     if (!load_jsonDoc(file, doc)) return false;
     out = doc[key].as<int32_t>();
     return true;
 }
 
-bool CORE_CLASS_JSON::jsonFileReadUint(const String& file, const String& key, uint32_t& out) {
+bool CLASS_CORE_JSON::jsonFileReadUint(const String& file, const String& key, uint32_t& out) {
     JsonDocument doc;
     if (!load_jsonDoc(file, doc)) return false;
     out = doc[key].as<uint32_t>();
     return true;
 }
 
-bool CORE_CLASS_JSON::jsonFileReadBool(const String& file, const String& key, bool& out) {
+bool CLASS_CORE_JSON::jsonFileReadBool(const String& file, const String& key, bool& out) {
     JsonDocument doc;
     if (!load_jsonDoc(file, doc)) return false;
     out = doc[key].as<bool>();
     return true;
 }
 
-bool CORE_CLASS_JSON::jsonFileWriteStr(const String& file, const String& key, const String& val) {
+bool CLASS_CORE_JSON::jsonFileWriteStr(const String& file, const String& key, const String& val) {
     JsonDocument doc;
     load_jsonDoc(file, doc);
     doc[key] = val;
     return save_jsonDoc(doc, file);
 }
 
-bool CORE_CLASS_JSON::jsonFileWriteInt(const String& file, const String& key, int32_t val) {
+bool CLASS_CORE_JSON::jsonFileWriteInt(const String& file, const String& key, int32_t val) {
     JsonDocument doc;
     load_jsonDoc(file, doc);
     doc[key] = val;
     return save_jsonDoc(doc, file);
 }
 
-bool CORE_CLASS_JSON::jsonFileWriteBool(const String& file, const String& key, bool val) {
+bool CLASS_CORE_JSON::jsonFileWriteBool(const String& file, const String& key, bool val) {
     JsonDocument doc;
     load_jsonDoc(file, doc);
     doc[key] = val;
     return save_jsonDoc(doc, file);
 }
 
-bool CORE_CLASS_JSON::jsonParseStr(const String& json, const String& key, String& out) {
+bool CLASS_CORE_JSON::jsonParseStr(const String& json, const String& key, String& out) {
     JsonDocument doc;
     DeserializationError err = deserializeJson(doc, json);
     if (err) return false;
@@ -135,7 +139,7 @@ bool CORE_CLASS_JSON::jsonParseStr(const String& json, const String& key, String
     return true;
 }
 
-bool CORE_CLASS_JSON::jsonParseInt(const String& json, const String& key, int32_t& out) {
+bool CLASS_CORE_JSON::jsonParseInt(const String& json, const String& key, int32_t& out) {
     JsonDocument doc;
     DeserializationError err = deserializeJson(doc, json);
     if (err) return false;
@@ -143,7 +147,7 @@ bool CORE_CLASS_JSON::jsonParseInt(const String& json, const String& key, int32_
     return true;
 }
 
-bool CORE_CLASS_JSON::jsonParseBool(const String& json, const String& key, bool& out) {
+bool CLASS_CORE_JSON::jsonParseBool(const String& json, const String& key, bool& out) {
     JsonDocument doc;
     DeserializationError err = deserializeJson(doc, json);
     if (err) return false;
@@ -151,7 +155,7 @@ bool CORE_CLASS_JSON::jsonParseBool(const String& json, const String& key, bool&
     return true;
 }
 
-String CORE_CLASS_JSON::jsonBuildObj(const String& key, const String& val) {
+String CLASS_CORE_JSON::jsonBuildObj(const String& key, const String& val) {
     JsonDocument doc;
     doc[key] = val;
     String out;
@@ -159,7 +163,7 @@ String CORE_CLASS_JSON::jsonBuildObj(const String& key, const String& val) {
     return out;
 }
 
-String CORE_CLASS_JSON::jsonBuildObjInt(const String& key, int32_t val) {
+String CLASS_CORE_JSON::jsonBuildObjInt(const String& key, int32_t val) {
     JsonDocument doc;
     doc[key] = val;
     String out;
@@ -167,7 +171,7 @@ String CORE_CLASS_JSON::jsonBuildObjInt(const String& key, int32_t val) {
     return out;
 }
 
-bool CORE_CLASS_JSON::jsonParseNestedStr(const String& json, const String& path, String& out) {
+bool CLASS_CORE_JSON::jsonParseNestedStr(const String& json, const String& path, String& out) {
     JsonDocument doc;
     DeserializationError err = deserializeJson(doc, json);
     if (err) return false;
@@ -187,7 +191,7 @@ bool CORE_CLASS_JSON::jsonParseNestedStr(const String& json, const String& path,
     return true;
 }
 
-bool CORE_CLASS_JSON::jsonParseNestedInt(const String& json, const String& path, int32_t& out) {
+bool CLASS_CORE_JSON::jsonParseNestedInt(const String& json, const String& path, int32_t& out) {
     JsonDocument doc;
     DeserializationError err = deserializeJson(doc, json);
     if (err) return false;
@@ -207,7 +211,7 @@ bool CORE_CLASS_JSON::jsonParseNestedInt(const String& json, const String& path,
     return true;
 }
 
-bool CORE_CLASS_JSON::jsonParseNestedInt64(const String& json, const String& path, int64_t& out) {
+bool CLASS_CORE_JSON::jsonParseNestedInt64(const String& json, const String& path, int64_t& out) {
     JsonDocument doc;
     DeserializationError err = deserializeJson(doc, json);
     if (err) return false;
@@ -227,7 +231,7 @@ bool CORE_CLASS_JSON::jsonParseNestedInt64(const String& json, const String& pat
     return true;
 }
 
-bool CORE_CLASS_JSON::jsonParseNestedBool(const String& json, const String& path, bool& out) {
+bool CLASS_CORE_JSON::jsonParseNestedBool(const String& json, const String& path, bool& out) {
     JsonDocument doc;
     DeserializationError err = deserializeJson(doc, json);
     if (err) return false;
@@ -247,7 +251,7 @@ bool CORE_CLASS_JSON::jsonParseNestedBool(const String& json, const String& path
     return true;
 }
 
-int CORE_CLASS_JSON::jsonGetArraySize(const String& json, const String& path) {
+int CLASS_CORE_JSON::jsonGetArraySize(const String& json, const String& path) {
     JsonDocument doc;
     DeserializationError err = deserializeJson(doc, json);
     if (err) return 0;
@@ -266,7 +270,7 @@ int CORE_CLASS_JSON::jsonGetArraySize(const String& json, const String& path) {
     return current.as<JsonArray>().size();
 }
 
-bool CORE_CLASS_JSON::jsonGetArrayStr(const String& json, const String& arrayPath, int index, const String& key, String& out) {
+bool CLASS_CORE_JSON::jsonGetArrayStr(const String& json, const String& arrayPath, int index, const String& key, String& out) {
     JsonDocument doc;
     DeserializationError err = deserializeJson(doc, json);
     if (err) return false;
@@ -288,7 +292,7 @@ bool CORE_CLASS_JSON::jsonGetArrayStr(const String& json, const String& arrayPat
     return true;
 }
 
-bool CORE_CLASS_JSON::jsonGetArrayInt(const String& json, const String& arrayPath, int index, const String& key, int32_t& out) {
+bool CLASS_CORE_JSON::jsonGetArrayInt(const String& json, const String& arrayPath, int index, const String& key, int32_t& out) {
     JsonDocument doc;
     DeserializationError err = deserializeJson(doc, json);
     if (err) return false;
@@ -310,7 +314,7 @@ bool CORE_CLASS_JSON::jsonGetArrayInt(const String& json, const String& arrayPat
     return true;
 }
 
-String CORE_CLASS_JSON::jsonBuildSlotConfig(const String& ssid, const String& password, bool dhcp,
+String CLASS_CORE_JSON::jsonBuildSlotConfig(const String& ssid, const String& password, bool dhcp,
                                              const IPAddress& ip, const IPAddress& netmask,
                                              const IPAddress& gateway, const IPAddress& dns) {
     JsonDocument doc;
@@ -335,7 +339,7 @@ String CORE_CLASS_JSON::jsonBuildSlotConfig(const String& ssid, const String& pa
     return out;
 }
 
-int CORE_CLASS_JSON::jsonParseSlotConfig(const String& json, String& ssid, String& password, bool& dhcp,
+int CLASS_CORE_JSON::jsonParseSlotConfig(const String& json, String& ssid, String& password, bool& dhcp,
                                           IPAddress& ip, IPAddress& netmask,
                                           IPAddress& gateway, IPAddress& dns) {
     JsonDocument doc;
@@ -369,7 +373,7 @@ int CORE_CLASS_JSON::jsonParseSlotConfig(const String& json, String& ssid, Strin
     return count;
 }
 
-bool CORE_CLASS_JSON::jsonFileLoadSlot(const String& file, String& ssid, String& password, bool& dhcp,
+bool CLASS_CORE_JSON::jsonFileLoadSlot(const String& file, String& ssid, String& password, bool& dhcp,
                                         IPAddress& ip, IPAddress& netmask,
                                         IPAddress& gateway, IPAddress& dns) {
     JsonDocument doc;
@@ -384,7 +388,7 @@ bool CORE_CLASS_JSON::jsonFileLoadSlot(const String& file, String& ssid, String&
     return true;
 }
 
-bool CORE_CLASS_JSON::jsonFileSaveSlot(const String& file, const String& ssid, const String& password, bool dhcp,
+bool CLASS_CORE_JSON::jsonFileSaveSlot(const String& file, const String& ssid, const String& password, bool dhcp,
                                         const IPAddress& ip, const IPAddress& netmask,
                                         const IPAddress& gateway, const IPAddress& dns) {
     JsonDocument doc;
@@ -407,28 +411,28 @@ bool CORE_CLASS_JSON::jsonFileSaveSlot(const String& file, const String& ssid, c
     return save_jsonDoc(doc, file);
 }
 
-bool CORE_CLASS_JSON::jsonFileLoadDoc(const String& file, JsonDocument& doc) {
+bool CLASS_CORE_JSON::jsonFileLoadDoc(const String& file, JsonDocument& doc) {
     return load_jsonDoc(file, doc);
 }
 
-bool CORE_CLASS_JSON::jsonFileSaveDoc(const String& file, JsonDocument& doc) {
+bool CLASS_CORE_JSON::jsonFileSaveDoc(const String& file, JsonDocument& doc) {
     return save_jsonDoc(doc, file);
 }
 
 
-String CORE_CLASS_JSON::getVersionStr(){
+String CLASS_CORE_JSON::getVersionStr(){
     return String(CORE_JSON_VERSION);
 }
 
-String CORE_CLASS_JSON::getGeneratedTime(){
+String CLASS_CORE_JSON::getGeneratedTime(){
     return String(CORE_JSON_GENERATED_TIME);
 }
 
-String CORE_CLASS_JSON::getCommitDateStr(){
+String CLASS_CORE_JSON::getCommitDateStr(){
     return String(CORE_JSON_COMMIT_DATE_STR);
 }
 
-void CORE_CLASS_JSON::html_ver_get(AsyncWebServerRequest *request) {
+void CLASS_CORE_JSON::html_ver_get(AsyncWebServerRequest *request) {
     DEBUGJSON("%s\n\r", __FUNCTION__);
     String values = "";
     values += "jsnversion|"     + getVersionStr()    + "|div\n";

@@ -32,6 +32,13 @@ bool Class_ProgBase::begin() {
 	return true;
 }
 
+void Class_ProgBase::begin(ModContext& ctx) {
+#if defined(ESP32)
+	_fs = ctx.fs;
+#endif
+	begin();
+}
+
 int Class_ProgBase::cfg_FileSaveFromWeb(CfgFile_ProgBase_t &_inStruct)  {
 	DEBUGLOGPROG(__PRETTY_FUNCTION__);	DEBUGLOGPROG("\r\n");
 	CfgFile_Prog = _inStruct;

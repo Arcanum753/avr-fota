@@ -48,6 +48,11 @@ jobs:
       if: matrix.env == 'd1_mini_pro'
       run: pio pkg install --global --platform "platformio/espressif8266"
 
+    # modules_registry.cpp генерируется под каждый env в отдельности (без #if defined).
+    # Обязательно перегенерировать под собираемый env, иначе линковка упадёт.
+    - name: Regenerate module registry for env
+      run: python python/module_registry_gen.py --env ${{ matrix.env }}
+
     - name: Build for ${{ matrix.env }}
       id: build-step
       run: pio run -e ${{ matrix.env }}

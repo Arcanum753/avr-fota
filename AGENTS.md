@@ -82,25 +82,22 @@ The main loop (`loop()` in `main.cpp`):
 3. Resets watchdog again
 4. Calls `loop_user()` (user hook, empty by default)
 5. Calls `TerminalLoop()`
-6. Calls `modOtaClass.loopHandler()`
+6. Calls `core_loop()`, `modules_loop()`, `dev_loop()` (задача `modOtaClass.loop()`/`otaClient.loop()` вызывается через `core_loop`)
 
 ### Core initialization flow (`setup()`)
 
 1. `InitRTOS()` — init EERTOS queues
 2. `LittleFS.begin()` — mount filesystem
 3. `ESPHTTPServer.begin(&LittleFS)` — starts the web server (`src/FSWebServerLib.cpp`):
-   - `ModClassJson.setFs()` — JSON core must be first
-   - Load `secret.json` (HTTP auth)
-   - Load `config_sys.json` (system config)
-   - `modWifiClass.begin()` — WiFi init + event hooks
+   - Fills global `ModContext` (fs, hostname, password)
+   - `core_begin(ModContext)` — core init (WiFi, NTP, JSON, editor, OTA)
+   - `modules_begin(ModContext)` — optional modules init
+   - `dev_begin(ModContext)` — devices init
    - `serverInit()` — register core HTTP routes
-   - `modWifiClass.webInit()` — WiFi web routes
-   - `modNtpClass.begin()` + `webInit()` — NTP
+   - `core_web_Init()`, `modules_web_Init()`, `dev_web_Init()` — register web routes
    - `MDNS.begin()` — mDNS
-   - `modOtaClass` / `otaClient` init + web routes
-   - `ModClassEdit.webInit()` — editor web routes
-   - Conditional: GPIO, SWD, ISP module init + web routes
-4. `TerminalInit()` — serial terminal
+   - Инициализация конкретных модулей регистрируется через `modules_registry` (см. ниже)
+4. `TerminalInit()` — serial terminal (вызывается через `core_begin`, см. ниже)
 5. `ledInit()` — LED GPIO init
 6. `ledMacroTimerTask()` — start LED macro timer
 7. `_secondEERtos.attach_ms(1, TimerService)` — start 1ms tick
@@ -112,27 +109,85 @@ Class_ProgBase (module_prog/module_prog.h)
 ├── Class_SubIsp (submodule_isp/) — AVR-ISP
 └── Class_SubSwd (submodule_swd/) — STM32 SWD
 
-CORE_OTA_CLASS (core_ota/core_ota.h)
-└── MODULE_CLASS_OTACLIENT (module_otaclient/) — extended OTA client
+CLASS_CORE_OTA (core_ota/core_ota.h)
+└── CLASS_MODULE_OTACLIENT (module_otaclient/) — extended OTA client
 ```
 
-### Inclusion mechanism
+### Именование классов: паттерн `CLASS_<ПРИНАДЛЕЖНОСТЬ>_<ФУНКЦИЯ>`
 
-Core modules are unconditionally `#include`'d in `FSWebServerLib.cpp`. Optional modules are guarded by preprocessor flags:
+Имена классов образуются по паттерну `CLASS_<ПРИНАДЛЕЖНОСТЬ>_<ФУНКЦИЯ>`, где
+принадлежность — категория модуля:
 
-```cpp
-#include "core_ota/core_ota.h"      // always
-#if defined(MODULE_GPIO)
-#include "module_gpio/module_gpio.h" // conditional
-#endif
-#if defined(PROGTYPE_ISP)
-#include "submodule_isp/submodule_isp.h" // conditional
-#endif
+- Ядра: `CLASS_CORE_*` (например `CLASS_CORE_WIFI`, `CLASS_CORE_OTA`)
+- Модули: `CLASS_MODULE_*` (например `CLASS_MODULE_GPIO`, `CLASS_MODULE_UDPBROADCAST`,
+  `CLASS_MODULE_I2C_MAPPER`, `CLASS_MODULE_I2C_LCD`)
+- Устройства: `CLASS_DEVICE_*` (например `CLASS_DEVICE_CLOCKMECH`, `CLASS_DEVICE_RINGMECH`)
+
+Составные названия функции пишутся через подчёркивание: `I2C_MAPPER`, `I2C_LCD`.
+
+Исключения (не переименовывать):
+- `Class_ProgBase` (module_prog) — база субмодулей.
+- `Class_SubIsp` / `Class_SubSwd` (submodule_*) — особый случай.
+- Библиотечные/инфраструктурные классы (`SerialTerminal`, `AsyncWebServer*` и т.п.).
+
+Глобальные объекты модулей НЕ переименовываются — только типы.
+
+### Inclusion mechanism: единый контракт модулей + автогенерация registry
+
+Все ядра/модули/устройства приводятся к единому контракту:
+- `begin(ModContext& ctx)` — инициализация периферии + загрузка конфигов. `ModContext`
+  (вын `src/mod_context.h`) содержит: `fs` (тип по `#if ESP32`/`#if ESP8266`),
+  `hostname`, `password`. Метод устанавливает `_fs = ctx.fs` и вызывает существующий `begin()`.
+- `web_Init()` — регистрация веб-путей (единое имя; историческое `webInit` удалено).
+- `loop()` — периодическая задача (опционально, включается флагом `loop = 1`).
+
+`src/FSWebServerLib.cpp` и `src/main.cpp` НЕ содержат ручного вызова `setFs`/`begin`/`webInit`
+для каждого модуля. Вместо этого вызываются функции из автогенерируемого
+`src/modules_registry.cpp`:
+- `core_begin(ctx)`, `modules_begin(ctx)`, `dev_begin(ctx)`
+- `core_web_Init()`, `modules_web_Init()`, `dev_web_Init()`
+- `core_loop()`, `modules_loop()`, `dev_loop()`
+
+Файл `src/modules_registry.cpp` генерируется сюкриптом `python/module_registry_gen.py`
+**под выбранный env** (без `#if defined(...)`):
+```bash
+python python/module_registry_gen.py --env esp32_clock-mech
 ```
+
+Определение включённых модулей:
+- Ядра (`core_*`) — статический список в генераторе (включаются всегда).
+- Модули/субмодули/устройства — извлекаются из `+<префикс>имя/>` в `src_filter` выбранного env.
+
+Для каждого модуля генератор читает секцию `[registry]` из `src/<module>/<module>.ini`:
+```ini
+[registry]
+object = ModClassDs3231
+define = MODULE_DS3231
+web = 1        # есть web_Init() — вызывается в *_web_Init
+loop = 0       # есть loop() — вызывается в *_loop
+```
+- `object` — имя глобального extern-объекта (например `ModClassDs3231`, `progIsp`, `otaClient`).
+- `define` — define-флаг env (справочно; сами `#if` в итоговый файл не пишутся).
+- `web` — 1 если у модуля есть `web_Init()`.
+- `loop` — 1 если у модуля есть `loop()`. Для `device_*` вызывается в `dev_loop()`, для остальных — в `modules_loop()`.
+
+Особые случаи:
+- `module_otaclient` (`otaClient`) при активном `-D MODULE_OTACLIENT` включаются/istр в **core**-группах
+  (begin/web/loop) вместе с базовым OTA, а не в modules-группах.
+- `module_udp` (`udpBroadcast`) — `begin()` вызывается из `core_wifi` при подключении, поэтому
+  `begin` в registry не дублируется; регистрируется только `web_Init()`.
+- `core_terminal` — без класса; `TerminalInit()` вызывается в `core_begin`,
+  `TerminalLoop()` — в `core_loop` (базовые команды регистрируются в begin, слоты
+  модулей применяются лениво при первом вызове `TerminalLoop()`).
+- `core_led` вне контракта — инициализируется вручную в `main.cpp` (`ledInit()`).
+
+**ВАЖНОЕ ОГРАНИЧЕНИЕ:** `src/modules_registry.cpp` сгенерирован под ОДИН env и не содержит
+`#if defined(...)`. При сборке другого env или при смене набора модулей необходимо
+**перезапустить генератор** с новым `--env`, иначе линковка упадёт.
 
 Source files are filtered by `src_filter` in `platformio.ini`:
 ```ini
-src_filter = +<*> -<.git/> -<.vscode/> -<module_*/> -<submodule_*/>
+src_filter = +<*> -<.git/> -<.vscode/> -<module_*/> -<submodule_*/> -<device_*/>
 ```
 Modules are added per-target:
 ```ini
@@ -141,6 +196,7 @@ extends = env:esp32
 src_filter = ${platformio.src_filter} +<module_prog/> +<submodule_swd/> +<module_udp/>
 build_flags = ${env.build_flags} -D MODULE_UDP=1 -D PROGTYPE_SWD=1 -D SWDPIN_CLK=21 -D SWDPIN_DATA=19
 ```
+После изменения `src_filter`/`build_flags` в env — перезапустить `python/module_registry_gen.py --env <env>`.
 
 ### Web page structure
 
@@ -211,6 +267,9 @@ Run order and purpose:
 3. `fs_builder.py` — prepares FS build directory at `web_debug/<env>/`, copies files from `data/` and module `web/` dirs, generates `_version_fs.json`, calls `gen_page_head.py`, redirects `PLATFORMIO_FS_DATA_DIR`
 4. `set_fs_data_dir.py` — sets PlatformIO's `PROJECT_DATA_DIR` to the prepared directory
 
+**Ручной запуск (before compilation, при смене env/набора модулей):**
+- `module_registry_gen.py` — generates `src/modules_registry.cpp/.h` under selected env (обязательно, см. `### Inclusion mechanism`)
+
 **Post-scripts** (after compilation):
 5. `copy_fw.py` — copies `firmware.bin` → `proj_fwbins/{ENV}-FIRMWARE-{VERSION}.bin`
 6. `copy_fs.py` — copies `littlefs.bin` → `proj_fwbins/{ENV}-FILESYS-{VERSION}.bin`
@@ -266,6 +325,7 @@ avr-fota/
 ├── python/                  # Build scripts
 │   ├── version_builder.py   # Version header generation
 │   ├── module_version_gen.py # Per-module version generation
+│   ├── module_registry_gen.py # Registry autogeneration under selected env
 │   ├── fs_builder.py        # FS image preparation
 │   ├── gen_page_head.py     # Dynamic page header generation
 │   ├── set_fs_data_dir.py   # FS data directory redirect
@@ -277,6 +337,8 @@ avr-fota/
 │   ├── common.h/cpp         # Utility functions
 │   ├── eertos.h/cpp         # Cooperative task scheduler
 │   ├── FSWebServerLib.h/cpp # Async web server + routing
+│   ├── mod_context.h        # Module init context (fs, hostname, password)
+│   ├── modules_registry.h/cpp # Generated module registry (begin/web_Init/loop)
 │   ├── version.h            # Auto-generated version header
 │   ├── debug.h              # Debug logging macros
 │   ├── StringArray.h        # Linked list utility

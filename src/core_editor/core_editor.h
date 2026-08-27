@@ -15,19 +15,22 @@
 #include <LittleFS.h>
 #endif
 
+#include "mod_context.h"
 
 
 
-class CORE_CLASS_EDITOR {
+
+class CLASS_CORE_EDITOR {
 public:
-    CORE_CLASS_EDITOR();
+    CLASS_CORE_EDITOR();
 #if ESP32
     void setFs(fs::LittleFSFS* fs);
 #elif defined(ESP8266)
     void setFs(FS* fs);
 #endif
     void begin();
-    void webInit();
+    void web_Init();
+    void begin(ModContext& ctx);
 
     void handleFileUpload(AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final);
 
@@ -51,7 +54,7 @@ protected:
 #endif
 };
 
-extern CORE_CLASS_EDITOR ModClassEdit;
+extern CLASS_CORE_EDITOR ModClassEdit;
 
 
 

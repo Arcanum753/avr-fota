@@ -18,12 +18,12 @@
 #include "module_otaclient_version.h"
 
 // Single global object - the class itself
-MODULE_CLASS_OTACLIENT otaClient; 
+CLASS_MODULE_OTACLIENT otaClient; 
 
 // Static manifest entries buffer (avoid stack allocation)
-ManifestEntry MODULE_CLASS_OTACLIENT::_manifestEntries[OTACLIENT_MAX_MANIFEST_ENTRIES];
+ManifestEntry CLASS_MODULE_OTACLIENT::_manifestEntries[OTACLIENT_MAX_MANIFEST_ENTRIES];
 
-MODULE_CLASS_OTACLIENT::MODULE_CLASS_OTACLIENT() : CORE_OTA_CLASS(true) {
+CLASS_MODULE_OTACLIENT::CLASS_MODULE_OTACLIENT() : CLASS_CORE_OTA(true) {
     _isStarted = false;
     _updateInProgress = false;
     _updateRetries = 0;
@@ -35,15 +35,15 @@ MODULE_CLASS_OTACLIENT::MODULE_CLASS_OTACLIENT() : CORE_OTA_CLASS(true) {
     _fsEnded = false;
 }
 
-uint16_t MODULE_CLASS_OTACLIENT::getTimeOut()          { return _config.timeOut; }
-bool MODULE_CLASS_OTACLIENT::powerOnGet()              { return _config.powerOn; }
-String MODULE_CLASS_OTACLIENT::serverAddressGet()      { return _config.serverAddress; }
-uint16_t MODULE_CLASS_OTACLIENT::serverPortGet()       { return _config.serverPort; }
-String MODULE_CLASS_OTACLIENT::manifestPathGet()       { return _config.manifestPath; }
-uint8_t MODULE_CLASS_OTACLIENT::isStart()              { return _isStarted; }
+uint16_t CLASS_MODULE_OTACLIENT::getTimeOut()          { return _config.timeOut; }
+bool CLASS_MODULE_OTACLIENT::powerOnGet()              { return _config.powerOn; }
+String CLASS_MODULE_OTACLIENT::serverAddressGet()      { return _config.serverAddress; }
+uint16_t CLASS_MODULE_OTACLIENT::serverPortGet()       { return _config.serverPort; }
+String CLASS_MODULE_OTACLIENT::manifestPathGet()       { return _config.manifestPath; }
+uint8_t CLASS_MODULE_OTACLIENT::isStart()              { return _isStarted; }
 
-void MODULE_CLASS_OTACLIENT::begin(String _hostname, String _password) {
-    CORE_OTA_CLASS::begin(_hostname, _password);
+void CLASS_MODULE_OTACLIENT::begin(String _hostname, String _password) {
+    CLASS_CORE_OTA::begin(_hostname, _password);
     defaultConfig();
     if ( load_config() == false) {save_config();}
     DEBUGOTACLIENT("%s\r\n", __FUNCTION__);
@@ -52,6 +52,10 @@ void MODULE_CLASS_OTACLIENT::begin(String _hostname, String _password) {
     _isStarted = true;
     SetTimerTask(otaclientTimer, SEC * MINUTES * otaClient.getTimeOut());
     SetTimerTask(otaclientLoopTask, 50);
+}
+
+void CLASS_MODULE_OTACLIENT::begin(ModContext& ctx) {
+    begin(ctx.hostname, ctx.password);
 }
 
 // ========== TIMER (for calling from other files) ==========
@@ -88,7 +92,7 @@ void otaclientLoopTask() {
 }
 
 // ========== ON WiFi CONNECT ==========
-void MODULE_CLASS_OTACLIENT::onWiFiConnect() {
+void CLASS_MODULE_OTACLIENT::onWiFiConnect() {
     DEBUGOTACLIENT("%s: powerOn=%d\r\n", __FUNCTION__, _config.powerOn);
     if (_config.powerOn) {
 #if defined(ESP8266)
@@ -102,7 +106,7 @@ void MODULE_CLASS_OTACLIENT::onWiFiConnect() {
 }
 
 // ========== TEST (async - just sets flag) ==========
-void MODULE_CLASS_OTACLIENT::test(AsyncWebServerRequest *request) {
+void CLASS_MODULE_OTACLIENT::test(AsyncWebServerRequest *request) {
     DEBUGOTACLIENT("%s\n\r", __FUNCTION__);
     
     // Защита от множественных тестов: если тест уже выполняется, отклоняем
@@ -124,7 +128,7 @@ void MODULE_CLASS_OTACLIENT::test(AsyncWebServerRequest *request) {
 }
 
 // ========== LOOP (called from main loop) ==========
-void MODULE_CLASS_OTACLIENT::loop() {
+void CLASS_MODULE_OTACLIENT::loop() {
     // Don't process any loop actions while update is in progress
     if (_updateInProgress) {
         return;
@@ -271,12 +275,12 @@ void MODULE_CLASS_OTACLIENT::loop() {
 }
 
 // ========== WEB INIT ==========
-void MODULE_CLASS_OTACLIENT::webInit(void) {
+void CLASS_MODULE_OTACLIENT::web_Init(void) {
     registerCommonRoutes();
     registerCustomRoutes();
 }
 
-void MODULE_CLASS_OTACLIENT::registerCustomRoutes() {
+void CLASS_MODULE_OTACLIENT::registerCustomRoutes() {
     ESPHTTPServer.on(HTML_FILE_OTACLIENT, HTTP_POST, [this](AsyncWebServerRequest *request) {
         if (!ESPHTTPServer.checkAuth(request)) {return request->requestAuthentication(); }
         get_configuration_html(request);
@@ -326,7 +330,7 @@ void MODULE_CLASS_OTACLIENT::registerCustomRoutes() {
 }
 
 // ========== SEND CONFIG HTML ==========
-void MODULE_CLASS_OTACLIENT::send_configuration_values_html(AsyncWebServerRequest *request) {
+void CLASS_MODULE_OTACLIENT::send_configuration_values_html(AsyncWebServerRequest *request) {
     DEBUGOTACLIENT("%s\n\r", __FUNCTION__);
     String values = "";
     values += "otaclienttime|"     + String(_config.timeOut) + "|input\n";
@@ -338,7 +342,7 @@ void MODULE_CLASS_OTACLIENT::send_configuration_values_html(AsyncWebServerReques
 }
 
 // ========== GET CONFIG HTML ==========
-void MODULE_CLASS_OTACLIENT::get_configuration_html(AsyncWebServerRequest *request) {
+void CLASS_MODULE_OTACLIENT::get_configuration_html(AsyncWebServerRequest *request) {
     DEBUGOTACLIENT("%s\n\r", __PRETTY_FUNCTION__);
     _config.powerOn  = false; 
     if (request->args() > 0) {
@@ -363,7 +367,7 @@ void MODULE_CLASS_OTACLIENT::get_configuration_html(AsyncWebServerRequest *reque
 }
 
 // ========== JSON GET ==========
-String MODULE_CLASS_OTACLIENT::jsonGet() {
+String CLASS_MODULE_OTACLIENT::jsonGet() {
     String ret = "";
     ret += "{\n";
     ret += "  \"deviceName\": \"" + ESPHTTPServer._sysConfig.deviceName + "\",\n";
@@ -384,7 +388,7 @@ String MODULE_CLASS_OTACLIENT::jsonGet() {
 }
 
 // ========== DEFAULT CONFIG ==========
-void MODULE_CLASS_OTACLIENT::defaultConfig() {
+void CLASS_MODULE_OTACLIENT::defaultConfig() {
     _config.timeOut = OTACLIENT_TIME_DFLT;
     _config.powerOn = OTACLIENT_POWERON;
     _config.serverAddress = OTACLIENT_SERVER_ADDR;
@@ -393,7 +397,7 @@ void MODULE_CLASS_OTACLIENT::defaultConfig() {
 }
 
 // ========== SAVE CONFIG ==========
-bool MODULE_CLASS_OTACLIENT::save_config() {
+bool CLASS_MODULE_OTACLIENT::save_config() {
     DEBUGOTACLIENT("%s\n\r", __PRETTY_FUNCTION__);
     JsonDocument doc;
     ModClassJson.jsonFileLoadDoc(CONFIG_FILE_OTACLIENT, doc);
@@ -406,7 +410,7 @@ bool MODULE_CLASS_OTACLIENT::save_config() {
 }
 
 // ========== LOAD CONFIG ==========
-bool MODULE_CLASS_OTACLIENT::load_config() {
+bool CLASS_MODULE_OTACLIENT::load_config() {
     DEBUGOTACLIENT("%s\n\r", __PRETTY_FUNCTION__);
     JsonDocument doc;
     if (!ModClassJson.jsonFileLoadDoc(CONFIG_FILE_OTACLIENT, doc)) return false;
@@ -428,7 +432,7 @@ bool MODULE_CLASS_OTACLIENT::load_config() {
 // ============================================================
 // FETCH MANIFEST from OTA server
 // ============================================================
-bool MODULE_CLASS_OTACLIENT::fetchManifest(ManifestEntry* entries, int& count) {
+bool CLASS_MODULE_OTACLIENT::fetchManifest(ManifestEntry* entries, int& count) {
     count = 0;
     
     if (_config.serverAddress.length() == 0) {
@@ -583,7 +587,7 @@ bool MODULE_CLASS_OTACLIENT::fetchManifest(ManifestEntry* entries, int& count) {
 // ============================================================
 // UNIFIED MANIFEST ENTRY CHECKING
 // ============================================================
-void MODULE_CLASS_OTACLIENT::checkManifestEntries(ManifestEntry* entries, int count,
+void CLASS_MODULE_OTACLIENT::checkManifestEntries(ManifestEntry* entries, int count,
                                                     fileCompareResult& fwResult, fileCompareResult& fsResult,
                                                     bool& fwValid, bool& fsValid,
                                                     int8_t& fwCompareResult, int8_t& fsCompareResult,
@@ -647,7 +651,7 @@ void MODULE_CLASS_OTACLIENT::checkManifestEntries(ManifestEntry* entries, int co
 // ============================================================
 // PERFORM UPDATE FROM STREAM
 // ============================================================
-bool MODULE_CLASS_OTACLIENT::performUpdateFromStream(WiFiClient& stream, size_t size, const String& expectedMd5, int fileType) {
+bool CLASS_MODULE_OTACLIENT::performUpdateFromStream(WiFiClient& stream, size_t size, const String& expectedMd5, int fileType) {
     DEBUGOTACLIENT("performUpdateFromStream: size=%u, type=%d, md5=%s\n", size, fileType, expectedMd5.c_str());
     
     // Set MD5 for verification
@@ -755,7 +759,7 @@ bool MODULE_CLASS_OTACLIENT::performUpdateFromStream(WiFiClient& stream, size_t 
 // ============================================================
 // DOWNLOAD AND UPDATE a single file
 // ============================================================
-bool MODULE_CLASS_OTACLIENT::downloadAndUpdate(const String& url, size_t size, const String& md5, int fileType) {
+bool CLASS_MODULE_OTACLIENT::downloadAndUpdate(const String& url, size_t size, const String& md5, int fileType) {
     DEBUGOTACLIENT("downloadAndUpdate: %s (%u bytes)\n", url.c_str(), size);
     
     WiFiClient client;
@@ -792,7 +796,7 @@ bool MODULE_CLASS_OTACLIENT::downloadAndUpdate(const String& url, size_t size, c
 // ============================================================
 // CHECK FOR UPDATES (main logic)
 // ============================================================
-void MODULE_CLASS_OTACLIENT::checkForUpdates() {
+void CLASS_MODULE_OTACLIENT::checkForUpdates() {
     DEBUGOTACLIENT("checkForUpdates from timer\n\r");
     
     // Don't start if already updating
@@ -886,19 +890,19 @@ void MODULE_CLASS_OTACLIENT::checkForUpdates() {
     }
 }
 
-String MODULE_CLASS_OTACLIENT::getVersionStr(){
+String CLASS_MODULE_OTACLIENT::getVersionStr(){
     return String(MODULE_OTACLIENT_VERSION);
 }
 
-String MODULE_CLASS_OTACLIENT::getGeneratedTime(){
+String CLASS_MODULE_OTACLIENT::getGeneratedTime(){
     return String(MODULE_OTACLIENT_GENERATED_TIME);
 }
 
-String MODULE_CLASS_OTACLIENT::getCommitDateStr(){
+String CLASS_MODULE_OTACLIENT::getCommitDateStr(){
     return String(MODULE_OTACLIENT_COMMIT_DATE_STR);
 }
 
-void MODULE_CLASS_OTACLIENT::html_ver_get(AsyncWebServerRequest *request) {
+void CLASS_MODULE_OTACLIENT::html_ver_get(AsyncWebServerRequest *request) {
     DEBUGOTACLIENT("%s\n\r", __FUNCTION__);
     String values = "";
     values += "otaclientversion|"     + getVersionStr()    + "|div\n";

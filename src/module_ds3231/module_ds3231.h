@@ -3,6 +3,8 @@
 
 #include "main.h"
 
+#include "mod_context.h"
+
 #ifdef DEBUG_DS3231
 #define DEBUGDS3231(...) Serial.printf(__VA_ARGS__)
 #else
@@ -47,16 +49,17 @@ typedef struct {
     bool     ctrlA2ie;       // A2IE — разрешить прерывание Alarm 2
 } strDs3231Config;
 
-class MODULE_CLASS_DS3231 {
+class CLASS_MODULE_DS3231 {
 public:
-    MODULE_CLASS_DS3231(bool _in);
+    CLASS_MODULE_DS3231(bool _in);
 #if defined(ESP32)
     void setFs(fs::LittleFSFS* fs);
 #elif defined(ESP8266)
     void setFs(FS* fs);
 #endif
     void begin();
-    void webInit();
+    void begin(ModContext& ctx);
+    void web_Init();
 
     // ===== Публичное API для других модулей =====
     time_t getTime();
@@ -162,7 +165,7 @@ protected:
 #endif
 };
 
-extern MODULE_CLASS_DS3231 ModClassDs3231;
+extern CLASS_MODULE_DS3231 ModClassDs3231;
 
 // SQW / GPIO — внешние функции (только ESP32)
 #if defined(ESP32)

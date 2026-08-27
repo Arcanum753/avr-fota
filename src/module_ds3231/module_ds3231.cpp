@@ -18,8 +18,8 @@
 #include <esp_attr.h>
 #endif
 
-MODULE_CLASS_DS3231 ModClassDs3231(false);
-MODULE_CLASS_DS3231::MODULE_CLASS_DS3231(bool _in) {
+CLASS_MODULE_DS3231 ModClassDs3231(false);
+CLASS_MODULE_DS3231::CLASS_MODULE_DS3231(bool _in) {
     dumb = _in; _lastError = 0; _wireStarted = false;
 #if defined(ESP32)
     _sqwIrqFlag = false;
@@ -47,9 +47,9 @@ void ds3231SqwPollTask() {
 #endif
 
 #if defined(ESP32)
-void MODULE_CLASS_DS3231::setFs(fs::LittleFSFS* fs)
+void CLASS_MODULE_DS3231::setFs(fs::LittleFSFS* fs)
 #elif defined(ESP8266)
-void MODULE_CLASS_DS3231::setFs(FS* fs)
+void CLASS_MODULE_DS3231::setFs(FS* fs)
 #endif
 {
     _fs = fs;
@@ -71,7 +71,7 @@ static uint8_t _bcd2dec(uint8_t bcd) {
 // I2C — низкоуровневые операции
 // ====================================================================
 
-uint8_t MODULE_CLASS_DS3231::_readReg(uint8_t reg) {
+uint8_t CLASS_MODULE_DS3231::_readReg(uint8_t reg) {
     if (_config.addr == DS3231_ADDR_NONE) { _lastError = -1; return 0; }
     if (!_wireStarted) { _wireStarted = true; Wire.begin(); }
     Wire.beginTransmission(_config.addr);
@@ -84,7 +84,7 @@ uint8_t MODULE_CLASS_DS3231::_readReg(uint8_t reg) {
     return 0;
 }
 
-bool MODULE_CLASS_DS3231::_writeReg(uint8_t reg, uint8_t val) {
+bool CLASS_MODULE_DS3231::_writeReg(uint8_t reg, uint8_t val) {
     if (_config.addr == DS3231_ADDR_NONE) { _lastError = -1; return false; }
     if (!_wireStarted) { _wireStarted = true; Wire.begin(); }
     Wire.beginTransmission(_config.addr);
@@ -94,7 +94,7 @@ bool MODULE_CLASS_DS3231::_writeReg(uint8_t reg, uint8_t val) {
     return (_lastError == 0);
 }
 
-bool MODULE_CLASS_DS3231::_readBlock(uint8_t reg, uint8_t *buf, uint8_t len) {
+bool CLASS_MODULE_DS3231::_readBlock(uint8_t reg, uint8_t *buf, uint8_t len) {
     if (_config.addr == DS3231_ADDR_NONE) { _lastError = -1; return false; }
     if (!_wireStarted) { _wireStarted = true; Wire.begin(); }
     Wire.beginTransmission(_config.addr);
@@ -109,7 +109,7 @@ bool MODULE_CLASS_DS3231::_readBlock(uint8_t reg, uint8_t *buf, uint8_t len) {
     return true;
 }
 
-bool MODULE_CLASS_DS3231::_writeBlock(uint8_t reg, uint8_t *buf, uint8_t len) {
+bool CLASS_MODULE_DS3231::_writeBlock(uint8_t reg, uint8_t *buf, uint8_t len) {
     if (_config.addr == DS3231_ADDR_NONE) { _lastError = -1; return false; }
     if (!_wireStarted) { _wireStarted = true; Wire.begin(); }
     Wire.beginTransmission(_config.addr);
@@ -123,7 +123,7 @@ bool MODULE_CLASS_DS3231::_writeBlock(uint8_t reg, uint8_t *buf, uint8_t len) {
 // Детекция DS3231
 // ====================================================================
 
-bool MODULE_CLASS_DS3231::_detectDS3231(uint8_t addr) {
+bool CLASS_MODULE_DS3231::_detectDS3231(uint8_t addr) {
     Wire.beginTransmission(addr);
     uint8_t err = Wire.endTransmission();
     if (err != 0) { return false; }
@@ -158,7 +158,7 @@ bool MODULE_CLASS_DS3231::_detectDS3231(uint8_t addr) {
     return true;
 }
 
-uint8_t MODULE_CLASS_DS3231::_scanForDS3231() {
+uint8_t CLASS_MODULE_DS3231::_scanForDS3231() {
     DEBUGDS3231("DS3231: сканирование шины I2C...\r\n");
     for (uint8_t addr = 0x01; addr < 0x7F; addr++) {
 #if defined(ESP32)
@@ -179,7 +179,7 @@ uint8_t MODULE_CLASS_DS3231::_scanForDS3231() {
 // Чтение / запись времени
 // ====================================================================
 
-time_t MODULE_CLASS_DS3231::_readTime() {
+time_t CLASS_MODULE_DS3231::_readTime() {
     uint8_t buf[7];
     if (!_readBlock(0x00, buf, 7)) { return 0; }
 
@@ -200,7 +200,7 @@ time_t MODULE_CLASS_DS3231::_readTime() {
     return makeTime(tm);
 }
 
-bool MODULE_CLASS_DS3231::_writeTime(time_t t) {
+bool CLASS_MODULE_DS3231::_writeTime(time_t t) {
     tmElements_t tm;
     breakTime(t, tm);
 
@@ -219,7 +219,7 @@ bool MODULE_CLASS_DS3231::_writeTime(time_t t) {
 // Публичное API
 // ====================================================================
 
-time_t MODULE_CLASS_DS3231::getTime() {
+time_t CLASS_MODULE_DS3231::getTime() {
     if (_config.addr == DS3231_ADDR_NONE) { return 0; }
     // Бит 7 регистра 0x00 — CH (Clock Halt). Если осциллятор был остановлен,
     // снимаем стоп-бит, чтобы продолжить счёт времени.
@@ -234,11 +234,11 @@ time_t MODULE_CLASS_DS3231::getTime() {
     return _readTime();
 }
 
-bool MODULE_CLASS_DS3231::setTime(time_t t) {
+bool CLASS_MODULE_DS3231::setTime(time_t t) {
     return _writeTime(t);
 }
 
-bool MODULE_CLASS_DS3231::setTime(int yr, int mon, int day, int hr, int min, int sec) {
+bool CLASS_MODULE_DS3231::setTime(int yr, int mon, int day, int hr, int min, int sec) {
     if (yr < 2000) { yr += 2000; }
     if (yr < 2000 || yr > 2099) { _lastError = -10; return false; }
     if (mon < 1 || mon > 12)    { _lastError = -11; return false; }
@@ -263,7 +263,7 @@ bool MODULE_CLASS_DS3231::setTime(int yr, int mon, int day, int hr, int min, int
     return _writeTime(t);
 }
 
-bool MODULE_CLASS_DS3231::getTemperature(float &temp) {
+bool CLASS_MODULE_DS3231::getTemperature(float &temp) {
     uint8_t buf[2];
     if (!_readBlock(0x11, buf, 2)) { return false; }
     // Проверяем целый градус в допустимом диапазоне — иначе данные невалидны
@@ -275,19 +275,19 @@ bool MODULE_CLASS_DS3231::getTemperature(float &temp) {
     return true;
 }
 
-bool MODULE_CLASS_DS3231::isConnected() {
+bool CLASS_MODULE_DS3231::isConnected() {
     return (_config.addr != DS3231_ADDR_NONE);
 }
 
-uint8_t MODULE_CLASS_DS3231::getAddr() {
+uint8_t CLASS_MODULE_DS3231::getAddr() {
     return _config.addr;
 }
 
-int MODULE_CLASS_DS3231::getLastError() {
+int CLASS_MODULE_DS3231::getLastError() {
     return _lastError;
 }
 
-uint8_t MODULE_CLASS_DS3231::getStatusReg() {
+uint8_t CLASS_MODULE_DS3231::getStatusReg() {
     return _readReg(0x0F);
 }
 
@@ -358,7 +358,7 @@ static void _encodeAlarm2Mode(uint8_t *buf, uint8_t min, uint8_t hour, uint8_t m
     }
 }
 
-bool MODULE_CLASS_DS3231::getAlarm1(uint8_t &hour, uint8_t &min, uint8_t &sec, uint8_t &mode, uint8_t &dayOrDate, bool &isDayOfWeek) {
+bool CLASS_MODULE_DS3231::getAlarm1(uint8_t &hour, uint8_t &min, uint8_t &sec, uint8_t &mode, uint8_t &dayOrDate, bool &isDayOfWeek) {
     uint8_t buf[4];
     if (!_readBlock(0x07, buf, 4)) { return false; }
     sec  = _bcd2dec(buf[0] & 0x7F);
@@ -368,7 +368,7 @@ bool MODULE_CLASS_DS3231::getAlarm1(uint8_t &hour, uint8_t &min, uint8_t &sec, u
     return true;
 }
 
-bool MODULE_CLASS_DS3231::setAlarm1(uint8_t hour, uint8_t min, uint8_t sec, uint8_t mode, uint8_t dayOrDate, bool isDayOfWeek) {
+bool CLASS_MODULE_DS3231::setAlarm1(uint8_t hour, uint8_t min, uint8_t sec, uint8_t mode, uint8_t dayOrDate, bool isDayOfWeek) {
     if (mode > 4) { mode = 4; }
     uint8_t buf[4];
     _encodeAlarm1Mode(buf, sec, min, hour, mode, dayOrDate, isDayOfWeek);
@@ -393,7 +393,7 @@ bool MODULE_CLASS_DS3231::setAlarm1(uint8_t hour, uint8_t min, uint8_t sec, uint
     return ok;
 }
 
-bool MODULE_CLASS_DS3231::getAlarm2(uint8_t &hour, uint8_t &min, uint8_t &mode, uint8_t &dayOrDate, bool &isDayOfWeek) {
+bool CLASS_MODULE_DS3231::getAlarm2(uint8_t &hour, uint8_t &min, uint8_t &mode, uint8_t &dayOrDate, bool &isDayOfWeek) {
     uint8_t buf[3];
     if (!_readBlock(0x0B, buf, 3)) { return false; }
     min  = _bcd2dec(buf[0] & 0x7F);
@@ -402,7 +402,7 @@ bool MODULE_CLASS_DS3231::getAlarm2(uint8_t &hour, uint8_t &min, uint8_t &mode, 
     return true;
 }
 
-bool MODULE_CLASS_DS3231::setAlarm2(uint8_t hour, uint8_t min, uint8_t mode, uint8_t dayOrDate, bool isDayOfWeek) {
+bool CLASS_MODULE_DS3231::setAlarm2(uint8_t hour, uint8_t min, uint8_t mode, uint8_t dayOrDate, bool isDayOfWeek) {
     if (mode > 3) { mode = 3; }
     uint8_t buf[3];
     _encodeAlarm2Mode(buf, min, hour, mode, dayOrDate, isDayOfWeek);
@@ -433,7 +433,7 @@ bool MODULE_CLASS_DS3231::setAlarm2(uint8_t hour, uint8_t min, uint8_t mode, uin
 #if defined(ESP32)
 
 // Собрать байт Control (0x0E) из полей конфига
-bool MODULE_CLASS_DS3231::_ctrlBitsToReg() {
+bool CLASS_MODULE_DS3231::_ctrlBitsToReg() {
     // EOSC (bit7)=0 — осциллятор включён
     uint8_t ctrl = 0x00;
     if (_config.ctrlBbsqw)  { ctrl |= 0x40; }
@@ -445,13 +445,13 @@ bool MODULE_CLASS_DS3231::_ctrlBitsToReg() {
 }
 
 // Записать биты Control (0x0E) из конфига
-void MODULE_CLASS_DS3231::_applyCtrlBits() {
+void CLASS_MODULE_DS3231::_applyCtrlBits() {
     if (_config.addr == DS3231_ADDR_NONE) { return; }
     _ctrlBitsToReg();
 }
 
 // Инициализация GPIO вывода SQW/INT#
-void MODULE_CLASS_DS3231::sqwGpioInit() {
+void CLASS_MODULE_DS3231::sqwGpioInit() {
     DEBUGDS3231("%s\r\n", __FUNCTION__);
     _sqwIrqFlag = false;
     _sqwCareActive = false;
@@ -488,7 +488,7 @@ void MODULE_CLASS_DS3231::sqwGpioInit() {
 }
 
 // Остановка мониторинга GPIO SQW (детектор флагов остаётся активным)
-void MODULE_CLASS_DS3231::sqwGpioStop() {
+void CLASS_MODULE_DS3231::sqwGpioStop() {
     DEBUGDS3231("%s\r\n", __FUNCTION__);
 #if defined(ESP32)
     sqwDisableInterrupt();
@@ -496,14 +496,14 @@ void MODULE_CLASS_DS3231::sqwGpioStop() {
 }
 
 // Переинициализация после смены конфига
-void MODULE_CLASS_DS3231::sqwGpioReinit() {
+void CLASS_MODULE_DS3231::sqwGpioReinit() {
     DEBUGDS3231("%s\r\n", __FUNCTION__);
     sqwGpioStop();
     sqwGpioInit();
 }
 
 // Подключение прерывания
-void MODULE_CLASS_DS3231::sqwEnableInterrupt() {
+void CLASS_MODULE_DS3231::sqwEnableInterrupt() {
     DEBUGDS3231("%s\r\n", __FUNCTION__);
     if (_sqwInterrupting) { return; }
     // При активном высоком уровне отслеживаем RISING, при низком — FALLING
@@ -514,7 +514,7 @@ void MODULE_CLASS_DS3231::sqwEnableInterrupt() {
 }
 
 // Отключение прерывания
-void MODULE_CLASS_DS3231::sqwDisableInterrupt() {
+void CLASS_MODULE_DS3231::sqwDisableInterrupt() {
     DEBUGDS3231("%s\r\n", __FUNCTION__);
     if (!_sqwInterrupting) { return; }
     detachInterrupt(digitalPinToInterrupt(DS3231_SQW_PIN));
@@ -522,12 +522,12 @@ void MODULE_CLASS_DS3231::sqwDisableInterrupt() {
 }
 
 // Вызвается из ISR — только ставим флаг, тяжёлую работу делаем в main-loop
-void MODULE_CLASS_DS3231::sqwSetIrqFlag() {
+void CLASS_MODULE_DS3231::sqwSetIrqFlag() {
     _sqwIrqFlag = true;
 }
 
 // Обработка флага прерывания/спайка в основном контексте
-void MODULE_CLASS_DS3231::checkSqw() {
+void CLASS_MODULE_DS3231::checkSqw() {
     bool level = (digitalRead(DS3231_SQW_PIN) == (uint8_t)_config.sqwLevelActive);
     // Ловим фронт «наступление активного сигнала»
     if (level && !_sqwLastLowEdge) {
@@ -541,21 +541,21 @@ void MODULE_CLASS_DS3231::checkSqw() {
 }
 
 // Шаг опроса (периодическая задача)
-void MODULE_CLASS_DS3231::sqwPollStep() {
+void CLASS_MODULE_DS3231::sqwPollStep() {
     checkAlarmFlags();
     // Перепланируем задачу на следующий интервал
     SetTimerTask(ds3231SqwPollTask, 1000);
 }
 
 // Текущий уровень GPIO SQW
-bool MODULE_CLASS_DS3231::getSqwLevel() {
+bool CLASS_MODULE_DS3231::getSqwLevel() {
     return (digitalRead(DS3231_SQW_PIN) == HIGH);
 }
 
-bool MODULE_CLASS_DS3231::getAlarmFired1() { return _alarm1Fired; }
-bool MODULE_CLASS_DS3231::getAlarmFired2() { return _alarm2Fired; }
-time_t MODULE_CLASS_DS3231::getLastAlarm1Time() { return _lastAlarm1At; }
-time_t MODULE_CLASS_DS3231::getLastAlarm2Time() { return _lastAlarm2At; }
+bool CLASS_MODULE_DS3231::getAlarmFired1() { return _alarm1Fired; }
+bool CLASS_MODULE_DS3231::getAlarmFired2() { return _alarm2Fired; }
+time_t CLASS_MODULE_DS3231::getLastAlarm1Time() { return _lastAlarm1At; }
+time_t CLASS_MODULE_DS3231::getLastAlarm2Time() { return _lastAlarm2At; }
 
 // Форматирование времени срабатывания: YYYY-MM-DD HH:MM:SS. Если время
 // недостоверно (t==0, например OSF), возвращаем пометку "time invalid".
@@ -587,7 +587,7 @@ static void _formatAlarmStamp(time_t t, String &out) {
 // и автовзвод (перезапись) для периодических режимов mode=1..3.
 // mode=0 (раз в секунду) — только краткое сообщение, перезапись не требуется.
 // mode=4 (по дню/дате) — полное сообщение, но повторно в течение суток не взводим.
-void MODULE_CLASS_DS3231::_handleAlarmFired(uint8_t alarmNum, uint8_t mode,
+void CLASS_MODULE_DS3231::_handleAlarmFired(uint8_t alarmNum, uint8_t mode,
                                             uint8_t hour, uint8_t min, uint8_t sec,
                                             uint8_t dayOrDate, bool isDayOfWeek) {
     time_t t = _readTime();
@@ -618,7 +618,7 @@ void MODULE_CLASS_DS3231::_handleAlarmFired(uint8_t alarmNum, uint8_t mode,
 }
 
 // Проверка флагов регистра Status (0x0F): A1F(bit0), A2F(bit1)
-void MODULE_CLASS_DS3231::checkAlarmFlags() {
+void CLASS_MODULE_DS3231::checkAlarmFlags() {
     if (_config.addr == DS3231_ADDR_NONE) { return; }
 
     // Обработка сигнала от GPIO (если включён мониторинг)
@@ -663,7 +663,7 @@ void MODULE_CLASS_DS3231::checkAlarmFlags() {
 }
 
 // Поля конфигурации SQW/GPIO для страницы. Вызывается handleRead/handlePoll
-void MODULE_CLASS_DS3231::emitSqwFields(String &values) {
+void CLASS_MODULE_DS3231::emitSqwFields(String &values) {
     values += "ds_sqw_enabled|" + String(_config.sqwEnabled ? "checked" : "") + "|chk\n";
     values += "ds_sqw_mode|"    + String(_config.sqwMode)                       + "|input\n";
     values += "ds_sqw_level|"   + String(_config.sqwLevelActive ? "1" : "0")    + "|input\n";
@@ -681,7 +681,7 @@ void MODULE_CLASS_DS3231::emitSqwFields(String &values) {
 }
 
 // Статус сработавших будильников на основе сохранённого времени последнего срабатывания.
-void MODULE_CLASS_DS3231::emitAlarmState(String &values) {
+void CLASS_MODULE_DS3231::emitAlarmState(String &values) {
     bool has1 = (_lastAlarm1At != 0);
     bool has2 = (_lastAlarm2At != 0);
     String t1, t2;
@@ -703,7 +703,7 @@ void MODULE_CLASS_DS3231::emitAlarmState(String &values) {
 // begin()
 // ====================================================================
 
-void MODULE_CLASS_DS3231::begin() {
+void CLASS_MODULE_DS3231::begin() {
     DEBUGDS3231("%s\r\n", __FUNCTION__);
 
     defaultConfig();
@@ -745,11 +745,16 @@ void MODULE_CLASS_DS3231::begin() {
 #endif
 }
 
+void CLASS_MODULE_DS3231::begin(ModContext& ctx) {
+    _fs = ctx.fs;
+    begin();
+}
+
 // ====================================================================
-// webInit()
+// web_Init()
 // ====================================================================
 
-void MODULE_CLASS_DS3231::webInit() {
+void CLASS_MODULE_DS3231::web_Init() {
     DEBUGDS3231("%s\r\n", __FUNCTION__);
 
     ESPHTTPServer.on("/ds3231/read", HTTP_GET, [this](AsyncWebServerRequest *request) {
@@ -801,7 +806,7 @@ void MODULE_CLASS_DS3231::webInit() {
 // Веб-обработчики
 // ====================================================================
 
-void MODULE_CLASS_DS3231::handleRead(AsyncWebServerRequest *request) {
+void CLASS_MODULE_DS3231::handleRead(AsyncWebServerRequest *request) {
     DEBUGDS3231("%s\r\n", __FUNCTION__);
     String values = "";
 
@@ -931,7 +936,7 @@ void MODULE_CLASS_DS3231::handleRead(AsyncWebServerRequest *request) {
     request->send(200, "text/plain", values);
 }
 
-void MODULE_CLASS_DS3231::handlePoll(AsyncWebServerRequest *request) {
+void CLASS_MODULE_DS3231::handlePoll(AsyncWebServerRequest *request) {
     DEBUGDS3231("%s\r\n", __FUNCTION__);
     String values = "";
     // Автоопрос (autoPoll/pollInterval) — клиентский: интервал задаёт JS на
@@ -1018,7 +1023,7 @@ void MODULE_CLASS_DS3231::handlePoll(AsyncWebServerRequest *request) {
     request->send(200, "text/plain", values);
 }
 
-void MODULE_CLASS_DS3231::handleSetTime(AsyncWebServerRequest *request) {
+void CLASS_MODULE_DS3231::handleSetTime(AsyncWebServerRequest *request) {
     DEBUGDS3231("%s\r\n", __FUNCTION__);
     if (_config.addr == DS3231_ADDR_NONE) { request->send(200, "text/plain", "DS3231 not connected"); return; }
 
@@ -1055,7 +1060,7 @@ void MODULE_CLASS_DS3231::handleSetTime(AsyncWebServerRequest *request) {
     }
 }
 
-void MODULE_CLASS_DS3231::handleSetAlarm1(AsyncWebServerRequest *request) {
+void CLASS_MODULE_DS3231::handleSetAlarm1(AsyncWebServerRequest *request) {
     DEBUGDS3231("%s\r\n", __FUNCTION__);
     if (_config.addr == DS3231_ADDR_NONE) { request->send(200, "text/plain", "DS3231 not connected"); return; }
 
@@ -1073,7 +1078,7 @@ void MODULE_CLASS_DS3231::handleSetAlarm1(AsyncWebServerRequest *request) {
     }
 }
 
-void MODULE_CLASS_DS3231::handleSetAlarm2(AsyncWebServerRequest *request) {
+void CLASS_MODULE_DS3231::handleSetAlarm2(AsyncWebServerRequest *request) {
     DEBUGDS3231("%s\r\n", __FUNCTION__);
     if (_config.addr == DS3231_ADDR_NONE) { request->send(200, "text/plain", "DS3231 not connected"); return; }
 
@@ -1090,7 +1095,7 @@ void MODULE_CLASS_DS3231::handleSetAlarm2(AsyncWebServerRequest *request) {
     }
 }
 
-void MODULE_CLASS_DS3231::handleSetReg(AsyncWebServerRequest *request) {
+void CLASS_MODULE_DS3231::handleSetReg(AsyncWebServerRequest *request) {
     DEBUGDS3231("%s\r\n", __FUNCTION__);
     if (_config.addr == DS3231_ADDR_NONE) { request->send(200, "text/plain", "DS3231 not connected"); return; }
 
@@ -1134,7 +1139,7 @@ void MODULE_CLASS_DS3231::handleSetReg(AsyncWebServerRequest *request) {
     request->send(200, "text/plain", "OK");
 }
 
-void MODULE_CLASS_DS3231::handleSaveConfig(AsyncWebServerRequest *request) {
+void CLASS_MODULE_DS3231::handleSaveConfig(AsyncWebServerRequest *request) {
     DEBUGDS3231("%s\r\n", __FUNCTION__);
     if (request->hasArg("autoPoll")) {
         _config.autoPoll = (request->arg("autoPoll") == "true");
@@ -1167,7 +1172,7 @@ void MODULE_CLASS_DS3231::handleSaveConfig(AsyncWebServerRequest *request) {
     request->send(200, "text/plain", "OK");
 }
 
-void MODULE_CLASS_DS3231::handleInfo(AsyncWebServerRequest *request) {
+void CLASS_MODULE_DS3231::handleInfo(AsyncWebServerRequest *request) {
     DEBUGDS3231("%s\r\n", __FUNCTION__);
     String values = "";
     values += "ds_autoPoll|"      + String(_config.autoPoll ? "checked" : "") + "|chk\n";
@@ -1191,7 +1196,7 @@ void MODULE_CLASS_DS3231::handleInfo(AsyncWebServerRequest *request) {
 // Конфиг
 // ====================================================================
 
-void MODULE_CLASS_DS3231::defaultConfig() {
+void CLASS_MODULE_DS3231::defaultConfig() {
     _config.addr         = DS3231_ADDR_NONE;
     _config.autoPoll     = false;
     _config.pollInterval = 5;
@@ -1208,7 +1213,7 @@ void MODULE_CLASS_DS3231::defaultConfig() {
 #endif
 }
 
-bool MODULE_CLASS_DS3231::loadConfig() {
+bool CLASS_MODULE_DS3231::loadConfig() {
     DEBUGDS3231("%s\r\n", __FUNCTION__);
     JsonDocument doc;
     if (ModClassJson.jsonFileLoadDoc(CONFIG_FILE_DS3231, doc) == false) { return false; }
@@ -1234,7 +1239,7 @@ bool MODULE_CLASS_DS3231::loadConfig() {
     return true;
 }
 
-bool MODULE_CLASS_DS3231::saveConfig() {
+bool CLASS_MODULE_DS3231::saveConfig() {
     DEBUGDS3231("%s\r\n", __FUNCTION__);
     JsonDocument doc;
     ModClassJson.jsonFileLoadDoc(CONFIG_FILE_DS3231, doc);
@@ -1372,19 +1377,19 @@ void ds3231TerminalRegister() {
 // Версионные методы
 // ====================================================================
 
-String MODULE_CLASS_DS3231::getVersionStr() {
+String CLASS_MODULE_DS3231::getVersionStr() {
     return String(MODULE_DS3231_VERSION);
 }
 
-String MODULE_CLASS_DS3231::getGeneratedTime() {
+String CLASS_MODULE_DS3231::getGeneratedTime() {
     return String(MODULE_DS3231_GENERATED_TIME);
 }
 
-String MODULE_CLASS_DS3231::getCommitDateStr() {
+String CLASS_MODULE_DS3231::getCommitDateStr() {
     return String(MODULE_DS3231_COMMIT_DATE_STR);
 }
 
-void MODULE_CLASS_DS3231::html_ver_get(AsyncWebServerRequest *request) {
+void CLASS_MODULE_DS3231::html_ver_get(AsyncWebServerRequest *request) {
     DEBUGDS3231("%s\r\n", __FUNCTION__);
     String values = "";
     values += "ds3231version|" + getVersionStr()    + "|div\n";
