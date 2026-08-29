@@ -261,9 +261,14 @@ void processListenPacket(AsyncUDPPacket &packet) {
     
     if (module_udp.responseGet() == false) { return; } // если мы не должны отвечать
     
-    if (packet.isBroadcast() == false) { return; } // если пакет не бродкаст
-    
-    module_udp._responseIp = packet.remoteIP();
+    // На ESP8266 isBroadcast() не распознаёт широковещательный адрес подсети (x.x.x.255),
+    // на который сервер шлёт пробу через netifaces
+    IPAddress subnetBcast;
+    subnetBcast[0] = WiFi.localIP()[0] | ~WiFi.subnetMask()[0];
+    subnetBcast[1] = WiFi.localIP()[1] | ~WiFi.subnetMask()[1];
+    subnetBcast[2] = WiFi.localIP()[2] | ~WiFi.subnetMask()[2];
+    subnetBcast[3] = WiFi.localIP()[3] | ~WiFi.subnetMask()[3];
+    if (packet.isBroadcast() == false && packet.localIP() != subnetBcast) { return; } // если пакет не бродкаст
     
     // Get data
     char udpDataBuf[UDP_DATA_LENGHT_MAX + 1]; // +1 для нуль-терминатора
@@ -275,20 +280,19 @@ void processListenPacket(AsyncUDPPacket &packet) {
     
     // Compare with keyword
     if (strncmp(udpDataBuf, module_udp.getKeyword().c_str(), module_udp.getKeyword().length()) == 0) {
-        responseHandler(module_udp._responseIp);
+        responseHandler();
     }
 }
 
 // ========== RESPONSE HANDLER ==========
-void responseHandler(IPAddress ip) {
+void responseHandler() {
     DEBUGUDP("%s\n\r", __FUNCTION__);
     
-    // Создаем локальное сообщение для каждого ответа
+    // Отвечаем бродкастом на TX-порт (как таймерный broadcast):
+    // unicast-ответ до сервера не доходил
     AsyncUDPMessage msg(UDP_DATA_MESSAGE_LEN);
     msg.print(module_udp.jsonGet());
-    
-    uint16_t portTx = module_udp.getPortTx();
-    module_udp._udp.sendTo(msg, ip, portTx);
+    module_udp._udp.broadcastTo(msg, module_udp.getPortTx());
 }
 
 // ========== SIMPLE BROADCAST (для вызова из других файлов) ==========

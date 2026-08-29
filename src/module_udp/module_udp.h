@@ -48,7 +48,7 @@ void broadcastSimple(void);
 void broadcastTimer(void);
 
 void processListenPacket(AsyncUDPPacket &packet);
-void responseHandler(IPAddress ip);
+void responseHandler(void);
 
 class CLASS_MODULE_UDPBROADCAST {
 public:
@@ -91,7 +91,6 @@ private:
 
     // Поля
     AsyncUDP _udp;
-    IPAddress _responseIp;
 
     char _sendBuffer[UDP_DATA_MESSAGE_LEN];
 
@@ -105,7 +104,7 @@ private:
 
     friend void broadcastTimer();
     friend void processListenPacket(AsyncUDPPacket &packet);
-    friend void responseHandler(IPAddress ip);
+    friend void responseHandler(void);
     friend void broadcastSimple(void);
 };
 
