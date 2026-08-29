@@ -426,10 +426,10 @@ void CLASS_DEVICE_CLOCKMECH::MechSetArrows() {
     if (device_clock_mech._timeMechHour > device_clock_mech._timeHourReal) { SetTask(MechSet1200_Setup); return; }
     if (device_clock_mech._timeMechHour < device_clock_mech._timeHourReal) { SetTask(MechSetArrowHourSetup); return; }
     // if (device_clock_mech._timeMechHour == device_clock_mech._timeHourReal) {
-        // if (device_clock_mech._minPrev != device_clock_mech._timeMinReal) {
-            // device_clock_mech._minPrev = device_clock_mech._timeMinReal;
+        if (device_clock_mech._minPrev != device_clock_mech._timeMinReal) {
+            device_clock_mech._minPrev = device_clock_mech._timeMinReal;
             SetTask(MechSetArrowMinSetup);
-        // }
+        }
     // }
 }
 
