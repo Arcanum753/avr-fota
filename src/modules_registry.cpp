@@ -4,7 +4,7 @@
 #include "FSWebServerLib.h"
 
 // Файл генерируется python/module_registry_gen.py под выбранный env.
-// Сгенерировано для env: esp8266-rgb
+// Сгенерировано для env: esp32_macrotest
 // Не редактировать вручную. При смене env — перезапустить генератор.
 
 #include "core_wifi/core_wifi.h"
@@ -13,7 +13,8 @@
 #include "core_editor/core_editor.h"
 #include "core_ota/core_ota.h"
 #include "core_terminal/core_terminal.h"
-#include "module_rgb/module_rgb.h"
+#include "module_macros/module_macros.h"
+#include "module_otaclient/module_otaclient.h"
 #include "module_udp/module_udp.h"
 
 // Определение глобального контекста приложения (extern из mod_context.h).
@@ -25,11 +26,11 @@ void core_begin(ModContext& ctx) {
     core_ntp.begin(ctx);
     core_editor.begin(ctx);
     TerminalInit();
-    core_ota.begin(ctx);
+    module_otaclient.begin(ctx);
 }
 
 void modules_begin(ModContext& ctx) {
-    module_rgb.begin(ctx);
+    module_macros.begin(ctx);
 }
 
 void dev_begin(ModContext& ctx) {
@@ -40,11 +41,11 @@ void core_web_Init() {
     core_ntp.web_Init();
     core_json.web_Init();
     core_editor.web_Init();
-    core_ota.web_Init();
+    module_otaclient.web_Init();
 }
 
 void modules_web_Init() {
-    module_rgb.web_Init();
+    module_macros.web_Init();
     module_udp.web_Init();
 }
 
@@ -53,7 +54,7 @@ void dev_web_Init() {
 
 void core_loop() {
     TerminalLoop();
-    core_ota.loop();
+    module_otaclient.loop();
 }
 
 void modules_loop() {

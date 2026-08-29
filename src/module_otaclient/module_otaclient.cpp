@@ -640,6 +640,10 @@ void CLASS_MODULE_OTACLIENT::checkManifestEntries(ManifestEntry* entries, int co
     ManifestEntry* fsEntry = NULL;
     int bestFwBuild = -1, bestFsBuild = -1;
     
+    // Разделители имени файла для текущего устройства (строгое совпадение префикса)
+    String fwSeparator = String(BUILD_ENV) + OTA_STR_SEPARATOR_FIRMWARE;
+    String fsSeparator = String(BUILD_ENV) + OTA_STR_SEPARATOR_FILESYSTEM;
+    
     for (int i = 0; i < count; i++) {
         int build = -1;
         int lastDot = entries[i].name.lastIndexOf('.');
@@ -650,12 +654,21 @@ void CLASS_MODULE_OTACLIENT::checkManifestEntries(ManifestEntry* entries, int co
         }
         
         if (entries[i].type == "filesystem") {
+            // Пропускаем файлы других устройств/вариантов (например, esp32_clock-mech_ring-...)
+            if (!entries[i].name.startsWith(fsSeparator)) {
+                DEBUGOTACLIENT("  Skip foreign target file: %s\n", entries[i].name.c_str());
+                continue;
+            }
             if (build > bestFsBuild) {
                 bestFsBuild = build;
                 fsEntry = &entries[i];
             }
             DEBUGOTACLIENT("  Found FS file: %s (build=%d)\n", entries[i].name.c_str(), build);
         } else if (entries[i].type == "firmware") {
+            if (!entries[i].name.startsWith(fwSeparator)) {
+                DEBUGOTACLIENT("  Skip foreign target file: %s\n", entries[i].name.c_str());
+                continue;
+            }
             if (build > bestFwBuild) {
                 bestFwBuild = build;
                 firmwareEntry = &entries[i];

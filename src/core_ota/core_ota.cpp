@@ -667,9 +667,9 @@ int8_t CLASS_CORE_OTA::fileNameCheck(String filename, fileCompareResult* result)
     filename = cleanFilename;
 
     if (filename.endsWith(".bin")) {
-        if (filename.indexOf("-FILESYS-") > 0) {
+        if (filename.indexOf(OTA_STR_SEPARATOR_FILESYSTEM) > 0) {
             result->fileType = FILE_TYPE_FILESYSTEM;
-        } else if (filename.indexOf("-FIRMWARE-") > 0) {
+        } else if (filename.indexOf(OTA_STR_SEPARATOR_FIRMWARE) > 0) {
             result->fileType = FILE_TYPE_FIRMWARE;
         }
     }
@@ -681,9 +681,9 @@ int8_t CLASS_CORE_OTA::fileNameCheck(String filename, fileCompareResult* result)
     
     String separator;
     if (result->fileType == FILE_TYPE_FILESYSTEM) {
-        separator = String(BUILD_ENV) + "-FILESYS-";
+        separator = String(BUILD_ENV) + OTA_STR_SEPARATOR_FILESYSTEM;
     } else if (result->fileType == FILE_TYPE_FIRMWARE) {
-        separator = String(BUILD_ENV) + "-FIRMWARE-";
+        separator = String(BUILD_ENV) + OTA_STR_SEPARATOR_FIRMWARE;
     } else {
         DEBUGOTA("\t Unknown file type\r\n");
         return _ret;

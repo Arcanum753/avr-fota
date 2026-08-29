@@ -27,6 +27,10 @@
 #define OTA_STR_NAMEMATCH                   "MATCHED"
 #define OTA_STR_NAMEDIFF                    "UNMATCHED"
 
+// Разделители имён прошивок/ФС в именах файлов: <ENV>-FIRMWARE-<версия>.bin
+#define OTA_STR_SEPARATOR_FIRMWARE          "-FIRMWARE-"
+#define OTA_STR_SEPARATOR_FILESYSTEM        "-FILESYS-"
+
 // FS version comparison results
 #define FS_VERSION_COMPARE_SAME             "SAME"
 #define FS_VERSION_COMPARE_NEWER            "NEWER"
