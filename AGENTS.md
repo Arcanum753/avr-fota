@@ -406,6 +406,12 @@ Each module has a dedicated debug flag and macro:
 - `DEBUG_I2C_MAPPER` → `DEBUGI2CMAPPER(...)`
 - `RELEASE` defined → all debug macros are no-ops
 
+Все модульные макросы печатают префикс модуля `[C_]/[M_]/[D_]` (например `[C_WIFI]`,
+`[M_UDP]`, `[D_CLOCKMECH]`) в начале каждой строки вывода через общий помощник
+`DBG_MOD` (см. `src/debug.h` и `src/debug_prefix.cpp`). Префикс выводится только
+в начале строки, поэтому паттерн `DEBUGXXX(__FUNCTION__); DEBUGXXX("\r\n");` даёт
+один префикс на строку. `module_macros` и `core_terminal` префиксы не используют.
+
 ### Key defines
 
 - `CONNECTION_LED` — GPIO for status LED (default -1 = disabled)

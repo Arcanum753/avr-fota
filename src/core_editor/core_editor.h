@@ -4,7 +4,7 @@
 
 
 #ifdef DEBUG_EDITOR
-#define DEBUGEDIT(...) Serial.printf(__VA_ARGS__)
+#define DEBUGEDIT(...) DBG_MOD("[C_EDITOR] ", __VA_ARGS__)
 #else
 #define DEBUGEDIT(...)
 #endif

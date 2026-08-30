@@ -5,7 +5,7 @@
 #include "mod_context.h"
 
 #ifdef DEBUG_GPIO
-#define DEBUGGPIO(...) Serial.printf(__VA_ARGS__)
+#define DEBUGGPIO(...) DBG_MOD("[M_GPIO] ", __VA_ARGS__)
 #else
 #define DEBUGGPIO(...)
 #endif

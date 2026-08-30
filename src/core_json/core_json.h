@@ -3,7 +3,7 @@
 #include "main.h"
 
 #ifdef DEBUG_JSON
-#define DEBUGJSON(...) Serial.printf(__VA_ARGS__)
+#define DEBUGJSON(...) DBG_MOD("[C_JSON] ", __VA_ARGS__)
 #else
 #define DEBUGJSON(...)
 #endif

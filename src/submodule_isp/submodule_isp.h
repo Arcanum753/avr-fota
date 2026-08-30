@@ -6,7 +6,7 @@
 #include "submodule_isp_version.h"
 
 #ifdef DEBUG_ISP
-#define DEBUGLOGISP(...)  Serial.printf(__VA_ARGS__)
+#define DEBUGLOGISP(...)  DBG_MOD("[M_ISP] ", __VA_ARGS__)
 #else
 #define DEBUGLOGISP(...)
 #endif

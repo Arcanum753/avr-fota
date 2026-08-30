@@ -6,7 +6,7 @@
 #include "core_ota/core_ota.h"
 
 #ifdef DEBUG_OTACLIENT
-#define DEBUGOTACLIENT(...) Serial.printf(__VA_ARGS__)
+#define DEBUGOTACLIENT(...) DBG_MOD("[M_OTACLIENT] ", __VA_ARGS__)
 #else
 #define DEBUGOTACLIENT(...)
 #endif

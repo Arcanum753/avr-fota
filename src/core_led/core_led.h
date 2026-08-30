@@ -3,7 +3,7 @@
 
 
 #ifdef DEBUG_LED
-#define DEBUGLOGLED(...) Serial.printf(__VA_ARGS__)
+#define DEBUGLOGLED(...) DBG_MOD("[C_LED] ", __VA_ARGS__)
 #else
 #define DEBUGLOGLED(...)
 #endif

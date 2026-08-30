@@ -31,10 +31,14 @@ or implied, of German Martin
 
 #include "NtpClientLib.h"
 
+#include "debug.h"
+
 #define DBG_PORT Serial
 
+// Локальный DEBUGLOG библиотеки NTP — снять переопределение глобального DEBUGLOG
+#undef DEBUGLOG
 #ifdef DEBUG_NTPCLIENT
-#define DEBUGLOG(...) DBG_PORT.printf(__VA_ARGS__)
+#define DEBUGLOG(...) DBG_MOD("[C_NTP] ", __VA_ARGS__)
 #else
 #define DEBUGLOG(...)
 #endif

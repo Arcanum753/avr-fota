@@ -20,6 +20,8 @@
 #define CONNECTION_LED -1
 #endif
 
+#include "debug.h"
+
 //#define RELEASE  // Comment to enable debug output
 
 void printGitInfo() ;

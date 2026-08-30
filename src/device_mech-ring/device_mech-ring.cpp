@@ -539,19 +539,19 @@ void CLASS_DEVICE_RINGMECH::CheckTime (uint8_t _inH)	{
 void CLASS_DEVICE_RINGMECH::cmdEn() {
     bool en = digitalRead(RINGMECH_EN);
     digitalWrite(RINGMECH_EN, en == LOW ? HIGH : LOW);
-    Serial.printf("Driver: %s\r\n", en == LOW ? "OFF" : "ON");
+    DBG_MOD("[D_CLOCKRING] ", "Driver: %s\r\n", en == LOW ? "OFF" : "ON");
 }
 
-void CLASS_DEVICE_RINGMECH::cmdSens() { Serial.printf("SENS=%d\r\n", digitalRead(RINGMECH_SENS)); }
+void CLASS_DEVICE_RINGMECH::cmdSens() { DBG_MOD("[D_CLOCKRING] ", "SENS=%d\r\n", digitalRead(RINGMECH_SENS)); }
 void CLASS_DEVICE_RINGMECH::cmdHome() { SetTask(MechHomeSetup); }
 void CLASS_DEVICE_RINGMECH::cmdCount() { SetTask(MechCountStepsSetup); }
 void CLASS_DEVICE_RINGMECH::cmdSave() { device_mech_ring.saveConfig(); }
 
 void CLASS_DEVICE_RINGMECH::cmdTurn() {
-    if (device_mech_ring._mechTurnTarget != 0) { Serial.println("Busy: previous r-turn still running"); return; }
-    if (device_mech_ring._config.enable_status == RING_MODE_WORK) { Serial.println("Blocked: WORK mode"); return; }
+    if (device_mech_ring._mechTurnTarget != 0) { DBG_MOD("[D_CLOCKRING] ", "Busy: previous r-turn still running\r\n"); return; }
+    if (device_mech_ring._config.enable_status == RING_MODE_WORK) { DBG_MOD("[D_CLOCKRING] ", "Blocked: WORK mode\r\n"); return; }
     char *arg = term.getNext();
-    if (arg == NULL) { Serial.println("Usage: r-turn <N>"); return; }
+    if (arg == NULL) { DBG_MOD("[D_CLOCKRING] ", "Usage: r-turn <N>\r\n"); return; }
     device_mech_ring._mechTurnTarget = (uint16_t)atoi(arg);
     if (device_mech_ring._mechTurnTarget == 0) return;
     SetTask(MechTurnNCount);
@@ -564,69 +564,69 @@ void CLASS_DEVICE_RINGMECH::cmdMode() {
         String s(arg);
         if (s == "dbg" || s == "debug")       { device_mech_ring._config.enable_status = RING_MODE_DEBUG; }
         else if (s == "work")                 { device_mech_ring._config.enable_status = RING_MODE_WORK; }
-        else { Serial.println("Usage: c-mode [dbg|work]"); return; }
+        else { DBG_MOD("[D_CLOCKRING] ", "Usage: c-mode [dbg|work]\r\n"); return; }
     }
-    Serial.printf("Mode: %s\r\n", device_mech_ring._config.enable_status == RING_MODE_WORK ? "WORK" : "DEBUG");
+    DBG_MOD("[D_CLOCKRING] ", "Mode: %s\r\n", device_mech_ring._config.enable_status == RING_MODE_WORK ? "WORK" : "DEBUG");
 }
 
 void CLASS_DEVICE_RINGMECH::cmdStatus() {
-    Serial.printf("===== RingMech Status =====\r\n");
-    Serial.printf("_ringStatus:           %d\r\n",      device_mech_ring._ringStatus);
-    Serial.printf("_config.enable_status: %d\r\n",      device_mech_ring._config.enable_status);
-    Serial.printf("_config.stepsPerRevolution: %d\r\n", device_mech_ring._config.stepsPerRevolution);
-    Serial.printf("_config.pollInterval:  %d\r\n",      device_mech_ring._config.pollInterval);
-    Serial.printf("_config.errorLimitSteps: %d\r\n",    device_mech_ring._config.errorLimitSteps);
-    Serial.printf("_config.ringPauseOne:     %d\r\n",      device_mech_ring._config.ringPauseOne);
-    Serial.printf("_config.ringPauseTwo:     %d\r\n",      device_mech_ring._config.ringPauseTwo);
-    Serial.printf("_config.firstPosition: %d\r\n",      device_mech_ring._config.firstPosition);
-    Serial.printf("_config.time_begin:    %d\r\n",      device_mech_ring._config.time_begin);
-    Serial.printf("_config.time_end:      %d\r\n",      device_mech_ring._config.time_end);
-    Serial.printf("_config.timeSource:    %s\r\n",      device_mech_ring._config.timeSource.c_str());
-    Serial.printf("_mechControlSteps:     %d\r\n",      device_mech_ring._mechControlSteps);
-    Serial.printf("_mechTurnTarget:       %d\r\n",      device_mech_ring._mechTurnTarget);
-    Serial.printf("_sensorState:          %d\r\n",      device_mech_ring._sensorState);
+    DBG_MOD("[D_CLOCKRING] ", "===== RingMech Status =====\r\n");
+    DBG_MOD("[D_CLOCKRING] ", "_ringStatus:           %d\r\n",      device_mech_ring._ringStatus);
+    DBG_MOD("[D_CLOCKRING] ", "_config.enable_status: %d\r\n",      device_mech_ring._config.enable_status);
+    DBG_MOD("[D_CLOCKRING] ", "_config.stepsPerRevolution: %d\r\n", device_mech_ring._config.stepsPerRevolution);
+    DBG_MOD("[D_CLOCKRING] ", "_config.pollInterval:  %d\r\n",      device_mech_ring._config.pollInterval);
+    DBG_MOD("[D_CLOCKRING] ", "_config.errorLimitSteps: %d\r\n",    device_mech_ring._config.errorLimitSteps);
+    DBG_MOD("[D_CLOCKRING] ", "_config.ringPauseOne:     %d\r\n",      device_mech_ring._config.ringPauseOne);
+    DBG_MOD("[D_CLOCKRING] ", "_config.ringPauseTwo:     %d\r\n",      device_mech_ring._config.ringPauseTwo);
+    DBG_MOD("[D_CLOCKRING] ", "_config.firstPosition: %d\r\n",      device_mech_ring._config.firstPosition);
+    DBG_MOD("[D_CLOCKRING] ", "_config.time_begin:    %d\r\n",      device_mech_ring._config.time_begin);
+    DBG_MOD("[D_CLOCKRING] ", "_config.time_end:      %d\r\n",      device_mech_ring._config.time_end);
+    DBG_MOD("[D_CLOCKRING] ", "_config.timeSource:    %s\r\n",      device_mech_ring._config.timeSource.c_str());
+    DBG_MOD("[D_CLOCKRING] ", "_mechControlSteps:     %d\r\n",      device_mech_ring._mechControlSteps);
+    DBG_MOD("[D_CLOCKRING] ", "_mechTurnTarget:       %d\r\n",      device_mech_ring._mechTurnTarget);
+    DBG_MOD("[D_CLOCKRING] ", "_sensorState:          %d\r\n",      device_mech_ring._sensorState);
     time_t t = device_mech_ring.getCurrentTime();
     if (t > 0) {
         char buf[12];
         snprintf(buf, sizeof(buf), "%02d:%02d", hour(t), minute(t));
-        Serial.printf("time: %s\r\n", buf);
+        DBG_MOD("[D_CLOCKRING] ", "time: %s\r\n", buf);
     }
-    Serial.printf("SENS=%d STEP=%d EN=%d\r\n",
+    DBG_MOD("[D_CLOCKRING] ", "SENS=%d STEP=%d EN=%d\r\n",
         digitalRead(RINGMECH_SENS),
         digitalRead(RINGMECH_STEP),
         digitalRead(RINGMECH_EN));
-    Serial.printf("=============================\r\n");
+    DBG_MOD("[D_CLOCKRING] ", "=============================\r\n");
 }
 
 void CLASS_DEVICE_RINGMECH::cmdTime() {
     char *arg1 = term.getNext();
     if (arg1 == NULL) {
-        Serial.printf("time_begin=%d time_end=%d\r\n", device_mech_ring._config.time_begin, device_mech_ring._config.time_end);
+        DBG_MOD("[D_CLOCKRING] ", "time_begin=%d time_end=%d\r\n", device_mech_ring._config.time_begin, device_mech_ring._config.time_end);
         return;
     }
     uint8_t b = (uint8_t)atoi(arg1);
-    if (b > 23) { Serial.println("Error: value must be 0-23"); return; }
+    if (b > 23) { DBG_MOD("[D_CLOCKRING] ", "Error: value must be 0-23\r\n"); return; }
     char *arg2 = term.getNext();
-    if (arg2 == NULL) { Serial.println("Usage: r-time <begin> <end>"); return; }
+    if (arg2 == NULL) { DBG_MOD("[D_CLOCKRING] ", "Usage: r-time <begin> <end>\r\n"); return; }
     uint8_t e = (uint8_t)atoi(arg2);
-    if (e > 23) { Serial.println("Error: value must be 0-23"); return; }
-    if (b > e) { Serial.println("Error: begin must be <= end"); return; }
+    if (e > 23) { DBG_MOD("[D_CLOCKRING] ", "Error: value must be 0-23\r\n"); return; }
+    if (b > e) { DBG_MOD("[D_CLOCKRING] ", "Error: begin must be <= end\r\n"); return; }
     device_mech_ring._config.time_begin = b;
     device_mech_ring._config.time_end   = e;
-    Serial.println("OK");
+    DBG_MOD("[D_CLOCKRING] ", "OK\r\n");
 }
 
 void CLASS_DEVICE_RINGMECH::cmdSource() {
     char *arg = term.getNext();
     if (arg == NULL) {
-        Serial.printf("timeSource=%s\r\n", device_mech_ring._config.timeSource.c_str());
+        DBG_MOD("[D_CLOCKRING] ", "timeSource=%s\r\n", device_mech_ring._config.timeSource.c_str());
         return;
     }
     String s(arg);
     if (s == "ds3231" || s == "ntp") {
         device_mech_ring._config.timeSource = s;
-        Serial.println("OK");
+        DBG_MOD("[D_CLOCKRING] ", "OK\r\n");
     } else {
-        Serial.println("Usage: r-src [ds3231|ntp]");
+        DBG_MOD("[D_CLOCKRING] ", "Usage: r-src [ds3231|ntp]\r\n");
     }
 }

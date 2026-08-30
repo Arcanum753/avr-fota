@@ -8,7 +8,7 @@
 #include <math.h>
 
 #ifdef DEBUG_RGB
-#define DEBUGRGB(...) Serial.printf(__VA_ARGS__)
+#define DEBUGRGB(...) DBG_MOD("[M_RGB] ", __VA_ARGS__)
 #else
 #define DEBUGRGB(...)
 #endif

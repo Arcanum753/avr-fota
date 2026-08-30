@@ -6,7 +6,7 @@
 #include "mod_context.h"
 
 #ifdef DEBUG_I2C_MAPPER
-#define DEBUGI2CMAPPER(...) Serial.printf(__VA_ARGS__)
+#define DEBUGI2CMAPPER(...) DBG_MOD("[M_I2C_MAPPER] ", __VA_ARGS__)
 #else
 #define DEBUGI2CMAPPER(...)
 #endif

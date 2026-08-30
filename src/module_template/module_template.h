@@ -6,7 +6,7 @@
 #include "mod_context.h"
 
 #ifdef DEBUG_TEMPLATE
-#define DEBUGTEMPLATE(...) Serial.printf(__VA_ARGS__)
+#define DEBUGTEMPLATE(...) DBG_MOD("[M_TEMPLATE] ", __VA_ARGS__)
 #else
 #define DEBUGTEMPLATE(...)
 #endif

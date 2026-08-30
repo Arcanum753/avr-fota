@@ -7,7 +7,7 @@
 #include "mod_context.h"
 
 #ifdef DEBUG_LCD
-#define DEBUGLCD(...) Serial.printf(__VA_ARGS__)
+#define DEBUGLCD(...) DBG_MOD("[M_LCD] ", __VA_ARGS__)
 #else
 #define DEBUGLCD(...)
 #endif

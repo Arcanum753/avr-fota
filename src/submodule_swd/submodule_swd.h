@@ -6,7 +6,7 @@
 #include "submodule_swd_version.h"
 
 #ifdef DEBUG_SWD
-#define DEBUGLOGSWD(...) Serial.printf(__VA_ARGS__)
+#define DEBUGLOGSWD(...) DBG_MOD("[M_SWD] ", __VA_ARGS__)
 #else
 #define DEBUGLOGSWD(...)
 #endif

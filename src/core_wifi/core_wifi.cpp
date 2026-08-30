@@ -279,7 +279,7 @@ void CLASS_CORE_WIFI::send_network_configuration_html(AsyncWebServerRequest *req
 
 	}
 	else {
-		DEBUGLOGWIFI(request->url().c_str());
+		DEBUGLOGWIFI("%s\r\n", request->url().c_str());
 		ESPHTTPServer.handleFileRead(request->url(), request);
 	}
 	DEBUGLOGWIFI(__PRETTY_FUNCTION__);	DEBUGLOGWIFI("\r\n");

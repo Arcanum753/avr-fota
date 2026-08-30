@@ -344,7 +344,7 @@ void AsyncFSWebServer::serverInit() {
 //system.html vvv	
 	on("/system/restart", HTTP_POST, [this](AsyncWebServerRequest *request) {
 		if (!this->checkAuth(request)) {	return request->requestAuthentication(); };
-		DBG_OUTPUT_PORT.println(request->url());
+		DBG_MOD("[C_HTTP] ", "%s\r\n", request->url().c_str());
 		request->send_P(200, "text/html", Page_IndexRefresh);
 		this->restart_esp();
 	});	
@@ -493,49 +493,49 @@ String AsyncFSWebServer:: getResetReason() {
 
 
 void AsyncFSWebServer::serialShowAbout() {
-	Serial.printf("\n\r\t\t**About** \n\r ");
-	Serial.printf("Project env: %s\n\r ", BUILD_ENV);	
-	Serial.printf("git branch: %s\n\r ", GIT_BRANCH);	
-	Serial.printf("ver date: %s\n\r ", BUILD_TIME);	
-	Serial.printf("Fiemware ver: %s\n\r ", String(VERSION_BUILD).c_str());
-	Serial.printf("File system ver: %s\n\r ", getFsVersionStr().c_str());
+	DBG_MOD("[C_HTTP] ", "\n\r\t\t**About** \n\r ");
+	DBG_MOD("[C_HTTP] ", "Project env: %s\n\r ", BUILD_ENV);	
+	DBG_MOD("[C_HTTP] ", "git branch: %s\n\r ", GIT_BRANCH);	
+	DBG_MOD("[C_HTTP] ", "ver date: %s\n\r ", BUILD_TIME);	
+	DBG_MOD("[C_HTTP] ", "Fiemware ver: %s\n\r ", String(VERSION_BUILD).c_str());
+	DBG_MOD("[C_HTTP] ", "File system ver: %s\n\r ", getFsVersionStr().c_str());
 	
-	Serial.printf("Device serial number: %s\n\r ", _sysConfig.deviceSerial.c_str());	
+	DBG_MOD("[C_HTTP] ", "Device serial number: %s\n\r ", _sysConfig.deviceSerial.c_str());	
 	#if defined(ESP32)
-	Serial.printf("Flash chip size: %u\r\n", ESP.getFlashChipSize());
+	DBG_MOD("[C_HTTP] ", "Flash chip size: %u\r\n", ESP.getFlashChipSize());
 	#endif
 	#if ESP8266
-	Serial.printf("Flash chip size: %u\r\n", ESP.getFlashChipRealSize());
+	DBG_MOD("[C_HTTP] ", "Flash chip size: %u\r\n", ESP.getFlashChipRealSize());
 	#endif
-	Serial.printf("Scketch size: %u\r\n", 		ESP.getSketchSize());
+	DBG_MOD("[C_HTTP] ", "Scketch size: %u\r\n", 		ESP.getSketchSize());
 	if (_fs) {
 #if defined(ESP32)
-		Serial.printf("FS total: %u\r\n", 		_fs->totalBytes());
-		Serial.printf("FS used: %u\r\n", 		_fs->usedBytes());
-		Serial.printf("FS free: %u\r\n", 		_fs->totalBytes() - _fs->usedBytes());
+		DBG_MOD("[C_HTTP] ", "FS total: %u\r\n", 		_fs->totalBytes());
+		DBG_MOD("[C_HTTP] ", "FS used: %u\r\n", 		_fs->usedBytes());
+		DBG_MOD("[C_HTTP] ", "FS free: %u\r\n", 		_fs->totalBytes() - _fs->usedBytes());
 #endif
 #if defined(ESP8266)
 		FSInfo fs_info;
 		if (_fs->info(fs_info)) {
-			Serial.printf("FS total: %u\r\n", 		fs_info.totalBytes);
-			Serial.printf("FS used: %u\r\n", 		fs_info.usedBytes);
-			Serial.printf("FS free: %u\r\n", 		fs_info.totalBytes - fs_info.usedBytes);
+			DBG_MOD("[C_HTTP] ", "FS total: %u\r\n", 		fs_info.totalBytes);
+			DBG_MOD("[C_HTTP] ", "FS used: %u\r\n", 		fs_info.usedBytes);
+			DBG_MOD("[C_HTTP] ", "FS free: %u\r\n", 		fs_info.totalBytes - fs_info.usedBytes);
 		}
 #endif
 	}
 
-	Serial.printf("wifi ssid: %s \n", WiFi.SSID().c_str());
-	Serial.printf("IP Address: %s \n", WiFi.localIP().toString().c_str());
+	DBG_MOD("[C_HTTP] ", "wifi ssid: %s \n", WiFi.SSID().c_str());
+	DBG_MOD("[C_HTTP] ", "IP Address: %s \n", WiFi.localIP().toString().c_str());
 	#if defined(ESP32)
-    Serial.printf("WifiHostName  %s \n\r", 	WiFi.getHostname());
+    DBG_MOD("[C_HTTP] ", "WifiHostName  %s \n\r", 	WiFi.getHostname());
     #elif defined(ESP8266)
-	Serial.printf("WifiHostName  %s \n\r", 	WiFi.hostname().c_str());
+	DBG_MOD("[C_HTTP] ", "WifiHostName  %s \n\r", 	WiFi.hostname().c_str());
     #endif
 	
-	Serial.printf("Gateway: %s\r\n", WiFi.gatewayIP().toString().c_str());
-	Serial.printf("DNS: %s\r\n", WiFi.dnsIP().toString().c_str());
-	Serial.printf("local DNS hostname  http://%s.local \n\r", getHostName().c_str());
-	Serial.printf("or you can connect directly  http://%s \n\r", WiFi.localIP().toString().c_str());
+	DBG_MOD("[C_HTTP] ", "Gateway: %s\r\n", WiFi.gatewayIP().toString().c_str());
+	DBG_MOD("[C_HTTP] ", "DNS: %s\r\n", WiFi.dnsIP().toString().c_str());
+	DBG_MOD("[C_HTTP] ", "local DNS hostname  http://%s.local \n\r", getHostName().c_str());
+	DBG_MOD("[C_HTTP] ", "or you can connect directly  http://%s \n\r", WiFi.localIP().toString().c_str());
 	
 	
 }

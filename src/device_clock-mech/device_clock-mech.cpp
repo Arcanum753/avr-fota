@@ -779,24 +779,24 @@ void CLASS_DEVICE_CLOCKMECH::cmdDir() {
     uint8_t dir = digitalRead(CLOCKMECH_DIR);
     if (dir == 1) { digitalWrite(CLOCKMECH_DIR, CLOCKMECH_ClockWise);}
     if (dir == 0) { digitalWrite(CLOCKMECH_DIR, CLOCKMECH_CounterClockWise);}
-    Serial.printf("Direction: %s\r\n", dir == CLOCKMECH_ClockWise ? "CCW" : "CW");
+    DBG_MOD("[D_CLOCKMECH] ", "Direction: %s\r\n", dir == CLOCKMECH_ClockWise ? "CCW" : "CW");
 }
 
 void CLASS_DEVICE_CLOCKMECH::cmdEn() {
     bool en = digitalRead(CLOCKMECH_EN);
     digitalWrite(CLOCKMECH_EN, en == LOW ? HIGH : LOW);
-    Serial.printf("Driver: %s\r\n", en == LOW ? "OFF" : "ON");
+    DBG_MOD("[D_CLOCKMECH] ", "Driver: %s\r\n", en == LOW ? "OFF" : "ON");
 }
 
 void CLASS_DEVICE_CLOCKMECH::cmdSled() {
     bool led = digitalRead(CLOCKMECH_SENS_LED);
     digitalWrite(CLOCKMECH_SENS_LED, led == HIGH ? LOW : HIGH);
-    Serial.printf("Sensor LED: %s\r\n", led == HIGH ? "OFF" : "ON");
+    DBG_MOD("[D_CLOCKMECH] ", "Sensor LED: %s\r\n", led == HIGH ? "OFF" : "ON");
 }
 
 void CLASS_DEVICE_CLOCKMECH::cmdSens() {
     
-    Serial.printf("SENS_HOUR=%d SENS_MIN=%d SENS_LED=%d\r\n",
+    DBG_MOD("[D_CLOCKMECH] ", "SENS_HOUR=%d SENS_MIN=%d SENS_LED=%d\r\n",
         digitalRead(CLOCKMECH_SENS_HOUR),
         digitalRead(CLOCKMECH_SENS_MIN),
         digitalRead(CLOCKMECH_SENS_LED));
@@ -812,12 +812,12 @@ void CLASS_DEVICE_CLOCKMECH::MechNCmdStep() {
 
 void CLASS_DEVICE_CLOCKMECH::cmdN() {
     if (_nStepCount > 0) {
-        Serial.println("Busy: previous clock-n still running");
+        DBG_MOD("[D_CLOCKMECH] ", "Busy: previous clock-n still running\r\n");
         return;
     }
     char *arg = term.getNext();
     if (arg == NULL) {
-        Serial.println("Usage: clock-n <N>");
+        DBG_MOD("[D_CLOCKMECH] ", "Usage: clock-n <N>\r\n");
         return;
     }
     _nStepCount = atoi(arg);
@@ -841,20 +841,20 @@ void CLASS_DEVICE_CLOCKMECH::cmdMode() {
         String s(arg);
         if (s == "dbg" || s == "debug")       { device_clock_mech._config.enable_status = MODE_DEBUG; }
         else if (s == "work")                 { device_clock_mech._config.enable_status = MODE_WORK; }
-        else { Serial.println("Usage: c-mode [dbg|work]"); return; }
+        else { DBG_MOD("[D_CLOCKMECH] ", "Usage: c-mode [dbg|work]\r\n"); return; }
     }
-    Serial.printf("Mode: %s\r\n", device_clock_mech._config.enable_status == MODE_WORK ? "WORK" : "DEBUG");
+    DBG_MOD("[D_CLOCKMECH] ", "Mode: %s\r\n", device_clock_mech._config.enable_status == MODE_WORK ? "WORK" : "DEBUG");
 }
 
 void CLASS_DEVICE_CLOCKMECH::cmdSetArrows() {
     char *arg1 = term.getNext();
     if (arg1 == NULL) {
-        Serial.println("Usage: c-set <hour> [min]");
+        DBG_MOD("[D_CLOCKMECH] ", "Usage: c-set <hour> [min]\r\n");
         return;
     }
     uint8_t h = (uint8_t)atoi(arg1);
     if (h > 24) {
-        Serial.println("Error: hour must be 0-24");
+        DBG_MOD("[D_CLOCKMECH] ", "Error: hour must be 0-24\r\n");
         return;
     }
     char *arg2 = term.getNext();
@@ -862,12 +862,12 @@ void CLASS_DEVICE_CLOCKMECH::cmdSetArrows() {
     if (arg2 != NULL) {
         m = (uint8_t)atoi(arg2);
         if (m > 60) {
-            Serial.println("Error: min must be 0-60");
+            DBG_MOD("[D_CLOCKMECH] ", "Error: min must be 0-60\r\n");
             return;
         }
     }
     device_clock_mech.MechTimeSet(h, m);
-    Serial.printf("Set Arrows to: %02d:%02d\r\n",  device_clock_mech._timeHourReal, device_clock_mech._timeMinReal);
+    DBG_MOD("[D_CLOCKMECH] ", "Set Arrows to: %02d:%02d\r\n",  device_clock_mech._timeHourReal, device_clock_mech._timeMinReal);
     SetTask(MechSetArrows);
 }
 
@@ -875,31 +875,31 @@ void CLASS_DEVICE_CLOCKMECH::cmdStatus() {
 
     time_t t = device_clock_mech.getCurrentTime();
   
-    Serial.printf("===== ClockMech Status =====\r\n");
-    Serial.printf("_Mech_Status:          %d\r\n", device_clock_mech._Mech_Status);
-    Serial.printf("_config.enable_status: %d\r\n", device_clock_mech._config.enable_status);
-    Serial.printf("_config.timeSource:    %s\r\n", device_clock_mech._config.timeSource.c_str());
-    Serial.printf("_config.stepsPerRevolution: %d\r\n", device_clock_mech._config.stepsPerRevolution);
-    Serial.printf("_config.pollInterval: %d\r\n", device_clock_mech._config.pollInterval);
-    Serial.printf("_config.errorLimitSteps: %d\r\n", device_clock_mech._config.errorLimitSteps);
-    Serial.printf("_config.sensorLedEnabled: %d\r\n", device_clock_mech._config.sensorLedEnabled);
-    Serial.printf("_mechControlSteps: %d\r\n", device_clock_mech._mechControlSteps);
-    Serial.printf("_timeMechHour: %d _timeMechMin: %d\r\n", device_clock_mech._timeMechHour, device_clock_mech._timeMechMin);
-    Serial.printf("_timeHourReal: %d _timeMinReal: %d\r\n", device_clock_mech._timeHourReal,  device_clock_mech._timeMinReal);
-    Serial.printf("_minPrev:          %d\r\n", device_clock_mech._minPrev);
-    Serial.printf("_sensorLedState:   %d\r\n", device_clock_mech._sensorLedState);
+    DBG_MOD("[D_CLOCKMECH] ", "===== ClockMech Status =====\r\n");
+    DBG_MOD("[D_CLOCKMECH] ", "_Mech_Status:          %d\r\n", device_clock_mech._Mech_Status);
+    DBG_MOD("[D_CLOCKMECH] ", "_config.enable_status: %d\r\n", device_clock_mech._config.enable_status);
+    DBG_MOD("[D_CLOCKMECH] ", "_config.timeSource:    %s\r\n", device_clock_mech._config.timeSource.c_str());
+    DBG_MOD("[D_CLOCKMECH] ", "_config.stepsPerRevolution: %d\r\n", device_clock_mech._config.stepsPerRevolution);
+    DBG_MOD("[D_CLOCKMECH] ", "_config.pollInterval: %d\r\n", device_clock_mech._config.pollInterval);
+    DBG_MOD("[D_CLOCKMECH] ", "_config.errorLimitSteps: %d\r\n", device_clock_mech._config.errorLimitSteps);
+    DBG_MOD("[D_CLOCKMECH] ", "_config.sensorLedEnabled: %d\r\n", device_clock_mech._config.sensorLedEnabled);
+    DBG_MOD("[D_CLOCKMECH] ", "_mechControlSteps: %d\r\n", device_clock_mech._mechControlSteps);
+    DBG_MOD("[D_CLOCKMECH] ", "_timeMechHour: %d _timeMechMin: %d\r\n", device_clock_mech._timeMechHour, device_clock_mech._timeMechMin);
+    DBG_MOD("[D_CLOCKMECH] ", "_timeHourReal: %d _timeMinReal: %d\r\n", device_clock_mech._timeHourReal,  device_clock_mech._timeMinReal);
+    DBG_MOD("[D_CLOCKMECH] ", "_minPrev:          %d\r\n", device_clock_mech._minPrev);
+    DBG_MOD("[D_CLOCKMECH] ", "_sensorLedState:   %d\r\n", device_clock_mech._sensorLedState);
     if (t > 0) {
         char buf[12];
         snprintf(buf, sizeof(buf), "%02d:%02d", hour(t), minute(t));
-        Serial.printf("time: %s\r\n", buf);
+        DBG_MOD("[D_CLOCKMECH] ", "time: %s\r\n", buf);
     }
-    Serial.printf("SENS_HOUR=%d SENS_MIN=%d SENS_LED=%d\r\n",
+    DBG_MOD("[D_CLOCKMECH] ", "SENS_HOUR=%d SENS_MIN=%d SENS_LED=%d\r\n",
         digitalRead(CLOCKMECH_SENS_HOUR),
         digitalRead(CLOCKMECH_SENS_MIN),
         digitalRead(CLOCKMECH_SENS_LED));
-    Serial.printf("DIR=%d STEP=%d EN=%d\r\n",
+    DBG_MOD("[D_CLOCKMECH] ", "DIR=%d STEP=%d EN=%d\r\n",
         digitalRead(CLOCKMECH_DIR),
         digitalRead(CLOCKMECH_STEP),
         digitalRead(CLOCKMECH_EN));
-    Serial.printf("=============================\r\n");
+    DBG_MOD("[D_CLOCKMECH] ", "=============================\r\n");
 }

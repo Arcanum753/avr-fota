@@ -7,13 +7,13 @@
 
 #ifdef DEBUG_OTA
 #define DEBUGOTASER Serial
-#define DEBUGOTA(...) Serial.printf(__VA_ARGS__)
+#define DEBUGOTA(...) DBG_MOD("[C_OTA] ", __VA_ARGS__)
 #else
 #define DEBUGOTA(...)
 #endif
 
 #ifdef DEBUG_OTALOAD
-#define DEBUGLOAD(...) Serial.printf(__VA_ARGS__)
+#define DEBUGLOAD(...) DBG_MOD("[C_OTA] ", __VA_ARGS__)
 #else
 #define DEBUGLOAD(...)
 #endif

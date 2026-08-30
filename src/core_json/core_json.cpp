@@ -72,7 +72,7 @@ bool CLASS_CORE_JSON::save_jsonDoc(const JsonDocument& jsonDoc,	const String& fi
 #ifndef RELEASE
 	String temp;
 	serializeJsonPretty(jsonDoc, temp);
-	Serial.println(temp.c_str());
+	DBG_MOD("[C_JSON] ", "%s\r\n", temp.c_str());
 #endif
 	serializeJson(jsonDoc, configFile);
 	configFile.flush();

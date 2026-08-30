@@ -60,7 +60,7 @@ void  CLASS_MODULE_GPIO::gpioGetArgs(AsyncWebServerRequest *request) {
 			DEBUGGPIO("Arg %d: %s %s\r\n", i, request->argName(i).c_str() , request->arg(i).c_str() );
 			if (request->argName(i) == "uartstr")	{
 				uartStr = urldecode(request->arg(i));
-				Serial.printf("%s \n\r", uartStr.c_str() );
+				DBG_MOD("[M_GPIO] ", "%s \n\r", uartStr.c_str() );
 				continue;
 			}
 			

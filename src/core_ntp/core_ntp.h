@@ -13,7 +13,7 @@
 
 
 #ifdef DEBUG_NTP
-#define DEBUGNTP(...) Serial.printf(__VA_ARGS__)
+#define DEBUGNTP(...) DBG_MOD("[C_NTP] ", __VA_ARGS__)
 #else
 #define DEBUGNTP(...)
 #endif

@@ -27,7 +27,7 @@ bool Class_SubIsp::chipSpecificInit() {
 
 void Class_SubIsp::onFlashComplete() {
 	if (avrprog.isFlashError()) {
-		DEBUGLOGPROG("onFlashComplete: ERROR during programming of %s\r\n", _flashPath.c_str());
+		DEBUGLOGISP("onFlashComplete: ERROR during programming of %s\r\n", _flashPath.c_str());
 		String errorText = avrprog.getFlashErrorString();
 		String errorStage = avrprog.getFlashErrorStage();
 		String errorPercent = String(avrprog.getFlashErrorPercent());
@@ -39,9 +39,9 @@ void Class_SubIsp::onFlashComplete() {
 		_progResult = 1;
 		_progRunning = false;
 		_uploadPercent = 0;
-		DEBUGLOGPROG("Programming error: %s, stage=%s, pct=%s, saved prog status to filelist\r\n", errorText.c_str(), errorStage.c_str(), errorPercent.c_str());
+		DEBUGLOGISP("Programming error: %s, stage=%s, pct=%s, saved prog status to filelist\r\n", errorText.c_str(), errorStage.c_str(), errorPercent.c_str());
 	} else {
-		DEBUGLOGPROG("onFlashComplete: success for %s\r\n", _flashPath.c_str());
+		DEBUGLOGISP("onFlashComplete: success for %s\r\n", _flashPath.c_str());
 
 		String elapsedStr = "";
 		if (_progStartTime > 0) {
@@ -49,13 +49,13 @@ void Class_SubIsp::onFlashComplete() {
 		}
 		filelist_SetProgStatus(_flashPath, _flashNtpStr, "ok", "", elapsedStr);
 
-		DEBUGLOGPROG("Programming success, saved prog date to filelist: %s, time=%sms\r\n", _flashNtpStr.c_str(), elapsedStr.c_str());
+		DEBUGLOGISP("Programming success, saved prog date to filelist: %s, time=%sms\r\n", _flashNtpStr.c_str(), elapsedStr.c_str());
 
 		_progResult = 0;
 		_progRunning = false;
 		_uploadPercent = 100;
 
-		DEBUGLOGPROG("Programming end \r\n");
+		DEBUGLOGISP("Programming end \r\n");
 	}
 }
 

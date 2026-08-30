@@ -6,7 +6,7 @@
 #include "mod_context.h"
 
 #ifdef DEBUG_CLOCKMECH
-#define DEBUGCLOCKMECH(...) Serial.printf(__VA_ARGS__)
+#define DEBUGCLOCKMECH(...) DBG_MOD("[D_CLOCKMECH] ", __VA_ARGS__)
 #else
 #define DEBUGCLOCKMECH(...)
 #endif

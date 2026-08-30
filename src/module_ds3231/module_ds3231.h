@@ -6,7 +6,7 @@
 #include "mod_context.h"
 
 #ifdef DEBUG_DS3231
-#define DEBUGDS3231(...) Serial.printf(__VA_ARGS__)
+#define DEBUGDS3231(...) DBG_MOD("[M_DS3231] ", __VA_ARGS__)
 #else
 #define DEBUGDS3231(...)
 #endif

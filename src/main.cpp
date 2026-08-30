@@ -37,7 +37,7 @@ void setup() {
     Serial.begin(115200);
     InitRTOS(); // init eertos
     fsMounted = LittleFS.begin();
-    if (fsMounted == false) { Serial.println("\n\r\nLittleFS Mount Failed\n\r\n\r"); }
+    if (fsMounted == false) { DBG_MOD("[SYS] ", "\n\r\nLittleFS Mount Failed\n\r\n\r"); }
     printGitInfo();
 	// WiFi is started inside library
     ESPHTTPServer.begin(&LittleFS);
@@ -75,20 +75,21 @@ void loop() {
 }
 
 void printGitInfo() {
-    Serial.println("\n");
+    DBG_MOD("[SYS] ", "\r\n");
     #if defined(ESP32)
-    Serial.println("*** ESP32 FIRMWARE INFORMATION ***");
+    DBG_MOD("[SYS] ", "*** ESP32 FIRMWARE INFORMATION ***\r\n");
 	#endif
     #if defined(ESP8266)
-    Serial.println("*** ESP8266 FIRMWARE INFORMATION ***");
+    DBG_MOD("[SYS] ", "*** ESP8266 FIRMWARE INFORMATION ***\r\n");
 	#endif
-    Serial.println("Envoirement: " + String(BUILD_ENV));
+    DBG_MOD("[SYS] ", "Envoirement: %s\r\n", String(BUILD_ENV).c_str());
     
-    Serial.println("Chip firmware ver: " + String(FIRMWARE_VERSION));
-    Serial.println("File system ver: " + ESPHTTPServer.getFsVersionStr());
+    DBG_MOD("[SYS] ", "Chip firmware ver: %s\r\n", String(FIRMWARE_VERSION).c_str());
+    DBG_MOD("[SYS] ", "File system ver: %s\r\n", ESPHTTPServer.getFsVersionStr().c_str());
+    DBG_MOD("[SYS] ", "Reset reason: %s\r\n", ESPHTTPServer.getResetReason().c_str());
     
-    Serial.println("Git Branch: " + String(GIT_BRANCH));
-    Serial.println("Git Commit: " + String(GIT_COMMIT));
+    DBG_MOD("[SYS] ", "Git Branch: %s\r\n", String(GIT_BRANCH).c_str());
+    DBG_MOD("[SYS] ", "Git Commit: %s\r\n", String(GIT_COMMIT).c_str());
 
     
     #if defined(ESP32)

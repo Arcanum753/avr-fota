@@ -12,7 +12,7 @@
 #include "mod_context.h"
 
 #ifdef DEBUG_PROG
-#define DEBUGLOGPROG(...)  Serial.printf(__VA_ARGS__)
+#define DEBUGLOGPROG(...)  DBG_MOD("[M_PROG] ", __VA_ARGS__)
 #else
 #define DEBUGLOGPROG(...)
 #endif

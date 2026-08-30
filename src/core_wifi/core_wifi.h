@@ -8,7 +8,7 @@
 #include "mod_context.h"
 
 #ifdef DEBUGLOG_WIFI
-#define DEBUGLOGWIFI(...) DEBUGLOG(__VA_ARGS__)
+#define DEBUGLOGWIFI(...) DBG_MOD("[C_WIFI] ", __VA_ARGS__)
 #else
 #define DEBUGLOGWIFI(...)
 #endif

@@ -6,7 +6,7 @@
 #include "mod_context.h"
 
 #ifdef DEBUG_RINGMECH
-#define DEBUGRINGMECH(...) Serial.printf(__VA_ARGS__)
+#define DEBUGRINGMECH(...) DBG_MOD("[D_CLOCKRING] ", __VA_ARGS__)
 #else
 #define DEBUGRINGMECH(...)
 #endif

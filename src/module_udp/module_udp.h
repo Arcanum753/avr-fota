@@ -13,7 +13,7 @@
 #endif
 
 #ifdef DEBUG_UDP
-#define DEBUGUDP(...) Serial.printf(__VA_ARGS__)
+#define DEBUGUDP(...) DBG_MOD("[M_UDP] ", __VA_ARGS__)
 #else
 #define DEBUGUDP(...)
 #endif

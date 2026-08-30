@@ -1337,40 +1337,40 @@ void ds3231CmdSqw() {
         module_ds3231.sqwGpioInit();
         module_ds3231._config.sqwEnabled = true;
         module_ds3231.saveConfig();
-        Serial.println("SQW monitoring ON");
+        DBG_MOD("[M_DS3231] ", "SQW monitoring ON\r\n");
         return;
     }
     if (arg1 == "off" || arg1 == "0") {
         module_ds3231._config.sqwEnabled = false;
         module_ds3231.sqwGpioStop();
         module_ds3231.saveConfig();
-        Serial.println("SQW monitoring OFF");
+        DBG_MOD("[M_DS3231] ", "SQW monitoring OFF\r\n");
         return;
     }
     if (arg1 == "poll") {
         module_ds3231._config.sqwMode = DS3231_SQW_MODE_POLLING;
         module_ds3231.saveConfig();
         module_ds3231.sqwGpioReinit();
-        Serial.println("SQW mode: polling");
+        DBG_MOD("[M_DS3231] ", "SQW mode: polling\r\n");
         return;
     }
     if (arg1 == "int") {
         module_ds3231._config.sqwMode = DS3231_SQW_MODE_INTERRUPT;
         module_ds3231.saveConfig();
         module_ds3231.sqwGpioReinit();
-        Serial.println("SQW mode: interrupt");
+        DBG_MOD("[M_DS3231] ", "SQW mode: interrupt\r\n");
         return;
     }
     // По умолчанию печатаем состояние
-    Serial.printf("SQW enabled=%d mode=%s level=%d pin D%d\r\n",
-                  module_ds3231._config.sqwEnabled ? 1 : 0,
-                  (module_ds3231._config.sqwMode == DS3231_SQW_MODE_INTERRUPT) ? "interrupt" : "polling",
-                  module_ds3231._config.sqwLevelActive ? 1 : 0,
-                  DS3231_SQW_PIN);
-    Serial.printf("SQW raw=%d\r\n", digitalRead(DS3231_SQW_PIN));
+    DBG_MOD("[M_DS3231] ", "SQW enabled=%d mode=%s level=%d pin D%d\r\n",
+            module_ds3231._config.sqwEnabled ? 1 : 0,
+            (module_ds3231._config.sqwMode == DS3231_SQW_MODE_INTERRUPT) ? "interrupt" : "polling",
+            module_ds3231._config.sqwLevelActive ? 1 : 0,
+            DS3231_SQW_PIN);
+    DBG_MOD("[M_DS3231] ", "SQW raw=%d\r\n", digitalRead(DS3231_SQW_PIN));
 #endif
 #if defined(ESP8266)
-    Serial.println("SQW GPIO available only on ESP32");
+    DBG_MOD("[M_DS3231] ", "SQW GPIO available only on ESP32\r\n");
 #endif
 }
 
@@ -1383,7 +1383,7 @@ void ds3231CmdSqr() {
         module_ds3231._config.ctrlIntcn = false;
         module_ds3231.saveConfig();
         module_ds3231._applyCtrlBits();
-        Serial.println("SQW output: BBSQW=1 (меандр)");
+        DBG_MOD("[M_DS3231] ", "SQW output: BBSQW=1 (меандр)\r\n");
         return;
     }
     if (arg1 == "intcn") {
@@ -1391,20 +1391,20 @@ void ds3231CmdSqr() {
         module_ds3231._config.ctrlBbsqw = false;
         module_ds3231.saveConfig();
         module_ds3231._applyCtrlBits();
-        Serial.println("SQW output: INTCN=1 (INT# по будильникам)");
+        DBG_MOD("[M_DS3231] ", "SQW output: INTCN=1 (INT# по будильникам)\r\n");
         return;
     }
     uint8_t ctrl = module_ds3231._readReg(0x0E);
-    Serial.printf("Control=0x%02X BBSQW=%d RS=%d INTCN=%d A1IE=%d A2IE=%d\r\n",
-                  ctrl,
-                  (ctrl & 0x40) ? 1 : 0,
-                  (ctrl >> 3) & 3,
-                  (ctrl & 0x04) ? 1 : 0,
-                  (ctrl & 0x01) ? 1 : 0,
-                  (ctrl & 0x02) ? 1 : 0);
+    DBG_MOD("[M_DS3231] ", "Control=0x%02X BBSQW=%d RS=%d INTCN=%d A1IE=%d A2IE=%d\r\n",
+            ctrl,
+            (ctrl & 0x40) ? 1 : 0,
+            (ctrl >> 3) & 3,
+            (ctrl & 0x04) ? 1 : 0,
+            (ctrl & 0x01) ? 1 : 0,
+            (ctrl & 0x02) ? 1 : 0);
 #endif
 #if defined(ESP8266)
-    Serial.println("SQW register control available only on ESP32");
+    DBG_MOD("[M_DS3231] ", "SQW register control available only on ESP32\r\n");
 #endif
 }
 
