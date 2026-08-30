@@ -437,7 +437,6 @@ void CLASS_DEVICE_CLOCKMECH::MechSetArrows() {
 // Сброс механизма в хх:00 (выставляем ТОЛЬКО МИНУТНУЮ стрелку)
 // ============================================================
 void CLASS_DEVICE_CLOCKMECH::MechSetxx00_Setup() {
-    digitalWrite(CLOCKMECH_SENS_LED, HIGH);
     GetSens();
     if (SENS_MIN_SET) {  MechSetxx00_endOk(); return; }
     device_clock_mech._Mech_Status = STATUS_SETXX00;
@@ -450,6 +449,7 @@ void CLASS_DEVICE_CLOCKMECH::MechSetxx00_Setup() {
 void CLASS_DEVICE_CLOCKMECH::MechSetxx00_Task() {
     if (device_clock_mech._Mech_Status != STATUS_SETXX00) {return;}
     // Нашли положение xx:00
+    digitalWrite(CLOCKMECH_SENS_LED, HIGH);
     if (SENS_MIN_SET) { MechSetxx00_endOk(); return; }
     // превышен лимит шагов
     device_clock_mech._mechControlSteps++;
@@ -478,7 +478,7 @@ void CLASS_DEVICE_CLOCKMECH::MechSetxx00_endFail() {
     digitalWrite(CLOCKMECH_EN, HIGH);
     digitalWrite(CLOCKMECH_SENS_LED, LOW);
     GetSens();
-    DEBUGCLOCKMECH("MechSet1200_Task: ERROR_NO_MIN (%d)\r\n", device_clock_mech._mechControlSteps);
+    DEBUGCLOCKMECH("MechSet1200: ERROR_NO_MIN (%d)\r\n", device_clock_mech._mechControlSteps);
     device_clock_mech._mechControlSteps = 0;
 }
 
@@ -486,7 +486,6 @@ void CLASS_DEVICE_CLOCKMECH::MechSetxx00_endFail() {
 // Сброс механизма в 12:хх
 // ============================================================
 void CLASS_DEVICE_CLOCKMECH::MechSet12xx_Setup() {
-    digitalWrite(CLOCKMECH_SENS_LED, HIGH);
     GetSens();
     if (SENS_HOUR_SET) { MechSet12xx_endOk(); return; }
     device_clock_mech._Mech_Status = STATUS_SET12XX;
@@ -498,6 +497,7 @@ void CLASS_DEVICE_CLOCKMECH::MechSet12xx_Setup() {
 
 void CLASS_DEVICE_CLOCKMECH::MechSet12xx_Task() {
     if (device_clock_mech._Mech_Status != STATUS_SET12XX) {return;}
+    digitalWrite(CLOCKMECH_SENS_LED, HIGH);
     // Нашли положение xx:00
     if (SENS_HOUR_SET) { MechSet12xx_endOk(); return; }
     device_clock_mech._mechControlSteps++;
@@ -534,9 +534,8 @@ void CLASS_DEVICE_CLOCKMECH::MechSet12xx_endFail() {
 // Сброс механизма в 12:00  (work)
 // ============================================================
 void CLASS_DEVICE_CLOCKMECH::MechSet1200_Setup() {
-    digitalWrite(CLOCKMECH_SENS_LED, HIGH);
-    GetSens();
     if (SENS_SET) {  MechSet1200_endOk(); return; }
+    GetSens();
     device_clock_mech._Mech_Status = STATUS_SET1200;
     digitalWrite(CLOCKMECH_EN, LOW);
     // digitalWrite(CLOCKMECH_DIR, CLOCKMECH_CounterClockWise);
@@ -546,6 +545,7 @@ void CLASS_DEVICE_CLOCKMECH::MechSet1200_Setup() {
 }
 void CLASS_DEVICE_CLOCKMECH::MechSet1200_Task() {
     if (device_clock_mech._Mech_Status != STATUS_SET1200) {return;}
+    digitalWrite(CLOCKMECH_SENS_LED, HIGH);
     // Нашли положение 12:00
     if (SENS_SET) { MechSet1200_endOk(); return; }
     // превышен лимит шагов на 12 оборотов минутной стрелки
@@ -589,7 +589,6 @@ void CLASS_DEVICE_CLOCKMECH::MechSet1200_endFail() {
 
 void CLASS_DEVICE_CLOCKMECH::MechCountStepsSetup() {
     device_clock_mech._Mech_Status = STATUS_COUNTING;
-    digitalWrite(CLOCKMECH_SENS_LED, HIGH);
     GetSens();
     digitalWrite(CLOCKMECH_EN, LOW);
     digitalWrite(CLOCKMECH_DIR, CLOCKMECH_ClockWise);
@@ -601,14 +600,9 @@ void CLASS_DEVICE_CLOCKMECH::MechCountStepsSetup() {
 
 void CLASS_DEVICE_CLOCKMECH::MechCountStepsTask() {
     if (device_clock_mech._Mech_Status != STATUS_COUNTING) {return;}
-    if (device_clock_mech._mechControlSteps >= device_clock_mech._config.errorLimitSteps) {
-        MechCountStepsFail();
-        return;
-    }
-    if ( SENS_MIN_SET && device_clock_mech._mechControlSteps > CLOCKMECH_MIN_STEPS_GAP) {
-        MechCountStepsOk(); 
-        return;
-    }
+    digitalWrite(CLOCKMECH_SENS_LED, HIGH);
+    if (device_clock_mech._mechControlSteps >= device_clock_mech._config.errorLimitSteps) { MechCountStepsFail(); return;   }
+    if ( SENS_MIN_SET && device_clock_mech._mechControlSteps > CLOCKMECH_MIN_STEPS_GAP) { MechCountStepsOk();  return; }
     device_clock_mech._mechControlSteps++;
     GoToTaskAfterStep = MechCountStepsTask;
     SetTask(MechMoveStepDown);
@@ -649,8 +643,7 @@ void CLASS_DEVICE_CLOCKMECH::MechCountStepsFail() {
 
 void CLASS_DEVICE_CLOCKMECH::MechSetArrowHourSetup() {
     device_clock_mech._Mech_Status = STATUS_SETHOUR;
-    digitalWrite(CLOCKMECH_SENS_LED, HIGH);
-    GetSens();
+    
     digitalWrite(CLOCKMECH_EN, LOW);
     digitalWrite(CLOCKMECH_DIR, CLOCKMECH_ClockWise);
     GoToTaskAfterStep = MechSetArrowHourTask;
@@ -659,6 +652,8 @@ void CLASS_DEVICE_CLOCKMECH::MechSetArrowHourSetup() {
 
 void CLASS_DEVICE_CLOCKMECH::MechSetArrowHourTask() {
     if (device_clock_mech._Mech_Status != STATUS_SETHOUR) {return;}
+    digitalWrite(CLOCKMECH_SENS_LED, HIGH);
+    GetSens();
     if (SENS_MIN_SET == true && (device_clock_mech._mechControlSteps > CLOCKMECH_MIN_STEPS_GAP) ) { MechSetArrowHourEndOk(); return; }
     if (device_clock_mech._mechControlSteps > device_clock_mech._config.errorLimitSteps) { MechSetArrowHourEndFail(); return; }
     device_clock_mech._mechControlSteps++;
@@ -724,8 +719,7 @@ void CLASS_DEVICE_CLOCKMECH::MechSetArrowHourEndFail() {
 
 void CLASS_DEVICE_CLOCKMECH::MechSetArrowMinSetup() {
     device_clock_mech._Mech_Status = STATUS_SETMIN;
-    digitalWrite(CLOCKMECH_SENS_LED, HIGH);
-    GetSens();
+    
     digitalWrite(CLOCKMECH_EN, LOW);
     digitalWrite(CLOCKMECH_DIR, CLOCKMECH_ClockWise);
     GoToTaskAfterStep = MechSetArrowMinTask;
@@ -735,7 +729,8 @@ void CLASS_DEVICE_CLOCKMECH::MechSetArrowMinSetup() {
 void CLASS_DEVICE_CLOCKMECH::MechSetArrowMinTask() {
     if (device_clock_mech._Mech_Status != STATUS_SETMIN) {return;}
     if (device_clock_mech._mechControlSteps >= device_clock_mech._config.errorLimitSteps) { MechSetArrowMinFail(); return; }
-
+    digitalWrite(CLOCKMECH_SENS_LED, HIGH);
+    GetSens();
     uint32_t MinPosSteps = MININHOUR * device_clock_mech._mechControlSteps;
     uint32_t MinTimeSteps = device_clock_mech._timeMinReal * device_clock_mech._config.stepsPerRevolution;
 

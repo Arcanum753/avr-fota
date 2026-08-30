@@ -528,7 +528,7 @@ void CLASS_DEVICE_RINGMECH::RingPollTask() {
 }
 
 void CLASS_DEVICE_RINGMECH::CheckTime (uint8_t _inH)	{
-	if (_inH >= HOURINCIRCLE)   { _inH -= HOURINCIRCLE; }
+	if (_inH > HOURINCIRCLE)   { _inH -= HOURINCIRCLE; }
 	_mechTurnTarget = _inH;
 }
 
