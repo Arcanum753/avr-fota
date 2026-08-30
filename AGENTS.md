@@ -59,14 +59,14 @@ Submodules (`submodule_*`) inherit from `Class_ProgBase` and implement specific 
 - `web/_menu.html` — ссылки в меню.
 - `web/xxx.html` — HTML-страница с формой, JS через `fetch` и `ApplyCVT()` из общих файлов `GetJson.js`/`GetMarkup.js` (не дублировать `applyCvtData` на каждой странице), сохранение без перезагрузки страницы.
 - `web/config_xxx.json` — дефолтный конфиг
-- Интеграция в `FSWebServerLib.cpp` под флагом `MODULE_XXX`
+- Интеграция в `src/core_web/FSWebServerLib.cpp` под флагом `MODULE_XXX`
 - Таргеты в `targets/targets_example.ini`
 
 **Единый порядок функций в .cpp модуля (обязательно для всех core_/module_/device_/submodule_):**
 
 Шаблонный блок — всегда в начале файла, конкретная логика — после него.
 
-1. **INCLUDES** — `#include "FSWebServerLib.h"` первым, затем библиотечные заголовки, `core_*/...`, свой `module_xxx.h`, `common.h`, `*_version.h`, `eertos.h`.
+1. **INCLUDES** — `#include "core_web/FSWebServerLib.h"` первым, затем библиотечные заголовки, `core_*/...`, свой `module_xxx.h`, `common/common.h`, `*_version.h`, `core_sys/eertos.h`.
 2. **ГЛОБАЛЬНЫЕ ОБЪЕКТЫ И ПЕРЕМЕННЫЕ** — глобальный объект класса, конструктор, глобальные/static переменные. Здесь же forward-declarations свободных функций, используемых шаблонным блоком.
 3. **setFs()**
 4. **begin()** и **begin(ModContext&)**
@@ -87,7 +87,7 @@ Submodules (`submodule_*`) inherit from `Class_ProgBase` and implement specific 
 
 ### EERTOS — Cooperative scheduler
 
-`src/eertos.h` + `src/eertos.cpp` implement a cooperative task/timer dispatcher (not an RTOS):
+`src/core_sys/eertos.h` + `src/core_sys/eertos.cpp` implement a cooperative task/timer dispatcher (not an RTOS):
 - `SetTask(TPTR)` — queue a function for execution in the main loop
 - `SetTimerTask(TPTR, uint32_t)` — schedule a function after N milliseconds
 - `DelTimerTask(TPTR)` — remove a scheduled timer
@@ -106,7 +106,7 @@ The main loop (`loop()` in `main.cpp`):
 
 1. `InitRTOS()` — init EERTOS queues
 2. `LittleFS.begin()` — mount filesystem
-3. `ESPHTTPServer.begin(&LittleFS)` — starts the web server (`src/FSWebServerLib.cpp`):
+3. `ESPHTTPServer.begin(&LittleFS)` — starts the web server (`src/core_web/FSWebServerLib.cpp`):
    - Fills global `ModContext` (fs, hostname, password)
    - `core_begin(ModContext)` — core init (WiFi, NTP, JSON, editor, OTA)
    - `modules_begin(ModContext)` — optional modules init
@@ -159,7 +159,7 @@ CLASS_CORE_OTA (core_ota/core_ota.h)
 - `web_Init()` — регистрация веб-путей (единое имя; историческое `webInit` удалено).
 - `loop()` — периодическая задача (опционально, включается флагом `loop = 1`).
 
-`src/FSWebServerLib.cpp` и `src/main.cpp` НЕ содержат ручного вызова `setFs`/`begin`/`webInit`
+`src/core_web/FSWebServerLib.cpp` и `src/main.cpp` НЕ содержат ручного вызова `setFs`/`begin`/`webInit`
 для каждого модуля. Вместо этого вызываются функции из автогенерируемого
 `src/modules_registry.cpp`:
 - `core_begin(ctx)`, `modules_begin(ctx)`, `dev_begin(ctx)`
@@ -218,20 +218,21 @@ build_flags = ${env.build_flags} -D MODULE_UDP=1 -D PROGTYPE_SWD=1 -D SWDPIN_CLK
 
 ### Web page structure
 
-`data/page_head.html` contains a static menu and a marker `<!-- MODULES_RIGHT_COLUMN -->`. The build script `gen_page_head.py` replaces this marker with links generated from each module's `web/` directory:
+`src/core_web/web/page_head.html` contains a static menu and a marker `<!-- MODULES_RIGHT_COLUMN -->`. The build script `gen_page_head.py` replaces this marker with links generated from each module's `web/` directory:
 - If a module has `web/_menu.html`, its content is used directly
 - Otherwise, `.html` files are scanned for `<title>` or first heading
 
 Module web files (e.g. `module_prog/web/prog.html`, `submodule_isp/web/avrcfg.html`) are copied into the FS build directory by `fs_builder.py`.
 
-### File system config files (in `data/` and module `web/` dirs)
+### File system config files (in `core_sys/web/`, `core_web/web/` and module `web/` dirs)
 
 | File | Location | Purpose |
 |------|----------|---------|
-| `config_sys.json` | `data/` | Device name, serial, WiFi scan time, AP lifetime |
-| `config_ntp.json` | `data/` | NTP server addresses, timezone, DST |
-| `config_wifi0-3.json` | `data/` | 4 Wi-Fi profiles (SSID, password, DHCP/static IP) |
-| `secret.json` | `data/` | HTTP auth login/password (hidden from FS browser) |
+| `config_sys.json` | `core_sys/web/` | Device name, serial, WiFi scan time, AP lifetime |
+| `config_ntp.json` | `core_sys/web/` | NTP server addresses, timezone, DST |
+| `config_wifi0-3.json` | `core_sys/web/` | 4 Wi-Fi profiles (SSID, password, DHCP/static IP) |
+| `secret.json` | `core_sys/web/` | HTTP auth login/password (hidden from FS browser) |
+| `page_head.html` | `core_web/web/` | HTML template for the device main page (with menu marker) |
 | `config_prog.json` | `module_prog/web/` | Programmer project config (chip, project name) |
 | `config_udp.json` | `module_udp/web/` | UDP module config |
 | `config_otaclient.json` | `module_otaclient/web/` | OTA client config |
@@ -333,13 +334,7 @@ GitHub Actions (`.github/workflows/platformio_ci.yml`):
 
 ```
 avr-fota/
-├── data/                    # FS source files (HTML, configs, images)
-│   ├── page_head.html       # HTML template with <!-- MODULES_RIGHT_COLUMN -->
-│   ├── config_sys.json      # System configuration
-│   ├── config_wifi0-3.json  # Wi-Fi profiles
-│   ├── config_ntp.json      # NTP configuration
-│   ├── secret.json          # HTTP auth credentials
-│   └── ...                  # HTML pages, JS, CSS, images
+├── data/                    # Пустая (заглушка для сборщика FS; веб-файлы в src/core_* /web)
 ├── python/                  # Build scripts
 │   ├── version_builder.py   # Version header generation
 │   ├── module_version_gen.py # Per-module version generation
@@ -350,18 +345,25 @@ avr-fota/
 │   ├── copy_fw.py           # Firmware binary copy
 │   └── copy_fs.py           # FS binary copy
 ├── src/                     # Source code
-│   ├── main.cpp             # Entry point (setup/loop)
-│   ├── main.h               # Project-wide defines
-│   ├── common.h/cpp         # Utility functions
-│   ├── eertos.h/cpp         # Cooperative task scheduler
-│   ├── FSWebServerLib.h/cpp # Async web server + routing
-│   ├── mod_context.h        # Module init context (fs, hostname, password)
+│   ├── common/              # Low-level utilities (time + string + common)
+│   │   ├── common.h/cpp     # hex2bin, urldecode, formatBytes, checkRange
+│   │   ├── TimeLib.h/cpp    # Time library fork
+│   │   └── StringArray.h    # Linked list utility (fork)
+│   ├── main.h/cpp            # Entry point (setup/loop), project-wide defines
+│   ├── debug.h / debug_prefix.cpp # Debug logging macros + DBG_MOD
+│   ├── mod_context.h         # Module init context (fs, hostname, password)
+│   ├── core_sys/             # System core (non-module files)
+│   │   ├── eertos.h/cpp      # Cooperative task scheduler
+│   │   └── web/              # System pages/configs: system.html, wifi.html,
+│   │                         #   wifi-slot.js, update.html, 404.html, spark-md5.js,
+│   │                         #   config_sys.json, secret.json, config_wifi0-3.json, config_ntp.json
+│   ├── core_web/            # Web-server core
+│   │   ├── FSWebServerLib.h/cpp # Async web server + routing (AsyncFSWebServer)
+│   │   └── web/             # Device main page: index.html, GetJson.js, GetMarkup.js,
+│   │                        #   style.css, page_head.html, page_bottom.html, esp.gif, logo.gif, favicon.ico
+│   ├── ESPAsyncWebServer.h  # Library fork (in src root so -Isrc overrides libdeps)
 │   ├── modules_registry.h/cpp # Generated module registry (begin/web_Init/loop)
 │   ├── version.h            # Auto-generated version header
-│   ├── debug.h              # Debug logging macros
-│   ├── StringArray.h        # Linked list utility
-│   ├── TimeLib.h / Time.cpp # Time library fork
-│   ├── ESPAsyncWebServer.h  # Async TCP/HTTP wrapper header
 │   ├── core_wifi/           # Wi-Fi core module
 │   ├── core_ntp/            # NTP core module
 │   ├── core_ota/            # OTA core module

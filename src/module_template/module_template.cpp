@@ -1,12 +1,12 @@
-#include "FSWebServerLib.h"
+#include "core_web/FSWebServerLib.h"
 
 #include "core_ntp/NtpClientLib.h"
 #include "core_json/core_json.h"
 
 #include "module_template.h"
-#include "common.h"
+#include "common/common.h"
 #include "module_template_version.h"
-#include "eertos.h"
+#include "core_sys/eertos.h"
 
 CLASS_MODULE_TEMPLATE module_template(false);
 CLASS_MODULE_TEMPLATE::CLASS_MODULE_TEMPLATE(bool _in) { dumb = _in; }

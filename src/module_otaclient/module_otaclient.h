@@ -2,7 +2,7 @@
 #define _MODOTACLIENT_h
 
 #include "main.h"
-#include "FSWebServerLib.h"
+#include "core_web/FSWebServerLib.h"
 #include "core_ota/core_ota.h"
 
 #ifdef DEBUG_OTACLIENT

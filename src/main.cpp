@@ -10,8 +10,8 @@
 #include <Ticker.h>
 
 #include "main.h"
-#include "FSWebServerLib.h"
-#include "eertos.h"
+#include "core_web/FSWebServerLib.h"
+#include "core_sys/eertos.h"
 
 #include "modules_registry.h"
 

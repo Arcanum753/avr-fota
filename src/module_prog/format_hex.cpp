@@ -1,5 +1,5 @@
 #include "format_hex.h"
-#include "common.h"  // для hex2bin()
+#include "common/common.h"  // для hex2bin()
 
 /**
  * @file format_hex.cpp

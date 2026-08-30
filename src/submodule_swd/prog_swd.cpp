@@ -1,7 +1,7 @@
 #include "main.h"
 
 #include "Arduino.h"
-#include "FSWebServerLib.h"
+#include "core_web/FSWebServerLib.h"
 #include "debug_cm.h"
 
 #if defined(ESP32)
@@ -13,7 +13,7 @@
 #include "submodule_swd.h"
 #include "prog_swd.h"
 #include "swd.h"
-#include "eertos.h"
+#include "core_sys/eertos.h"
 #include "../module_prog/format_bin.h"
 #include "../module_prog/format_hex.h"
 #include "stm32f1_flash.h"

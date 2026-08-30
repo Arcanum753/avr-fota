@@ -1,4 +1,4 @@
-#include "FSWebServerLib.h"
+#include "core_web/FSWebServerLib.h"
 
 #include "core_ntp/NtpClientLib.h"
 #include "core_json/core_json.h"
@@ -6,11 +6,11 @@
 #include "core_terminal/ErriezSerialTerminal.h"
 
 #include "module_macros.h"
-#include "common.h"
+#include "common/common.h"
 #include "module_macros_version.h"
-#include "eertos.h"
+#include "core_sys/eertos.h"
 
-#include <TimeLib.h>
+#include "common/TimeLib.h"
 
 CLASS_MODULE_MACROS module_macros(false);
 CLASS_MODULE_MACROS::CLASS_MODULE_MACROS(bool _in) {

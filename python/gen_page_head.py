@@ -36,6 +36,20 @@ WEB_FOLDER_NAME = "web"               # имя папки с веб-файлам
 MODULE_PREFIX = "module_"             # префикс модулей
 DEVICE_PREFIX = "device_"             # префикс девайс-модулей
 
+# Левая колонка меню (core-страницы). Единый источник: используется и при
+# генерации page_head.html из шаблона, и в запасном меню _generate_fallback().
+# При добавлении новой core-страницы править только здесь (шаблон data/page_head.html
+# остаётся каркасом и его левая колонка при наличии маркера не используется).
+STATIC_MENU_LINKS = """    <div>
+        <a href="index.html">Main</a>
+        <a href="ntp.html">NTP configuration</a>
+        <a href="system.html">System configuration</a>
+        <a href="wifi.html">WiFi Configuration</a>
+        <a target=_tab href="edit.html">SPIFFS File editor</a>
+        <a href="update.html">Esp Firmware & FS OTA update</a>
+    </div>
+"""
+
 
 # ============================================================
 # ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
@@ -219,25 +233,26 @@ def generate_page_head(
     Аргументы:
         modules: список имён модулей (например, ["module_udp", "module_prog_isp"])
         src_dir: путь к папке src/ проекта.
-                 Если None — ищет src/ относительно директории скрипта.
+                 Если None — ищет <корень проекта>/src.
         template_path: путь к шаблону page_head.html.
-                       Если None — ищет в data/page_head.html относительно
-                       директории скрипта.
+                       Если None — ищет <корень проекта>/data/page_head.html.
     
     Возвращает:
         Строку с полным HTML-кодом page_head.html
     """
+    # Корень проекта — родитель директории скрипта (python/), где лежит platformio.ini
+    script_dir = Path(os.path.dirname(os.path.abspath(__file__)))
+    project_root = script_dir.parent
+
     # Определяем путь к src/
     if src_dir is None:
-        script_dir = Path(os.path.dirname(os.path.abspath(__file__)))
-        src_dir = script_dir / "src"
+        src_dir = project_root / "src"
     else:
         src_dir = Path(src_dir)
     
     # Определяем путь к шаблону
     if template_path is None:
-        script_dir = Path(os.path.dirname(os.path.abspath(__file__)))
-        template_path = str(script_dir / "data" / "page_head.html")
+        template_path = str(project_root / "src" / "core_web" / "web" / "page_head.html")
     
     # Читаем шаблон
     if not os.path.exists(template_path):
@@ -258,7 +273,14 @@ def generate_page_head(
     # вместе со следующим за ним пустым <div></div>
     marker_block = "<!-- MODULES_RIGHT_COLUMN -->\n    <div>\n    </div>"
     if marker_block in template:
-        result = template.replace(marker_block, right_column)
+        # Меню целиком строится из левой колонки STATIC_MENU_LINKS и правой
+        # колонки модулей — шаблон используется только для шапки и структуры.
+        # Так левая колонка и запасное меню не расходятся.
+        if '<div class="menu">' in template:
+            head = template.split('<div class="menu">', 1)[0]
+            result = head + '<div class="menu">\n' + STATIC_MENU_LINKS + right_column + '\n</div>\n'
+        else:
+            result = template.replace(marker_block, right_column)
         log_info("Replaced marker + empty div with generated menu")
     else:
         # Если маркера нет — ищем пустой <div></div> после первого <div>
@@ -283,13 +305,7 @@ def _generate_fallback(modules: List[str], src_dir: Path) -> str:
     right = generate_right_column(modules, src_dir)
     return f"""<h3 class="top">Device web-server.<sup>&copy;</sup></h3>
 <div class="menu">
-    <div>
-        <a href="index.html">Main</a>
-        <a href="system.html">System configuration</a>
-        <a href="wifi.html">WiFi Configuration</a>
-        <a target=_tab href="edit.html">SPIFFS File editor</a>
-        <a href="update.html">Firmware & FS OTA self</a>
-    </div>
+{STATIC_MENU_LINKS}
 {right}
 </div>
 """
@@ -311,17 +327,17 @@ def main() -> None:
     parser.add_argument(
         "--src_dir",
         default=None,
-        help="Path to src/ directory (default: <script_dir>/src)"
+        help="Path to src/ directory (default: <project_root>/src)"
     )
     parser.add_argument(
         "--output",
         default=None,
-        help="Output file path (default: <script_dir>/data/page_head.html)"
+        help="Output file path (default: <project_root>/data/page_head.html)"
     )
     parser.add_argument(
         "--template",
         default=None,
-        help="Template file path (default: <script_dir>/data/page_head.html)"
+        help="Template file path (default: <project_root>/data/page_head.html)"
     )
 
     args = parser.parse_args()
@@ -343,7 +359,7 @@ def main() -> None:
         output_path = args.output
     else:
         script_dir = os.path.dirname(os.path.abspath(__file__))
-        output_path = os.path.join(script_dir, "data", "page_head.html")
+        output_path = os.path.join(script_dir, "..", "src", "core_web", "web", "page_head.html")
 
     # Сохраняем
     try:

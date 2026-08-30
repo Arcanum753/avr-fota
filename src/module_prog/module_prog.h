@@ -4,8 +4,8 @@
 #include "main.h"
 #include <FS.h>
 #include "ESPAsyncWebServer.h"
-#include "FSWebServerLib.h"
-#include "common.h"
+#include "core_web/FSWebServerLib.h"
+#include "common/common.h"
 #include "debug.h"
 #include "core_ntp/core_ntp.h"
 #include "core_json/core_json.h"

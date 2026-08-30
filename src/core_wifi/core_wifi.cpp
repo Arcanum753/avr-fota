@@ -9,9 +9,8 @@
 
 #include <DNSServer.h>
 
-#include "FSWebServerLib.h"
-#include "main.h"
-#include "common.h"
+#include "core_web/FSWebServerLib.h"
+#include "common/common.h"
 #include "debug.h"
 
 #include "core_json/core_json.h"

@@ -1,7 +1,7 @@
 
-#include "FSWebServerLib.h"
+#include "core_web/FSWebServerLib.h"
 #include "module_gpio.h"
-#include "common.h"
+#include "common/common.h"
 #include "module_gpio_version.h"
 
 CLASS_MODULE_GPIO module_gpio(false);

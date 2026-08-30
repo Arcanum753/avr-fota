@@ -10,7 +10,7 @@
 #include "main.h"
 
 #include <ESPAsyncWebServer.h>
-#include "FSWebServerLib.h"
+#include "core_web/FSWebServerLib.h"
 #include "ErriezSerialTerminal.h"
 
 #include "core_terminal/core_terminal.h"

@@ -1,11 +1,11 @@
-#include "FSWebServerLib.h"
+#include "core_web/FSWebServerLib.h"
 
 #include "core_json/core_json.h"
 
 #include "module_rgb.h"
 #include "module_rgb_version.h"
-#include "common.h"
-#include "eertos.h"
+#include "common/common.h"
+#include "core_sys/eertos.h"
 
 CLASS_MODULE_RGB module_rgb;
 CLASS_MODULE_RGB::CLASS_MODULE_RGB() : _pendingReinit(false), _pendingSave(false), _pendingApply(false) {}

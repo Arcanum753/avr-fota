@@ -56,9 +56,9 @@ extern "C" {
 
 #endif
 
-#include "eertos.h"
+#include "core_sys/eertos.h"
 
-#include <TimeLib.h>
+#include "common/TimeLib.h"
 
 #if defined(ARDUINO) && ARDUINO >= 100
 #include "Arduino.h"

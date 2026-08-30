@@ -1,11 +1,11 @@
-#include "FSWebServerLib.h"
+#include "core_web/FSWebServerLib.h"
 
 #include "core_json/core_json.h"
 
 #include "device_clock-mech.h"
-#include "common.h"
+#include "common/common.h"
 #include "device_clock-mech_version.h"
-#include "eertos.h"
+#include "core_sys/eertos.h"
 
 #include "core_terminal/core_terminal.h"
 #include "core_terminal/ErriezSerialTerminal.h"
@@ -14,7 +14,7 @@
 #include "module_ds3231/module_ds3231.h"
 #endif
 
-#include <TimeLib.h>
+#include "common/TimeLib.h"
 
 DPDR GoToTaskAfterStep = Idle_task;
 

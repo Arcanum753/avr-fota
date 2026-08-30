@@ -274,9 +274,9 @@ def cpp_content(env_name: str,
                 core_loop: List[str], modules_loop: List[str], dev_loop: List[str]) -> str:
     L: List[str] = []
     L.append('#include "modules_registry.h"')
-    L.append('// FSWebServerLib.h включается первым: предоставляет AsyncWebServerRequest,')
+    L.append('// core_web/FSWebServerLib.h включается первым: предоставляет AsyncWebServerRequest,')
     L.append('// класс AsyncFSWebServer (ESPHTTPServer) и Arduino-типы для всех заголовков модулей.')
-    L.append('#include "FSWebServerLib.h"')
+    L.append('#include "core_web/FSWebServerLib.h"')
     L.append("")
     L.append("// Файл генерируется python/module_registry_gen.py под выбранный env.")
     L.append(f"// Сгенерировано для env: {env_name}")

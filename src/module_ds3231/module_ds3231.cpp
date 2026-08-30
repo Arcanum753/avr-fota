@@ -1,9 +1,9 @@
-#include "FSWebServerLib.h"
+#include "core_web/FSWebServerLib.h"
 
 #include "module_ds3231.h"
 #include "module_ds3231_version.h"
-#include "common.h"
-#include "eertos.h"
+#include "common/common.h"
+#include "core_sys/eertos.h"
 
 #include "core_json/core_json.h"
 #include "core_ntp/NtpClientLib.h"
@@ -11,7 +11,7 @@
 #include "core_terminal/ErriezSerialTerminal.h"
 
 #include <Wire.h>
-#include <TimeLib.h>
+#include "common/TimeLib.h"
 
 #if defined(ESP32)
 #include <esp_task_wdt.h>

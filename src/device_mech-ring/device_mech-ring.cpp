@@ -1,11 +1,11 @@
-#include "FSWebServerLib.h"
+#include "core_web/FSWebServerLib.h"
 
 #include "core_json/core_json.h"
 
 #include "device_mech-ring.h"
-#include "common.h"
+#include "common/common.h"
 #include "device_mech-ring_version.h"
-#include "eertos.h"
+#include "core_sys/eertos.h"
 
 #include "core_terminal/core_terminal.h"
 #include "core_terminal/ErriezSerialTerminal.h"

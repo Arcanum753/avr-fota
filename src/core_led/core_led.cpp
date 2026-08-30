@@ -8,7 +8,7 @@
 #if defined(ESP8266)
 #endif
 
-#include "eertos.h"
+#include "core_sys/eertos.h"
 #include "core_led.h"
 
 uint32_t ledMacroPosition = 0;

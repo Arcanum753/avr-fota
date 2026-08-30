@@ -13,8 +13,8 @@
 #include <core_ntp/NtpClientLib.h>
 #include "core_json/core_json.h"
 #include "module_otaclient/module_otaclient.h"
-#include "eertos.h"
-#include "common.h"
+#include "core_sys/eertos.h"
+#include "common/common.h"
 #include "module_otaclient_version.h"
 
 // Single global object - the class itself

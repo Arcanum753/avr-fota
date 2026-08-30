@@ -5,17 +5,17 @@
 #include <SPI.h>
 
 
-#include "FSWebServerLib.h"
+#include "core_web/FSWebServerLib.h"
 
 #include "core_json/core_json.h"
 
 #include "submodule_isp.h"
 #include "prog_isp.h"
 // #include "debug.h"
-#include "common.h"
+#include "common/common.h"
 #include "../module_prog/format_hex.h"
 #include "../module_prog/format_bin.h"
-#include "eertos.h"
+#include "core_sys/eertos.h"
 
 
 #if defined(ESP32)

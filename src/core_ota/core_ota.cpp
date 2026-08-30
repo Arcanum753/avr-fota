@@ -7,8 +7,8 @@
 
 #include"version.h"
 #include <ArduinoOTA.h>
-#include "FSWebServerLib.h"
-#include "common.h"
+#include "core_web/FSWebServerLib.h"
+#include "common/common.h"
 #include "core_ota.h"
 #include "core_ota_version.h"
 #include "core_json/core_json.h"

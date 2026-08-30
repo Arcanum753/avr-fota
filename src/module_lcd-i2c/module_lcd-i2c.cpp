@@ -1,12 +1,12 @@
-#include "FSWebServerLib.h"
+#include "core_web/FSWebServerLib.h"
 
 #include "core_ntp/NtpClientLib.h"
 #include "core_json/core_json.h"
 
 #include "module_lcd-i2c.h"
-#include "common.h"
+#include "common/common.h"
 #include "module_lcd-i2c_version.h"
-#include "eertos.h"
+#include "core_sys/eertos.h"
 #include "version.h"
 
 CLASS_MODULE_I2C_LCD module_lcd_i2c(false);

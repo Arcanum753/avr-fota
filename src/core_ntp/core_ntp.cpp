@@ -1,4 +1,4 @@
-#include "FSWebServerLib.h"
+#include "core_web/FSWebServerLib.h"
 
 #include "main.h"
 #include "core_json/core_json.h"
@@ -9,7 +9,7 @@
 #include "module_udp/module_udp.h"
 #endif
 
-#include "common.h"
+#include "common/common.h"
 #include "core_ntp_version.h"
 
 CLASS_CORE_NTP core_ntp(false);

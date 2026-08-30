@@ -14,8 +14,8 @@
 #include <core_ntp/NtpClientLib.h>
 #include "core_json/core_json.h"
 #include "module_udp/module_udp.h"
-#include "eertos.h"
-#include "common.h"
+#include "core_sys/eertos.h"
+#include "common/common.h"
 #include "module_udp_version.h"
 
 // Единственный глобальный объект - сам класс

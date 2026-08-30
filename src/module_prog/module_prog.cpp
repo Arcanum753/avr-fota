@@ -12,7 +12,6 @@
 #endif
 
 #include "module_prog.h"
-#include "StringArray.h"
 
 Class_ProgBase::Class_ProgBase(uint8_t in): _in(in){ }
 
