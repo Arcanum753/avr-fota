@@ -30,8 +30,17 @@
 #include "module_otaclient/module_otaclient.h"
 #endif
 
+#include "core_sys/eertos.h"
+
 CLASS_CORE_WIFI 	core_wifi(false);
 DNSServer 		dnsServer;
+
+// Пауза между повторными сканами, когда сеть не находится и AP выключена (сек)
+#define WIFI_RESCAN_PAUSE_SEC		20
+// Бюджет попытки подключения, если scanTime <= 0 (сек)
+#define WIFI_CONNECT_BUDGET_SEC		20
+// Защита от «зависшего» скана (скан не завершается) — принудительный рестарт (сек)
+#define WIFI_SCAN_STUCK_SEC			60
 
 // ============================================================
 // Паттерны светодиодной индикации статуса Wi-Fi (кассета модуля)
@@ -67,16 +76,6 @@ void CLASS_CORE_WIFI::begin(fs::LittleFSFS* fs)
 #if defined(ESP8266)
 	WiFi.setSleepMode(WIFI_NONE_SLEEP);
 #endif
-	if (AP_ENABLE_BUTTON >= 0) {
-		// Set AP mode if AP button was pressed
-		if (_apConfig.APenable) {	configureWifiAP();	}
-		// Set WiFi config
-		else {	configureWifi();	}
-	}
-	// Set WiFi config
-	else {	configureWifi(); 	}
-	_secondTk.attach(1.0f, &CLASS_CORE_WIFI::s_secondTick, static_cast<void*>(this)); // Task to run periodic things every second
-
 	// Try to load configuration from file system// Load defaults if any error
 	if (!load_configWifi(3)) { defaultConfigWifi(3); _apConfig.APenable = true; 	}
 	if (!load_configWifi(2)) { defaultConfigWifi(2); _apConfig.APenable = true; 	}
@@ -88,6 +87,18 @@ void CLASS_CORE_WIFI::begin(fs::LittleFSFS* fs)
 	DEBUGLOGWIFI("_strWifis[1] %s\r\n", _strWifi1);
 	DEBUGLOGWIFI("_strWifis[2] %s\r\n", _strWifi2);
 	DEBUGLOGWIFI("_strWifis[3] %s\r\n", _strWifi3);
+
+	if (AP_ENABLE_BUTTON >= 0) {
+		// Set AP mode if AP button was pressed
+		if (_apConfig.APenable) {	configureWifiAP();	}
+		// Set WiFi config
+		else {	configureWifi();	}
+	}
+	// Set WiFi config
+	else {	configureWifi(); 	}
+	// 1-секундный автомат Wi-Fi выполняется в контексте loop() через EERTOS
+	// (SetTimerTask), а не из Ticker/esp_timer — WiFi API в контексте loop безопасен.
+	SetTimerTask(&CLASS_CORE_WIFI::s_secondTick, 1000);
 
 // Register wifi Event to control connection LED and wifi connection status
 	#if defined(ESP32)
@@ -522,93 +533,196 @@ void CLASS_CORE_WIFI::html_ver_get(AsyncWebServerRequest *request) {
 // Конкретная логика модуля
 // ============================================================
 
-void CLASS_CORE_WIFI::s_secondTick(void* arg) {
-	CLASS_CORE_WIFI* self = reinterpret_cast<CLASS_CORE_WIFI*>(arg);
+void CLASS_CORE_WIFI::s_secondTick() {
+	SetTimerTask(&CLASS_CORE_WIFI::s_secondTick, 1000);
+	core_wifi.secondTick();
+}
 
-	//DNS captive
-	if (self->wifiStatus == FS_STAT_APMODE) {	dnsServer.processNextRequest();	}
-	
-	// Периодический сброс счётчиков неудачных попыток (каждые 60 секунд)
-	if (self->connectionTimout % 60 == 0 && self->connectionTimout > 0) {
+void CLASS_CORE_WIFI::secondTick() {
+	_stateSeconds++;
+
+	if (_suppressDisc > 0) { _suppressDisc--; }
+
+	// Периодический сброс счётчиков неудачных попыток раз в 60 секунд —
+	// независимо от состояния (раньше привязка к connectionTimout не срабатывала в AP)
+	if (_stateSeconds % 60 == 0) {
 		bool anyBlocked = false;
 		for (int i = 0; i < 4; i++) {
-			if (self->_wifiFailCount[i] >= MAX_WIFI_FAIL_COUNT) { anyBlocked = true; break; }
+			if (_wifiFailCount[i] >= MAX_WIFI_FAIL_COUNT) { anyBlocked = true; break; }
 		}
 		if (anyBlocked) {
 			DEBUGLOGWIFI("Periodic reset of wifi fail counters\n");
-			self->resetWifiFailCounters();
+			resetWifiFailCounters();
 		}
 	}
 
-//Check connection timeout if enabled
-	if (self->scanTime > 0) {
-		if (self->wifiStatus == FS_STAT_CONNECTING) 	{
-			if (++self->connectionTimout >= self->scanTime){
-				DEBUGLOGWIFI("Connection Timeout. Switching to AP Mode.\r\n");
-				self->WifiScan = WF_SCAN_NO_NEED;
-				self->configureWifiAP();
-			}
-		}
-		if (self->wifiStatus == FS_STAT_WRONGPASSWORDS) {
-			DEBUGLOGWIFI("All passwords wrong. Switching to AP Mode.\r\n");
-			self->WifiScan = WF_SCAN_NO_NEED;
-			self->configureWifiAP();
-			ledMacrosWifiError();
-		}
-		
-		if (self->WifiScan == WF_STAT_SCANED)	{
-			self->configureWifi();
-			self->WifiScan = WF_SCAN_NO_NEED;
-			ledMacrosWifiConnecting();
-		}
-		
-		if (self->WifiScan != WF_SCAN_NO_NEED) {
-			self->load_configWifi(self->scanWifi());
-			ledMacrosWifiScan();
-		}
-		if (self->wifiStatus == FS_STAT_CONNECTED) { ledMacrosWifiConnected(); }
+	if (wifiStatus == FS_STAT_APMODE) {
+		//DNS captive
+		dnsServer.processNextRequest();
+		apTick();
+		return;
 	}
 
-// AP mode — scantime timeout and rescan logic
-	if (self->wifiStatus == FS_STAT_APMODE && self->scanTime > 0) {
-		ledMacrosWifiAP();	// re-arm AP-моргания (идемпотентно), возобновляет после конечных паттернов
-		if (++self->_apUptime >= self->scanTime) {
-			if (WiFi.softAPgetStationNum() == 0) {
-				// Выходим из AP-режима, иначе configureWifi() сразу вернётся
-				// из-за проверки wifiStatus == FS_STAT_APMODE и пересканирование
-				// никогда не выполнится (устройство навсегда застрянет в AP).
-				DEBUGLOGWIFI("AP timeout, no clients. Re-scanning.\r\n");
-				self->_apUptime = 0;
-				dnsServer.stop();
-				WiFi.softAPdisconnect(true);
-				self->wifiStatus = FS_STAT_DISCONNECTED;
-				self->WifiScan = WF_STAT_SCANING;
-				self->configureWifi();
+	// Отложенный вход в AP из WiFi-события выполняем в контексте loop
+	if (_enterApPending) {
+		_enterApPending = false;
+		enterApWait();
+		return;
+	}
+
+	if (wifiStatus == FS_STAT_CONNECTED) {
+		ledMacrosWifiConnected();
+		return;
+	}
+	if (wifiStatus == FS_STAT_CONNECTING) {
+		staTick();
+		return;
+	}
+}
+
+// AP «живёт» максимум _wifiAPLifeTime минут без активности:
+// клиент не подключился, либо висит без трафика. Затем — скан сети.
+void CLASS_CORE_WIFI::apTick() {
+	if (_wifiAPLifeTime == 0) {
+		leaveApToScan();
+		return;
+	}
+
+	// Любая HTTP-активность клиента (notifyApClientActivity из сервера) продлевает AP
+	if (_apClientActivity) {
+		_apClientActivity = false;
+		_apUptime = 0;
+		ledMacrosWifiAP();
+		return;
+	}
+
+	if ((uint32_t)++_apUptime >= (uint32_t)_wifiAPLifeTime * 60) {
+		DEBUGLOGWIFI("AP idle %lu sec without activity. Leaving AP to scan.\r\n", (unsigned long)_wifiAPLifeTime * 60);
+		leaveApToScan();
+		return;
+	}
+	ledMacrosWifiAP();
+}
+
+void CLASS_CORE_WIFI::leaveApToScan() {
+	DEBUGLOGWIFI("AP -> STA scan\r\n");
+	dnsServer.stop();
+	_suppressDisc = 3;   // события от переключения режимов игнорируем
+	_ignoreDisconnect = true;
+	WiFi.softAPdisconnect(true);
+	WiFi.mode(WIFI_STA);
+	_ignoreDisconnect = false;
+	wifiStatus = FS_STAT_CONNECTING;
+	WifiScan = WF_STAT_SCANING;
+	connectionTimout = 0;
+	_apUptime = 0;
+	_apClientActivity = false;
+	_nextStaScanAt = _stateSeconds;
+	WiFi.scanNetworks(true);
+	ledMacrosWifiScan();
+}
+
+// Вход в «AP в ожидании клиента». При _wifiAPLifeTime == 0 AP не включается —
+// остаёмся в STA и периодически пересканируем сеть.
+void CLASS_CORE_WIFI::enterApWait() {
+	if (wifiStatus == FS_STAT_APMODE) {
+		_apUptime = 0;
+		return;
+	}
+	if (_wifiAPLifeTime == 0) {
+		wifiStatus = FS_STAT_CONNECTING;
+		WifiScan = WF_STAT_SCANING;
+		connectionTimout = 0;
+		_apUptime = 0;
+		_apClientActivity = false;
+		_nextStaScanAt = _stateSeconds;
+		return;
+	}
+	configureWifiAP();
+}
+
+void CLASS_CORE_WIFI::rescanSoon() {
+	_nextStaScanAt = _stateSeconds; // ближайший тик начнёт скан
+}
+
+bool CLASS_CORE_WIFI::anySlotFree() {
+	for (int i = 0; i < 4; i++) {
+		if (_wifiFailCount[i] < MAX_WIFI_FAIL_COUNT) { return true; }
+	}
+	return false;
+}
+
+// STA: скан сети из конфигов / попытка подключения
+void CLASS_CORE_WIFI::staTick() {
+	// Идёт попытка подключения (WiFi.begin вызван) — контролируем бюджет
+	if (WifiScan == WF_SCAN_NO_NEED) {
+		uint32_t budget = (scanTime > 0) ? (uint32_t)scanTime : WIFI_CONNECT_BUDGET_SEC;
+		if ((uint32_t)++connectionTimout >= budget) {
+			DEBUGLOGWIFI("Connect budget expired. Back to AP wait.\r\n");
+			enterApWait();
+		}
+		return;
+	}
+
+	// Пауза между повторными сканами (STA-режим без AP, сеть не находится)
+	if (_stateSeconds < _nextStaScanAt) {
+		ledMacrosWifiScan();
+		return;
+	}
+
+	int st = WiFi.scanComplete();
+	if (st == WIFI_SCAN_RUNNING) {
+		// Защита от «зависшего» скана: если скан не завершается дольше порога —
+		// перезапускаем через AP-ожидание или повторный скан
+		if ((uint32_t)++connectionTimout >= WIFI_SCAN_STUCK_SEC) {
+			DEBUGLOGWIFI("Scan stuck %lu sec. Restarting.\r\n", (unsigned long)WIFI_SCAN_STUCK_SEC);
+			connectionTimout = 0;
+			WiFi.scanDelete();
+			if (_wifiAPLifeTime > 0) {
+				enterApWait();
+			} else {
+				WiFi.mode(WIFI_STA);
+				_nextStaScanAt = _stateSeconds + WIFI_RESCAN_PAUSE_SEC;
 				ledMacrosWifiScan();
-			} else {
-				self->_apUptime = 0;
-			}
-		}
-	}
-
-// AP mode — client idle timeout
-	if (self->wifiStatus == FS_STAT_APMODE && self->_wifiAPLifeTime > 0) {
-		if (WiFi.softAPgetStationNum() > 0) {
-			if (self->_apClientActivity) {
-				self->_apClientIdleSec = 0;
-				self->_apClientActivity = false;
-			} else {
-				if (++self->_apClientIdleSec >= self->_wifiAPLifeTime * 60) {
-					DEBUGLOGWIFI("AP client idle timeout, disconnecting client.\r\n");
-					WiFi.softAPdisconnect(true);
-					self->_apClientIdleSec = 0;
-				}
 			}
 		} else {
-			self->_apClientIdleSec = 0;
+			ledMacrosWifiScan();
 		}
+		return;
+	}
+	if (st == WIFI_SCAN_FAILED) {
+		connectionTimout = 0;
+		WiFi.scanNetworks(true);	// перезапуск скана
+		ledMacrosWifiScan();
+		return;
+	}
+	if (st < 0) {
+		ledMacrosWifiScan();
+		return;
 	}
 
+	// Скан завершён
+	connectionTimout = 0;
+	int slot = scanWifi();
+	WiFi.scanDelete();
+	if (slot < 0) {
+		// Сети из конфигов нет (или все SSID заблокированы счётчиками неудач)
+		if (_wifiAPLifeTime > 0) {
+			enterApWait();
+		} else {
+			_nextStaScanAt = _stateSeconds + WIFI_RESCAN_PAUSE_SEC;
+			ledMacrosWifiScan();
+		}
+		return;
+	}
+
+	// Найдена сеть из конфигов — подключаемся
+	load_configWifi(slot);
+	WifiScan = WF_SCAN_NO_NEED;
+	connectionTimout = 0;
+	DEBUGLOGWIFI("Connecting to %s\r\n", _wifiConfig.ssid.c_str());
+	WiFi.begin(_wifiConfig.ssid.c_str(), _wifiConfig.password.c_str());
+	ledMacrosWifiConnecting();
 }
 
 // ============================================================
@@ -635,8 +749,11 @@ void CLASS_CORE_WIFI::configureWifiAP() {
 		module_udp.stop();	// always stop!
 #endif
 	String APname = ESPHTTPServer.getHostName();
+	_suppressDisc = 3;   // события от собственного отключения STA игнорируем
+	_ignoreDisconnect = true;
 	if (WiFi.status() == WL_CONNECTED) { WiFi.disconnect();	}
 	WiFi.mode(WIFI_AP);
+	_ignoreDisconnect = false;
 	wifiStatus = FS_STAT_APMODE;
 	if (ESPHTTPServer._httpAuth.auth) {
 		WiFi.softAP(APname, ESPHTTPServer._httpAuth.wwwPassword);
@@ -651,7 +768,6 @@ void CLASS_CORE_WIFI::configureWifiAP() {
 	DEBUGLOGWIFI("AP Mode enabled. SSID: %s IP: %s\r\n", WiFi.softAPSSID().c_str(), WiFi.softAPIP().toString().c_str());
 	connectionTimout = 0;
 	_apUptime = 0;
-	_apClientIdleSec = 0;
 	_apClientActivity = false;
 	ledSetSteady(false);
 	ledMacrosWifiAP();	// вход в AP-режим
@@ -660,59 +776,52 @@ void CLASS_CORE_WIFI::configureWifiAP() {
 int CLASS_CORE_WIFI::scanWifi() {
 	int _scanNum = -1;
 
+	// Выбор SSID из завершённого скана в порядке приоритета (сначала слот 3, потом 2, 1, 0).
+	// Пропускаем SSID, у которых превышен лимит неудачных попыток.
 	int nets = WiFi.scanComplete();
-	if (nets == WIFI_SCAN_FAILED) {	WiFi.scanNetworks(true);	}
-	if (nets > 0) {
-		// Ищем SSID в порядке приоритета (сначала слот 3, потом 2, 1, 0)
-		// Пропускаем SSID, у которых превышен лимит неудачных попыток
-		for (int i = 0; i < nets; ++i) {
-			if (strcmp( _strWifi3,  WiFi.SSID(i).c_str()) == 0 && _wifiFailCount[3] < MAX_WIFI_FAIL_COUNT){ _scanNum = 3; }
-		}
-		if (_scanNum < 0) {
-			for (int i = 0; i < nets; ++i) {
-				if (strcmp( _strWifi2,  WiFi.SSID(i).c_str()) == 0 && _wifiFailCount[2] < MAX_WIFI_FAIL_COUNT){ _scanNum = 2; }
-			}
-		}
-		if (_scanNum < 0) {
-			for (int i = 0; i < nets; ++i) {
-				if (strcmp( _strWifi1,  WiFi.SSID(i).c_str()) == 0 && _wifiFailCount[1] < MAX_WIFI_FAIL_COUNT){ _scanNum = 1; }
-			}
-		}
-		if (_scanNum < 0) {
-			for (int i = 0; i < nets; ++i) {
-				if (strcmp( _strWifi0,  WiFi.SSID(i).c_str()) == 0 && _wifiFailCount[0] < MAX_WIFI_FAIL_COUNT){ _scanNum = 0; }
-			}
-		}
-		WiFi.scanDelete();
-	}
-	if (_scanNum >= 0) {	WifiScan = WF_STAT_SCANED;	}
+	if (nets <= 0) { return -1; }
 
-	DEBUGLOGWIFI("timeout: %d _scanNum = %d nets = %d \r\n", (scanTime - connectionTimout), _scanNum, nets);
+	for (int i = 0; i < nets && _scanNum < 0; ++i) {
+		if (strcmp( _strWifi3,  WiFi.SSID(i).c_str()) == 0 && _wifiFailCount[3] < MAX_WIFI_FAIL_COUNT){ _scanNum = 3; }
+	}
+	if (_scanNum < 0) {
+		for (int i = 0; i < nets && _scanNum < 0; ++i) {
+			if (strcmp( _strWifi2,  WiFi.SSID(i).c_str()) == 0 && _wifiFailCount[2] < MAX_WIFI_FAIL_COUNT){ _scanNum = 2; }
+		}
+	}
+	if (_scanNum < 0) {
+		for (int i = 0; i < nets && _scanNum < 0; ++i) {
+			if (strcmp( _strWifi1,  WiFi.SSID(i).c_str()) == 0 && _wifiFailCount[1] < MAX_WIFI_FAIL_COUNT){ _scanNum = 1; }
+		}
+	}
+	if (_scanNum < 0) {
+		for (int i = 0; i < nets && _scanNum < 0; ++i) {
+			if (strcmp( _strWifi0,  WiFi.SSID(i).c_str()) == 0 && _wifiFailCount[0] < MAX_WIFI_FAIL_COUNT){ _scanNum = 0; }
+		}
+	}
 	return _scanNum;
 }
 
-void CLASS_CORE_WIFI::configureWifi() { // set esp8266 as wifi client
+void CLASS_CORE_WIFI::configureWifi() { // вход в STA-режим: скан сети / подключение
 	if (wifiStatus == FS_STAT_APMODE) {return;}
 	DEBUGLOGWIFI(__PRETTY_FUNCTION__);	DEBUGLOGWIFI("\r\n");
 	//disconnect required here
 	//improves reconnect reliability
+	_suppressDisc = 3;   // события от собственного disconnect() игнорируем
+	_ignoreDisconnect = true;
 	if (WiFi.isConnected()) {	WiFi.disconnect(); 	}
 	//encourge clean recovery after disconnect species5618, 08-March-2018
 	WiFi.mode(WIFI_STA);
-	if (WifiScan == WF_STAT_SCANED){
-		DEBUGLOGWIFI("Connecting to %s\r\n", _wifiConfig.ssid.c_str());
-		WiFi.begin(_wifiConfig.ssid.c_str(), _wifiConfig.password.c_str());
-	}  else  {
-		WiFi.scanNetworks(true);
-	}
+	_ignoreDisconnect = false;
 	wifiStatus = FS_STAT_CONNECTING;
+	WifiScan = WF_STAT_SCANING;
+	connectionTimout = 0;
 	ledSetSteady(false);	// выход из steady-on при подключении
-//Only use wait waitForConnectResult if the timeout is not enabled to not mess with the timeout
-	if (scanTime <= 0) { WiFi.waitForConnectResult(); }
 	_apUptime = 0;
-	_apClientIdleSec = 0;
 	_apClientActivity = false;
-
+	_nextStaScanAt = _stateSeconds;
+	WiFi.scanNetworks(true);
+	ledMacrosWifiScan();
 }
 
 #if defined(ESP32)
@@ -746,6 +855,8 @@ void CLASS_CORE_WIFI::onWiFiConnectedGotIP(WiFiEventStationModeGotIP data) {
 	wifiDisconnectedSince = 0;
 	connectionTimout = 0;
 	wifiStatus = FS_STAT_CONNECTED;
+	_enterApPending = false;
+	_suppressDisc = 0;
 #if defined(MODULE_UDP)
 //udp start to listen
 	module_udp.begin();
@@ -768,6 +879,8 @@ void CLASS_CORE_WIFI::onWiFiDisconnected(WiFiEventInfo_t info) {
 void CLASS_CORE_WIFI::onWiFiDisconnected(WiFiEventStationModeDisconnected data) {
 #endif
 
+	// Собственные отключения (переключение режимов, restart) не обрабатываем
+	if (_ignoreDisconnect || _suppressDisc > 0 || wifiStatus == FS_STAT_RESET) { return; }
 
 #if defined(MODULE_UDP)
 	module_udp.stop();	// always stop!
@@ -775,42 +888,54 @@ void CLASS_CORE_WIFI::onWiFiDisconnected(WiFiEventStationModeDisconnected data) 
 	core_ntp.ntpOnDisconected();
 	ledSetSteady(false);	// выход из steady-on при отключении
 
-	if (wifiStatus == FS_STAT_RESET) {return;}
-
-DEBUGLOGWIFI(" case STA_DISCONNECTED \r\n");
-
-	// Определяем команду "неверный пароль" по точной причине отключения
-	// из события, а не по WiFi.status(), — на ESP32 внутри события отключения
-	// WiFi.status() почти всегда возвращает "не подключён" и ложно помечает
-	// любой временный обрыв как "wrong password", блокируя автовосстановление.
-	bool wrongPass = false;
+	uint8_t reason = 0;
 #if defined(ESP8266)
-	wrongPass =
-		(data.reason == WIFI_DISCONNECT_REASON_AUTH_FAIL ||
-		 data.reason == WIFI_DISCONNECT_REASON_AUTH_EXPIRE ||
-		 data.reason == WIFI_DISCONNECT_REASON_AUTH_LEAVE ||
-		 data.reason == WIFI_DISCONNECT_REASON_NO_AP_FOUND);
+	reason = data.reason;
 #endif
 #if defined(ESP32)
-	wrongPass =
-		(info.wifi_sta_disconnected.reason == WIFI_REASON_AUTH_FAIL ||
-		 info.wifi_sta_disconnected.reason == WIFI_REASON_AUTH_EXPIRE ||
-		 info.wifi_sta_disconnected.reason == WIFI_REASON_AUTH_LEAVE ||
-		 info.wifi_sta_disconnected.reason == WIFI_REASON_NO_AP_FOUND);
+	reason = info.wifi_sta_disconnected.reason;
 #endif
-	if (wrongPass) {
-		wifiStatus = FS_STAT_WRONGPASSWORDS;
-		WifiScan = WF_SCAN_NO_NEED;
-		wifiSsidSetPSWDwrong(_wifiConfig.ssid);
-		ledMacrosWifiDisconnect()	;
-	}
+	DEBUGLOGWIFI("STA disconnected, reason: %u\r\n", (unsigned)reason);
 
-	// if (CONNECTION_LED >= 0) {	espLedOff();	}// Turn LED off
+	// «Неверный пароль» определяем по точной причине из события, а не по WiFi.status().
+	// NO_AP_FOUND (пропал роутер) неверным паролем НЕ считается.
+	bool authFail = false;
+#if defined(ESP8266)
+	authFail = (reason == WIFI_DISCONNECT_REASON_AUTH_FAIL);
+#endif
+#if defined(ESP32)
+	authFail = (reason == WIFI_REASON_AUTH_FAIL);
+#endif
+
 	if (wifiDisconnectedSince == 0) { wifiDisconnectedSince = millis(); }
 	DEBUGLOGWIFI("Disconnected for %d seconds \r\n", (int)((millis() - wifiDisconnectedSince) / 1000));
-	wifiStatus = FS_STAT_CONNECTING;
-	WifiScan = WF_STAT_SCANING;
 
+	wifiStatus = FS_STAT_CONNECTING;
+	connectionTimout = 0;
+
+	if (authFail) {
+		DEBUGLOGWIFI("Auth fail (wrong password?): %s\r\n", _wifiConfig.ssid.c_str());
+		wifiSsidSetPSWDwrong(_wifiConfig.ssid);
+		ledMacrosWifiDisconnect();
+		if (anySlotFree()) {
+			// Остались незаблокированные слоты — пересканируем и пробуем следующий
+			WifiScan = WF_STAT_SCANING;
+			rescanSoon();
+		} else {
+			// Все сети заблокированы — в AP, чтобы пользователь исправил пароль
+			_enterApPending = true;
+		}
+		return;
+	}
+
+	// Роутер пропал или попытка подключения не удалась.
+	// Логика: сначала AP ждёт клиента (если включена), затем скан сети.
+	WifiScan = WF_STAT_SCANING;
+	if (_wifiAPLifeTime > 0) {
+		_enterApPending = true;
+	} else {
+		rescanSoon();
+	}
 }
 
 void CLASS_CORE_WIFI::wifiSsidSetPSWDwrong(String _str) {

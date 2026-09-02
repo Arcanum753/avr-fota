@@ -103,7 +103,6 @@ class  CLASS_CORE_WIFI    {
     WiFiEventHandler onStationModeConnectedHandler, onStationModeDisconnectedHandler, onStationModeGotIPHandler ;
     #endif
     
-    Ticker _secondTk;
     strWifiConfig       _wifiConfig;    //  WiFi configuration
     strApConfig         _apConfig;      // Static AP config settings
     char                _strWifi0[40];
@@ -111,19 +110,18 @@ class  CLASS_CORE_WIFI    {
     char                _strWifi2[40];
     char                _strWifi3[40];
     long                wifiDisconnectedSince = 0;
-    enWifiStatus        wifiStatus;
-    enWifiScan WifiScan;
+    enWifiStatus        wifiStatus = FS_STAT_CONNECTING;
+    enWifiScan WifiScan = WF_STAT_SCANING;
     uint16_t connectionTimout;
     bool _secondFlag;
     uint8_t             _wifiFailCount[4] = {0, 0, 0, 0}; // Счётчики неудачных попыток для каждого SSID
-    uint16_t            _wifiScanTime;
-    uint16_t            _wifiAPLifeTime;
-    volatile uint16_t   _apUptime = 0;
-    volatile uint16_t   _apClientIdleSec = 0;
+    uint16_t            _wifiScanTime;  // бюджет попытки подключения в STA, минуты (scanTime = _wifiScanTime*60)
+    uint16_t            _wifiAPLifeTime; // «жизнь» AP: сколько минут AP ждёт/обслуживает клиента без активности, затем скан; 0 = AP не включать
+    volatile uint16_t   _apUptime = 0;      // секунды AP без активности (таймер «жизни» AP)
     volatile bool       _apClientActivity = false;
-    void notifyApClientActivity() { _apClientActivity = true; }
+    void notifyApClientActivity() { if (wifiStatus == FS_STAT_APMODE) { _apClientActivity = true; } }
     
-    static void s_secondTick(void* arg);
+    static void s_secondTick();
     void web_Init();
     String getMacAddress();
     int scanWifi();
@@ -165,9 +163,22 @@ private:
     void handle_slot_upload(AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total);
     void send_wifi_sysconf_json(AsyncWebServerRequest *request);
     void handle_wifi_sysconf_post(AsyncWebServerRequest *request);
+    // --- Ежесекундный автомат состояния Wi-Fi (исполняется в контексте loop) ---
+    void secondTick();          // шаг автомата (раз в секунду)
+    void apTick();              // шаг в состоянии AP (ожидание/обслуживание клиента)
+    void staTick();             // шаг в состоянии STA (скан/попытка подключения)
+    void enterApWait();         // вход в AP-ожидание (или STA-реконнект при _wifiAPLifeTime==0)
+    void leaveApToScan();       // выход из AP и запуск скана сети
+    void rescanSoon();          // разрешить пересканирование в ближайший тик
+    bool anySlotFree();         // есть ли слот с _wifiFailCount < MAX_WIFI_FAIL_COUNT
 protected: 
-    volatile int16_t scanTime = 1;
+    int32_t scanTime = 1;       // бюджет попытки подключения в STA (сек), 0/отрицательное -> внутренний дефолт
     bool  dumb = false;
+    uint32_t _stateSeconds = 0;     // счётчик секунд автомата (независимо от состояния)
+    bool     _enterApPending = false; // запрос входа в AP из WiFi-события (обрабатывается в loop)
+    bool     _ignoreDisconnect = false; // подавление событий от собственных WiFi.disconnect()
+    uint8_t  _suppressDisc = 0;  // кол-во секунд, в течение которых события отключения игнорируются
+    uint32_t _nextStaScanAt = 0; // тик, с которого можно снова запускать скан (пауза при отсутствии сети)
 };
 
 
