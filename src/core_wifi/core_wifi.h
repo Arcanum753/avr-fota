@@ -173,6 +173,16 @@ protected:
 
 extern CLASS_CORE_WIFI core_wifi; 
 
+// ============================================================
+// Кассета светодиодной индикации статуса Wi-Fi
+// ============================================================
+void ledMacrosWifiScan();
+void ledMacrosWifiDisconnect();
+void ledMacrosWifiAP();
+void ledMacrosWifiConnecting();
+void ledMacrosWifiError();
+void ledMacrosWifiConnected();
+
 
 
 #endif // _MODWIFI_h

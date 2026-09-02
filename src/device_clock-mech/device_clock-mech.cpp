@@ -9,6 +9,11 @@
 
 #include "core_terminal/core_terminal.h"
 #include "core_terminal/ErriezSerialTerminal.h"
+#include "core_led/core_led.h"
+
+#if defined(ESP8266)
+#include <avr/pgmspace.h>
+#endif
 
 #if defined(MODULE_DS3231)
 #include "module_ds3231/module_ds3231.h"
@@ -19,6 +24,12 @@
 DPDR GoToTaskAfterStep = Idle_task;
 
 static uint16_t _nStepCount = 0;
+
+// ============================================================
+// Паттерн светодиодной индикации ошибки (кассета модуля)
+// ============================================================
+
+static const char patDevError[] PROGMEM = LED_PATTERN_DEV_ERROR;
 
 CLASS_DEVICE_CLOCKMECH device_clock_mech(false);
 CLASS_DEVICE_CLOCKMECH::CLASS_DEVICE_CLOCKMECH(bool _in) { dumb = _in; }
@@ -38,6 +49,7 @@ void CLASS_DEVICE_CLOCKMECH::begin() {
     _timeHourReal = 0;
     _Mech_Status = STATUS_IDLE;
     _minPrev = 0;
+    ledClearState(LED_PRIO_DEV); // сброс моргания ошибки устройства
     GetSens();
     
     defaultConfig(); //конфиги
@@ -313,6 +325,12 @@ void CLASS_DEVICE_CLOCKMECH::html_ver_get(AsyncWebServerRequest *request) {
 // ============================================================
 
 // ============================================================
+// Светодиодная индикация ошибки устройства
+// ============================================================
+void CLASS_DEVICE_CLOCKMECH::ledMacrosClockMechError() {
+    ledSetState(LED_PRIO_DEV, patDevError, -1);
+}
+// ============================================================
 // Регистрация терминальных команд
 // ============================================================
 void clockMechTerminalRegister() {
@@ -461,6 +479,7 @@ void CLASS_DEVICE_CLOCKMECH::MechSetxx00_Task() {
 
 void CLASS_DEVICE_CLOCKMECH::MechSetxx00_endOk() {
     device_clock_mech._Mech_Status = STATUS_IDLE;
+    ledClearState(LED_PRIO_DEV);
     GoToTaskAfterStep = Idle_task;
     device_clock_mech._timeMechMin = 0;
     device_clock_mech._timeMechHour = 0;
@@ -474,6 +493,7 @@ void CLASS_DEVICE_CLOCKMECH::MechSetxx00_endOk() {
 
 void CLASS_DEVICE_CLOCKMECH::MechSetxx00_endFail() {
     device_clock_mech._Mech_Status = ERROR_NO_MIN;
+    ledMacrosClockMechError();
     GoToTaskAfterStep = Idle_task;
     digitalWrite(CLOCKMECH_EN, HIGH);
     digitalWrite(CLOCKMECH_SENS_LED, LOW);
@@ -510,6 +530,7 @@ void CLASS_DEVICE_CLOCKMECH::MechSet12xx_Task() {
 
 void CLASS_DEVICE_CLOCKMECH::MechSet12xx_endOk() {
     device_clock_mech._Mech_Status = STATUS_IDLE;
+    ledClearState(LED_PRIO_DEV);
     GoToTaskAfterStep = Idle_task;
     device_clock_mech._timeMechMin = 0;
     device_clock_mech._timeMechHour = 0;
@@ -522,6 +543,7 @@ void CLASS_DEVICE_CLOCKMECH::MechSet12xx_endOk() {
 
 void CLASS_DEVICE_CLOCKMECH::MechSet12xx_endFail() {
     device_clock_mech._Mech_Status = ERROR_NO_HOUR;
+    ledMacrosClockMechError();
     GoToTaskAfterStep = Idle_task;
     digitalWrite(CLOCKMECH_EN, HIGH);
     digitalWrite(CLOCKMECH_SENS_LED, LOW);
@@ -558,6 +580,7 @@ void CLASS_DEVICE_CLOCKMECH::MechSet1200_Task() {
 
 void CLASS_DEVICE_CLOCKMECH::MechSet1200_endOk() {
     device_clock_mech._Mech_Status = STATUS_IDLE;
+    ledClearState(LED_PRIO_DEV);
     GoToTaskAfterStep = Idle_task;
     device_clock_mech._timeMechMin = 0;
     device_clock_mech._timeMechHour = 0;
@@ -575,6 +598,7 @@ void CLASS_DEVICE_CLOCKMECH::MechSet1200_endOk() {
 
 void CLASS_DEVICE_CLOCKMECH::MechSet1200_endFail() {
     device_clock_mech._Mech_Status = ERROR_NO_MECH;
+    ledMacrosClockMechError();
     GoToTaskAfterStep = Idle_task;
     digitalWrite(CLOCKMECH_EN, HIGH);
     digitalWrite(CLOCKMECH_SENS_LED, LOW);
@@ -610,6 +634,7 @@ void CLASS_DEVICE_CLOCKMECH::MechCountStepsTask() {
 
 void CLASS_DEVICE_CLOCKMECH::MechCountStepsOk() {
     DEBUGCLOCKMECH("%s\r\n", __FUNCTION__);
+    ledClearState(LED_PRIO_DEV);
     GetSens(); cmdSens();
     digitalWrite(CLOCKMECH_EN, HIGH);
     digitalWrite(CLOCKMECH_SENS_LED, LOW);
@@ -628,6 +653,7 @@ void CLASS_DEVICE_CLOCKMECH::MechCountStepsOk() {
 void CLASS_DEVICE_CLOCKMECH::MechCountStepsFail() {
     DEBUGCLOCKMECH("MechCountSteps: ERROR_NO_MECH\r\n");
     device_clock_mech._Mech_Status = ERROR_NO_MECH;
+    ledMacrosClockMechError();
     GoToTaskAfterStep = Idle_task;
     GetSens(); cmdSens();
     device_clock_mech._mechControlSteps = 0;
@@ -663,6 +689,7 @@ void CLASS_DEVICE_CLOCKMECH::MechSetArrowHourTask() {
 }
 
 void CLASS_DEVICE_CLOCKMECH::MechSetArrowHourEndOk() {
+    ledClearState(LED_PRIO_DEV);
     GoToTaskAfterStep = Idle_task;
     GetSens();
     if (device_clock_mech._timeMechHour == device_clock_mech._timeHourReal) { DEBUGCLOCKMECH("tH_M == tH_R \r\n"); }
@@ -681,6 +708,7 @@ void CLASS_DEVICE_CLOCKMECH::MechSetArrowHourEndOk() {
 void CLASS_DEVICE_CLOCKMECH::MechSetArrowHourEndFail() {
     DEBUGCLOCKMECH("%s\r\n", __FUNCTION__);
     device_clock_mech._Mech_Status = ERROR_NO_MECH;
+    ledMacrosClockMechError();
     GetSens();
     GoToTaskAfterStep = Idle_task;
     digitalWrite(CLOCKMECH_EN, HIGH);
@@ -744,6 +772,7 @@ void CLASS_DEVICE_CLOCKMECH::MechSetArrowMinTask() {
 
 void CLASS_DEVICE_CLOCKMECH::MechSetArrowMinOk() {
     device_clock_mech._Mech_Status = STATUS_IDLE;
+    ledClearState(LED_PRIO_DEV);
     GoToTaskAfterStep = Idle_task;
     digitalWrite(CLOCKMECH_EN, HIGH);
     digitalWrite(CLOCKMECH_SENS_LED, LOW);
@@ -754,6 +783,7 @@ void CLASS_DEVICE_CLOCKMECH::MechSetArrowMinOk() {
 
 void CLASS_DEVICE_CLOCKMECH::MechSetArrowMinFail() {
     device_clock_mech._Mech_Status = ERROR_NO_MECH;
+    ledMacrosClockMechError();
     GoToTaskAfterStep = Idle_task;
     GetSens(); cmdSens();
     digitalWrite(CLOCKMECH_EN, HIGH);

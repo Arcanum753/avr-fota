@@ -9,6 +9,11 @@
 
 #include "core_terminal/core_terminal.h"
 #include "core_terminal/ErriezSerialTerminal.h"
+#include "core_led/core_led.h"
+
+#if defined(ESP8266)
+#include <avr/pgmspace.h>
+#endif
 
 DPDR GoToTaskAfterStepRing = Idle_task;
 
@@ -18,6 +23,12 @@ void CLASS_DEVICE_RINGMECH::setFs(fs::LittleFSFS* fs)  {   _fs = fs;   }
 volatile uint16_t step_time = RINGMECH_SPEED_DEFAULT;
 
 // ============================================================
+// Паттерн светодиодной индикации ошибки (кассета модуля)
+// ============================================================
+
+static const char patDevError[] PROGMEM = LED_PATTERN_DEV_ERROR;
+
+// ============================================================
 // begin()
 // ============================================================
 void CLASS_DEVICE_RINGMECH::begin() {
@@ -25,6 +36,7 @@ void CLASS_DEVICE_RINGMECH::begin() {
     GoToTaskAfterStepRing = Idle_task;
     _mechControlSteps = 0;
     _ringStatus = RING_STATUS_IDLE;
+    ledClearState(LED_PRIO_DEV); // сброс моргания ошибки устройства
     _sensorState = digitalRead(RINGMECH_SENS);
     _timeHourPrev = 0xFF;
 
@@ -191,6 +203,7 @@ void CLASS_DEVICE_RINGMECH::cmdResetWeb(AsyncWebServerRequest *request) {
     device_mech_ring._mechControlSteps = 0;
     device_mech_ring._mechTurnTarget = 0;
     device_mech_ring._ringStatus = RING_STATUS_IDLE;
+    ledClearState(LED_PRIO_DEV);
     request->send(200, "application/json", "{\"ok\":true}");
 }
 
@@ -275,6 +288,13 @@ void CLASS_DEVICE_RINGMECH::html_ver_get(AsyncWebServerRequest *request) {
 // ============================================================
 // Конкретная логика модуля
 // ============================================================
+
+// ============================================================
+// Светодиодная индикация ошибки устройства
+// ============================================================
+void CLASS_DEVICE_RINGMECH::ledMacrosRingMechError() {
+    ledSetState(LED_PRIO_DEV, patDevError, -1);
+}
 
 // ============================================================
 // Регистрация терминальных команд
@@ -362,6 +382,7 @@ void CLASS_DEVICE_RINGMECH::MechHomeTask() {
 
 void CLASS_DEVICE_RINGMECH::MechHomeEndOk() {
     device_mech_ring._ringStatus = RING_STATUS_IDLE;
+    ledClearState(LED_PRIO_DEV);
     GoToTaskAfterStepRing = Idle_task;
     device_mech_ring._mechControlSteps = 0;
     device_mech_ring._sensorState = digitalRead(RINGMECH_SENS);
@@ -376,6 +397,7 @@ void CLASS_DEVICE_RINGMECH::MechHomeEndOk() {
 
 void CLASS_DEVICE_RINGMECH::MechHomeEndFail() {
     device_mech_ring._ringStatus = RING_ERROR_NO_MECH;
+    ledMacrosRingMechError();
     GoToTaskAfterStepRing = Idle_task;
     digitalWrite(RINGMECH_EN, HIGH);
     digitalWrite(RINGMECH_SENS_LED, LOW);
@@ -415,6 +437,7 @@ void CLASS_DEVICE_RINGMECH::MechCountStepsTask() {
 
 void CLASS_DEVICE_RINGMECH::MechCountStepsOk() {
     DEBUGRINGMECH("%s\r\n", __FUNCTION__);
+    ledClearState(LED_PRIO_DEV);
     digitalWrite(RINGMECH_EN, HIGH);
     device_mech_ring._sensorState = digitalRead(RINGMECH_SENS);
     digitalWrite(RINGMECH_SENS_LED, LOW);
@@ -430,6 +453,7 @@ void CLASS_DEVICE_RINGMECH::MechCountStepsOk() {
 void CLASS_DEVICE_RINGMECH::MechCountStepsFail() {
     DEBUGRINGMECH("MechCountSteps: RING_ERROR_NO_MECH\r\n");
     device_mech_ring._ringStatus = RING_ERROR_NO_MECH;
+    ledMacrosRingMechError();
     GoToTaskAfterStepRing = Idle_task;
     device_mech_ring._mechControlSteps = 0;
     digitalWrite(RINGMECH_EN, HIGH);
@@ -484,6 +508,7 @@ void CLASS_DEVICE_RINGMECH::MechTurnNEndOk() {
     digitalWrite(RINGMECH_EN, HIGH);
     device_mech_ring._sensorState = digitalRead(RINGMECH_SENS);
     digitalWrite(RINGMECH_SENS_LED, LOW);
+    ledClearState(LED_PRIO_DEV);
     GoToTaskAfterStepRing = Idle_task;
     device_mech_ring._mechControlSteps = 0;
     device_mech_ring._ringStatus = RING_STATUS_IDLE;
@@ -498,6 +523,7 @@ void CLASS_DEVICE_RINGMECH::MechTurnNEndFail() {
     GoToTaskAfterStepRing = Idle_task;
     device_mech_ring._mechControlSteps = 0;
     device_mech_ring._ringStatus = RING_ERROR_NO_MECH;
+    ledMacrosRingMechError();
 }
 
 // ============================================================

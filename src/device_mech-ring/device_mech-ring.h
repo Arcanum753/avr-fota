@@ -81,6 +81,9 @@ public:
     void web_Init();
     time_t getCurrentTime();
 
+    // Кассета светодиодной индикации ошибки устройства
+    static void ledMacrosRingMechError();
+    
     static void cmdEn();
     static void cmdSens();
     static void cmdHome();

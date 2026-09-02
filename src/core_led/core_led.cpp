@@ -1,22 +1,48 @@
 
 
+
 #include <Arduino.h>
 #if defined(ESP32)
 #include <esp32-hal-gpio.h>
 #endif
 
 #if defined(ESP8266)
+#include <avr/pgmspace.h>
 #endif
+
+#include <string.h>
 
 #include "core_sys/eertos.h"
 #include "core_led.h"
 
-uint32_t ledMacroPosition = 0;
-String ledBlinkMacros = "...";
+// ============================================================
+// Глобальные объекты и переменные
+// ============================================================
 
-volatile uint8_t isBlinking = 0;
-int16_t ledMacroTimes = 0;
-static bool patternActive = false;
+typedef struct {
+    const char* pattern;  // указатель на PROGMEM-строку
+    uint8_t     length;   // число слотов
+    uint8_t     position; // текущая позиция
+    int16_t     times;    // число повторов, -1 = бесконечно
+    bool        active;
+} LedSlot;
+
+static LedSlot ledSlots[LED_PRIO_COUNT];
+static bool ledSteadyOn = false;                 // базовое состояние «горит постоянно»
+static char ledManualPattern[LEDSTRINGLIMIT + 1];// буфер терминальной команды blink (без heap)
+
+// ============================================================
+// Доступ к PROGMEM-строкам (кассеты модулей передают flash-указатели)
+// ============================================================
+
+#if defined(ESP8266)
+static uint8_t ledPatLen(const char* p)  { return (uint8_t)strlen_P(p); }
+static char    ledPatAt(const char* p, uint8_t i) { return (char)pgm_read_byte(p + i); }
+#endif
+#if defined(ESP32)
+static uint8_t ledPatLen(const char* p)  { return (uint8_t)strlen(p); }
+static char    ledPatAt(const char* p, uint8_t i) { return p[i]; }
+#endif
 
 
 #if defined(ESP8266)
@@ -29,6 +55,68 @@ void espLedOn ()    {  if (CONNECTION_LED >= 0)	{digitalWrite(CONNECTION_LED, HI
 void espLedOff ()    { if (CONNECTION_LED >= 0)	{digitalWrite(CONNECTION_LED, LOW);} }
 #endif
 
+// ============================================================
+// Верхний активный слот и применение выхода
+// ============================================================
+
+static LedSlot* ledTopSlot() {
+	for (int i = LED_PRIO_COUNT - 1; i >= 0; i--) {
+		if (ledSlots[i].active) { return &ledSlots[i]; }
+	}
+	return NULL;
+}
+
+static void ledApplyOutput() {
+	LedSlot* s = ledTopSlot();
+	if (s) {
+		if (ledPatAt(s->pattern, s->position) == '*') { espLedOn(); }
+		else { espLedOff(); }
+	} else {
+		if (ledSteadyOn) { espLedOn(); }
+		else { espLedOff(); }
+	}
+}
+
+// ============================================================
+// Управление слотами
+// ============================================================
+
+void ledSetState(LedPriority prio, const char* pattern, int16_t times) {
+	if (prio >= LED_PRIO_COUNT) { return; }
+	if (pattern == NULL) { ledClearState(prio); return; }
+	if (times == 0) { ledClearState(prio); return; }	// 0 = снять слот
+	LedSlot& s = ledSlots[prio];
+	if (prio != LED_PRIO_MANUAL) {
+		// тот же паттерн уже активен — не перезапускаем (идемпотентно)
+		if (s.active && s.pattern == pattern) { return; }
+		// конечный паттерн в слоте не прерывается другим паттерном
+		if (s.active && s.times != -1) { return; }
+	}
+	s.pattern = pattern;
+	s.length = ledPatLen(pattern);
+	if (s.length == 0) { ledClearState(prio); return; }
+	s.position = 0;
+	s.times = times;
+	s.active = true;
+	ledApplyOutput();
+}
+
+void ledClearState(LedPriority prio) {
+	if (prio >= LED_PRIO_COUNT) { return; }
+	ledSlots[prio].active = false;
+	ledApplyOutput();
+}
+
+void ledSetSteady(bool on) {
+	ledSteadyOn = on;
+	ledApplyOutput();
+}
+
+void ledMacroRst()    {
+	for (uint8_t i = 0; i < LED_PRIO_COUNT; i++) { ledSlots[i].active = false; }
+	ledSteadyOn = false;
+	espLedOff();
+}
 
 void ledInit()    {
 	if (CONNECTION_LED >= 0) {	pinMode(CONNECTION_LED, OUTPUT);	}
@@ -37,72 +125,39 @@ void ledInit()    {
 	ledMacroTimerTask();
 }
 
-void flashLEDOnConnected()	{
-	if (isBlinking == 1) {return;}
-	espLedOn();
+// ============================================================
+// Продвижение паттерна (1 шаг)
+// ============================================================
+
+bool ledMacroBlinker( ) {
+	LedSlot* s = ledTopSlot();
+	if (!s) {
+		ledApplyOutput();
+		return false;
+	}
+	if (s->position	>= s->length-1) { 
+		s->position = 0; 
+		if (s->times > 0) { s->times--; }
+		if (s->times == 0) { s->active = false; }
+	} 
+	else { s->position++; }
+	ledApplyOutput();
+	return true; // repeat? true/false
 }
 
 void ledMacroTimerTask() {
 	SetTimerTask(ledMacroTimerTask, SLOT_MIN_TIME);
-	if (patternActive == true && ledMacroTimes  != 0 ) {	
-		ledMacroBlinker(); 
-		isBlinking = 1;
-	} else { 
-		isBlinking = 0; 
-		if (ledMacroTimes == 0) { patternActive = false; }
-	}
+	ledMacroBlinker();
 }
 
+// ============================================================
+// Ручной тест из терминала (команда blink)
+// ============================================================
 
-bool ledMacroBlinker( ) {
-	if (ledBlinkMacros.length() !=0 ) {
-		if (ledMacroPosition	>= ledBlinkMacros.length()-1) { 
-			ledMacroPosition = 0; 
-			if (ledMacroTimes > 0) { ledMacroTimes--; }
-		} 
-		else { ledMacroPosition++; }
-		if (ledBlinkMacros[ledMacroPosition] == '*') { espLedOn();}
-		if (ledBlinkMacros[ledMacroPosition] == '.') { espLedOff();}
-	} else {
-		espLedOff(); 
-	}
-	return true; // repeat? true/false
-}
-
-void LedMacroSet (String _inStr, int16_t _times){ 
-	if (patternActive == true) { return;   }
-	if (_inStr.length() == 0) {
-        espLedOff();
-        return;
-    }
+void LedMacroSet (const char* _inStr, int16_t _times){ 
+	if (_inStr == NULL) { return; }
 	if (_times < -1) {_times = -1;}
-	ledMacroTimes = _times;
-	ledMacroRst();
-	if (LEDSTRINGLIMIT 		<= _inStr.length()-1) {  _inStr.remove(LEDSTRINGLIMIT);  } 
-	ledBlinkMacros = _inStr; 
-	patternActive = true;
+	strncpy(ledManualPattern, _inStr, LEDSTRINGLIMIT);
+	ledManualPattern[LEDSTRINGLIMIT] = '\0';
+	ledSetState(LED_PRIO_MANUAL, ledManualPattern, _times);
 }
-
-void ledMacroRst()    {
-	espLedOff();
-	ledMacroPosition = 0;
-}
-
-// ==================== Wi-Fi состояния ====================
-
-void ledMacrosWifiScan()			{	LedMacroSet("*.*.*.*.", 10);  }
-void ledMacrosWifiDisconnect()		{	LedMacroSet("*.........", 3);  }
-void ledMacrosWifiAP()				{	LedMacroSet("*.*.*......", -1); }
-void ledMacrosWifiConnecting()		{	LedMacroSet("*.*..", 2); }
-void ledMacrosWifiError()			{	LedMacroSet("*.*.*", 5); }
-// ==================== Память ====================
-void ledMacrosMemoryRead()			{	LedMacroSet("*", 1); }
-void ledMacrosMemoryWrite()			{	LedMacroSet("*.*", 1); }
-void ledMacrosMemoryError()			{	LedMacroSet("*.*.*.*.*", 3); }
-void ledMacrosMemoryClear()			{	LedMacroSet("***...***...", 2); }
-
-// ==================== Дополнительные ====================
-void ledMacrosSuccess()				{	LedMacroSet("*", 1); }
-void ledMacrosError()				{	LedMacroSet("*.*.*", 2); }
-void ledMacrosWaiting()				{	LedMacroSet("*...*...", -1); }
-void ledMacrosSystemStart()			{	LedMacroSet("***", 2); }

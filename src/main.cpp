@@ -43,8 +43,8 @@ void setup() {
     ESPHTTPServer.begin(&LittleFS);
     ledInit(); 
     // flashLED(CONNECTION_LED, 25, 150);
-    ledMacroTimerTask();
-	_secondEERtos.attach_ms(1, &TimerService); // init eertos time manager and start.
+    // ledMacroTimerTask() вызывается внутри ledInit() — повторная регистрация удваивала скорость моргания
+    _secondEERtos.attach_ms(1, &TimerService); // init eertos time manager and start.
 }
 
 void loop() {

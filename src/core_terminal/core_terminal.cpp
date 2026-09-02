@@ -236,5 +236,5 @@ void BlinkCmd(){
         Serial.println("Blink mask is more than 200 slots. ");
         return;
     }
-    LedMacroSet(  arg2, times);
+    LedMacroSet(  arg2.c_str(), times);
 }

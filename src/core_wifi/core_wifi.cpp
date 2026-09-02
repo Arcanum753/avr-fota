@@ -5,6 +5,7 @@
 #endif
 #if defined(ESP8266)
 #include <LittleFS.h>
+#include <avr/pgmspace.h>
 #endif
 
 #include <DNSServer.h>
@@ -31,6 +32,16 @@
 
 CLASS_CORE_WIFI 	core_wifi(false);
 DNSServer 		dnsServer;
+
+// ============================================================
+// Паттерны светодиодной индикации статуса Wi-Fi (кассета модуля)
+// ============================================================
+
+static const char patWifiScan[]     PROGMEM = "*.*.*.*.";
+static const char patWifiDisc[]     PROGMEM = "*.........";
+static const char patWifiAP[]       PROGMEM = "*.*.*......";
+static const char patWifiConn[]     PROGMEM = "*.*..";
+static const char patWifiErr[]      PROGMEM = "*.*.*";
 
 CLASS_CORE_WIFI :: CLASS_CORE_WIFI (bool _in) {
 	 dumb = _in;
@@ -536,7 +547,6 @@ void CLASS_CORE_WIFI::s_secondTick(void* arg) {
 				DEBUGLOGWIFI("Connection Timeout. Switching to AP Mode.\r\n");
 				self->WifiScan = WF_SCAN_NO_NEED;
 				self->configureWifiAP();
-				ledMacrosWifiAP();
 			}
 		}
 		if (self->wifiStatus == FS_STAT_WRONGPASSWORDS) {
@@ -556,11 +566,12 @@ void CLASS_CORE_WIFI::s_secondTick(void* arg) {
 			self->load_configWifi(self->scanWifi());
 			ledMacrosWifiScan();
 		}
-		if (self->wifiStatus == FS_STAT_CONNECTED && (CONNECTION_LED >= 0) ) {  flashLEDOnConnected(); }
+		if (self->wifiStatus == FS_STAT_CONNECTED) { ledMacrosWifiConnected(); }
 	}
 
 // AP mode — scantime timeout and rescan logic
 	if (self->wifiStatus == FS_STAT_APMODE && self->scanTime > 0) {
+		ledMacrosWifiAP();	// re-arm AP-моргания (идемпотентно), возобновляет после конечных паттернов
 		if (++self->_apUptime >= self->scanTime) {
 			if (WiFi.softAPgetStationNum() == 0) {
 				// Выходим из AP-режима, иначе configureWifi() сразу вернётся
@@ -600,6 +611,17 @@ void CLASS_CORE_WIFI::s_secondTick(void* arg) {
 
 }
 
+// ============================================================
+// Светодиодная индикация статуса Wi-Fi
+// ============================================================
+
+void ledMacrosWifiScan()			{	ledSetState(LED_PRIO_WIFI, patWifiScan, 10);  }
+void ledMacrosWifiDisconnect()		{	ledSetState(LED_PRIO_WIFI, patWifiDisc, 3);  }
+void ledMacrosWifiAP()				{	ledSetState(LED_PRIO_WIFI, patWifiAP, -1); }
+void ledMacrosWifiConnecting()		{	ledSetState(LED_PRIO_WIFI, patWifiConn, 2); }
+void ledMacrosWifiError()			{	ledSetState(LED_PRIO_WIFI, patWifiErr, 5); }
+void ledMacrosWifiConnected()		{	ledSetSteady(true); ledClearState(LED_PRIO_WIFI); }
+
 void CLASS_CORE_WIFI::startDNSCaptive() {
     // Перехватываем все DNS запросы и направляем на IP точки доступа
     dnsServer.start(53, "*", WiFi.softAPIP());
@@ -631,6 +653,8 @@ void CLASS_CORE_WIFI::configureWifiAP() {
 	_apUptime = 0;
 	_apClientIdleSec = 0;
 	_apClientActivity = false;
+	ledSetSteady(false);
+	ledMacrosWifiAP();	// вход в AP-режим
 }
 
 int CLASS_CORE_WIFI::scanWifi() {
@@ -682,6 +706,7 @@ void CLASS_CORE_WIFI::configureWifi() { // set esp8266 as wifi client
 		WiFi.scanNetworks(true);
 	}
 	wifiStatus = FS_STAT_CONNECTING;
+	ledSetSteady(false);	// выход из steady-on при подключении
 //Only use wait waitForConnectResult if the timeout is not enabled to not mess with the timeout
 	if (scanTime <= 0) { WiFi.waitForConnectResult(); }
 	_apUptime = 0;
@@ -713,7 +738,7 @@ void CLASS_CORE_WIFI::onWiFiConnectedGotIP() {
 #if defined(ESP8266)
 void CLASS_CORE_WIFI::onWiFiConnectedGotIP(WiFiEventStationModeGotIP data) {
 #endif
-	if (CONNECTION_LED >= 0) { espLedOn(); 	} // Turn LED on
+	ledMacrosWifiConnected();	// выход из всех wifi-морганий: steady-on
 
 	DEBUGLOGWIFI("GotIP Address: %s \n", WiFi.localIP().toString().c_str());
 	DEBUGLOGWIFI("Gateway:    %s\r\n", WiFi.gatewayIP().toString().c_str());
@@ -748,6 +773,7 @@ void CLASS_CORE_WIFI::onWiFiDisconnected(WiFiEventStationModeDisconnected data) 
 	module_udp.stop();	// always stop!
 #endif
 	core_ntp.ntpOnDisconected();
+	ledSetSteady(false);	// выход из steady-on при отключении
 
 	if (wifiStatus == FS_STAT_RESET) {return;}
 

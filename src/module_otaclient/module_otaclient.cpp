@@ -737,11 +737,16 @@ bool CLASS_MODULE_OTACLIENT::performUpdateFromStream(WiFiClient& stream, size_t 
 #ifdef DEBUG_OTA
         Update.printError(Serial);
 #endif
+        ledMacrosUpdateError();
         // Remount filesystem
         fsRemount();
         _fsEnded = false;
         return false;
     }
+
+    // Моргание обновления: прошивка или файловая система
+    if (fileType == FILE_TYPE_FIRMWARE) { ledMacrosUpdateFirmware(); }
+    if (fileType == FILE_TYPE_FILESYSTEM) { ledMacrosUpdateFilesystem(); }
     
     // Stream data in chunks
     uint8_t buf[OTACLIENT_CHUNK_SIZE];
@@ -764,6 +769,7 @@ bool CLASS_MODULE_OTACLIENT::performUpdateFromStream(WiFiClient& stream, size_t 
 #if defined(ESP8266)
             Update.end();
 #endif
+            ledMacrosUpdateError();
             fsRemount();
             _fsEnded = false;
             return false;
@@ -778,6 +784,7 @@ bool CLASS_MODULE_OTACLIENT::performUpdateFromStream(WiFiClient& stream, size_t 
 #if defined(ESP8266)
             Update.end();
 #endif
+            ledMacrosUpdateError();
             fsRemount();
             _fsEnded = false;
             return false;
@@ -800,6 +807,7 @@ bool CLASS_MODULE_OTACLIENT::performUpdateFromStream(WiFiClient& stream, size_t 
 #ifdef DEBUG_OTA
         Update.printError(Serial);
 #endif
+        ledMacrosUpdateError();
         fsRemount();
         _fsEnded = false;
         return false;

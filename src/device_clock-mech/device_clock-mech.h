@@ -74,6 +74,9 @@ public:
     void begin(ModContext& ctx);
     void web_Init();
     time_t getCurrentTime();
+
+    // Кассета светодиодной индикации ошибки устройства
+    static void ledMacrosClockMechError();
     
     
     static void cmdStep();

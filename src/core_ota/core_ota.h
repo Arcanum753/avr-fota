@@ -152,6 +152,14 @@ protected:
 
 extern CLASS_CORE_OTA core_ota;
 
+// ============================================================
+// Кассета светодиодной индикации обновления
+// (общая для core_ota и module_otaclient)
+// ============================================================
+void ledMacrosUpdateFirmware();
+void ledMacrosUpdateFilesystem();
+void ledMacrosUpdateError();
+
 // Global flag: set to true when FS has been ended by OTA update process
 // Prevents double _fs->end() in restart_esp() which causes crash (LoadStoreAlignmentCause)
 extern bool _ota_fsEndCalled;

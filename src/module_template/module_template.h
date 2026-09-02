@@ -49,6 +49,9 @@ public:
     void begin(ModContext& ctx);
     void web_Init();
 
+    // Демо-кассета светодиодной индикации (пример: как модуль носит свою кассету)
+    void ledMacrosTemplateDemo();
+
 private:
     String getVersionStr();
     String getGeneratedTime();

@@ -3,6 +3,7 @@
 #include <esp32-hal-gpio.h>
 #elif defined(ESP8266)
 #include <LittleFS.h>
+#include <avr/pgmspace.h>
 #endif
 
 #include"version.h"
@@ -12,11 +13,20 @@
 #include "core_ota.h"
 #include "core_ota_version.h"
 #include "core_json/core_json.h"
+#include "core_led/core_led.h"
 
 CLASS_CORE_OTA core_ota(false);
 
 // Global flag to prevent double _fs->end() crashes
 bool _ota_fsEndCalled = false;
+
+// ============================================================
+// Паттерны светодиодной индикации обновления (кассета модуля)
+// ============================================================
+
+static const char patOtaFw[]    PROGMEM = "*.*.*.*.*.*.*.*.*.*";
+static const char patOtaFs[]    PROGMEM = "***...***...***...";
+static const char patOtaErr[]   PROGMEM = "*.*.*";
 
 CLASS_CORE_OTA :: CLASS_CORE_OTA (bool _in) {
 	 dumb = _in;
@@ -346,6 +356,7 @@ void CLASS_CORE_OTA::html_uploadUpdateFile(AsyncWebServerRequest *request, Strin
             DEBUGOTA("%s\n", values.c_str());
             request->send(500, "text/plain", values);
             errorOccurred = true;
+            ledMacrosUpdateError();
             
             fsRemount();
             return;
@@ -355,6 +366,10 @@ void CLASS_CORE_OTA::html_uploadUpdateFile(AsyncWebServerRequest *request, Strin
         // Setting it before was useless - it was always cleared by begin()
         Update.setMD5(_browserFileMD5.c_str());
         DEBUGOTA("Hash from browser: %s\r\n", _browserFileMD5.c_str());
+
+        // Моргание обновления: прошивка или файловая система
+        if (typeOTAfile == FILE_TYPE_FIRMWARE) { ledMacrosUpdateFirmware(); }
+        if (typeOTAfile == FILE_TYPE_FILESYSTEM) { ledMacrosUpdateFilesystem(); }
     }
     
     if (errorOccurred)  { return; }
@@ -376,6 +391,7 @@ void CLASS_CORE_OTA::html_uploadUpdateFile(AsyncWebServerRequest *request, Strin
         request->send(500, "text/plain", values);
         errorOccurred = true;
         responseSent = true;  
+        ledMacrosUpdateError();
         
 #if defined(ESP32)
         Update.abort();
@@ -415,6 +431,7 @@ void CLASS_CORE_OTA::html_uploadUpdateFile(AsyncWebServerRequest *request, Strin
 #ifdef DEBUG_OTA
             Update.printError(DEBUGOTASER);
 #endif
+            ledMacrosUpdateError();
             fsRemount();
         }
     }
@@ -463,6 +480,14 @@ void CLASS_CORE_OTA::html_ver_get(AsyncWebServerRequest *request) {
 // Конкретная логика модуля
 // ============================================================
 
+// ============================================================
+// Светодиодная индикация обновления
+// ============================================================
+
+void ledMacrosUpdateFirmware()		{	ledSetState(LED_PRIO_OTA, patOtaFw, -1); }
+void ledMacrosUpdateFilesystem()	{	ledSetState(LED_PRIO_OTA, patOtaFs, -1); }
+void ledMacrosUpdateError()			{	ledSetState(LED_PRIO_OTA, patOtaErr, 2); }
+
 void CLASS_CORE_OTA::prepareSizesForUpdate (){
 	DEBUGOTA(__FUNCTION__);	DEBUGOTA("\r\n");
 	maxSketchSpace   = (ESP.getSketchSize() - 0x1000) & 0xFFFFF000;
@@ -483,8 +508,8 @@ bool  CLASS_CORE_OTA::ConfigureOTA( String _hostname, String _password) {
 	} else { return false;	}	
 
 
-#ifndef RELEASE
 	ArduinoOTA.onStart([]() {
+		ledMacrosUpdateFirmware();	// ArduinoOTA обновляет только прошивку
 		DEBUGOTA("\r\n ArduinoOTA start. \r\n");
 	});
 
@@ -501,6 +526,7 @@ bool  CLASS_CORE_OTA::ConfigureOTA( String _hostname, String _password) {
 		DEBUGOTA("\t OTA update progress: %u%% \r\n", (progress / (total / 100)));
 	});
 	ArduinoOTA.onError([](ota_error_t error) {
+		ledMacrosUpdateError();
 		DEBUGOTA("Error[%u]: ", error);
 		if (error == OTA_AUTH_ERROR) 			{DEBUGOTA("Auth Failed\r\n");		}
 		else if (error == OTA_BEGIN_ERROR) 		{DEBUGOTA("Begin Failed\r\n");		}
@@ -509,7 +535,6 @@ bool  CLASS_CORE_OTA::ConfigureOTA( String _hostname, String _password) {
 		else if (error == OTA_END_ERROR) 		{DEBUGOTA("End Failed\r\n");		}
 	});
 	DEBUGOTA("\r\n ArduinoOTA Ready \r\n");
-#endif // RELEASE
 	ArduinoOTA.begin();
 
 	return true;
