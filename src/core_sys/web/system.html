@@ -38,7 +38,12 @@
             <tr><td class="label"><label for="wwwauth">Use auth:</label></td><td><input type="checkbox" id="wwwauth" name="wwwauth" onclick='javascript:enableAuthFields(this);'></td></tr>
             <tr id="username" style="display: none;"><td class="label"><label for="wwwuser">Web User:</label></td><td><input type="text" id="wwwuser" name="wwwuser" value=""></td></tr>
             <tr id="password" style="display: none;"><td class="label"><label for="wwwpass">Password:</label></td><td><input type="password" id="wwwpass" name="wwwpass" value=""></td></tr>
+            <tr><td colspan="2" align="center"><b>Password recovery</b></td></tr>
+            <tr><td class="label"><label for="wwwsecq">Security question:</label></td><td><input type="text" id="wwwsecq" name="wwwsecq" value=""></td></tr>
+            <tr><td class="label"><label for="wwwseca">Security answer:</label></td><td><input type="password" id="wwwseca" name="wwwseca" value=""></td></tr>
+            <tr><td align="center" colspan="2">To reset a forgotten password open /recover.</td></tr>
             <tr><td align="center" colspan="2">Notice password is used for<br/>HTTP Auth, AP Mode and OTA</td></tr>
+            <tr><td align="center" colspan="2">Password: 8-63 characters, only latin letters and digits.<br/>After saving changes the device will reboot.</td></tr>
             <tr><td align="center"><input type="submit" value="Save" class="button-prog"></td></tr>
             <tr><td id="submitResult" align="center"></td></tr>
         </table>
@@ -54,7 +59,16 @@
                 ApplyCVT("/system/devconf")
                     .then(() => ApplyCVT("/system/version"))
                     .then(() => ApplyCVT("/system/wwwauth"))
-                    .then(() => enableAuthFields(document.getElementById("wwwauth")));
+                    .then(() => enableAuthFields(document.getElementById("wwwauth")))
+                    .then(() => {
+                        initAuthState = {
+                            auth: document.getElementById("wwwauth").checked,
+                            user: document.getElementById("wwwuser").value,
+                            pass: document.getElementById("wwwpass").value,
+                            secq: document.getElementById("wwwsecq").value,
+                            seca: document.getElementById("wwwseca").value
+                        };
+                    });
             };
 
         function enableAuthFields(cb) {
@@ -72,22 +86,75 @@
             }
         }
         
+        var initAuthState = { auth: false, user: "", pass: "", secq: "", seca: "" };
+
+        function showSubmitMsg(text, ok) {
+            let el = document.getElementById("submitResult");
+            el.innerHTML = text;
+            el.style.color = ok ? '#155724' : '#721c24';
+        }
+
+        // Валидация пароля: 8-63 символа, только латинские буквы и цифры
+        function isPasswordValid(pass) {
+            if (pass.length < 8 || pass.length > 63) return false;
+            return /^[A-Za-z0-9]+$/.test(pass);
+        }
+
+        // Предупреждение перед отправкой, если настройки auth реально изменились
+        function confirmAuthChange(checked) {
+            let stateChanged =
+                (checked !== initAuthState.auth) ||
+                (document.getElementById("wwwuser").value !== initAuthState.user) ||
+                (document.getElementById("wwwpass").value !== initAuthState.pass) ||
+                (document.getElementById("wwwsecq").value !== initAuthState.secq) ||
+                (document.getElementById("wwwseca").value !== initAuthState.seca);
+            if (!stateChanged) return true;
+            return window.confirm("Настройки доступа изменены. Для применения устройство перезагрузится. Продолжить?");
+        }
+
         function checkAuth(frm)
         {
+            // Контрольный вопрос/ответ: допустимы только оба заполнены или оба пусты
+            var secq = document.getElementById("wwwsecq").value;
+            var seca = document.getElementById("wwwseca").value;
+            if ((secq == "") != (seca == ""))
+            {
+                showSubmitMsg("Заполните оба поля вопроса и ответа или очистите оба");
+                return false;
+            }
             if (document.getElementById("wwwauth").checked)
             {
-                if((document.getElementById("wwwuser").value == "") || (document.getElementById("wwwpass").value == ""))
+                if (document.getElementById("wwwuser").value == "")
                 {
-                    document.getElementById("submitResult").innerHTML = "User and password must be filled";
+                    showSubmitMsg("Логин должен быть заполнен");
                     return false;
                 }
+                // Строгая проверка нового пароля выполняется только если он изменился
+                var pass = document.getElementById("wwwpass").value;
+                var passChanged = (pass !== initAuthState.pass);
+                if (passChanged)
+                {
+                    if (pass.length < 8 || pass.length > 63)
+                    {
+                        showSubmitMsg("Пароль: 8-63 символа, только латинские буквы и цифры");
+                        return false;
+                    }
+                    if (!isPasswordValid(pass))
+                    {
+                        showSubmitMsg("Пароль: только латинские буквы и цифры");
+                        return false;
+                    }
+                }
+                if (!confirmAuthChange(true)) { return false; }
             }
             else
             {
                 document.getElementById("wwwuser").value = "";
                 document.getElementById("wwwpass").value = "";
+                if (!confirmAuthChange(false)) { return false; }
             }
             document.getElementById("wwwAuthForm").action = "/system/savewwwauth";
+            return true;
         }
 
         function restartESP() {

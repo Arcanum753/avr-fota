@@ -54,6 +54,8 @@ typedef struct {
     bool auth;
     String wwwUsername;
     String wwwPassword;
+    String wwwQuestion;
+    String wwwAnswer;
 } strHTTPAuth;
 
 
@@ -124,6 +126,8 @@ private:
     void html_system_Save(AsyncWebServerRequest *request);
     void send_wwwauth_configuration_values_html(AsyncWebServerRequest *request);
     void set_wwwauth_configuration(AsyncWebServerRequest *request);
+    void recover_status_values_html(AsyncWebServerRequest *request);
+    void recover_reset(AsyncWebServerRequest *request);
 
 	void handle_rest_config(AsyncWebServerRequest *request);
 	void post_rest_config(AsyncWebServerRequest *request);

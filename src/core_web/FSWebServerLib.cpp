@@ -108,12 +108,16 @@ bool AsyncFSWebServer::loadHTTPAuth() {
 		_httpAuth.auth = false;
 		_httpAuth.wwwUsername = "";
 		_httpAuth.wwwPassword = "";
+		_httpAuth.wwwQuestion = "";
+		_httpAuth.wwwAnswer = "";
 		DEBUGLOG("Huh\n\r");
 		return false;
 	}
 	_httpAuth.auth = doc["auth"].as<bool>();
 	_httpAuth.wwwUsername = doc["user"].as<String>();
 	_httpAuth.wwwPassword = doc["pass"].as<String>();
+	_httpAuth.wwwQuestion = doc["secq"].as<String>();
+	_httpAuth.wwwAnswer = doc["seca"].as<String>();
 	DEBUGLOG(_httpAuth.auth ? "Secret initialized.\r\n" : "Auth disabled.\r\n");
 	if (_httpAuth.auth) {
 		DEBUGLOG("User: %s\r\n", _httpAuth.wwwUsername.c_str());
@@ -172,9 +176,22 @@ void AsyncFSWebServer::send_wwwauth_configuration_values_html(AsyncWebServerRequ
 	values += "wwwauth|" + (String)(_httpAuth.auth ? "checked" : "") + "|chk\n";
 	values += "wwwuser|" + (String)_httpAuth.wwwUsername + "|input\n";
 	values += "wwwpass|" + (String)_httpAuth.wwwPassword + "|input\n";
+	values += "wwwsecq|" + (String)_httpAuth.wwwQuestion + "|input\n";
+	values += "wwwseca|" + (String)_httpAuth.wwwAnswer + "|input\n";
 
 	request->send(200, "text/plain", values);
 
+}
+
+// Валидация пароля администратора: 8-63 символа, только латинские буквы и цифры
+static bool isAdminPassValid(const String& pass) {
+	if (pass.length() < 8 || pass.length() > 63) { return false; }
+	for (unsigned int i = 0; i < pass.length(); i++) {
+		char c = pass.charAt(i);
+		bool ok = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9');
+		if (!ok) { return false; }
+	}
+	return true;
 }
 
 void AsyncFSWebServer::set_wwwauth_configuration(AsyncWebServerRequest *request)	{
@@ -182,33 +199,97 @@ void AsyncFSWebServer::set_wwwauth_configuration(AsyncWebServerRequest *request)
 	DEBUGLOG("%s %d\n", __FUNCTION__, request->args());
 	if (request->args() > 0)	{
 		bool save	   = false;
-		_httpAuth.auth = false;
+		bool oldAuth  = _httpAuth.auth;
+		String oldUser = _httpAuth.wwwUsername;
+		String oldPass = _httpAuth.wwwPassword;
+		String oldSecQ = _httpAuth.wwwQuestion;
+		String oldSecA = _httpAuth.wwwAnswer;
+		bool newAuth  = false;
+		String newUser = "";
+		String newPass = "";
+		bool hasSecQ  = false;
+		bool hasSecA  = false;
+		String newSecQ = "";
+		String newSecA = "";
 		for (uint8_t i = 0; i < request->args(); i++)		{
 			if (request->argName(i) == "authconf") {
 				save = true;
 				continue;
 			}
 			if (request->argName(i) == "wwwuser") {
-				_httpAuth.wwwUsername = urldecode(request->arg(i));
+				newUser = urldecode(request->arg(i));
 				continue;
 			}
 			if (request->argName(i) == "wwwpass") {
-				_httpAuth.wwwPassword = urldecode(request->arg(i));
+				newPass = urldecode(request->arg(i));
+				continue;
+			}
+			if (request->argName(i) == "wwwsecq") {
+				newSecQ = urldecode(request->arg(i));
+				hasSecQ = true;
+				continue;
+			}
+			if (request->argName(i) == "wwwseca") {
+				newSecA = urldecode(request->arg(i));
+				hasSecA = true;
 				continue;
 			}
 			if (request->argName(i) == "wwwauth") {
-				_httpAuth.auth = true;
+				newAuth = true;
 				continue;
 			}
 		}
-		if (!_httpAuth.auth)		{
-			_httpAuth.wwwUsername = "";
-			_httpAuth.wwwPassword = "";
+		if (!newAuth)		{
+			newUser = "";
+			newPass = "";
 		}
 
+		// Если форма не передала поля контрольного вопроса (например, старая
+		// закэшированная страница) — секцию восстановления не трогаем.
+		if (!hasSecQ || !hasSecA) {
+			newSecQ = oldSecQ;
+			newSecA = oldSecA;
+		}
+
+		// Серверная валидация (запасной уровень; форма проверяет на странице).
+		// Строгая проверка нового пароля выполняется только если он реально изменился,
+		// чтобы не блокировать пароли, заданные до введения ограничений.
+		if (newAuth) {
+			if (newUser.length() == 0) {
+				request->send(400, "text/plain", "User must be filled");
+				return;
+			}
+			if (newPass != oldPass && !isAdminPassValid(newPass)) {
+				request->send(400, "text/plain", "Password: 8-63 chars, only latin letters and digits");
+				return;
+			}
+		}
+
+		// Контрольный вопрос/ответ: допустимы только оба заполнены или оба пусты
+		if ((newSecQ.length() == 0) != (newSecA.length() == 0)) {
+			request->send(400, "text/plain", "Fill both question and answer or clear both");
+			return;
+		}
+
+		_httpAuth.auth = newAuth;
+		_httpAuth.wwwUsername = newUser;
+		_httpAuth.wwwPassword = newPass;
+		_httpAuth.wwwQuestion = newSecQ;
+		_httpAuth.wwwAnswer = newSecA;
+
 		if (save)		{
-			request->send_P(200, "text/html", Page_GeneralSys);
 			saveHTTPAuth();
+			bool changed = (oldAuth != newAuth) || (oldUser != newUser) || (oldPass != newPass)
+				|| (oldSecQ != newSecQ) || (oldSecA != newSecA);
+			if (changed) {
+				// Применяем новый/убранный пароль ко всем механизмам (HTTP auth, AP, OTA):
+				// ArduinoOTA фиксирует пароль при старте, поэтому требуется перезагрузка.
+				request->send_P(200, "text/html", Page_IndexRefresh);
+				restart_esp();
+			}
+			else {
+				request->send_P(200, "text/html", Page_GeneralSys);
+			}
 		}
 	}
 }
@@ -221,7 +302,66 @@ bool AsyncFSWebServer::saveHTTPAuth() {
 	doc["auth"] = _httpAuth.auth;
 	doc["user"] = _httpAuth.wwwUsername;
 	doc["pass"] = _httpAuth.wwwPassword;
+	doc["secq"] = _httpAuth.wwwQuestion;
+	doc["seca"] = _httpAuth.wwwAnswer;
 	return core_json.jsonFileSaveDoc(SECRET_FILE, doc);
+}
+
+// Экранирование для вставки в HTML (div) и защиты разделителей CVT (| и перевод строки)
+static String escHtml(const String& s) {
+	String out;
+	out.reserve(s.length());
+	for (unsigned int i = 0; i < s.length(); i++) {
+		char c = s.charAt(i);
+		switch (c) {
+			case '&':  out += "&amp;";   break;
+			case '<':  out += "&lt;";    break;
+			case '>':  out += "&gt;";    break;
+			case '"':  out += "&quot;";  break;
+			case '|':  out += "&#124;";  break;
+			case '\r':
+			case '\n': out += ' ';       break;
+			default:   out += c;         break;
+		}
+	}
+	return out;
+}
+
+// Статус восстановления для публичной страницы /recover (формат ApplyCVT)
+void AsyncFSWebServer::recover_status_values_html(AsyncWebServerRequest *request) {
+	DEBUGLOG(__FUNCTION__);	DEBUGLOG("\r\n");
+	String values = "";
+	if (_httpAuth.wwwQuestion.length() > 0 && _httpAuth.wwwAnswer.length() > 0) {
+		values += "recover_cfg|1|div\n";
+		values += "recover_q|" + escHtml(_httpAuth.wwwQuestion) + "|div\n";
+	}
+	else {
+		values += "recover_cfg|0|div\n";
+		values += "recover_q||div\n";
+	}
+	request->send(200, "text/plain", values);
+}
+
+// Сброс пароля по контрольному ответу (публичный эндпоинт, без авторизации)
+void AsyncFSWebServer::recover_reset(AsyncWebServerRequest *request) {
+	DEBUGLOG(__FUNCTION__);	DEBUGLOG("\r\n");
+	if (_httpAuth.wwwQuestion.length() == 0 || _httpAuth.wwwAnswer.length() == 0) {
+		request->send(200, "text/html", "<html><head><meta charset='utf-8'></head><body><h2>Recovery not configured</h2><a href='/recover'>Back</a></body></html>");
+		return;
+	}
+	String answer = request->hasArg("answer") ? urldecode(request->arg("answer")) : "";
+	if (answer != _httpAuth.wwwAnswer) {
+		request->send(200, "text/html", "<html><head><meta charset='utf-8'></head><body><h2>Wrong answer</h2><a href='/recover'>Back</a></body></html>");
+		return;
+	}
+	// Ответ совпал: стираем пароль полностью, вопрос/ответ сохраняем.
+	// Перезагрузка нужна, чтобы отключение auth применилось к HTTP, AP и OTA.
+	_httpAuth.auth = false;
+	_httpAuth.wwwUsername = "";
+	_httpAuth.wwwPassword = "";
+	saveHTTPAuth();
+	request->send_P(200, "text/html", Page_IndexRefresh);
+	restart_esp();
 }
 
 
@@ -377,6 +517,22 @@ void AsyncFSWebServer::serverInit() {
 
 //system.html ^^^
 
+//recover (восстановление забытого пароля) — публичные маршруты без авторизации
+	on("/recover", HTTP_GET, [this](AsyncWebServerRequest *request) {
+		core_wifi.notifyApClientActivity();
+		if (!this->handleFileRead("/recover.html", request)) {
+			request->send(404, "text/plain", "FileNotFound");
+		}
+	});
+	on("/recover/status", HTTP_GET, [this](AsyncWebServerRequest *request) {
+		core_wifi.notifyApClientActivity();
+		this->recover_status_values_html(request);
+	});
+	on("/recover/reset", HTTP_POST, [this](AsyncWebServerRequest *request) {
+		core_wifi.notifyApClientActivity();
+		this->recover_reset(request);
+	});
+
 	//called when the url is not defined here
 	//use it to load content from LittleFS
 	onNotFound([this](AsyncWebServerRequest *request) {
@@ -444,6 +600,9 @@ void AsyncFSWebServer::serverInit() {
 }
 
 bool AsyncFSWebServer::checkAuth(AsyncWebServerRequest *request) {
+	// Любой HTTP-запрос в AP-режиме считается активностью клиента
+	// и продлевает «жизнь» AP (таймер в core_wifi)
+	core_wifi.notifyApClientActivity();
 	if (!_httpAuth.auth) {	return true;}
 	else {
 		return request->authenticate(_httpAuth.wwwUsername.c_str(), _httpAuth.wwwPassword.c_str());
