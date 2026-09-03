@@ -35,4 +35,6 @@ void BlinkCmd();
 
 void avr() ;
 
+void TermIdent();
+
 // String  fsDirListGet(); //DEBUG

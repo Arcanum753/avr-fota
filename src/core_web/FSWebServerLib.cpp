@@ -40,6 +40,8 @@
 
 #include "common/common.h"
 
+#include "core_sys/ident_store.h"
+
 AsyncFSWebServer ESPHTTPServer(80);
 
 
@@ -76,7 +78,8 @@ AsyncFSWebServer::AsyncFSWebServer(uint16_t port) : AsyncWebServer(port) {}
 
 	loadHTTPAuth();
 	defaultConfigSys();
-	if (load_config_Sys() == false) {  save_configSys(); 	}
+	bool fsSysCfg = load_config_Sys();
+	loadDeviceIdent(fsSysCfg);
 
 	// Заполняем остальные поля глобального контекста модулей (hostname, password)
 	g_ctx.hostname = getHostName();
@@ -452,6 +455,7 @@ void AsyncFSWebServer::html_system_Save(AsyncWebServerRequest *request) {
 		}
 		request->send_P(200, "text/html", Page_GeneralSys);
 		save_configSys();
+		saveSysIdentStore();
 	}
 	else {	handleFileRead(request->url(), request);	}
 }
@@ -758,15 +762,48 @@ bool AsyncFSWebServer::load_config_Sys() {
 
 void AsyncFSWebServer::defaultConfigSys() {
 	// DEFAULT CONFIG SYSTEM
+	// Серийник по умолчанию: последние 5 hex-символов уникального ID чипа
+	// (короткий, но достаточно различимый для устройств с одинаковой прошивкой)
 	#ifdef ESP32
 	_sysConfig.deviceName 		= "esp32";    
-	_sysConfig.deviceSerial 	=   (String)ESP.getChipModel() ;
+	// Уникальный ID чипа из eFuse MAC (48 бит), hex без потери старших бит
+	uint64_t chipId = ESP.getEfuseMac();
+	char chipBuf[17];
+	snprintf(chipBuf, sizeof(chipBuf), "%08lX%08lX",
+		(unsigned long)(chipId >> 32), (unsigned long)(chipId & 0xFFFFFFFF));
+	String chipStr = String(chipBuf);
+	_sysConfig.deviceSerial = chipStr.substring(chipStr.length() > 5 ? chipStr.length() - 5 : 0);
 	#endif
 	#if defined(ESP8266)
 	_sysConfig.deviceName 		= "esp8266";
-	_sysConfig.deviceSerial 	=   (String)ESP.getChipId() ;
+	String chipStr = String(ESP.getChipId(), HEX);
+	_sysConfig.deviceSerial = chipStr.substring(chipStr.length() > 5 ? chipStr.length() - 5 : 0);
 	#endif
 
+}
+
+bool AsyncFSWebServer::saveSysIdentStore() {
+	return identStoreSave(_sysConfig.deviceName, _sysConfig.deviceSerial);
+}
+
+void AsyncFSWebServer::loadDeviceIdent(bool fsOk) {
+	String n = "";
+	String s = "";
+	if (identStoreLoad(n, s)) {
+		// Энергонезависимое хранилище — источник истины (пережило обновление FS/прошивки)
+		_sysConfig.deviceName = n;
+		_sysConfig.deviceSerial = s;
+		return;
+	}
+	// Хранилище пусто, повреждено или раздел отсутствует (старая partition table).
+	// Если серийник из config_sys.json — заводская заглушка, формируем дефолт
+	// платформы с уникальным ID чипа (новое устройство).
+	bool factory = (_sysConfig.deviceSerial.length() == 0 || _sysConfig.deviceSerial == "000");
+	if (factory) { defaultConfigSys(); }
+	bool stored = saveSysIdentStore();
+	// Записываем config_sys.json в FS, когда конфига не было вовсе, либо когда
+	// идентичность только что инициализирована/мигрирована в хранилище (единоразово).
+	if (stored || !fsOk) { save_configSys(); }
 }
 
 bool AsyncFSWebServer::save_configSys() {

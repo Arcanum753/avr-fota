@@ -108,7 +108,11 @@ public:
     bool load_config_Sys();
     bool save_configSys();
     void defaultConfigSys();
+    // сохранить имя/серийник в энергонезависимое хранилище (источник истины)
+    bool saveSysIdentStore();
 private:
+    // загрузка имени/серийника из энергонезависимого хранилища с миграцией из FS
+    void loadDeviceIdent(bool fsOk);
     // bool load_generic_config()
     bool loadHTTPAuth();
     bool saveHTTPAuth();

@@ -16,6 +16,7 @@
 #include "core_terminal/core_terminal.h"
 #include "core_ntp/core_ntp.h"
 #include "core_led/core_led.h"
+#include "core_sys/ident_store.h"
 
 #if defined(MODULE_UDP)
 #include "module_udp/module_udp.h"
@@ -49,6 +50,7 @@ void TerminalInit(){
     term.addCommand("reset", EspReset );        // ресет мк
     term.addCommand("echo",  TerminalEcho );    // выкл/вкл "эха" терминала.
     term.addCommand("?",     InfoShow );        // общая информация и текущее состояние подключения вай-фай
+    term.addCommand("id",    TermIdent );       // показать/установить имя и серийник устройства
 
     term.addCommand("1",    test ); // тест терминала
 
@@ -237,4 +239,50 @@ void BlinkCmd(){
         return;
     }
     LedMacroSet(  arg2.c_str(), times);
+}
+
+// Команда id: показать/установить имя и серийник устройства.
+// Идентичность хранится в энергонезависимом хранилище (не стирается при обновлении FS).
+void TermIdent() {
+    char *arg1 = term.getNext();
+
+    if (arg1 == NULL) {
+        Serial.printf("Device name:   %s\r\n", ESPHTTPServer._sysConfig.deviceName.c_str());
+        Serial.printf("Device serial: %s\r\n", ESPHTTPServer._sysConfig.deviceSerial.c_str());
+        Serial.println("Usage: id <serial> | id name <name> | id reset");
+        return;
+    }
+
+    String cmd(arg1);
+    if (cmd == "reset") {
+        // Восстановить дефолт: имя платформы + уникальный ID чипа
+        ESPHTTPServer.defaultConfigSys();
+    }
+    else if (cmd == "name") {
+        char *arg2 = term.getNext();
+        if (arg2 == NULL) {
+            Serial.println("Usage: id name <name>");
+            return;
+        }
+        String name(arg2);
+        if (name.length() == 0 || name.length() > IDENT_MAX_NAME) {
+            Serial.printf("Error: name length must be 1..%d\r\n", IDENT_MAX_NAME);
+            return;
+        }
+        ESPHTTPServer._sysConfig.deviceName = name;
+    }
+    else {
+        String serial(arg1);
+        if (serial.length() == 0 || serial.length() > IDENT_MAX_SERIAL) {
+            Serial.printf("Error: serial length must be 1..%d\r\n", IDENT_MAX_SERIAL);
+            return;
+        }
+        ESPHTTPServer._sysConfig.deviceSerial = serial;
+    }
+
+    ESPHTTPServer.saveSysIdentStore();
+    ESPHTTPServer.save_configSys();
+    Serial.println("Identity saved. Reboot needed to apply hostname/mDNS.");
+    Serial.printf("Device name:   %s\r\n", ESPHTTPServer._sysConfig.deviceName.c_str());
+    Serial.printf("Device serial: %s\r\n", ESPHTTPServer._sysConfig.deviceSerial.c_str());
 }
