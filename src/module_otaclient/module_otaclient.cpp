@@ -317,13 +317,12 @@ String CLASS_MODULE_OTACLIENT::jsonGet() {
 void CLASS_MODULE_OTACLIENT::onWiFiConnect() {
     DEBUGOTACLIENT("%s: powerOn=%d\r\n", __FUNCTION__, _config.powerOn);
     if (_config.powerOn) {
-#if defined(ESP8266)
-        // ESP8266: отложить проверку обновлений на 5 секунд после WiFi connect,
-        // чтобы дать стеку WiFi стабилизироваться и избежать WDT reset
+        // Отложить проверку обновлений на 5 секунд после WiFi connect.
+        // ESP32: onWiFiConnect вызывается из WiFi-события в задаче arduino_events
+        // с маленьким стеком — выполнение OTA-загрузки прямо здесь переполняет стек
+        // (Stack canary watchpoint) и вызывает перезагрузку устройства.
+        // ESP8266: дать стеку WiFi стабилизироваться и избежать WDT reset.
         SetTimerTask(otaclientTimer, SEC * 5);
-#else
-        checkForUpdates();
-#endif
     }
 }
 
