@@ -70,9 +70,9 @@ public:
     CLASS_CORE_OTA (bool _in);
 
 #if ESP32
-    fs::LittleFSFS*               _fs;
+    fs::LittleFSFS*               _fs = nullptr;
 #elif defined(ESP8266)
-    FS*                         _fs;                        // esp8266/esp32 flash file system
+    FS*                         _fs = nullptr;                  // esp8266/esp32 flash file system
 #endif
 
 #if ESP32

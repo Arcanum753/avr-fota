@@ -51,6 +51,7 @@ void CLASS_MODULE_OTACLIENT::begin(String _hostname, String _password) {
 }
 
 void CLASS_MODULE_OTACLIENT::begin(ModContext& ctx) {
+    _fs = ctx.fs;
     begin(ctx.hostname, ctx.password);
 }
 
