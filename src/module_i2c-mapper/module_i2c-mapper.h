@@ -41,10 +41,16 @@ private:
 
     void handleScan(AsyncWebServerRequest *request);
 
+    uint8_t scanBus(uint8_t *found, uint8_t maxCount);   // скан шины, возвращает число найденных устройств
+    friend void i2cMapperCmdScan();                      // терминальная команда i2c-scan (доступ к scanBus)
+
 protected:
     bool dumb;
 };
 
 extern CLASS_MODULE_I2C_MAPPER module_i2c_mapper;
+
+// Терминальные команды модуля (регистрируются через TerminalRegisterModule)
+void i2cMapperTerminalRegister();
 
 #endif // _MODULE_I2C_MAPPER_h
