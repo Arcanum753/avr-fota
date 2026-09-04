@@ -1,4 +1,4 @@
-core_editor=18
+core_editor=19
 core_json=17
 core_led=5
 core_ntp=21
@@ -13,7 +13,7 @@ module_ds3231=5
 module_gpio=13
 module_i2c-mapper=6
 module_lcd-i2c=5
-module_macros=2
+module_macros=3
 module_otaclient=16
 module_prog=13
 module_rgb=5

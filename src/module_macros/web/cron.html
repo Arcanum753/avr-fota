@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta http-equiv="Content-type" content="text/html; charset=utf-8">
+    <title>CRON helper</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        body { width: 780px; }
+        .content h3 { margin: 6px 0; }
+        .cron-line { margin: 8px 0; }
+        .cron-line input#cronOutput { width: 400px; font-family: monospace; }
+        .cron-line button { margin-left: 8px; }
+        .fields { margin: 10px 0; line-height: 1.8; }
+        .fields label { white-space: nowrap; }
+        .fields input[type="text"] { width: 90px; }
+        .presets button { margin: 2px 4px 2px 0; }
+        .tip { font-size: 13px; color: #444; line-height: 1.5; }
+        code { background: #f0f0f0; padding: 0 3px; }
+    </style>
+</head>
+<body>
+    <markup>./page_head.html</markup>
+    <h2 class="title" style="background: #7D8EE2"> <span id="devicename"></span> CRON helper</h2>
+
+    <div class="content" style="text-align: left; padding: 0 12px;">
+        <h3>Генератор CRON-строк</h3>
+
+        <div class="cron-line">
+            <label>Строка CRON:</label>
+            <input type="text" id="cronOutput" readonly value="0 * * * * *" />
+            <button id="copyBtn">Копировать</button>
+        </div>
+
+        <div class="fields">
+            <label>Секунды (0-59): <input type="text" id="sec" value="0" /></label><br>
+            <label>Минуты (0-59): <input type="text" id="minute" value="*" /></label><br>
+            <label>Часы (0-23): <input type="text" id="hour" value="*" /></label><br>
+            <label>День месяца (1-31): <input type="text" id="dayOfMonth" value="*" /></label><br>
+            <label>Месяц (1-12): <input type="text" id="month" value="*" /></label><br>
+            <label>День недели (0-7, 0 и 7 = Вс): <input type="text" id="dayOfWeek" value="*" /></label><br>
+            <label>Год (необязательно, 7-е поле): <input type="text" id="year" placeholder="" /></label>
+        </div>
+
+        <div class="presets">
+            <b>Основные маски:</b><br>
+            <button data-preset="0 * * * * *">Каждую минуту</button>
+            <button data-preset="0 0 * * * *">Каждый час</button>
+            <button data-preset="0 0 0 * * *">Каждый день в 00:00</button>
+            <button data-preset="0 0 0 * * 1">Каждый понедельник в 00:00</button>
+            <button data-preset="0 0 0 1 * *">1-го числа каждого месяца в 00:00</button>
+            <button data-preset="0 0 0 1 1 *">1 января каждого года в 00:00</button>
+        </div>
+
+        <div class="presets">
+            <b>Интервалы (каждые N…):</b><br>
+            <button onclick="setEvery('minute')">каждые N минут</button>
+            <button onclick="setEvery('hour')">каждые N часов</button>
+            <button onclick="setEvery('day')">каждые N дней</button>
+            <button onclick="setEvery('week')">каждые N недель</button>
+            <button onclick="setEvery('month')">каждые N месяцев</button>
+        </div>
+
+        <div class="presets">
+            <b>Диапазоны и комбинации:</b><br>
+            <button onclick="setRange('hour', 9, 18)">Часы с 9 до 18</button>
+            <button onclick="setRange('dayOfWeek', 1, 5)">Будние дни (пн-пт)</button>
+            <button onclick="setRange('dayOfWeek', 0, 6, true)">Выходные (сб-вс)</button>
+            <button onclick="setSpecificDateTime()">Конкретная дата и время</button>
+        </div>
+
+        <div class="presets">
+            <b>Произвольный диапазон (С..ПО):</b><br>
+            <button onclick="setRangeInteractive('minute')">Минуты</button>
+            <button onclick="setRangeInteractive('hour')">Часы</button>
+            <button onclick="setRangeInteractive('dayOfMonth')">День месяца</button>
+            <button onclick="setRangeInteractive('month')">Месяц</button>
+            <button onclick="setRangeInteractive('dayOfWeek')">День недели</button>
+        </div>
+
+        <div class="tip">
+            <p>
+                Маска модуля — из <b>6 полей</b>: <code>секунды минуты часы день-месяца месяц день-недели</code>.
+                Поле «Год» необязательно и добавляется как 7-е. Синтаксис поля:
+                <code>*</code> (любое), <code>*/N</code> (каждые N), <code>a-b</code> (диапазон),
+                <code>a-b/N</code> (шаг), <code>a,b,c</code> (список), <code>?</code> (как *).
+                Готовую строку вставляйте в правило: <code>cron {<em>строка</em>} { … }</code>.
+            </p>
+        </div>
+    </div>
+
+    <div class="footer">
+        Module version: <span id="macrosversion"> </span> &nbsp;|&nbsp;
+        Build: <span id="macrosgentime"> </span> <br>
+    </div>
+
+    <markup>./page_bottom.html</markup>
+    <script src="GetJson.js" defer></script>
+    <script src="GetMarkup.js" defer></script>
+    <script>
+        (function () {
+            'use strict';
+
+            var secInput = document.getElementById('sec');
+            var minuteInput = document.getElementById('minute');
+            var hourInput = document.getElementById('hour');
+            var dayOfMonthInput = document.getElementById('dayOfMonth');
+            var monthInput = document.getElementById('month');
+            var dayOfWeekInput = document.getElementById('dayOfWeek');
+            var yearInput = document.getElementById('year');
+            var cronOutput = document.getElementById('cronOutput');
+            var copyBtn = document.getElementById('copyBtn');
+
+            function baseFields() {
+                return { sec: '*', min: '*', hour: '*', dom: '*', mon: '*', dow: '*', year: '' };
+            }
+
+            function updateCron() {
+                var sec = secInput.value.trim();
+                var minute = minuteInput.value.trim();
+                var hour = hourInput.value.trim();
+                var dom = dayOfMonthInput.value.trim();
+                var mon = monthInput.value.trim();
+                var dow = dayOfWeekInput.value.trim();
+                var year = yearInput.value.trim();
+
+                var parts = [sec || '*', minute || '*', hour || '*', dom || '*', mon || '*', dow || '*'];
+                if (year) { parts.push(year); }
+                cronOutput.value = parts.join(' ');
+            }
+
+            function setAll(f) {
+                secInput.value = f.sec;
+                minuteInput.value = f.min;
+                hourInput.value = f.hour;
+                dayOfMonthInput.value = f.dom;
+                monthInput.value = f.mon;
+                dayOfWeekInput.value = f.dow;
+                yearInput.value = f.year;
+                updateCron();
+            }
+
+            function setPreset(presetStr) {
+                var parts = presetStr.trim().split(/\s+/);
+                if (parts.length !== 6 && parts.length !== 7) {
+                    alert('Неверный формат пресета. Ожидается 6 или 7 полей.');
+                    return;
+                }
+                var f = baseFields();
+                f.sec = parts[0];
+                f.min = parts[1];
+                f.hour = parts[2];
+                f.dom = parts[3];
+                f.mon = parts[4];
+                f.dow = parts[5];
+                if (parts.length === 7) { f.year = parts[6]; }
+                setAll(f);
+            }
+
+            document.querySelectorAll('[data-preset]').forEach(function (btn) {
+                btn.addEventListener('click', function () {
+                    setPreset(this.getAttribute('data-preset'));
+                });
+            });
+
+            window.setEvery = function (unit) {
+                var n = null;
+                var f = baseFields();
+                switch (unit) {
+                    case 'minute':
+                        n = prompt('Введите N (каждые N минут):', '5');
+                        if (n === null) { return; }
+                        f.min = '*/' + parseInt(n, 10);
+                        break;
+                    case 'hour':
+                        n = prompt('Введите N (каждые N часов):', '5');
+                        if (n === null) { return; }
+                        f.sec = '0'; f.min = '0';
+                        f.hour = '*/' + parseInt(n, 10);
+                        break;
+                    case 'day':
+                        n = prompt('Введите N (каждые N дней):', '5');
+                        if (n === null) { return; }
+                        f.sec = '0'; f.min = '0'; f.hour = '0';
+                        f.dom = '*/' + parseInt(n, 10);
+                        break;
+                    case 'week':
+                        alert('Функция «каждые N недель» не выражается стандартным CRON.');
+                        return;
+                    case 'month':
+                        n = prompt('Введите N (каждые N месяцев):', '2');
+                        if (n === null) { return; }
+                        f.sec = '0'; f.min = '0'; f.hour = '0'; f.dom = '1';
+                        f.mon = '*/' + parseInt(n, 10);
+                        break;
+                    default:
+                        alert('Неизвестная единица');
+                        return;
+                }
+                setAll(f);
+            };
+
+            window.setRange = function (fieldName, start, end, isWeekend) {
+                var f = baseFields();
+                var rangeStr = isWeekend ? '0,6' : start + '-' + end;
+                switch (fieldName) {
+                    case 'minute': f.min = rangeStr; break;
+                    case 'hour': f.sec = '0'; f.min = '0'; f.hour = rangeStr; break;
+                    case 'dayOfMonth': f.sec = '0'; f.min = '0'; f.hour = '0'; f.dom = rangeStr; break;
+                    case 'month': f.sec = '0'; f.min = '0'; f.hour = '0'; f.dom = '1'; f.mon = rangeStr; break;
+                    case 'dayOfWeek': f.sec = '0'; f.min = '0'; f.hour = '0'; f.dow = rangeStr; break;
+                    default: alert('Неизвестное поле'); return;
+                }
+                setAll(f);
+            };
+
+            window.setRangeInteractive = function (fieldName) {
+                var labels = {
+                    minute: 'минут (0-59)',
+                    hour: 'часов (0-23)',
+                    dayOfMonth: 'дней месяца (1-31)',
+                    month: 'месяцев (1-12)',
+                    dayOfWeek: 'дней недели (0-7, 0/7 = Вс)'
+                };
+                var limits = {
+                    minute: [0, 59],
+                    hour: [0, 23],
+                    dayOfMonth: [1, 31],
+                    month: [1, 12],
+                    dayOfWeek: [0, 7]
+                };
+                var lim = limits[fieldName] || [0, 100];
+                var label = labels[fieldName] || fieldName;
+
+                var startStr = prompt('Введите начало диапазона для ' + label + ' (от ' + lim[0] + ' до ' + lim[1] + '):', String(lim[0]));
+                if (startStr === null) { return; }
+                var endStr = prompt('Введите конец диапазона для ' + label + ' (от ' + lim[0] + ' до ' + lim[1] + '):', String(lim[1]));
+                if (endStr === null) { return; }
+
+                var start = parseInt(startStr, 10);
+                var end = parseInt(endStr, 10);
+                if (isNaN(start) || isNaN(end) || start < lim[0] || end > lim[1] || start > end) {
+                    alert('Некорректный диапазон. Требования: ' + start + ' >= ' + lim[0] + ', ' + end + ' <= ' + lim[1] + ', ' + start + ' <= ' + end + '.');
+                    return;
+                }
+                setRange(fieldName, start, end, false);
+            };
+
+            window.setSpecificDateTime = function () {
+                var year = prompt('Введите год:', '2026');
+                if (year === null) { return; }
+                var month = prompt('Введите месяц (1-12):', '1');
+                if (month === null) { return; }
+                var day = prompt('Введите день месяца (1-31):', '1');
+                if (day === null) { return; }
+                var hour = prompt('Введите час (0-23):', '0');
+                if (hour === null) { return; }
+                var minute = prompt('Введите минуту (0-59):', '0');
+                if (minute === null) { return; }
+
+                var f = baseFields();
+                f.sec = '0';
+                f.min = minute.trim();
+                f.hour = hour.trim();
+                f.dom = day.trim();
+                f.mon = month.trim();
+                f.dow = '*';
+                f.year = year.trim();
+                setAll(f);
+            };
+
+            [secInput, minuteInput, hourInput, dayOfMonthInput, monthInput, dayOfWeekInput, yearInput].forEach(function (inp) {
+                inp.addEventListener('input', updateCron);
+                inp.addEventListener('change', updateCron);
+            });
+
+            copyBtn.addEventListener('click', function () {
+                navigator.clipboard.writeText(cronOutput.value).then(function () {
+                    var orig = copyBtn.textContent;
+                    copyBtn.textContent = 'Скопировано!';
+                    setTimeout(function () { copyBtn.textContent = orig; }, 2000);
+                }).catch(function () {
+                    cronOutput.select();
+                    document.execCommand('copy');
+                    alert('Скопировано в буфер обмена');
+                });
+            });
+
+            updateCron();
+
+            setTimeout(function () {
+                try {
+                    ApplyCVT('/system/version').then(function () { ApplyCVT('/macros/ver'); }).catch(function () {});
+                } catch (e) { /* игнорируем */ }
+            }, 300);
+        })();
+    </script>
+</body>
+</html>

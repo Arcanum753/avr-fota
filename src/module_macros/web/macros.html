@@ -7,14 +7,6 @@
     <style>
         body { width: 780px; }
         table.scan { min-width: 600px; }
-        table.scan th.drag {
-            cursor: move;
-            touch-action: none;
-            -moz-user-select: none; -webkit-user-select: none; user-select: none;
-        }
-        table.scan th.drag.over { background: #fd9; }
-        table.scan th.drag.drag-source { opacity: .45; }
-        body.drag-active { -moz-user-select: none; -webkit-user-select: none; user-select: none; }
         td.num { width: 34px; }
         td.sz { width: 70px; }
         .rowcb { width: 26px; }
@@ -43,11 +35,23 @@
         .statusline { margin: 4px 0; font-size: 13px; }
         #msgArea { color: #a00; min-height: 16px; font-size: 13px; }
         input.inline { width: 85%; box-sizing: border-box; }
-        th.drag.sortable { cursor: move; }
+        th { font-weight: normal; }
         tr.sel { background: #ffe9a8; }
         tr.sel:hover { background: #ffdf80; }
         tbody tr { cursor: pointer; }
         tbody tr:hover { background: #f2f2f2; }
+        /* значки-точки состояния */
+        .stb { display: inline-block; width: 12px; height: 12px; border-radius: 50%;
+               vertical-align: middle; border: 1px solid rgba(0,0,0,.25); }
+        .stb.run  { background: #1a7f37; }
+        .stb.wait { background: #f0ad3c; }
+        .stb.stop { background: #c7c7c7; }
+        .stb.err  { background: #d33; }
+        th .hico { vertical-align: middle; }
+        th svg, .stb { cursor: help; }
+        th.srt { cursor: pointer; }
+        th.srt:hover { background: #e8f1ff; }
+        .sortmark { font-size: 11px; }
     </style>
 </head>
 <body>
@@ -67,25 +71,17 @@
             <button id="btnPrioUp" type="button" onclick="actPrio(1)" title="Приоритет +1 (ниже, 7 - низший)">svg</button>
             <button id="btnDel"   type="button" onclick="actDelete()" title="Удалить выделенные файлы">svg</button>
             <span id="busy" style="display:none; color:#068; font-weight:bold;">…</span>
-            <span class="hint">Колонки перетаскиваются за заголовки; двойной клик по файлу — редактор.</span>
+            <span class="hint">Двойной клик по файлу — редактор.</span>
         </div>
         <div id="msgArea"></div>
         <div class="statusline">
             NTP: <span id="ntpState">--</span> |
-            Модуль: <span id="modState">--</span> |
             Сценариев: <span id="countState">0</span>
         </div>
 
         <table class="scan" id="macTable">
             <thead>
-                <tr id="headRow">
-                    <th class="rowcb" data-col="cb"><input type="checkbox" id="cbAll" title="Выделить всё"></th>
-                    <th data-col="prio" class="drag sortable" title="Приоритет (0 - высший, 7 - низший)">Приоритет</th>
-                    <th data-col="name" class="drag sortable" title="Имя файла">Имя файла</th>
-                    <th data-col="size" class="drag sortable" title="Размер файла">Размер</th>
-                    <th data-col="run" class="drag sortable" title="Состояние: запущен/стоп/ошибка">Состояние</th>
-                    <th data-col="created" class="drag sortable" title="Дата создания">Создан</th>
-                </tr>
+                <tr id="headRow"></tr>
             </thead>
             <tbody id="macBody"></tbody>
         </table>
@@ -201,9 +197,9 @@ cond {[&gt;= $ticks 6]} {
     <script src="GetMarkup.js" defer></script>
     <script>
         // ---------- Состояние страницы ----------
-        const FILES_KEY = 'macros_col_order';
-        const DATA_COLS = ['prio', 'name', 'size', 'run', 'created'];   // колонки (без checkbox)
-        let colOrder = DATA_COLS.slice();
+        // Фиксированный порядок колонок (после колонки-чекбокса):
+        // состояние, приоритет, имя файла, размер, создан.
+        const DATA_COLS = ['run', 'prio', 'name', 'size', 'created'];
         let files = [];
         let selected = new Set();          // имена файлов
         let editingName = null;            // имя файла, чьё поле редактируется
@@ -263,133 +259,81 @@ cond {[&gt;= $ticks 6]} {
             return p(d.getDate()) + '.' + p(d.getMonth() + 1) + '.' + d.getFullYear() + ' ' +
                    p(d.getHours()) + ':' + p(d.getMinutes());
         }
+        // Состояние файла — значок-точка + подсказка
         function statusBadge(f) {
             if (f.err) {
-                return '<span class="badge err" title="' + esc(f.err) + '">ошибка</span>';
+                return '<span class="stb err" title="Ошибка: ' + esc(f.err) + '"></span>';
             }
             if (f.run) {
                 return f.active
-                    ? '<span class="badge run">запущен</span>'
-                    : '<span class="badge stop">старт...</span>';
+                    ? '<span class="stb run" title="Запущен"></span>'
+                    : '<span class="stb wait" title="Старт..."></span>';
             }
-            return '<span class="badge stop">стоп</span>';
+            return '<span class="stb stop" title="Стоп"></span>';
         }
 
-        // ---------- Порядок колонок (localStorage) ----------
-        function loadOrder() {
-            try {
-                const saved = JSON.parse(localStorage.getItem(FILES_KEY));
-                if (Array.isArray(saved) && saved.length === DATA_COLS.length &&
-                    saved.every(c => DATA_COLS.indexOf(c) >= 0)) {
-                    colOrder = saved;
-                }
-            } catch (e) { /* проигнорировать */ }
-        }
-        function saveOrder() {
-            try { localStorage.setItem(FILES_KEY, JSON.stringify(colOrder)); } catch (e) { /* */ }
-        }
+        // Порядок колонок фиксирован (см. DATA_COLS), перетаскивание убрано.
 
-        // ---------- Перетаскивание колонок (pointer-события, работает с мышью и тачем) ----------
-        let dragState = null;
+        // Сортировка по клику на заголовок (имя/размер/дата/приоритет)
+        const SORTABLE = ['name', 'size', 'created', 'prio'];
+        let sortCol = null;   // активная колонка сортировки
+        let sortDir = 1;      // 1 — по возрастанию, -1 — по убыванию
 
-        // Индекс колонки (по colOrder) под горизонтальной координатой указателя
-        function headerIndexAt(x) {
-            const headers = Array.from(document.querySelectorAll('#headRow th[data-col]'))
-                .filter(h => h.dataset.col !== 'cb');
-            for (let i = 0; i < headers.length; i++) {
-                const r = headers[i].getBoundingClientRect();
-                if (x < r.right) return i;
-            }
-            return headers.length - 1;
-        }
-
-        function initHeaderDrag() {
-            const headRow = document.getElementById('headRow');
-            headRow.addEventListener('pointerdown', (e) => {
-                const th = e.target.closest('th[data-col]');
-                if (!th || th.dataset.col === 'cb') return;
-                if (e.pointerType === 'mouse' && e.button !== 0) return;
-
-                dragState = { col: th.dataset.col, active: false, startX: e.clientX, x: e.clientX };
-
-                const move = (ev) => {
-                    if (!dragState) return;
-                    const dx = ev.clientX - dragState.startX;
-                    if (!dragState.active && Math.abs(dx) < 6) return;
-                    if (!dragState.active) {
-                        dragState.active = true;
-                        document.body.classList.add('drag-active');
-                        const h = headRow.querySelector('th[data-col="' + dragState.col + '"]');
-                        if (h) h.classList.add('drag-source');
-                    }
-                    dragState.x = ev.clientX;
-
-                    // Подсветка колонки-цели
-                    headRow.querySelectorAll('th[data-col]').forEach(hh => hh.classList.remove('over'));
-                    const headers = Array.from(headRow.querySelectorAll('th[data-col]'))
-                        .filter(h => h.dataset.col !== 'cb');
-                    const idx = headerIndexAt(ev.clientX);
-                    const target = headers[idx];
-                    if (target && target.dataset.col !== dragState.col) target.classList.add('over');
-                };
-
-                const up = (ev) => {
-                    if (!dragState) return;
-                    const st = dragState;
-                    dragState = null;
-                    document.body.classList.remove('drag-active');
-                    headRow.querySelectorAll('th').forEach(hh => hh.classList.remove('over', 'drag-source'));
-                    document.removeEventListener('pointermove', move);
-                    document.removeEventListener('pointerup', up);
-                    document.removeEventListener('pointercancel', up);
-
-                    if (!st.active) return;
-
-                    let a = colOrder.indexOf(st.col);
-                    if (a < 0) return;
-                    let idx = headerIndexAt(ev.clientX);
-                    colOrder.splice(a, 1);
-                    if (idx > a) idx--;
-                    if (idx < 0) idx = 0;
-                    if (idx > colOrder.length) idx = colOrder.length;
-                    colOrder.splice(idx, 0, st.col);
-
-                    saveOrder();
-                    renderHeaders();
-                    renderRows();
-                };
-
-                document.addEventListener('pointermove', move);
-                document.addEventListener('pointerup', up);
-                document.addEventListener('pointercancel', up);
-                e.preventDefault();
+        function sortFiles() {
+            if (!sortCol) { return files; }
+            const dir = sortDir;
+            const col = sortCol;
+            const arr = files.slice();
+            arr.sort((a, b) => {
+                if (col === 'name') { return dir * a.name.localeCompare(b.name); }
+                const va = a[col], vb = b[col];
+                return dir * ((va > vb) ? 1 : (va < vb) ? -1 : 0);
             });
+            return arr;
         }
 
         function renderHeaders() {
             const headRow = document.getElementById('headRow');
-            // Сохраняем только чекбокс и пересоздаём остальные заголовки в новом порядке
-            while (headRow.children.length > 1) headRow.removeChild(headRow.lastChild);
-            const names = {
-                prio: 'Приоритет',
-                name: 'Имя файла',
-                size: 'Размер',
-                run: 'Состояние',
-                created: 'Создан'
+            headRow.innerHTML = '';
+
+            // Чекбокс «выбрать все»
+            const cbTh = document.createElement('th');
+            cbTh.className = 'rowcb';
+            cbTh.innerHTML = '<input type="checkbox" id="cbAll" title="Выделить всё">';
+            headRow.appendChild(cbTh);
+
+            const headers = {
+                run: {
+                    title: 'Состояние: запущен / стоп / ошибка',
+                    html: '<svg class="hico" width="15" height="15" viewBox="0 0 24 24">' +
+                          '<circle cx="12" cy="12" r="9" fill="none" stroke="#555" stroke-width="2"/>' +
+                          '<circle cx="12" cy="12" r="4" fill="#1a7f37"/></svg>'
+                },
+                prio: {
+                    title: 'Приоритет (0 — высший, 7 — низший). Клик — сортировка',
+                    html: '<svg class="hico" width="15" height="15" viewBox="0 0 24 24" fill="none" ' +
+                          'stroke="#555" stroke-width="2"><path d="M8 6l4-3 4 3"/><path d="M8 18l4 3 4-3"/>' +
+                          '<path d="M12 3v18"/></svg>'
+                },
+                name: { title: 'Имя файла. Клик — сортировка', html: 'Имя файла' },
+                size: { title: 'Размер файла. Клик — сортировка', html: 'Размер' },
+                created: { title: 'Дата создания. Клик — сортировка', html: 'Создан' }
             };
-            const tips = {
-                prio: 'Приоритет (0 - высший, 7 - низший)',
-                name: 'Имя файла',
-                size: 'Размер файла',
-                run: 'Состояние: запущен/стоп/ошибка',
-                created: 'Дата создания'
-            };
-            for (const c of colOrder) {
+
+            for (const c of DATA_COLS) {
                 const th = document.createElement('th');
                 th.dataset.col = c;
-                th.className = 'drag sortable';
-                th.title = tips[c];
-                th.textContent = names[c];
+                th.title = headers[c].title;
+                th.innerHTML = headers[c].html;
+                if (SORTABLE.includes(c)) {
+                    th.classList.add('srt');
+                    if (sortCol === c) {
+                        const s = document.createElement('span');
+                        s.className = 'sortmark';
+                        s.textContent = sortDir === 1 ? ' ▲' : ' ▼';
+                        th.appendChild(s);
+                    }
+                }
                 headRow.appendChild(th);
             }
         }
@@ -414,7 +358,8 @@ cond {[&gt;= $ticks 6]} {
         // ---------- Рендер таблицы ----------
         function fileCellValue(f, col) {
             switch (col) {
-                case 'prio': return '<span class="num">' + f.prio + '</span>';
+                case 'prio': return '<span class="num" title="Приоритет ' + f.prio +
+                                   ' (0 — высший, 7 — низший)">' + f.prio + '</span>';
                 case 'name': {
                     if (editingName === f.name) {
                         return '<input class="inline" id="renameInput" type="text" value="' + esc(f.name) + '">';
@@ -431,7 +376,7 @@ cond {[&gt;= $ticks 6]} {
         function renderRows() {
             const tbody = document.getElementById('macBody');
             tbody.innerHTML = '';
-            for (const f of files) {
+            for (const f of sortFiles()) {
                 const tr = document.createElement('tr');
                 tr.dataset.name = f.name;
                 if (selected.has(f.name)) tr.classList.add('sel');
@@ -450,20 +395,12 @@ cond {[&gt;= $ticks 6]} {
                 tdCb.appendChild(cb);
                 tr.appendChild(tdCb);
 
-                const cellMap = {};
                 for (const c of DATA_COLS) {
                     const td = document.createElement('td');
                     td.dataset.col = c;
                     td.innerHTML = fileCellValue(f, c);
-                    cellMap[c] = td;
                     tr.appendChild(td);
                 }
-                // Сортировка ячеек по текущему порядку колонок
-                const cells = [];
-                for (const c of colOrder) cells.push(cellMap[c]);
-                for (const c of DATA_COLS) tr.removeChild(cellMap[c]);
-                for (const td of cells) tr.appendChild(td);
-                tr.insertBefore(tdCb, tr.firstChild);
 
                 // Клик по строке — выбор; двойной клик — редактор
                 tr.addEventListener('click', (e) => {
@@ -492,7 +429,6 @@ cond {[&gt;= $ticks 6]} {
                 const r = await fetch('/macros/list', { cache: 'no-store' });
                 const data = await r.json();
                 document.getElementById('ntpState').textContent = data.ntp ? 'синхронизировано' : 'не синхронизировано';
-                document.getElementById('modState').textContent = data.enabled ? 'включён' : 'выключен';
                 document.getElementById('countState').textContent = data.files.length;
 
                 // Обновляем метаданные, сохраняя выделение
@@ -641,10 +577,6 @@ cond {[&gt;= $ticks 6]} {
             // Обработчики заданы атрибутами onclick прямо в разметке кнопок
             syncSelUi(); // сразу выставляем активные/неактивные кнопки
 
-            document.getElementById('cbAll').addEventListener('change', (e) => {
-                selected = new Set(e.target.checked ? files.map(f => f.name) : []);
-                renderRows();
-            });
             document.addEventListener('keydown', (e) => {
                 if (e.target && e.target.id === 'renameInput') {
                     if (e.key === 'Enter' || e.key === 'Escape') {
@@ -654,9 +586,28 @@ cond {[&gt;= $ticks 6]} {
                 }
             });
 
-            loadOrder();
             renderHeaders();
-            initHeaderDrag();
+
+            // Чекбокс «выбрать все» в шапке
+            const cbAll = document.getElementById('cbAll');
+            if (cbAll) {
+                cbAll.addEventListener('change', (e) => {
+                    selected = new Set(e.target.checked ? files.map(f => f.name) : []);
+                    renderRows();
+                });
+            }
+
+            // Сортировка по клику на заголовок
+            document.getElementById('headRow').addEventListener('click', (e) => {
+                const th = e.target.closest('th[data-col]');
+                if (!th) return;
+                const col = th.dataset.col;
+                if (!SORTABLE.includes(col)) return;
+                if (sortCol === col) { sortDir = -sortDir; }
+                else { sortCol = col; sortDir = 1; }
+                renderHeaders();
+                renderRows();
+            });
 
             // Версии и первичная загрузка списка выполняются один раз при открытии страницы
             setTimeout(() => {
