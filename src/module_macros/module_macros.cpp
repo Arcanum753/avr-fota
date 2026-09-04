@@ -7,26 +7,59 @@
 
 #include "module_macros.h"
 #include "common/common.h"
+#include "common/TimeLib.h"
 #include "module_macros_version.h"
 #include "core_sys/eertos.h"
 
-#include "common/TimeLib.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
 CLASS_MODULE_MACROS module_macros(false);
+
 CLASS_MODULE_MACROS::CLASS_MODULE_MACROS(bool _in) {
     dumb = _in;
-    _ruleCount = 0;
-    _lastFiredAt = 0;
+    _fileCount = 0;
+    _metaRev = 0;
+    _scriptRev = 0;
+    _lastScriptRev = 0;
+    _ntpWasSynced = false;
+    _evIn = 0;
+    _evOut = 0;
+    _fs = NULL;
 }
 
 // Forward declarations — свободные функции, используемые логикой модуля
-static bool cronFieldParse(const String& token, uint8_t maxVal, CronField& f);
-static bool cronFieldMatch(uint8_t val, const CronField& f);
+static String macroJsonEscape(const String& s);
+static String macroFileBaseName(const String& pathOrName);
+static int macroTclResultError(struct tcl* t, const char* msg);
+static int macroTclResultErrorS(struct tcl* t, const String& msg);
+static String macroReadArg(struct tcl* t, tcl_value_t* args, int idx, bool* ok);
+static String tclValueToString(tcl_value_t* v);
 
+// Команды Tcl должны иметь C-линковку (тип tcl_cmd_fn_t объявлен в extern "C")
+extern "C" {
+static int tclCmdEntity(struct tcl* t, tcl_value_t* args, void* arg);
+static int tclCmdPuts(struct tcl* t, tcl_value_t* args, void* arg);
+static int tclCmdNow(struct tcl* t, tcl_value_t* args, void* arg);
+static int tclCmdClock(struct tcl* t, tcl_value_t* args, void* arg);
+static void macroTclRegisterExtras(struct tcl* t, void* ctx);
+}
+
+static bool macroEvalCond(MacroFile& f, const String& cond, String& errOut);
+static int macroEvalChunks(struct tcl* t, const String& src, String* errOut);
+
+// Периодическая 1-сек задача и терминальный обработчик объявлены здесь,
+// чтобы их можно было использовать до определений в конце файла
+void macroTickTask();
+void macroCmd();
+
+// ============================================================
+// setFs()
+// ============================================================
 #if defined(ESP32)
 void CLASS_MODULE_MACROS::setFs(fs::LittleFSFS* fs)
-#endif
-#if defined(ESP8266)
+#elif defined(ESP8266)
 void CLASS_MODULE_MACROS::setFs(FS* fs)
 #endif
 {
@@ -42,15 +75,19 @@ void CLASS_MODULE_MACROS::begin() {
     defaultConfig();
     if (loadConfig() == false) { saveConfig(); }
 
-    // Сценарий: если файла нет — создаём пример, затем разбираем
-    if (_config.scenarioFile.length() == 0) { _config.scenarioFile = SCENARIO_FILE_DFLT; }
-    if (_fs->exists(_config.scenarioFile) == false) { writeDefaultScenario(); }
-    parseScenario();
+    ensureMacrosDir();
+    reconcileList();
 
     TerminalRegisterModule(macroTerminalRegister);
 
-    // Периодическая проверка cron-расписаний (раз в секунду)
-    SetTimerTask(CLASS_MODULE_MACROS::tick, 1000);
+    // Первичная сборка интерпретаторов запущенных файлов выполняется в setup()
+    // (main-loop контекст, до старта веб-сервера), чтобы tick не делал это дважды.
+    _scriptRev = 1;
+    rebuildScripts();
+    _lastScriptRev = _scriptRev;
+
+    // Периодическая задача исполнительной машины (раз в секунду)
+    SetTimerTask(macroTickTask, 1000);
 }
 
 void CLASS_MODULE_MACROS::begin(ModContext& ctx) {
@@ -64,28 +101,52 @@ void CLASS_MODULE_MACROS::begin(ModContext& ctx) {
 void CLASS_MODULE_MACROS::web_Init() {
     DEBUGMACROS("%s\r\n", __FUNCTION__);
 
-    // AJAX — получение списка правил и статуса
-    ESPHTTPServer.on("/macros/info", HTTP_GET, [this](AsyncWebServerRequest *request) {
+    // AJAX — список файлов-сценариев (JSON)
+    ESPHTTPServer.on("/macros/list", HTTP_GET, [this](AsyncWebServerRequest *request) {
         if (!ESPHTTPServer.checkAuth(request)) { return request->requestAuthentication(); }
-        this->handleInfo(request);
+        this->handleList(request);
     });
 
-    // AJAX — перечитать файл сценария
-    ESPHTTPServer.on("/macros/reload", HTTP_POST, [this](AsyncWebServerRequest *request) {
+    // AJAX — действия по сценариям (только GET, состояние передаётся в query)
+    ESPHTTPServer.on("/macros/create", HTTP_GET, [this](AsyncWebServerRequest *request) {
+        if (!ESPHTTPServer.checkAuth(request)) { return request->requestAuthentication(); }
+        this->handleCreate(request);
+    });
+
+    // AJAX — удалить файл(ы)
+    ESPHTTPServer.on("/macros/delete", HTTP_GET, [this](AsyncWebServerRequest *request) {
+        if (!ESPHTTPServer.checkAuth(request)) { return request->requestAuthentication(); }
+        this->handleDelete(request);
+    });
+
+    // AJAX — переименовать файл
+    ESPHTTPServer.on("/macros/rename", HTTP_GET, [this](AsyncWebServerRequest *request) {
+        if (!ESPHTTPServer.checkAuth(request)) { return request->requestAuthentication(); }
+        this->handleRename(request);
+    });
+
+    // AJAX — запустить/остановить файл
+    ESPHTTPServer.on("/macros/state", HTTP_GET, [this](AsyncWebServerRequest *request) {
+        if (!ESPHTTPServer.checkAuth(request)) { return request->requestAuthentication(); }
+        this->handleState(request);
+    });
+
+    // AJAX — изменить приоритет (информационно)
+    ESPHTTPServer.on("/macros/prio", HTTP_GET, [this](AsyncWebServerRequest *request) {
+        if (!ESPHTTPServer.checkAuth(request)) { return request->requestAuthentication(); }
+        this->handlePrio(request);
+    });
+
+    // AJAX — перечитать файл(ы)
+    ESPHTTPServer.on("/macros/reload", HTTP_GET, [this](AsyncWebServerRequest *request) {
         if (!ESPHTTPServer.checkAuth(request)) { return request->requestAuthentication(); }
         this->handleReload(request);
     });
 
-    // AJAX — запустить правило вручную
-    ESPHTTPServer.on("/macros/run", HTTP_POST, [this](AsyncWebServerRequest *request) {
+    // AJAX — внешнее событие (button/term) — резерв для будущих модулей
+    ESPHTTPServer.on("/macros/fire", HTTP_GET, [this](AsyncWebServerRequest *request) {
         if (!ESPHTTPServer.checkAuth(request)) { return request->requestAuthentication(); }
-        this->handleRun(request);
-    });
-
-    // AJAX — сохранить настройки (enabled, файл сценария)
-    ESPHTTPServer.on("/macros/save", HTTP_POST, [this](AsyncWebServerRequest *request) {
-        if (!ESPHTTPServer.checkAuth(request)) { return request->requestAuthentication(); }
-        this->handleSave(request);
+        this->handleFire(request);
     });
 
     // Версия модуля
@@ -97,79 +158,201 @@ void CLASS_MODULE_MACROS::web_Init() {
 // ============================================================
 // Веб-обработчики
 // ============================================================
-void CLASS_MODULE_MACROS::handleInfo(AsyncWebServerRequest *request) {
+void CLASS_MODULE_MACROS::handleList(AsyncWebServerRequest *request) {
+
+    String json = "{\"enabled\":";
+    json += (_config.enabled ? "true" : "false");
+    json += ",\"ntp\":";
+    json += (NTP.getLastNTPSync() > 0) ? "1" : "0";
+    json += ",\"files\":[";
+
+    // Сортировка по приоритету (0 - высший), затем по имени
+    uint8_t order[MACRO_MAX_FILES];
+    for (uint8_t i = 0; i < _fileCount; i++) { order[i] = i; }
+    for (uint8_t i = 0; i < _fileCount; i++) {
+        for (uint8_t j = i + 1; j < _fileCount; j++) {
+            bool less = (_files[order[j]].prio < _files[order[i]].prio);
+            if (!less && _files[order[j]].prio == _files[order[i]].prio) {
+                less = (_files[order[j]].name < _files[order[i]].name);
+            }
+            if (less) {
+                uint8_t tmp = order[i];
+                order[i] = order[j];
+                order[j] = tmp;
+            }
+        }
+    }
+
+    for (uint8_t n = 0; n < _fileCount; n++) {
+        MacroFile& f = _files[order[n]];
+        if (n > 0) { json += ","; }
+
+        size_t size = 0;
+        File sf = _fs->open(f.name, "r");
+        if (sf) {
+            size = sf.size();
+            sf.close();
+        }
+
+        json += "{\"name\":\"";
+        json += macroJsonEscape(macroFileBaseName(f.name));
+        json += "\",\"prio\":";
+        json += String(f.prio);
+        json += ",\"run\":";
+        json += (f.run ? "true" : "false");
+        json += ",\"size\":";
+        json += String((uint32_t)size);
+        json += ",\"created\":";
+        json += String(f.created);
+        json += ",\"active\":";
+        json += (f.active ? "true" : "false");
+        json += ",\"err\":\"";
+        json += macroJsonEscape(f.err);
+        json += "\"}";
+    }
+
+    json += "]}";
+    request->send(200, "application/json", json);
+}
+
+void CLASS_MODULE_MACROS::handleCreate(AsyncWebServerRequest *request) {
     DEBUGMACROS("%s\r\n", __FUNCTION__);
-    String values = "";
-    values += "mac_enabled|"    + String(_config.enabled ? "checked" : "") + "|chk\n";
-    values += "mac_scenfile|"   + _config.scenarioFile                      + "|input\n";
-    values += "mac_count|"      + String(_ruleCount)                        + "|div\n";
 
-    String timeDate = "NTP not synced";
-    if (NTP.getLastNTPSync() > 0) { timeDate = NTP.getTimeDateString(); }
-    values += "mac_ntp|" + timeDate + "|div\n";
-
-    String last = "--";
-    if (_lastFiredAt > 0) {
-        time_t t = (time_t)_lastFiredAt;
-        char buf[24];
-        snprintf(buf, sizeof(buf), "%02d:%02d:%02d", hour(t), minute(t), second(t));
-        last = _lastFiredName + " (" + String(buf) + ")";
-    }
-    values += "mac_last|" + last + "|div\n";
-
-    for (uint8_t i = 0; i < _ruleCount; i++) {
-        String p = "mac_" + String(i) + "_";
-        String typeStr = "cron";
-        if (_rules[i].type == MACRO_TRIG_BUTTON) { typeStr = "button"; }
-        if (_rules[i].type == MACRO_TRIG_TERM)   { typeStr = "term"; }
-
-        String trig = _rules[i].id;
-        if (_rules[i].type == MACRO_TRIG_CRON) { trig = _rules[i].cronExpr; }
-
-        values += p + "type|"   + typeStr            + "|div\n";
-        values += p + "trig|"   + trig               + "|div\n";
-        values += p + "action|" + _rules[i].action   + "|div\n";
+    String tmpl = MACRO_DEFAULT_NAME;
+    if (request->hasArg("name")) {
+        String n = request->arg("name");
+        n.trim();
+        if (n.length() > 0) {
+            if (!n.endsWith(".tcl")) { n += ".tcl"; }
+            if (!nameOk(n)) { request->send(200, "text/plain", "ERR: bad name"); return; }
+            tmpl = n;
+        }
     }
 
-    request->send(200, "text/plain", values);
+    String fullPath;
+    if (createNewFile(tmpl, fullPath)) {
+        request->send(200, "text/plain", "OK");
+    } else {
+        request->send(200, "text/plain", "ERR: cannot create");
+    }
+}
+
+void CLASS_MODULE_MACROS::handleDelete(AsyncWebServerRequest *request) {
+    DEBUGMACROS("%s\r\n", __FUNCTION__);
+
+    if (!request->hasArg("name")) { request->send(200, "text/plain", "ERR: no name"); return; }
+
+    String list = request->arg("name");
+    bool ok = true;
+    int start = 0;
+    while (start <= (int)list.length()) {
+        int comma = list.indexOf(',', start);
+        String base = (comma < 0) ? list.substring(start) : list.substring(start, comma);
+        base.trim();
+        if (base.length() > 0) {
+            if (deleteFileEntry(base) == false) { ok = false; }
+        }
+        if (comma < 0) { break; }
+        start = comma + 1;
+    }
+    request->send(200, "text/plain", ok ? "OK" : "ERR: partial delete");
+}
+
+void CLASS_MODULE_MACROS::handleRename(AsyncWebServerRequest *request) {
+    DEBUGMACROS("%s\r\n", __FUNCTION__);
+
+    if (!request->hasArg("old") || !request->hasArg("new")) {
+        request->send(200, "text/plain", "ERR: no args");
+        return;
+    }
+    String oldBase = request->arg("old");
+    String newBase = request->arg("new");
+    oldBase.trim();
+    newBase.trim();
+    if (!newBase.endsWith(".tcl")) { newBase += ".tcl"; }
+
+    if (renameFileEntry(oldBase, newBase)) {
+        request->send(200, "text/plain", "OK");
+    } else {
+        request->send(200, "text/plain", "ERR: rename failed");
+    }
+}
+
+void CLASS_MODULE_MACROS::handleState(AsyncWebServerRequest *request) {
+    DEBUGMACROS("%s\r\n", __FUNCTION__);
+
+    if (!request->hasArg("name") || !request->hasArg("on")) {
+        request->send(200, "text/plain", "ERR: no args");
+        return;
+    }
+    String base = request->arg("name");
+    base.trim();
+    bool on = (request->arg("on") == "1");
+
+    if (setFileRun(base, on)) {
+        request->send(200, "text/plain", "OK");
+    } else {
+        request->send(200, "text/plain", "ERR: not found");
+    }
+}
+
+void CLASS_MODULE_MACROS::handlePrio(AsyncWebServerRequest *request) {
+    DEBUGMACROS("%s\r\n", __FUNCTION__);
+
+    if (!request->hasArg("name") || !request->hasArg("dir")) {
+        request->send(200, "text/plain", "ERR: no args");
+        return;
+    }
+    String base = request->arg("name");
+    base.trim();
+    int8_t delta = (int8_t)request->arg("dir").toInt();
+
+    if (setFilePrio(base, delta)) {
+        request->send(200, "text/plain", "OK");
+    } else {
+        request->send(200, "text/plain", "ERR: not found");
+    }
 }
 
 void CLASS_MODULE_MACROS::handleReload(AsyncWebServerRequest *request) {
     DEBUGMACROS("%s\r\n", __FUNCTION__);
-    parseScenario();
-    request->send(200, "text/plain", "OK");
-}
 
-void CLASS_MODULE_MACROS::handleRun(AsyncWebServerRequest *request) {
-    DEBUGMACROS("%s\r\n", __FUNCTION__);
-    if (request->hasArg("id")) {
-        String id = urldecode(request->arg("id"));
-        id.trim();
-        if (fireById(id)) { request->send(200, "text/plain", "OK"); return; }
-        request->send(200, "text/plain", "Not found");
+    if (request->hasArg("name")) {
+        String base = request->arg("name");
+        base.trim();
+        int idx = findFile(MACROS_DIR_RE + base);
+        if (idx >= 0) {
+            // Пересборка произойдёт в tick (перезапуск файла)
+            _scriptRev++;
+            request->send(200, "text/plain", "OK");
+            return;
+        }
+        request->send(200, "text/plain", "ERR: not found");
         return;
     }
-    request->send(200, "text/plain", "Missing id");
+    reloadAll();
+    request->send(200, "text/plain", "OK");
 }
 
-void CLASS_MODULE_MACROS::handleSave(AsyncWebServerRequest *request) {
+void CLASS_MODULE_MACROS::handleFire(AsyncWebServerRequest *request) {
     DEBUGMACROS("%s\r\n", __FUNCTION__);
 
-    if (request->hasArg("enabled")) {
-        _config.enabled = (request->arg("enabled") == "true");
+    if (!request->hasArg("token")) {
+        request->send(200, "text/plain", "ERR: no token");
+        return;
     }
-    if (request->hasArg("scenfile")) {
-        String f = urldecode(request->arg("scenfile"));
-        f.trim();
-        if (f.length() > 0) {
-            if (f[0] != '/') { f = "/" + f; }
-            _config.scenarioFile = f;
-        }
+    uint8_t type = MACRO_ENT_TERM;
+    if (request->hasArg("type")) {
+        String t = request->arg("type");
+        if (t == "button") { type = MACRO_ENT_BUTTON; }
+        else if (t == "term") { type = MACRO_ENT_TERM; }
     }
-
-    saveConfig();
-    parseScenario();
-    request->send(200, "text/plain", "OK");
+    String token = request->arg("token");
+    if (fireToken(type, token)) {
+        request->send(200, "text/plain", "OK");
+    } else {
+        request->send(200, "text/plain", "ERR: queue full");
+    }
 }
 
 // ============================================================
@@ -178,7 +361,7 @@ void CLASS_MODULE_MACROS::handleSave(AsyncWebServerRequest *request) {
 
 void CLASS_MODULE_MACROS::defaultConfig() {
     _config.enabled = true;
-    _config.scenarioFile = SCENARIO_FILE_DFLT;
+    _fileCount = 0;
 }
 
 bool CLASS_MODULE_MACROS::loadConfig() {
@@ -186,11 +369,30 @@ bool CLASS_MODULE_MACROS::loadConfig() {
     JsonDocument doc;
     if (core_json.jsonFileLoadDoc(CONFIG_FILE_MACROS, doc) == false) { return false; }
 
-    _config.enabled      = doc["enabled"].as<bool>();
-    _config.scenarioFile = doc["scenarioFile"].as<String>();
-    if (_config.scenarioFile.length() == 0) { _config.scenarioFile = SCENARIO_FILE_DFLT; }
+    _config.enabled = doc["enabled"].as<bool>();
 
-    DEBUGMACROS("enabled: %d, scenarioFile: %s\r\n", _config.enabled, _config.scenarioFile.c_str());
+    _fileCount = 0;
+    if (doc["files"].is<JsonArray>()) {
+        JsonArray arr = doc["files"].as<JsonArray>();
+        for (JsonObject obj : arr) {
+            if (_fileCount >= MACRO_MAX_FILES) { break; }
+            MacroFile& f = _files[_fileCount];
+            f.name    = obj["name"].as<String>();
+            f.prio    = obj["prio"].as<uint8_t>();
+            f.run     = obj["run"].as<bool>();
+            f.created = obj["created"].as<uint32_t>();
+            if (f.name.length() == 0) { continue; }
+            f.active = false;
+            f.err = "";
+            f.tcl = NULL;
+            f.ctx.file = NULL;
+            f.ctx.parsing = false;
+            f.nEnts = 0;
+            _fileCount++;
+        }
+    }
+
+    DEBUGMACROS("enabled: %d, files: %d\r\n", _config.enabled, _fileCount);
     return true;
 }
 
@@ -198,9 +400,22 @@ bool CLASS_MODULE_MACROS::saveConfig() {
     DEBUGMACROS("%s\r\n", __FUNCTION__);
     JsonDocument doc;
     core_json.jsonFileLoadDoc(CONFIG_FILE_MACROS, doc);
-    doc["enabled"]      = _config.enabled;
-    doc["scenarioFile"] = _config.scenarioFile;
+    doc["enabled"] = _config.enabled;
+
+    JsonArray arr = doc["files"].to<JsonArray>();
+    arr.clear();
+    for (uint8_t i = 0; i < _fileCount; i++) {
+        JsonObject obj = arr.add<JsonObject>();
+        obj["name"]    = _files[i].name;
+        obj["prio"]    = _files[i].prio;
+        obj["run"]     = _files[i].run;
+        obj["created"] = _files[i].created;
+    }
     return core_json.jsonFileSaveDoc(CONFIG_FILE_MACROS, doc);
+}
+
+bool CLASS_MODULE_MACROS::saveMeta() {
+    return saveConfig();
 }
 
 // ============================================================
@@ -229,355 +444,757 @@ void CLASS_MODULE_MACROS::html_ver_get(AsyncWebServerRequest *request) {
 }
 
 // ============================================================
-// Конкретная логика модуля
+// Логика работы со списком файлов
 // ============================================================
 
-// Публичное API
-
-uint8_t CLASS_MODULE_MACROS::getRuleCount() {
-    return _ruleCount;
-}
-
-// Вывод списка правил в терминал
-void CLASS_MODULE_MACROS::printRules() {
-    Serial.printf("[MACRO] rules: %d, enabled: %d, file: %s\r\n",
-                  _ruleCount,
-                  _config.enabled ? 1 : 0,
-                  _config.scenarioFile.c_str());
-    for (uint8_t i = 0; i < _ruleCount; i++) {
-        const char* typeStr = "cron";
-        if (_rules[i].type == MACRO_TRIG_BUTTON) { typeStr = "button"; }
-        if (_rules[i].type == MACRO_TRIG_TERM)   { typeStr = "term"; }
-        String trig = (_rules[i].type == MACRO_TRIG_CRON) ? _rules[i].cronExpr : _rules[i].id;
-        Serial.printf("  [%d] %s(%s) -> %s\r\n", i, typeStr, trig.c_str(), _rules[i].action.c_str());
+int CLASS_MODULE_MACROS::findFile(const String& name) {
+    for (uint8_t i = 0; i < _fileCount; i++) {
+        if (_files[i].name == name) { return i; }
     }
+    return -1;
 }
 
-// Перечитать файл сценария
-bool CLASS_MODULE_MACROS::reloadScenario() {
-    parseScenario();
+bool CLASS_MODULE_MACROS::nameOk(const String& name) {
+    if (name.length() < 6 || name.length() > 48) { return false; }
+    if (!name.endsWith(".tcl")) { return false; }
+    for (uint8_t i = 0; i < name.length(); i++) {
+        char c = name[i];
+        bool ok = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+                  (c >= '0' && c <= '9') || c == '-' || c == '_' || c == '.';
+        if (!ok) { return false; }
+    }
     return true;
 }
 
-// Запустить правило по id (button/term)
-bool CLASS_MODULE_MACROS::fireById(const String& id) {
-    if (id.length() == 0) { return false; }
-    for (uint8_t i = 0; i < _ruleCount; i++) {
-        if (_rules[i].type != MACRO_TRIG_CRON && _rules[i].id == id) {
-            fireRule(i);
-            return true;
-        }
-    }
-    DEBUGMACROS("[MACRO] rule '%s' not found\r\n", id.c_str());
-    return false;
+void CLASS_MODULE_MACROS::bumpMeta() {
+    _metaRev++;
+    _scriptRev++;
 }
 
-// Запустить правила по типу триггера и токену (term)
-bool CLASS_MODULE_MACROS::fireByType(uint8_t type, const String& id) {
-    if (id.length() == 0) { return false; }
-    bool fired = false;
-    for (uint8_t i = 0; i < _ruleCount; i++) {
-        if (_rules[i].type == type && _rules[i].id == id) {
-            fireRule(i);
-            fired = true;
-        }
-    }
-    return fired;
-}
-
-// Срабатывание правила: результат выводится в терминал
-void CLASS_MODULE_MACROS::fireRule(uint8_t idx) {
-    MacroRule& r = _rules[idx];
-
-    char stamp[24];
-    time_t t = now();
-    snprintf(stamp, sizeof(stamp), "%02d:%02d:%02d", hour(t), minute(t), second(t));
-
-    const char* typeStr = "cron";
-    if (r.type == MACRO_TRIG_BUTTON) { typeStr = "button"; }
-    if (r.type == MACRO_TRIG_TERM)   { typeStr = "term"; }
-
-    Serial.printf("[MACRO] %s %s(%s) -> %s\r\n",
-                  stamp, typeStr,
-                  (r.type == MACRO_TRIG_CRON) ? r.cronExpr.c_str() : r.id.c_str(),
-                  r.action.c_str());
-
-    _lastFiredName = (r.type == MACRO_TRIG_CRON) ? r.cronExpr : r.id;
-    _lastFiredAt = (uint32_t)t;
-}
-
-// ============================================================
-// Сценарий: файл -> правила
-// ============================================================
-
-// Создать файл сценария по умолчанию (если его ещё нет)
-void CLASS_MODULE_MACROS::writeDefaultScenario() {
-    DEBUGMACROS("%s: creating default scenario %s\r\n", __FUNCTION__, _config.scenarioFile.c_str());
-    File f = _fs->open(_config.scenarioFile, "w");
-    if (!f) {
-        DEBUGMACROS("%s: cannot create %s\r\n", __FUNCTION__, _config.scenarioFile.c_str());
-        return;
-    }
-    f.print("# Example scenario for module_macros (prototype)\r\n");
-    f.print("# Triggers: cron <6-field expression> : <action>\r\n");
-    f.print("#           button <name> : <action>\r\n");
-    f.print("#           term <word> : <action>\r\n");
-    f.print("# cron: <sec> <min> <hour> <dom> <month> <dow> (5 fields - no seconds)\r\n");
-    f.print("# The fired action is printed to the serial terminal.\r\n");
-    f.print("\r\n");
-    f.print("cron */10 * * * * * : Cron fired: every 10 seconds\r\n");
-    f.print("cron 0 * * * * * : Cron fired: every minute\r\n");
-    f.print("button test : Button test pressed on the web page\r\n");
-    f.print("term hello : Got 'hello' message from the terminal\r\n");
-    f.close();
-}
-
-// Разобрать файл сценария построчно
-void CLASS_MODULE_MACROS::parseScenario() {
-    DEBUGMACROS("%s: %s\r\n", __FUNCTION__, _config.scenarioFile.c_str());
-    _ruleCount = 0;
-
-    File f = _fs->open(_config.scenarioFile, "r");
-    if (!f) {
-        DEBUGMACROS("%s: cannot open %s\r\n", __FUNCTION__, _config.scenarioFile.c_str());
-        return;
-    }
-
-    while (f.available() && _ruleCount < MACRO_MAX_RULES) {
-        String line = f.readStringUntil('\n');
-        line.trim();
-        if (line.length() == 0) { continue; }
-        if (line[0] == '#') { continue; }
-
-        MacroRule rule;
-        if (parseRuleLine(line, rule)) {
-            _rules[_ruleCount++] = rule;
-        } else {
-            DEBUGMACROS("%s: skip line: %s\r\n", __FUNCTION__, line.c_str());
-        }
+String CLASS_MODULE_MACROS::readFile(const String& path) {
+    File f = _fs->open(path, "r");
+    if (!f) { return ""; }
+    String content;
+    while (f.available()) {
+        content += (char)f.read();
+        if (content.length() > 8192) { break; }
     }
     f.close();
-
-    DEBUGMACROS("%s: %d rules loaded\r\n", __FUNCTION__, _ruleCount);
+    return content;
 }
 
-// Разобрать одну строку сценария: "<триггер> : <действие>"
-bool CLASS_MODULE_MACROS::parseRuleLine(const String& line, MacroRule& rule) {
-    int colon = line.indexOf(':');
-    if (colon < 0) { return false; }
+bool CLASS_MODULE_MACROS::writeFile(const String& path, const String& data) {
+    File f = _fs->open(path, "w");
+    if (!f) { return false; }
+    bool ok = (f.write((const uint8_t*)data.c_str(), data.length()) == data.length());
+    f.close();
+    return ok;
+}
 
-    String trig = line.substring(0, colon);
-    String action = line.substring(colon + 1);
-    trig.trim();
-    action.trim();
-    if (action.length() == 0) { return false; }
+bool CLASS_MODULE_MACROS::fsRenameFile(const String& oldPath, const String& newPath) {
+    String data = readFile(oldPath);
+    if (data.length() == 0) { return false; }
+    if (writeFile(newPath, data) == false) { return false; }
+    _fs->remove(oldPath);
+    return true;
+}
 
-    rule.action = action;
-    rule.lastFire = 0;
-    memset(rule.cron, 0, sizeof(rule.cron));
-    rule.hasSeconds = false;
-    rule.cronExpr = "";
+String CLASS_MODULE_MACROS::uniqueNewName(const String& tmpl) {
+    String base = tmpl.substring(0, tmpl.length() - 4); // без ".tcl"
+    String cand = tmpl;
+    uint8_t idx = 0;
+    while (_fs->exists(MACROS_DIR_RE + cand)) {
+        idx++;
+        cand = base + String(idx) + ".tcl";
+        if (idx > 99) { break; }
+    }
+    return cand;
+}
 
-    // cron <выражение> : <действие>
-    if (trig.startsWith("cron ")) {
-        String expr = trig.substring(5);
-        expr.trim();
-        if (expr.length() == 0) { return false; }
+void CLASS_MODULE_MACROS::ensureMacrosDir() {
+    // Создаём каталог сценариев (примеры .tcl поставляются в составе FS-образа:
+    // web/macros/*.tcl -> /macros/*.tcl, см. python/fs_builder.py)
+    if (_fs->exists(MACROS_DIR) == false) {
+        _fs->mkdir(MACROS_DIR);
+        DEBUGMACROS("%s: dir %s created\r\n", __FUNCTION__, MACROS_DIR);
+    }
+}
 
-        // Делим выражение на слова (поля)
-        String fields[6];
-        uint8_t n = 0;
-        int startIdx = 0;
-        while (startIdx <= expr.length() && n < 6) {
-            int sp = expr.indexOf(' ', startIdx);
-            String w = (sp < 0) ? expr.substring(startIdx) : expr.substring(startIdx, sp);
-            w.trim();
-            if (w.length() > 0) { fields[n++] = w; }
-            if (sp < 0) { break; }
-            startIdx = sp + 1;
+void CLASS_MODULE_MACROS::reconcileList() {
+    // 1) Удаляем записи, файлы которых пропали
+    for (int i = (int)_fileCount - 1; i >= 0; i--) {
+        if (_fs->exists(_files[i].name) == false) {
+            destroyScript(_files[i]);
+            for (int j = i; j < (int)_fileCount - 1; j++) { _files[j] = _files[j + 1]; }
+            _fileCount--;
         }
+    }
 
-        // 5 полей: мин час день месяц день-нед; 6 полей: + секунды
-        static const uint8_t maxVals[6] = {59, 59, 23, 31, 12, 6};
-        uint8_t fieldCount = n;
-        if (fieldCount != 5 && fieldCount != 6) {
-            DEBUGMACROS("%s: bad cron field count (%d): %s\r\n", __FUNCTION__, n, expr.c_str());
-            return false;
+    // 2) Сканируем каталог и добавляем новые .tcl
+#if defined(ESP32)
+    File root = _fs->open(MACROS_DIR);
+    if (root) {
+        File entry = root.openNextFile();
+        while (entry) {
+            if (entry.isDirectory() == false) {
+                String base = macroFileBaseName(String(entry.name()));
+                if (base.endsWith(".tcl")) {
+                    if (findFile(MACROS_DIR_RE + base) < 0) { addFileEntry(base, 7, false); }
+                }
+            }
+            entry = root.openNextFile();
         }
-        rule.hasSeconds = (fieldCount == 6);
-        rule.cronExpr = expr;
-        rule.type = MACRO_TRIG_CRON;
-
-        uint8_t offset = rule.hasSeconds ? 0 : 1;
-        for (uint8_t i = 0; i < fieldCount; i++) {
-            if (cronFieldParse(fields[i], maxVals[offset + i], rule.cron[offset + i]) == false) {
-                DEBUGMACROS("%s: bad cron field '%s'\r\n", __FUNCTION__, fields[i].c_str());
-                return false;
+    }
+#endif
+#if defined(ESP8266)
+    Dir dir = _fs->openDir(MACROS_DIR);
+    while (dir.next()) {
+        if (dir.isDirectory() == false) {
+            String base = macroFileBaseName(dir.fileName());
+            if (base.endsWith(".tcl")) {
+                if (findFile(MACROS_DIR_RE + base) < 0) { addFileEntry(base, 7, false); }
             }
         }
-        return true;
     }
+#endif
 
-    // button <имя> : <действие>
-    if (trig.startsWith("button ")) {
-        String id = trig.substring(7);
-        id.trim();
-        if (id.length() == 0) { return false; }
-        rule.type = MACRO_TRIG_BUTTON;
-        rule.id = id;
-        return true;
-    }
-
-    // term <слово> : <действие>
-    if (trig.startsWith("term ")) {
-        String id = trig.substring(5);
-        id.trim();
-        if (id.length() == 0) { return false; }
-        rule.type = MACRO_TRIG_TERM;
-        rule.id = id;
-        return true;
-    }
-
-    return false;
+    saveConfig();
+    DEBUGMACROS("%s: total %d files\r\n", __FUNCTION__, _fileCount);
 }
 
 // ============================================================
-// Cron: парсинг и проверка совпадения
+// Операции со списком (общие для HTTP и терминала)
 // ============================================================
 
-// Разобрать одно поле cron-выражения. Поддерживает: *, */n, число, a-b, a-b/n, список через запятую
-static bool cronFieldParse(const String& token, uint8_t maxVal, CronField& f) {
-    f.count = 0;
-    f.maxVal = maxVal;
+bool CLASS_MODULE_MACROS::addFileEntry(const String& base, uint8_t prio, bool run) {
+    if (nameOk(base) == false) { return false; }
+    String path = MACROS_DIR_RE + base;
+    if (findFile(path) >= 0) { return true; }
+    if (_fileCount >= MACRO_MAX_FILES) { return false; }
 
-    int startIdx = 0;
-    while (startIdx <= token.length()) {
-        int commaIdx = token.indexOf(',', startIdx);
-        String part = (commaIdx < 0) ? token.substring(startIdx) : token.substring(startIdx, commaIdx);
-        part.trim();
+    MacroFile& f = _files[_fileCount];
+    f.name    = path;
+    f.prio    = (prio > 7) ? 7 : prio;
+    f.run     = run;
+    f.created = (uint32_t)now();
+    f.active  = false;
+    f.err     = "";
+    f.tcl     = NULL;
+    f.ctx.file = &f;
+    f.ctx.parsing = false;
+    f.nEnts   = 0;
+    _fileCount++;
+    return true;
+}
 
-        if (part.length() > 0) {
-            if (f.count >= CRON_FIELD_MAX_RANGES) { return false; }
+bool CLASS_MODULE_MACROS::createNewFile(const String& base, String& fullPath) {
+    if (nameOk(base) == false) { return false; }
 
-            uint8_t from = 0, to = maxVal, step = 1;
-            int slashIdx = part.indexOf('/');
-            String rangePart = part;
-            if (slashIdx >= 0) {
-                step = (uint8_t)part.substring(slashIdx + 1).toInt();
-                if (step == 0) { return false; }
-                rangePart = part.substring(0, slashIdx);
-                rangePart.trim();
+    String cand = uniqueNewName(base);
+    fullPath = MACROS_DIR_RE + cand;
+
+    String empty;
+    empty = "# New macro script (Tcl). Register cron/cond/button/term rules.\r\n";
+    if (writeFile(fullPath, empty) == false) { return false; }
+
+    if (addFileEntry(cand, 7, false) == false) {
+        _fs->remove(fullPath);
+        return false;
+    }
+    saveConfig();
+    bumpMeta();
+    return true;
+}
+
+bool CLASS_MODULE_MACROS::deleteFileEntry(const String& base) {
+    String path = MACROS_DIR_RE + base;
+    int idx = findFile(path);
+    if (idx < 0) { return false; }
+
+    if (_fs->exists(path)) { _fs->remove(path); }
+
+    destroyScript(_files[idx]);
+    for (int j = idx; j < (int)_fileCount - 1; j++) { _files[j] = _files[j + 1]; }
+    _fileCount--;
+    saveConfig();
+    bumpMeta();
+    return true;
+}
+
+bool CLASS_MODULE_MACROS::setFileRun(const String& base, bool on) {
+    String path = MACROS_DIR_RE + base;
+    int idx = findFile(path);
+    if (idx < 0) { return false; }
+
+    if (_files[idx].run != on) {
+        _files[idx].run = on;
+        if (on == false) {
+            _files[idx].err = "";
+            destroyScript(_files[idx]);
+        }
+        saveConfig();
+        bumpMeta();
+    }
+    return true;
+}
+
+bool CLASS_MODULE_MACROS::setFilePrio(const String& base, int8_t delta) {
+    String path = MACROS_DIR_RE + base;
+    int idx = findFile(path);
+    if (idx < 0) { return false; }
+
+    int8_t p = (int8_t)_files[idx].prio + delta;
+    if (p < 0) { p = 0; }
+    if (p > 7) { p = 7; }
+    _files[idx].prio = (uint8_t)p;
+    saveConfig();
+    return true;
+}
+
+bool CLASS_MODULE_MACROS::renameFileEntry(const String& oldBase, const String& newBase) {
+    if (nameOk(newBase) == false) { return false; }
+    String oldPath = MACROS_DIR_RE + oldBase;
+    String newPath = MACROS_DIR_RE + newBase;
+    int idx = findFile(oldPath);
+    if (idx < 0) { return false; }
+    if (newBase == oldBase) { return true; }
+    if (_fs->exists(newPath)) { return false; }
+
+    if (fsRenameFile(oldPath, newPath) == false) { return false; }
+
+    _files[idx].name = newPath;
+    _files[idx].err = "";
+    saveConfig();
+    bumpMeta();
+    return true;
+}
+
+// ============================================================
+// Движок сценариев
+// ============================================================
+
+// Обёртка для tcl.c: исполнение скрипта в интерпретаторе через проверенный
+// C++-вариант построчной разбивки (используется для тел пользовательских proc)
+extern "C" int macroTclEvalScript(struct tcl* t, const char* src) {
+    if (t == NULL || src == NULL) { return FERROR; }
+    String s(src);
+    return macroEvalChunks(t, s, NULL);
+}
+
+// Выполнение Tcl-кода по командам: pTcl надёжно обрабатывает несколько команд
+// только при поочерёдном вызове, поэтому скрипт режем на команды уровня 0
+// (с учётом {} , [] , "" и комментариев #) и исполняем каждую отдельно
+// в том же интерпретаторе (процедуры/переменные сохраняются между вызовами).
+static bool macroWsOnly(const String& s) {
+    for (uint8_t i = 0; i < s.length(); i++) {
+        char c = s.charAt(i);
+        if (c != ' ' && c != '\t') { return false; }
+    }
+    return true;
+}
+
+static int macroEvalChunks(struct tcl* t, const String& src, String* errOut) {
+    String chunk;
+    int brace = 0;
+    int bracket = 0;
+    bool inQuote = false;
+    bool comment = false;
+    size_t len = src.length();
+
+    for (size_t i = 0; i < len; i++) {
+        char c = src.charAt((unsigned int)i);
+
+        if (comment) {
+            if (c == '\n' || c == '\r') { comment = false; }
+            continue;
+        }
+        // Комментарий до конца строки (только в начале команды)
+        if (c == '#' && brace == 0 && bracket == 0 && !inQuote && macroWsOnly(chunk)) {
+            comment = true;
+            continue;
+        }
+        // Разделитель команд (вне {} [] "")
+        if (!inQuote && brace == 0 && bracket == 0 && (c == '\n' || c == ';')) {
+            chunk.trim();
+            if (chunk.length() > 0) {
+                // Ошибкой считаем только FERROR: proc-определения на верхнем
+                // уровне возвращают FRETURN - это не ошибка разбора.
+                int r = tcl_eval(t, chunk.c_str(), chunk.length() + 1);
+                if (r == FERROR) {
+                    if (errOut != NULL && errOut->length() == 0 && t->result &&
+                        tcl_length(t->result) > 0) {
+                        *errOut = tclValueToString(t->result);
+                    }
+                    return r;
+                }
+            }
+            chunk = "";
+            continue;
+        }
+
+        if (!inQuote) {
+            if (c == '{') { brace++; }
+            else if (c == '}') { if (brace > 0) { brace--; } }
+            else if (c == '[') { bracket++; }
+            else if (c == ']') { if (bracket > 0) { bracket--; } }
+            else if (c == '"') { inQuote = true; }
+        } else if (c == '"') {
+            inQuote = false;
+        }
+        chunk += c;
+    }
+
+    // Последняя команда
+    chunk.trim();
+    if (chunk.length() > 0) {
+        int r = tcl_eval(t, chunk.c_str(), chunk.length() + 1);
+        if (r == FERROR) {
+            if (errOut != NULL && errOut->length() == 0 && t->result &&
+                tcl_length(t->result) > 0) {
+                *errOut = tclValueToString(t->result);
+            }
+            return r;
+        }
+    }
+    return FNORMAL;
+}
+
+void CLASS_MODULE_MACROS::destroyScript(MacroFile& f) {
+    if (f.tcl) {
+        tcl_destroy(f.tcl);
+        free(f.tcl);
+        f.tcl = NULL;
+    }
+    for (uint8_t i = 0; i < f.nEnts; i++) {
+        f.ents[i].spec = "";
+        f.ents[i].body = "";
+    }
+    f.nEnts = 0;
+    f.active = false;
+    f.ctx.parsing = false;
+}
+
+bool CLASS_MODULE_MACROS::parseScript(MacroFile& f) {
+    f.err = "";
+    destroyScript(f);
+
+    String content = readFile(f.name);
+    if (content.length() == 0) {
+        f.err = "File is empty or unreadable";
+        DEBUGMACROS("%s: %s\r\n", __FUNCTION__, f.err.c_str());
+        return false;
+    }
+
+    struct tcl* t = (struct tcl*)calloc(1, sizeof(struct tcl));
+    if (t == NULL) {
+        f.err = "No memory for interpreter";
+        return false;
+    }
+    tcl_init(t);
+    f.tcl = t;
+    f.ctx.file = &f;
+
+    macroTclRegisterExtras(t, (void*)&f.ctx);
+
+    f.ctx.parsing = true;
+    int r = macroEvalChunks(t, content, &f.err);
+    f.ctx.parsing = false;
+
+    if (r == FERROR) {
+        if (f.err.length() == 0) {
+            f.err = "Scenario parse error";
+        }
+        DEBUGMACROS("%s: %s -> %s\r\n", __FUNCTION__, f.name.c_str(), f.err.c_str());
+        destroyScript(f);
+        return false;
+    }
+
+    if (f.nEnts == 0) {
+        f.err = "No rules registered in the scenario";
+        DEBUGMACROS("%s: %s -> %s\r\n", __FUNCTION__, f.name.c_str(), f.err.c_str());
+        destroyScript(f);
+        return false;
+    }
+
+    f.active = true;
+    DEBUGMACROS("%s: %s -> %d ent\r\n", __FUNCTION__, f.name.c_str(), f.nEnts);
+    return true;
+}
+
+void CLASS_MODULE_MACROS::rebuildScripts() {
+    for (uint8_t i = 0; i < _fileCount; i++) {
+        MacroFile& f = _files[i];
+        if (f.run == false) {
+            destroyScript(f);
+            continue;
+        }
+        if (_fs->exists(f.name) == false) {
+            f.err = "File is missing";
+            destroyScript(f);
+            continue;
+        }
+        // Полная пересборка: разрушаем и разбираем заново
+        parseScript(f);
+    }
+}
+
+String CLASS_MODULE_MACROS::runBody(MacroFile& f, const String& body) {
+    if (f.tcl == NULL || f.active == false) { return "No interpreter"; }
+    String errTxt;
+    int r = macroEvalChunks(f.tcl, body, &errTxt);
+    if (r == FERROR) {
+        if (errTxt.length() > 0) { return errTxt; }
+        return "Scenario execution error";
+    }
+    return "";
+}
+
+// Выполнение тела с записью ошибки в файл (метод класса: доступ к runBody)
+void CLASS_MODULE_MACROS::execBody(MacroFile& f, const String& body) {
+    String err = runBody(f, body);
+    if (err.length() > 0) {
+        f.err = err;
+        DEBUGMACROS("[MACRO] %s exec error: %s\r\n", f.name.c_str(), err.c_str());
+    }
+}
+
+// Вычисление Tcl-условия; возвращает истину/ложь, при ошибке пишет текст в errOut
+static bool macroEvalCond(MacroFile& f, const String& cond, String& errOut) {
+    if (f.tcl == NULL || f.active == false) {
+        errOut = "No interpreter";
+        return false;
+    }
+    int r = macroEvalChunks(f.tcl, cond, &errOut);
+    if (r == FERROR) {
+        if (errOut.length() == 0) { errOut = "Condition evaluation error"; }
+        return false;
+    }
+    return (tcl_int(f.tcl->result) != 0);
+}
+
+void CLASS_MODULE_MACROS::drainEvents() {
+    while (_evIn != _evOut) {
+        MacroEvent ev = _evQueue[_evOut];
+        _evOut = (_evOut + 1) % MACRO_EV_QUEUE;
+
+        for (uint8_t i = 0; i < _fileCount; i++) {
+            MacroFile& f = _files[i];
+            if (f.run == false || f.active == false) { continue; }
+            for (uint8_t j = 0; j < f.nEnts; j++) {
+                MacroEntity& e = f.ents[j];
+                if (e.type == ev.type && e.spec == ev.spec) {
+                    const char* tn = (ev.type == MACRO_ENT_TERM) ? "term" : "button";
+                    Serial.printf("[MACRO] condition %s \"%s\" fired\r\n", tn, ev.spec.c_str());
+                    execBody(f, e.body);
+                }
+            }
+        }
+    }
+}
+
+void CLASS_MODULE_MACROS::tickStep() {
+    // Пересборка интерпретаторов при изменении списка
+    if (_scriptRev != _lastScriptRev) {
+        _lastScriptRev = _scriptRev;
+        rebuildScripts();
+    }
+
+    if (_config.enabled == false) { return; }
+
+    // Внешние события (term/button)
+    drainEvents();
+
+    bool ntpSync = (NTP.getLastNTPSync() > 0);
+    if (ntpSync && !_ntpWasSynced) {
+        _ntpWasSynced = true;
+        DEBUGMACROS("[MACRO] NTP synced, cron activated\r\n");
+
+        // Файлы, добавленные до синхронизации времени (created == 0),
+        // получают реальную дату создания
+        bool changed = false;
+        for (uint8_t i = 0; i < _fileCount; i++) {
+            if (_files[i].created == 0) {
+                _files[i].created = (uint32_t)now();
+                changed = true;
+            }
+        }
+        if (changed) { saveConfig(); }
+    }
+
+    // Проход по запущенным файлам и их сущностям
+    for (uint8_t i = 0; i < _fileCount; i++) {
+        MacroFile& f = _files[i];
+        if (f.run == false || f.active == false) { continue; }
+
+        for (uint8_t j = 0; j < f.nEnts; j++) {
+            MacroEntity& e = f.ents[j];
+
+            if (e.type == MACRO_ENT_CRON) {
+                if (ntpSync == false) { continue; }
+
+                if (e.next == 0) {
+                    // Инициализация следующего момента после синхронизации времени
+                    time_t nx = cron_next(&e.expr, (time_t)now());
+                    e.next = nx;
+                    continue;
+                }
+                if (e.next == (time_t)-1) { continue; } // расписание не имеет ближайших моментов
+
+                if ((time_t)now() >= e.next) {
+                    DEBUGMACROS("[MACRO] %s cron(%s)\r\n", f.name.c_str(), e.spec.c_str());
+                    execBody(f, e.body);
+                    e.next = cron_next(&e.expr, (time_t)now());
+                }
             }
 
-            if (rangePart == "*") {
-                from = 0;
-                to = maxVal;
-            } else {
-                int dashIdx = rangePart.indexOf('-');
-                if (dashIdx >= 0) {
-                    from = (uint8_t)rangePart.substring(0, dashIdx).toInt();
-                    to = (uint8_t)rangePart.substring(dashIdx + 1).toInt();
+            if (e.type == MACRO_ENT_COND) {
+                String errTxt;
+                bool truth = macroEvalCond(f, e.spec, errTxt);
+                if (errTxt.length() > 0) {
+                    f.err = errTxt;
+                    DEBUGMACROS("[MACRO] %s cond error: %s\r\n", f.name.c_str(), errTxt.c_str());
+                    continue;
+                }
+                if (truth && e.lastCond == false) {
+                    // Фронт false -> true
+                    DEBUGMACROS("[MACRO] %s cond(true)\r\n", f.name.c_str());
+                    e.lastCond = true;
+                    execBody(f, e.body);
+                } else if (truth == false) {
+                    e.lastCond = false;
+                }
+            }
+        }
+    }
+}
+
+// ============================================================
+// Публичное API
+// ============================================================
+
+bool CLASS_MODULE_MACROS::reloadAll() {
+    bumpMeta();
+    return true;
+}
+
+bool CLASS_MODULE_MACROS::fireToken(uint8_t type, const String& spec) {
+    if (spec.length() == 0) { return false; }
+    if (type != MACRO_ENT_TERM && type != MACRO_ENT_BUTTON) { return false; }
+    uint8_t next = (uint8_t)((_evIn + 1) % MACRO_EV_QUEUE);
+    if (next == _evOut) { return false; } // очередь заполнена
+    _evQueue[_evIn].type = type;
+    _evQueue[_evIn].spec = spec;
+    _evIn = next;
+    return true;
+}
+
+uint8_t CLASS_MODULE_MACROS::getFileCount() {
+    return _fileCount;
+}
+
+void CLASS_MODULE_MACROS::printList() {
+    Serial.printf("[MACRO] enabled: %d, files: %d\r\n", _config.enabled, _fileCount);
+    for (uint8_t i = 0; i < _fileCount; i++) {
+        MacroFile& f = _files[i];
+        Serial.printf("  [%d] prio=%d run=%d active=%d %s (%d ent)%s%s\r\n",
+                      i,
+                      f.prio,
+                      f.run ? 1 : 0,
+                      f.active ? 1 : 0,
+                      f.name.c_str(),
+                      f.nEnts,
+                      f.err.length() > 0 ? " err=" : "",
+                      f.err.c_str());
+    }
+}
+
+// ============================================================
+// Периодическая задача EERTOS (раз в секунду)
+// ============================================================
+
+void macroTickTask() {
+    module_macros.tickStep();
+    SetTimerTask(macroTickTask, 1000);
+}
+
+// ============================================================
+// Команды Tcl, регистрируемые в интерпретаторах сценариев
+// ============================================================
+
+// Записать в result текст ошибки и вернуть FERROR
+static int macroTclResultError(struct tcl* t, const char* msg) {
+    return tcl_result(t, FERROR, tcl_alloc(msg, strlen(msg)));
+}
+
+static int macroTclResultErrorS(struct tcl* t, const String& msg) {
+    if (msg.length() == 0) { return macroTclResultError(t, "error"); }
+    return tcl_result(t, FERROR, tcl_alloc(msg.c_str(), msg.length()));
+}
+
+// Прочитать слово аргумента списком в String
+static String macroReadArg(struct tcl* t, tcl_value_t* args, int idx, bool* ok) {
+    *ok = false;
+    tcl_value_t* v = tcl_list_at(args, idx);
+    if (v == NULL) { return ""; }
+    String s = tclValueToString(v);
+    tcl_free(v);
+    *ok = true;
+    return s;
+}
+
+// Копия значения Tcl в Arduino String (переносимо между ESP32/ESP8266)
+static String tclValueToString(tcl_value_t* v) {
+    String out;
+    if (v == NULL) { return out; }
+    int len = tcl_length(v);
+    const char* s = tcl_string(v);
+    out.reserve((unsigned int)len);
+    for (int i = 0; i < len; i++) { out += s[i]; }
+    return out;
+}
+
+// Регистрация сущности: cron / cond / button / term {spec} {body}
+extern "C" {
+static int tclCmdEntity(struct tcl* t, tcl_value_t* args, void* arg) {
+    PtclMacroCtx* pc = (PtclMacroCtx*)arg;
+    if (pc == NULL || pc->file == NULL) { return macroTclResultError(t, "no scenario context"); }
+    if (pc->parsing == false) { return macroTclResultError(t, "rules can be registered only during file parse"); }
+
+    MacroFile* f = pc->file;
+    if (tcl_list_length(args) != 3) { return macroTclResultError(t, "usage: <cmd> {specifier} {body}"); }
+
+    tcl_value_t* namev = tcl_list_at(args, 0);
+    const char* cmdName = namev ? tcl_string(namev) : "";
+    DEBUGMACROS("[MACRO] reg: %s\r\n", cmdName);
+    uint8_t type;
+    if (strcmp(cmdName, "cron") == 0)        { type = MACRO_ENT_CRON; }
+    else if (strcmp(cmdName, "cond") == 0)   { type = MACRO_ENT_COND; }
+    else if (strcmp(cmdName, "button") == 0) { type = MACRO_ENT_BUTTON; }
+    else if (strcmp(cmdName, "term") == 0)   { type = MACRO_ENT_TERM; }
+    else {
+        if (namev) { tcl_free(namev); }
+        return macroTclResultError(t, "unknown registration command");
+    }
+    if (namev) { tcl_free(namev); }
+
+    if (f->nEnts >= MACRO_MAX_ENTS) { return macroTclResultError(t, "file rule limit exceeded"); }
+
+    bool ok1, ok2;
+    String spec = macroReadArg(t, args, 1, &ok1);
+    String body = macroReadArg(t, args, 2, &ok2);
+    if (ok1 == false || ok2 == false) { return macroTclResultError(t, "not enough arguments"); }
+    spec.trim();
+    if (spec.length() == 0) { return macroTclResultError(t, "empty specifier"); }
+    if (body.length() == 0) { return macroTclResultError(t, "empty rule body"); }
+
+    MacroEntity& e = f->ents[f->nEnts];
+    e.type = type;
+    e.spec = spec;
+    e.body = body;
+    e.lastCond = false;
+    e.next = 0;
+
+    if (type == MACRO_ENT_CRON) {
+        const char* perr = NULL;
+        cron_expr cx;
+        memset(&cx, 0, sizeof(cx));
+        cron_parse_expr(spec.c_str(), &cx, &perr);
+        if (perr) {
+            String msg = "cron expression error: ";
+            msg += perr;
+            msg += " (";
+            msg += spec;
+            msg += ")";
+            return macroTclResultErrorS(t, msg);
+        }
+        e.expr = cx;
+    }
+
+    f->nEnts++;
+    return tcl_result(t, FNORMAL, tcl_alloc("", 0));
+}
+
+// puts — вывод в последовательный порт
+static int tclCmdPuts(struct tcl* t, tcl_value_t* args, void* arg) {
+    (void)arg;
+    if (tcl_list_length(args) < 2) { return tcl_result(t, FNORMAL, tcl_alloc("", 0)); }
+
+    tcl_value_t* text = tcl_list_at(args, 1);
+    if (text == NULL) { return tcl_result(t, FNORMAL, tcl_alloc("", 0)); }
+
+    const char* s = tcl_string(text);
+    int len = tcl_length(text);
+    Serial.printf("[MACRO] ");
+    for (int i = 0; i < len; i++) { Serial.write((uint8_t)s[i]); }
+    Serial.printf("\r\n");
+
+    int r = tcl_result(t, FNORMAL, tcl_dup(text));
+    tcl_free(text);
+    return r;
+}
+
+// now — текущие секунды (локальное «наивное» время TimeLib)
+static int tclCmdNow(struct tcl* t, tcl_value_t* args, void* arg) {
+    (void)args;
+    (void)arg;
+    char buf[16];
+    snprintf(buf, sizeof(buf), "%lu", (unsigned long)now());
+    return tcl_result(t, FNORMAL, tcl_alloc(buf, strlen(buf)));
+}
+
+// clock — текущее время в формате ЧЧ:ММ:СС (для печати в примерах)
+static int tclCmdClock(struct tcl* t, tcl_value_t* args, void* arg) {
+    (void)args;
+    (void)arg;
+    time_t tnow = (time_t)now();
+    char buf[10];
+    snprintf(buf, sizeof(buf), "%02d:%02d:%02d",
+             (int)hour(tnow), (int)minute(tnow), (int)second(tnow));
+    return tcl_result(t, FNORMAL, tcl_alloc(buf, strlen(buf)));
+}
+
+static void macroTclRegisterExtras(struct tcl* t, void* ctx) {
+    tcl_register(t, "cron",   tclCmdEntity, 0, ctx);
+    tcl_register(t, "cond",   tclCmdEntity, 0, ctx);
+    tcl_register(t, "button", tclCmdEntity, 0, ctx);
+    tcl_register(t, "term",   tclCmdEntity, 0, ctx);
+    tcl_register(t, "puts",   tclCmdPuts, 0, ctx);
+    tcl_register(t, "now",    tclCmdNow, 0, ctx);
+    tcl_register(t, "clock",  tclCmdClock, 0, ctx);
+}
+} // extern "C"
+
+// ============================================================
+// Вспомогательные утилиты
+// ============================================================
+
+static String macroFileBaseName(const String& pathOrName) {
+    int slash = pathOrName.lastIndexOf('/');
+    if (slash >= 0) { return pathOrName.substring(slash + 1); }
+    return pathOrName;
+}
+
+static String macroJsonEscape(const String& s) {
+    String out;
+    for (uint8_t i = 0; i < s.length(); i++) {
+        char c = s.charAt(i);
+        switch (c) {
+            case '"':  out += "\\\""; break;
+            case '\\': out += "\\\\"; break;
+            case '\n': out += "\\n";  break;
+            case '\r': out += "\\r";  break;
+            case '\t': out += "\\t";  break;
+            default:
+                if ((unsigned char)c < 0x20) {
+                    char buf[8];
+                    snprintf(buf, sizeof(buf), "\\u%04x", (unsigned char)c);
+                    out += buf;
                 } else {
-                    from = (uint8_t)rangePart.toInt();
-                    to = from;
+                    out += c;
                 }
-                if (from > maxVal) { from = maxVal; }
-                if (to > maxVal) { to = maxVal; }
-            }
-
-            f.from[f.count] = from;
-            f.to[f.count] = to;
-            f.step[f.count] = step;
-            f.count++;
-        }
-
-        if (commaIdx < 0) { break; }
-        startIdx = commaIdx + 1;
-    }
-    return (f.count > 0);
-}
-
-// Совпадение значения с полем cron (поддерживает «ночные» диапазоны from > to)
-static bool cronFieldMatch(uint8_t val, const CronField& f) {
-    for (uint8_t i = 0; i < f.count; i++) {
-        if (f.from[i] <= f.to[i]) {
-            if (val >= f.from[i] && val <= f.to[i] && ((val - f.from[i]) % f.step[i]) == 0) { return true; }
-        } else {
-            // Ночной диапазон from..max, 0..to — разворачиваем в непрерывную последовательность
-            // от from (позиция 0) до to, чтобы шаг отсчитывался от начала диапазона.
-            uint8_t len = (uint8_t)(f.maxVal - f.from[i] + f.to[i] + 1);
-            if (val >= f.from[i]) {
-                uint8_t pos = (uint8_t)(val - f.from[i]);
-                if (pos < len && (pos % f.step[i]) == 0) { return true; }
-            } else if (val <= f.to[i]) {
-                uint8_t pos = (uint8_t)(val + f.maxVal - f.from[i] + 1);
-                if (pos < len && (pos % f.step[i]) == 0) { return true; }
-            }
         }
     }
-    return false;
-}
-
-// Поле является простым wildcard '*': count==1, 0..maxVal, шаг 1.
-// Такое поле не ограничивает значение и не должно считаться «указанным».
-static bool cronFieldIsAny(const CronField& f) {
-    return (f.count == 1 && f.from[0] == 0 && f.to[0] == f.maxVal && f.step[0] == 1);
-}
-
-// Проверка совпадения всех полей правила cron с текущим временем
-static bool macroCronMatch(const MacroRule& r, time_t t) {
-    bool match = true;
-
-    if (r.hasSeconds) {
-        match &= cronFieldMatch((uint8_t)second(t), r.cron[0]);
-    }
-    match &= cronFieldMatch((uint8_t)minute(t), r.cron[1]);
-    match &= cronFieldMatch((uint8_t)hour(t),   r.cron[2]);
-
-    // День месяца и день недели: если заданы оба — срабатывает по совпадению любого.
-    // Wildcard '*' не считается «указанным» полем (иначе OR всегда истинен).
-    bool domSpecified = !cronFieldIsAny(r.cron[3]);
-    bool dowSpecified = !cronFieldIsAny(r.cron[5]);
-    if (domSpecified && dowSpecified) {
-        match &= (cronFieldMatch((uint8_t)day(t), r.cron[3]) ||
-                  cronFieldMatch((uint8_t)(weekday(t) - 1), r.cron[5]));
-    } else {
-        if (domSpecified) { match &= cronFieldMatch((uint8_t)day(t), r.cron[3]); }
-        if (dowSpecified) { match &= cronFieldMatch((uint8_t)(weekday(t) - 1), r.cron[5]); }
-    }
-
-    match &= cronFieldMatch((uint8_t)month(t), r.cron[4]);
-    return match;
-}
-
-// ============================================================
-// Периодическая задача cron (EERTOS, раз в секунду)
-// ============================================================
-
-void CLASS_MODULE_MACROS::tick() {
-    if (module_macros._config.enabled && NTP.getLastNTPSync() > 0) {
-        time_t t = now();
-        for (uint8_t i = 0; i < module_macros._ruleCount; i++) {
-            MacroRule& r = module_macros._rules[i];
-            if (r.type != MACRO_TRIG_CRON) { continue; }
-
-            if (macroCronMatch(r, t)) {
-                // Не срабатываем повторно в течение одного интервала:
-                // для 6 полей — раз в секунду, для 5 полей — раз в минуту
-                bool fired = false;
-                if (r.hasSeconds) {
-                    fired = ((uint32_t)t == r.lastFire);
-                } else {
-                    fired = (((uint32_t)t / 60) == (r.lastFire / 60));
-                }
-                if (!fired) {
-                    r.lastFire = (uint32_t)t;
-                    module_macros.fireRule(i);
-                }
-            }
-        }
-    }
-    SetTimerTask(CLASS_MODULE_MACROS::tick, 1000);
+    return out;
 }
 
 // ============================================================
@@ -588,34 +1205,84 @@ void macroCmd() {
     String arg = term.getNext();
 
     if (arg == "list") {
-        module_macros.printRules();
+        module_macros.printList();
         return;
     }
     if (arg == "reload") {
-        module_macros.reloadScenario();
-        Serial.printf("[MACRO] scenario reloaded: %d rules\r\n", module_macros.getRuleCount());
+        String name = term.getNext();
+        if (name.length() == 0) {
+            module_macros.reloadAll();
+            Serial.println("[MACRO] reload requested");
+            return;
+        }
+        // Перезапуск одного файла (пересборка произойдёт в tick)
+        int idx = module_macros.findFile(String(MACROS_DIR_RE) + name);
+        if (idx >= 0) {
+            module_macros._scriptRev++;
+            Serial.println("[MACRO] reload requested for " + name);
+        } else {
+            Serial.println("[MACRO] not found");
+        }
         return;
     }
     if (arg == "run") {
-        String id = term.getNext();
-        if (id.length() == 0) { Serial.println("Usage: macro run <id>"); return; }
-        if (module_macros.fireById(id)) { Serial.println("[MACRO] fired"); }
+        String name = term.getNext();
+        if (name.length() == 0) { Serial.println("Usage: macro run <file.tcl>"); return; }
+        if (module_macros.setFileRun(name, true)) { Serial.println("[MACRO] run " + name); }
         else { Serial.println("[MACRO] not found"); }
         return;
     }
-    if (arg == "msg") {
-        String word = term.getNext();
-        if (word.length() == 0) { Serial.println("Usage: macro msg <word>"); return; }
-        if (module_macros.fireByType(MACRO_TRIG_TERM, word)) { Serial.println("[MACRO] fired"); }
+    if (arg == "stop") {
+        String name = term.getNext();
+        if (name.length() == 0) { Serial.println("Usage: macro stop <file.tcl>"); return; }
+        if (module_macros.setFileRun(name, false)) { Serial.println("[MACRO] stop " + name); }
         else { Serial.println("[MACRO] not found"); }
+        return;
+    }
+    if (arg == "prio") {
+        String name = term.getNext();
+        String dir = term.getNext();
+        if (name.length() == 0 || dir.length() == 0) {
+            Serial.println("Usage: macro prio <file.tcl> <+1|-1>");
+            return;
+        }
+        int8_t d = (int8_t)dir.toInt();
+        if (module_macros.setFilePrio(name, d)) { Serial.println("[MACRO] prio updated"); }
+        else { Serial.println("[MACRO] not found"); }
+        return;
+    }
+    if (arg == "msg" || arg == "btn") {
+        uint8_t type = (arg == "msg") ? MACRO_ENT_TERM : MACRO_ENT_BUTTON;
+        const char* what = (type == MACRO_ENT_TERM) ? "term" : "button";
+
+        // Собираем ВСЕ слова аргументов в одну строку (спецификатор с параметрами)
+        String spec;
+        while (true) {
+            String w = term.getNext();
+            if (w.length() == 0) { break; }
+            if (spec.length() > 0) { spec += " "; }
+            spec += w;
+        }
+        if (spec.length() == 0) {
+            Serial.println("Usage: macro msg <term-specifier> | macro btn <button-specifier>");
+            return;
+        }
+        if (module_macros.fireToken(type, spec)) {
+            Serial.println("[MACRO] event " + String(what) + " \"" + spec + "\" queued");
+        } else {
+            Serial.println("[MACRO] queue full");
+        }
         return;
     }
 
     Serial.println("Commands:");
-    Serial.println("  macro list          - show rules");
-    Serial.println("  macro reload        - reload scenario file");
-    Serial.println("  macro run <id>      - fire rule by id");
-    Serial.println("  macro msg <word>    - fire 'term' rules by word");
+    Serial.println("  macro list                        - show scenarios");
+    Serial.println("  macro reload [file.tcl]           - re-read scenario(s)");
+    Serial.println("  macro run <file.tcl>              - start scenario");
+    Serial.println("  macro stop <file.tcl>             - stop scenario");
+    Serial.println("  macro prio <file.tcl> <delta>     - change priority");
+    Serial.println("  macro msg <word> [params...]      - fire term-rules by full match");
+    Serial.println("  macro btn <name> [params...]      - fire button-rules by full match");
 }
 
 void macroTerminalRegister() {

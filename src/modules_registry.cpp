@@ -4,7 +4,7 @@
 #include "core_web/FSWebServerLib.h"
 
 // Файл генерируется python/module_registry_gen.py под выбранный env.
-// Сгенерировано для env: esp32_clock-mech_ring
+// Сгенерировано для env: esp32_macrotest
 // Не редактировать вручную. При смене env — перезапустить генератор.
 
 #include "core_wifi/core_wifi.h"
@@ -13,9 +13,7 @@
 #include "core_editor/core_editor.h"
 #include "core_ota/core_ota.h"
 #include "core_terminal/core_terminal.h"
-#include "device_clock-mech/device_clock-mech.h"
-#include "device_mech-ring/device_mech-ring.h"
-#include "module_ds3231/module_ds3231.h"
+#include "module_macros/module_macros.h"
 #include "module_otaclient/module_otaclient.h"
 #include "module_udp/module_udp.h"
 
@@ -32,12 +30,10 @@ void core_begin(ModContext& ctx) {
 }
 
 void modules_begin(ModContext& ctx) {
-    module_ds3231.begin(ctx);
+    module_macros.begin(ctx);
 }
 
 void dev_begin(ModContext& ctx) {
-    device_clock_mech.begin(ctx);
-    device_mech_ring.begin(ctx);
 }
 
 void core_web_Init() {
@@ -49,13 +45,11 @@ void core_web_Init() {
 }
 
 void modules_web_Init() {
-    module_ds3231.web_Init();
+    module_macros.web_Init();
     module_udp.web_Init();
 }
 
 void dev_web_Init() {
-    device_clock_mech.web_Init();
-    device_mech_ring.web_Init();
 }
 
 void core_loop() {

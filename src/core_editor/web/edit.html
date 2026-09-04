@@ -676,6 +676,7 @@
           if(typeof ext !== "undefined"){
             switch(ext){
               case "txt":
+              case "tcl":
               case "htm":
               case "html":
               case "js":
@@ -755,7 +756,10 @@
           return function(){
             if (xhr.readyState == 4){
               if(xhr.status == 200) {
-                addList(parent, path, JSON.parse(xhr.responseText).sort((a, b) => a.name.localeCompare(b.name)));
+                addList(parent, path, JSON.parse(xhr.responseText).sort((a, b) => {
+                  if (a.type !== b.type) return a.type === "dir" ? -1 : 1;
+                  return a.name.localeCompare(b.name);
+                }));
               }
             }
           }
@@ -778,7 +782,8 @@
           var ext = /(?:\.([^.]+))?$/.exec(filename)[1];
           if(typeof ext !== "undefined"){
             switch(ext){
-              case "txt": lang = "plain"; break;
+              case "txt":
+              case "tcl": lang = "plain"; break;
               case "htm": lang = "html"; break;
               case "js": lang = "javascript"; break;
               case "c":  lang = "c_cpp"; break;

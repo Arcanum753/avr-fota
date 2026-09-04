@@ -770,30 +770,41 @@ def prepare_fs_image() -> Optional[Path]:
             continue
         
         try:
-            for item in module_web.iterdir():
-                if not item.is_file():
+            # Рекурсивный обход: подпапки web/ копируются с сохранением пути
+            # (например web/macros/ex_10s.tcl -> FS /macros/ex_10s.tcl).
+            for item in sorted(module_web.rglob("*")):
+                if item.is_dir():
                     continue
-                
-                # Пропускаем служебные файлы (начинающиеся с _)
-                if item.name.startswith("_"):
-                    log_debug(f"  - {module_name}/{WEB_FOLDER_NAME}/{item.name} (skipped, service file)")
+
+                rel = item.relative_to(module_web)
+
+                # Пропускаем служебные файлы/каталоги (имя части пути начинается с _)
+                if any(part.startswith("_") for part in rel.parts):
+                    log_debug(f"  - {module_name}/{WEB_FOLDER_NAME}/{rel} (skipped, service file)")
                     continue
-                
+
                 if not validate_module_name(item.name):
                     log_warning(f"Skipping file with invalid name in {module_name}: {item.name}")
                     continue
-                
-                dst_path = target_web_dir / item.name
+
+                dst_path = target_web_dir / rel
+                if dst_path.parent != target_web_dir:
+                    try:
+                        dst_path.parent.mkdir(parents=True, exist_ok=True)
+                    except OSError as e:
+                        log_error(f"Failed to create directory {dst_path.parent} for {module_name}: {e}")
+                        return None
+
                 was_overwrite = dst_path.exists()
-                
+
                 if safe_copy_file(item, dst_path):
                     web_files += 1
-                    
+
                     if was_overwrite:
                         overwritten_files += 1
-                        log_debug(f"  ✓ {module_name}/{WEB_FOLDER_NAME}/{item.name} (overwrites common)")
+                        log_debug(f"  ✓ {module_name}/{WEB_FOLDER_NAME}/{rel} (overwrites common)")
                     else:
-                        log_debug(f"  + {module_name}/{WEB_FOLDER_NAME}/{item.name}")
+                        log_debug(f"  + {module_name}/{WEB_FOLDER_NAME}/{rel}")
         except Exception as e:
             log_error(f"Error copying files from module {module_name}: {e}")
             return None
