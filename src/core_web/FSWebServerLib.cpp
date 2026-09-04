@@ -8,6 +8,8 @@
 #include <LittleFS.h>
 #include <esp_task_wdt.h>
 #include <esp32-hal-gpio.h>
+#include <esp_partition.h>
+#include <esp_ota_ops.h>
 #include <ESPmDNS.h>
 #endif
 
@@ -671,6 +673,35 @@ void AsyncFSWebServer::serialShowAbout() {
 	DBG_MOD("[C_HTTP] ", "Flash chip size: %u\r\n", ESP.getFlashChipRealSize());
 	#endif
 	DBG_MOD("[C_HTTP] ", "Scketch size: %u\r\n", 		ESP.getSketchSize());
+#if defined(ESP32)
+	{
+		// Реальная информация о размере прошивки. Бутлоадер сверяет длину образа
+		// из заголовка (ESP.getSketchSize — включает выравнивание/дескриптор) с
+		// размером app-раздела, а не «used» из elf-секций (тот занижает и не
+		// ловит переполнение — вечный boot-loop).
+		const esp_partition_t* runPart = esp_ota_get_running_partition();
+		if (runPart) {
+			uint32_t sketchSize = ESP.getSketchSize();
+			DBG_MOD("[C_HTTP] ", "App partition: %s @0x%X, size: %u (0x%X)\r\n",
+				runPart->label,
+				(unsigned)runPart->address,
+				(unsigned)runPart->size,
+				(unsigned)runPart->size);
+			DBG_MOD("[C_HTTP] ", "Sketch image real size: %u (0x%X)\r\n",
+				(unsigned)sketchSize,
+				(unsigned)sketchSize);
+			if (sketchSize > runPart->size) {
+				DBG_MOD("[C_HTTP] ", "!!! WARNING: image larger than app partition by %u bytes - bootloader rejects it (boot loop) !!!\r\n",
+					(unsigned)(sketchSize - runPart->size));
+			} else {
+				DBG_MOD("[C_HTTP] ", "Free in app partition: %u bytes (%u%%)\r\n",
+					(unsigned)(runPart->size - sketchSize),
+					(unsigned)((runPart->size - sketchSize) * 100UL / runPart->size));
+			}
+			DBG_MOD("[C_HTTP] ", "Free sketch space (OTA target): %u\r\n", (unsigned)ESP.getFreeSketchSpace());
+		}
+	}
+#endif
 	if (_fs) {
 #if defined(ESP32)
 		DBG_MOD("[C_HTTP] ", "FS total: %u\r\n", 		_fs->totalBytes());
