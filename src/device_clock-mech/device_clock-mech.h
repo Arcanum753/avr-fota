@@ -54,6 +54,14 @@ typedef enum {
 #define     MININHOUR					60
 #define     MINMAX						59
 #define     HOURCONTROLDEF              5	
+// Штатная пауза между фазами шага, мс (STEP HIGH -> LOW)
+#define     CLOCKMECH_STEP_DELAY_MS         2
+// Пауза фазы шага, если ядро занято (сеть/веб/чтение FS), мс
+#define     CLOCKMECH_STEP_BUSY_MS          500
+// Интервал между соседними шагами, с которого считаем ядро занятым, мс
+#define     CLOCKMECH_STEP_GAP_BUSY_MS      15
+// Интервал больше этого — считаем новым запуском механизма (не пауза), мс
+#define     CLOCKMECH_STEP_GAP_RESET_MS     1000
 typedef void (*DPDR)(void);
 void clockMechTerminalRegister() ;
 

@@ -29,6 +29,12 @@
 #define RINGMECH_RING_FIRST_PAUSE_DEFAULT 750
 #define RINGMECH_RING_SECON_PAUSE_DEFAULT 750
 #define RINGMECH_SPEED_DEFAULT 2
+// Пауза фазы шага, если ядро занято (сеть/веб/чтение FS), мс
+#define RINGMECH_STEP_BUSY_MS       500
+// Интервал между соседними шагами, с которого считаем ядро занятым, мс
+#define RINGMECH_STEP_GAP_BUSY_MS   15
+// Интервал больше этого — считаем новым запуском механизма (не пауза), мс
+#define RINGMECH_STEP_GAP_RESET_MS  1000
 #define RINGMECH_FIRST_POSITION_DEFAULT 85
 #define RINGMECH_TIME_BEGIN_DEFAULT 9
 #define RINGMECH_TIME_END_DEFAULT   18

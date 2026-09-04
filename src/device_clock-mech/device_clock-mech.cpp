@@ -25,6 +25,9 @@ DPDR GoToTaskAfterStep = Idle_task;
 
 static uint16_t _nStepCount = 0;
 
+// Время последнего шага (для детектора занятости ядра в MechMoveStepDown)
+static uint32_t _lastStepDownUs = 0;
+
 // ============================================================
 // Паттерн светодиодной индикации ошибки (кассета модуля)
 // ============================================================
@@ -399,7 +402,28 @@ void CLASS_DEVICE_CLOCKMECH::MechInitGPIOs() {
 
 void CLASS_DEVICE_CLOCKMECH::MechMoveStepDown() {
     digitalWrite(CLOCKMECH_STEP, HIGH);
-    SetTimerTask(MechMoveStepUp, 2);
+
+    // Проверка занятости ядра: если предыдущий цикл шага (HIGH->LOW->задача)
+    // занял заметно больше штатных ~4 мс — планировщик/таймеры задерживались
+    // (сеть, веб, чтение FS). Тогда следующую фазу откладываем, механизм
+    // «встаёт» на паузу; логика при этом не меняется.
+    bool coreBusy = false;
+    if (_lastStepDownUs != 0) {
+        uint32_t gapMs = (micros() - _lastStepDownUs) / 1000UL;
+        if ((gapMs > CLOCKMECH_STEP_GAP_BUSY_MS) && (gapMs < CLOCKMECH_STEP_GAP_RESET_MS)) {
+            coreBusy = true;
+        }
+    }
+    uint32_t stepDelayMs = CLOCKMECH_STEP_DELAY_MS;
+    if (coreBusy) {
+        // Пауза из-за занятости ядра. Сбрасываем базу отсчёта: собственная
+        // пауза не должна восприниматься как новая занятость на следующем шаге.
+        stepDelayMs = CLOCKMECH_STEP_BUSY_MS;
+        _lastStepDownUs = 0;
+    } else {
+        _lastStepDownUs = micros();
+    }
+    SetTimerTask(MechMoveStepUp, stepDelayMs);
 }
 void CLASS_DEVICE_CLOCKMECH::MechMoveStepUp() {
     digitalWrite(CLOCKMECH_STEP, LOW);

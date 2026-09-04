@@ -20,3 +20,6 @@ task_progress.md
 *version.h
 /.kilo
 /example
+
+# Запасные варианты реализации (не входят в сборку/коммиты)
+/alt_clock-mech-isr/
