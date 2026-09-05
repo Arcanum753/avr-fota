@@ -43,19 +43,20 @@ pio run --environment esp32_clock-mech
 
 PlatformIO автоматически выполняет скрипты в заданном порядке.
 
-**Пре-скрипты (до компиляции):**
-- `version_builder.py` — пишет версию прошивки в `src/version.h`.
-- `module_version_gen.py` — версии модулей (меняются при изменении кода модуля).
-- `fs_builder.py` — собирает «веб-образ» файловой системы в `web_debug/<env>/`,
+**Пре-скрипты (до компиляции, порядок = номер файла):**
+- `1_registry_pre_build.py` — генерирует список модулей `modules_registry.cpp/.h` под текущий env.
+- `2_version_builder.py` — пишет версию прошивки в `src/version.h`.
+- `3_module_version_gen.py` — версии модулей (меняются при изменении кода модуля).
+- `4_fs_builder.py` — собирает «веб-образ» файловой системы в `web_debug/<env>/`,
   и вызывает `gen_page_head.py` (меню сайта).
-- `set_fs_data_dir.py` — подставляет эту папку PlatformIO для сборки файловой системы.
+- `5_set_fs_data_dir.py` — подставляет эту папку PlatformIO для сборки файловой системы.
 
 **Параллельно:**
 - компилируется весь C++-код, включая сгенерированный `modules_registry.cpp`;
 - собирается прошивка `firmware.bin` и файловая система `littlefs.bin`.
 
 **Пост-скрипты (после компиляции):**
-- `copy_fw.py` и `copy_fs.py` — кладут готовые бинарники в папку `proj_fwbins/`.
+- `6_copy_fw.py` и `7_copy_fs.py` — кладут готовые бинарники в папку `proj_fwbins/`.
 
 ---
 

@@ -1,4 +1,4 @@
-# copy_fs.py
+# 6_copy_fw.py
 import shutil
 import re
 from pathlib import Path
@@ -19,11 +19,8 @@ FW_BINS_ROOT = "proj_fwbins"
 VERSION_HEADER = "version.h"
 VERSION_HEADER_PATH = f"src/{VERSION_HEADER}"
 
-# Имена бинарников ФС
-FS_BIN_NAMES = ["spiffs.bin", "littlefs.bin"]
-
-# Суффикс для файла ФС (перед .bin)
-FS_FILE_SUFFIX = "_fs"
+# Суффикс для файла прошивки (перед .bin) - пустая строка, так как прошивка без суффикса
+FW_FILE_SUFFIX = ""
 
 # ============================================================
 # ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
@@ -74,15 +71,15 @@ def format_version_for_filename(version):
 # ОСНОВНАЯ ФУНКЦИЯ
 # ============================================================
 
-def copy_fs_image(source, target, env):
+def copy_bin_file(source, target, env):
     """
-    Копирует образ файловой системы в папку с бинарниками.
+    Копирует прошивку в папку с бинарниками.
     """
     # Получаем имя текущей среды сборки
     env_name = env.subst("$PIOENV")
     
-    # Путь к исходному файлу (образу ФС)
-    fs_path = str(target[0])
+    # Путь к исходному файлу прошивки
+    firmware_path = str(target[0])
     
     # Папка в корне проекта для собранных бинарников
     project_dir = Path(env.subst("$PROJECT_DIR"))
@@ -97,27 +94,25 @@ def copy_fs_image(source, target, env):
     if version:
         # Формируем имя с версией
         version_for_filename = format_version_for_filename(version)
-        base_name = f"{env_name}-FILESYS-{version_for_filename}.bin"
+        base_name = f"{env_name}-FIRMWARE-{version_for_filename}.bin"
     else:
         # Если версии нет, используем только имя среды
-        base_name = f"{env_name}-FILESYS.bin"
+        base_name = f"{env_name}-FIRMWARE.bin"
         debug_print("Using environment name only (no version)")
     
-    # Копируем образ ФС в корневую папку
-    fs_dst = firmware_dir / base_name
-    shutil.copy2(fs_path, fs_dst)
-    print(f"Copied FS image to: {fs_dst}")
+    # Копируем прошивку в корневую папку
+    firmware_dst = firmware_dir / base_name
+    shutil.copy2(firmware_path, firmware_dst)
+    print(f"Copied firmware to: {firmware_dst}")
     
-    # Копируем образ ФС в папку сборки (с именем среды и версией)
-    build_dir = Path(fs_path).parent
-    local_fs = build_dir / base_name
-    shutil.copy2(fs_path, local_fs)
-    print(f"Copied FS image to: {local_fs}")
+    # Копируем прошивку в папку сборки (с именем среды и версией)
+    build_dir = Path(firmware_path).parent
+    local_firmware = build_dir / base_name
+    shutil.copy2(firmware_path, local_firmware)
+    print(f"Copied firmware to: {local_firmware}")
 
 # ============================================================
 # РЕГИСТРАЦИЯ
 # ============================================================
 
-# Регистрируем на события сборки ФС
-for fs_name in FS_BIN_NAMES:
-    env.AddPostAction(f"$BUILD_DIR/{fs_name}", copy_fs_image)
+env.AddPostAction("$BUILD_DIR/${PROGNAME}.bin", copy_bin_file)

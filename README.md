@@ -22,18 +22,19 @@
 - [Система версионирования](#система-версионирования)
   - [Формат версии](#формат-версии)
   - [Файлы счётчиков версий](#файлы-счётчиков-версий)
-  - [Генерация version.h (version_builder.py)](#генерация-versionh-version_builderpy)
-  - [Генерация модульных версий (module_version_gen.py)](#генерация-модульных-версий-module_version_genpy)
+  - [Генерация version.h (2_version_builder.py)](#генерация-versionh-2_version_builderpy)
+  - [Генерация модульных версий (3_module_version_gen.py)](#генерация-модульных-версий-3_module_version_genpy)
   - [Именование файлов прошивки и ФС](#именование-файлов-прошивки-и-фс)
   - [Файл _version_fs.json](#файл-_version_fsjson)
 - [Python-скрипты сборки](#python-скрипты-сборки)
-  - [version_builder.py](#version_builderpy)
-  - [module_version_gen.py](#module_version_genpy)
-  - [fs_builder.py](#fs_builderpy)
+  - [1_registry_pre_build.py](#1_registry_pre_buildpy)
+  - [2_version_builder.py](#2_version_builderpy)
+  - [3_module_version_gen.py](#3_module_version_genpy)
+  - [4_fs_builder.py](#4_fs_builderpy)
   - [gen_page_head.py](#gen_page_headpy)
-  - [set_fs_data_dir.py](#set_fs_data_dirpy)
-  - [copy_fw.py](#copy_fwpy)
-  - [copy_fs.py](#copy_fspy)
+  - [5_set_fs_data_dir.py](#5_set_fs_data_dirpy)
+  - [6_copy_fw.py](#6_copy_fwpy)
+  - [7_copy_fs.py](#7_copy_fspy)
   - [Порядок выполнения скриптов](#порядок-выполнения-скриптов)
 - [Файлы настроек (конфигурации)](#файлы-настроек-конфигурации)
 - [Компиляция и отладка](#компиляция-и-отладка)
@@ -259,13 +260,13 @@ MAJOR.MINOR.DATE.BUILD
 | **version_counter.txt** | Хранит MAJOR и MINOR версию | Две строки: первая — MAJOR (0-9), вторая — MINOR (0-999) |
 | **build_counter.txt** | Хранит номер сборки BUILD | Одна строка: число от 0 до 9999 |
 
-**version_counter.txt** редактируется вручную. При изменении содержимого git-коммита (появлении новых файлов или изменении существующих) скрипт `version_builder.py` автоматически увеличивает MINOR на 1.
+**version_counter.txt** редактируется вручную. При изменении содержимого git-коммита (появлении новых файлов или изменении существующих) скрипт `2_version_builder.py` автоматически увеличивает MINOR на 1.
 
 **build_counter.txt** увеличивается автоматически при каждом запуске сборки. Если файл отсутствует — создаётся со значением 0.
 
-### Генерация version.h (version_builder.py)
+### Генерация version.h (2_version_builder.py)
 
-Скрипт `python/version_builder.py` запускается **до** компиляции (pre-script) и генерирует файл `src/version.h`, который содержит макрос `FIRMWARE_VERSION` с полной строкой версии.
+Скрипт `python/2_version_builder.py` запускается **до** компиляции (pre-script) и генерирует файл `src/version.h`, который содержит макрос `FIRMWARE_VERSION` с полной строкой версии.
 
 **Алгоритм работы:**
 
@@ -302,9 +303,9 @@ MAJOR.MINOR.DATE.BUILD
 
 **Защита от двойного запуска:** скрипт проверяет, не был ли он уже запущен в текущей сессии (через переменную окружения `VERSION_BUILDER_RUN`). Это предотвращает повторное увеличение BUILD при перезапуске сборки PlatformIO.
 
-### Генерация модульных версий (module_version_gen.py)
+### Генерация модульных версий (3_module_version_gen.py)
 
-Скрипт `python/module_version_gen.py` запускается **до** компиляции (pre-script) и генерирует файлы `*_version.h` для каждого модуля (как core, так и module).
+Скрипт `python/3_module_version_gen.py` запускается **до** компиляции (pre-script) и генерирует файлы `*_version.h` для каждого модуля (как core, так и module).
 
 **Алгоритм работы:**
 
@@ -352,12 +353,12 @@ MAJOR.MINOR.DATE.BUILD
 - `{VERSION}` — полная строка версии из `FIRMWARE_VERSION` макроса
 
 Копирование выполняется скриптами:
-- `python/copy_fw.py` — копирует `firmware.bin` → `proj_fwbins/{ENV}-FIRMWARE-{VERSION}.bin`
-- `python/copy_fs.py` — копирует `spiffs.bin` (или `littlefs.bin`) → `proj_fwbins/{ENV}-FILESYS-{VERSION}.bin`
+- `python/6_copy_fw.py` — копирует `firmware.bin` → `proj_fwbins/{ENV}-FIRMWARE-{VERSION}.bin`
+- `python/7_copy_fs.py` — копирует `spiffs.bin` (или `littlefs.bin`) → `proj_fwbins/{ENV}-FILESYS-{VERSION}.bin`
 
 ### Файл _version_fs.json
 
-При сборке образа ФС скрипт `python/fs_builder.py` генерирует файл `_version_fs.json`, который помещается в корень ФС. Этот файл содержит полную информацию о версии прошивки и используется для проверки совместимости при OTA-обновлениях.
+При сборке образа ФС скрипт `python/4_fs_builder.py` генерирует файл `_version_fs.json`, который помещается в корень ФС. Этот файл содержит полную информацию о версии прошивки и используется для проверки совместимости при OTA-обновлениях.
 
 **Структура `_version_fs.json`:**
 
@@ -395,9 +396,20 @@ MAJOR.MINOR.DATE.BUILD
 
 ## Python-скрипты сборки
 
-Все скрипты находятся в директории `python/` и подключаются к процессу сборки PlatformIO через параметр `extra_scripts` в `platformio.ini`. Скрипты разделены на **pre-scripts** (выполняются до компиляции) и **post-scripts** (выполняются после компиляции).
+Все скрипты находятся в директории `python/` и подключаются к процессу сборки PlatformIO через параметр `extra_scripts` в `platformio.ini`. Скрипты разделены на **pre-scripts** (выполняются до компиляции) и **post-scripts** (выполняются после компиляции). Число в имени файла (`1_`, `2_`, …) — порядок выполнения. Утилиты `module_registry_gen.py`, `gen_page_head.py`, `build_all.py` запускаются другими скриптами или вручную, поэтому номера не имеют.
 
-### version_builder.py
+### 1_registry_pre_build.py
+
+**Назначение:** Перегенерация списка модулей `src/modules_registry.cpp/.h` под текущий env.
+
+**Тип:** Pre-script
+
+**Алгоритм:**
+1. Определяет имя текущего окружения (env) из PlatformIO
+2. Запускает `python/module_registry_gen.py --env <env>` (см. [Inclusion mechanism](#inclusion-mechanism))
+3. При ошибке генератора — прерывает сборку
+
+### 2_version_builder.py
 
 **Назначение:** Генерация файла `src/version.h` с версией прошивки и информацией о git-репозитории.
 
@@ -445,7 +457,7 @@ MAJOR.MINOR.DATE.BUILD
 - `BUILD_DIGITS = 4` — количество цифр BUILD
 - `DATE_FORMAT = "%Y%m%d_%H%M"` — формат даты
 
-### module_version_gen.py
+### 3_module_version_gen.py
 
 **Назначение:** Генерация файлов `*_version.h` для каждого модуля (core_* и module_*).
 
@@ -480,7 +492,7 @@ MAJOR.MINOR.DATE.BUILD
    - Для каждого модуля создаёт файл вида `src/<module_name>/<module_name>_version.h`
    - Пример: `src/core_wifi/core_wifi_version.h`
 
-### fs_builder.py
+### 4_fs_builder.py
 
 **Назначение:** Подготовка и сборка образа файловой системы (ФС).
 
@@ -526,7 +538,7 @@ MAJOR.MINOR.DATE.BUILD
 
 **Назначение:** Динамическая генерация HTML-заголовка страниц (`page_head.html`) на основе подключённых модулей.
 
-**Тип:** Вызывается из `fs_builder.py`
+**Тип:** Вызывается из `4_fs_builder.py`
 
 **Подробный алгоритм:**
 
@@ -545,18 +557,18 @@ MAJOR.MINOR.DATE.BUILD
    - Вставляет сгенерированные ссылки модулей вместо маркера
    - Записывает результат в подготовленную директорию ФС
 
-### set_fs_data_dir.py
+### 5_set_fs_data_dir.py
 
 **Назначение:** Перенаправление директории данных для сборки ФС.
 
 **Тип:** Pre-script
 
 **Алгоритм:**
-- Читает переменную окружения `PLATFORMIO_FS_DATA_DIR`, установленную `fs_builder.py`
+- Читает переменную окружения `PLATFORMIO_FS_DATA_DIR`, установленную `4_fs_builder.py`
 - Устанавливает `PROJECT_DATA_DIR` в PlatformIO на значение этой переменной
 - Это заставляет PlatformIO использовать подготовленную директорию (с `_version_fs.json` и сгенерированным `page_head.html`) вместо стандартной `data/`
 
-### copy_fw.py
+### 6_copy_fw.py
 
 **Назначение:** Копирование бинарного файла прошивки в директорию `proj_fwbins/` с версией в имени.
 
@@ -569,7 +581,7 @@ MAJOR.MINOR.DATE.BUILD
 4. Копирует `.pio/build/<env>/firmware.bin` → `proj_fwbins/{ENV}-FIRMWARE-{VERSION}.bin`
 5. Если директория `proj_fwbins/` не существует — создаёт её
 
-### copy_fs.py
+### 7_copy_fs.py
 
 **Назначение:** Копирование бинарного файла файловой системы в директорию `proj_fwbins/` с версией в имени.
 
@@ -590,10 +602,11 @@ MAJOR.MINOR.DATE.BUILD
 **Pre-scripts (до компиляции):**
 
 ```
-1. version_builder.py    → генерирует src/version.h (MAJOR.MINOR.DATE.BUILD)
-2. module_version_gen.py → генерирует *_version.h для каждого модуля
-3. fs_builder.py         → подготавливает директорию ФС, генерирует _version_fs.json и page_head.html
-4. set_fs_data_dir.py    → перенаправляет PROJECT_DATA_DIR на подготовленную директорию
+1. 1_registry_pre_build.py → генерирует modules_registry.cpp/.h под текущий env
+2. 2_version_builder.py    → генерирует src/version.h (MAJOR.MINOR.DATE.BUILD)
+3. 3_module_version_gen.py → генерирует *_version.h для каждого модуля
+4. 4_fs_builder.py         → подготавливает директорию ФС, генерирует _version_fs.json и page_head.html
+5. 5_set_fs_data_dir.py    → перенаправляет PROJECT_DATA_DIR на подготовленную директорию
 ```
 
 **Компиляция:** PlatformIO компилирует исходный код в `firmware.bin`
@@ -601,16 +614,16 @@ MAJOR.MINOR.DATE.BUILD
 **Post-scripts (после компиляции):**
 
 ```
-5. copy_fw.py → копирует firmware.bin → proj_fwbins/{ENV}-FIRMWARE-{VERSION}.bin
-6. copy_fs.py → копирует spiffs.bin → proj_fwbins/{ENV}-FILESYS-{VERSION}.bin
+6. 6_copy_fw.py → копирует firmware.bin → proj_fwbins/{ENV}-FIRMWARE-{VERSION}.bin
+7. 7_copy_fs.py → копирует spiffs.bin → proj_fwbins/{ENV}-FILESYS-{VERSION}.bin
 ```
 
 **При сборке образа ФС (Build Filesystem Image):**
 
 ```
-1. fs_builder.py         → подготавливает директорию, генерирует _version_fs.json и page_head.html
-2. set_fs_data_dir.py    → перенаправляет PROJECT_DATA_DIR
-3. PlatformIO buildfs    → собирает образ ФС из подготовленной директории
+1. 4_fs_builder.py        → подготавливает директорию, генерирует _version_fs.json и page_head.html
+2. 5_set_fs_data_dir.py   → перенаправляет PROJECT_DATA_DIR
+3. PlatformIO buildfs     → собирает образ ФС из подготовленной директории
 ```
 
 ---

@@ -46,7 +46,7 @@ GENERATE_FS_VERSION_JSON = True          # генерировать JSON фай�
 INCLUDE_BUILD_INFO_IN_JSON = True        # включать информацию о сборке в JSON
 FS_VERSION_SCHEMA_VERSION = "1.0.0"      # версия схемы JSON
 
-# ------------------- Файлы версий (от version_builder.py) -------------------
+# ------------------- Файлы версий (от 2_version_builder.py) -------------------
 VERSION_COUNTER_FILE = "version_counter.txt"   # major и minor
 BUILD_COUNTER_FILE = "build_counter.txt"       # build счётчик
 VERSION_HEADER_FILE = "version.h"              # заголовочный файл (как источник)
@@ -254,12 +254,12 @@ def create_symlink_direct(target: Path, link_name: Path) -> bool:
         return False
 
 # ============================================================
-# ФУНКЦИИ ДЛЯ ЧТЕНИЯ ВЕРСИИ ИЗ ФАЙЛОВ version_builder.py
+# ФУНКЦИИ ДЛЯ ЧТЕНИЯ ВЕРСИИ ИЗ ФАЙЛОВ 2_version_builder.py
 # ============================================================
 
 def read_version_from_counter_file(project_dir: Path) -> Dict[str, Any]:
     """
-    Читает major и minor из version_counter.txt (создаётся version_builder.py)
+    Читает major и minor из version_counter.txt (создаётся 2_version_builder.py)
     Формат файла:
         major=0
         minor=17
@@ -278,7 +278,7 @@ def read_version_from_counter_file(project_dir: Path) -> Dict[str, Any]:
     
     if not counter_file.exists():
         log_warning(f"Version counter file not found: {counter_file}")
-        log_warning(f"Run version_builder.py first or create {VERSION_COUNTER_FILE}")
+        log_warning(f"Run 2_version_builder.py first or create {VERSION_COUNTER_FILE}")
         return version_info
     
     try:
@@ -302,7 +302,7 @@ def read_version_from_counter_file(project_dir: Path) -> Dict[str, Any]:
 
 def read_build_from_counter_file(project_dir: Path) -> int:
     """
-    Читает build номер из build_counter.txt (создаётся version_builder.py)
+    Читает build номер из build_counter.txt (создаётся 2_version_builder.py)
     Формат файла: просто число
     """
     build_file = project_dir / BUILD_COUNTER_FILE
@@ -310,7 +310,7 @@ def read_build_from_counter_file(project_dir: Path) -> int:
     
     if not build_file.exists():
         log_warning(f"Build counter file not found: {build_file}")
-        log_warning(f"Run version_builder.py first to initialize build counter")
+        log_warning(f"Run 2_version_builder.py first to initialize build counter")
         return build
     
     try:
@@ -397,7 +397,7 @@ def read_version_from_header(project_dir: Path) -> Dict[str, Any]:
 
 def get_current_version(project_dir: Path) -> Dict[str, Any]:
     """
-    Получает текущую версию, читая из файлов version_builder.py.
+    Получает текущую версию, читая из файлов 2_version_builder.py.
     Приоритет:
     1. version_counter.txt + build_counter.txt
     2. version.h (если нет counter файлов)
@@ -500,14 +500,14 @@ def generate_fs_version_json(target_web_dir: Path, env_name: str,
                              project_dir: Path) -> Optional[Path]:
     """
     Генерирует JSON файл с информацией о версии файловой системы.
-    Версия читается из файлов version_builder.py
+    Версия читается из файлов 2_version_builder.py
     """
     if not GENERATE_FS_VERSION_JSON:
         return None
     
     log_info("Generating FS version JSON file...")
     
-    # Получаем версию из файлов version_builder.py
+    # Получаем версию из файлов 2_version_builder.py
     version_info = get_current_version(project_dir)
     
     log_info(f"  Version: {version_info['full_string']}")
@@ -663,11 +663,11 @@ def prepare_fs_image() -> Optional[Path]:
     
     if not version_file.exists():
         log_warning(f"{VERSION_COUNTER_FILE} not found!")
-        log_warning(f"Run version_builder.py first to initialize version counters")
+        log_warning(f"Run 2_version_builder.py first to initialize version counters")
     
     if not build_file.exists():
         log_warning(f"{BUILD_COUNTER_FILE} not found!")
-        log_warning(f"Run version_builder.py first to initialize build counter")
+        log_warning(f"Run 2_version_builder.py first to initialize build counter")
     
     # Проверка свободного места
     if not check_disk_space(project_dir, 50):
@@ -833,7 +833,7 @@ def prepare_fs_image() -> Optional[Path]:
     else:
         log_info("Using static page_head.html from data/ folder (gen_page_head module not available)")
     
-    # 10. Генерируем JSON файл с версией ФС (читая из version_builder файлов)
+    # 10. Генерируем JSON файл с версией ФС (читая из 2_version_builder файлов)
     if GENERATE_FS_VERSION_JSON:
         json_file = generate_fs_version_json(
             target_web_dir, 

@@ -489,7 +489,7 @@ String CLASS_MODULE_MACROS::uniqueNewName(const String& tmpl) {
 
 void CLASS_MODULE_MACROS::ensureMacrosDir() {
     // Создаём каталог сценариев (примеры .tcl поставляются в составе FS-образа:
-    // web/macros/*.tcl -> /macros/*.tcl, см. python/fs_builder.py)
+    // web/macros/*.tcl -> /macros/*.tcl, см. python/4_fs_builder.py)
     if (_fs->exists(MACROS_DIR) == false) {
         _fs->mkdir(MACROS_DIR);
         DEBUGMACROS("%s: dir %s created\r\n", __FUNCTION__, MACROS_DIR);
