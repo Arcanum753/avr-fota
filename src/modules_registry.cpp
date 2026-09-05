@@ -4,7 +4,7 @@
 #include "core_web/FSWebServerLib.h"
 
 // Файл генерируется python/module_registry_gen.py под выбранный env.
-// Сгенерировано для env: esp32_macrotest
+// Сгенерировано для env: Test32_cOta_lcd_rgb
 // Не редактировать вручную. При смене env — перезапустить генератор.
 
 #include "core_wifi/core_wifi.h"
@@ -13,8 +13,9 @@
 #include "core_editor/core_editor.h"
 #include "core_ota/core_ota.h"
 #include "core_terminal/core_terminal.h"
-#include "module_macros/module_macros.h"
+#include "module_lcd-i2c/module_lcd-i2c.h"
 #include "module_otaclient/module_otaclient.h"
+#include "module_rgb/module_rgb.h"
 #include "module_udp/module_udp.h"
 
 // Определение глобального контекста приложения (extern из mod_context.h).
@@ -30,7 +31,8 @@ void core_begin(ModContext& ctx) {
 }
 
 void modules_begin(ModContext& ctx) {
-    module_macros.begin(ctx);
+    module_lcd_i2c.begin(ctx);
+    module_rgb.begin(ctx);
 }
 
 void dev_begin(ModContext& ctx) {
@@ -45,7 +47,8 @@ void core_web_Init() {
 }
 
 void modules_web_Init() {
-    module_macros.web_Init();
+    module_lcd_i2c.web_Init();
+    module_rgb.web_Init();
     module_udp.web_Init();
 }
 

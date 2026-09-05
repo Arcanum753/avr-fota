@@ -5,6 +5,8 @@
 
 #include "mod_context.h"
 
+#include "module_macros_engine.h"
+
 #ifdef DEBUG_MACROS
 #define DEBUGMACROS(...) Serial.printf(__VA_ARGS__)
 #else
@@ -18,75 +20,12 @@
 #include <LittleFS.h>
 #endif
 
-#include "tcl.h"
-#include "ccronexpr.h"
-
 #define CONFIG_FILE_MACROS    "/config_macros.json"
 #define MACROS_DIR            "/macros"
 #define MACROS_DIR_RE         "/macros/"
 #define MACRO_DEFAULT_NAME    "new_macros.tcl"
 
-// Ограничения прототипа (ESP8266 RAM ограничен — лимиты ниже)
-#if defined(ESP32)
-#define MACRO_MAX_FILES       16     // максимум файлов-сценариев в списке
-#define MACRO_MAX_ENTS        24     // максимум сущностей в одном файле
-#elif defined(ESP8266)
-#define MACRO_MAX_FILES       8      // максимум файлов-сценариев в списке
-#define MACRO_MAX_ENTS        8      // максимум сущностей в одном файле
-#endif
-#define MACRO_EV_QUEUE        8      // размер очереди внешних событий (term/button)
-
-// Типы сущностей сценария
-#define MACRO_ENT_CRON        0      // «момент времени» по cron-выражению
-#define MACRO_ENT_COND        1      // «условие» по фронту false->true
-#define MACRO_ENT_BUTTON      2      // событие с веб-страницы / внешнего вызова (macro btn)
-#define MACRO_ENT_TERM        3      // событие из терминала (macro msg)
-
-// Внешнее событие (очередь term/button)
-typedef struct {
-    uint8_t type;            // MACRO_ENT_BUTTON или MACRO_ENT_TERM
-    String  spec;            // спецификатор (может содержать несколько слов-параметров)
-} MacroEvent;
-
-struct MacroFile;
-
-// Контекст разбора/исполнения Tcl-файла. Передаётся как arg в tcl_register.
-typedef struct {
-    struct MacroFile* file;  // файл, которому принадлежит интерпретатор
-    bool parsing;            // true — идёт разбор файла (регистрация сущностей)
-} PtclMacroCtx;
-
-// Одна сущность сценария (строка «таблицы условий и моментов времени»)
-typedef struct {
-    uint8_t   type;          // MACRO_ENT_*
-    String    spec;          // cron-выражение / Tcl-условие / токен button|term
-    String    body;          // тело на Tcl
-    cron_expr expr;          // разобранное cron-выражение (для MACRO_ENT_CRON)
-    time_t    next;          // следующее срабатывание cron (0 — не инициализировано)
-    bool      lastCond;      // предыдущее состояние условия (для MACRO_ENT_COND)
-} MacroEntity;
-
-// Файл-сценарий: метаданные (сохраняются в JSON) + runtime-состояние
-typedef struct MacroFile {
-    // --- метаданные (config_macros.json) ---
-    String    name;          // полный путь: /macros/xxx.tcl
-    uint8_t   prio;          // приоритет 0..7 (0 — высший)
-    bool      run;           // включён пользователем
-    uint32_t  created;       // время создания (локальное, TimeLib)
-
-    // --- runtime-состояние (не сохраняется) ---
-    bool      active;        // файл запущен и успешно разобран
-    String    err;           // текст последней ошибки (пусто — ошибок нет)
-    struct tcl* tcl;         // интерпретатор файла (только когда active)
-    PtclMacroCtx ctx;        // контекст для команд Tcl (ctx.file указывает на этот файл)
-    MacroEntity ents[MACRO_MAX_ENTS];
-    uint8_t   nEnts;         // число сущностей в ents
-} MacroFile;
-
-// Структура конфига — сохраняется в config_macros.json
-typedef struct {
-    bool enabled;            // модуль включён
-} strMacrosConfig;
+class AsyncWebServerRequest;
 
 class CLASS_MODULE_MACROS {
 public:

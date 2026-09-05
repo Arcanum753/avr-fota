@@ -1,2 +1,2 @@
 major=0
-minor=58
+minor=59
