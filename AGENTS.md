@@ -21,6 +21,23 @@ The project is split into **two categories**:
 
 Submodules (`submodule_*`) inherit from `Class_ProgBase` and implement specific programmers. The base programmer logic lives in `module_prog/`.
 
+### Multi-repository layout
+
+Ядро — единый git-репозиторий (этот файл). Компоненты (`module_*`, `device_*`, контейнер
+программатора) — **отдельные git-репозитории**, которые клонируются пользователем в `src/<имя>`
+(устройства и модули — по репозиторию на компонент). Исключения:
+
+- `src/module_template/` остаётся в ядре — эталон для создания новых модулей.
+- Программатор — один репозиторий-контейнер `module_program`, клонируется в `src/module_program/`
+  и содержит вложенные компоненты `module_prog/`, `submodule_isp/`, `submodule_swd/` (выбор ISP/SWD —
+  через env, как раньше). Тулинг и python-скрипты умеют работать с вложенными компонентами
+  (`src/<dir...>/<name>`), генератор registry ищет `<name>.ini` по полному пути.
+
+Сборка набора: клонировать нужные репозитории в `src/` → env из их `.ini` подхватывается
+glob-масками `src/*/*.ini` и `src/*/*/*.ini` в `[platformio] extra_configs` → выбрать env и собрать.
+Репозиторий ядра игнорирует внешние папки через `.gitignore` (`/src/module_*/`, `/src/device_*/`,
+`!/src/module_template/`).
+
 ### Core modules (always compiled)
 
 | Module | Directory | Purpose |
@@ -37,8 +54,8 @@ Submodules (`submodule_*`) inherit from `Class_ProgBase` and implement specific 
 
 | Module | Flag | Purpose |
 |--------|------|---------|
-| `module_prog` + `submodule_isp` | `-D PROGTYPE_ISP` | AVR-ISP programmer (AtMega/AtTiny) |
-| `module_prog` + `submodule_swd` | `-D PROGTYPE_SWD` | SWD programmer (STM32 F1/F4) |
+| `module_program` (репо) | `-D PROGTYPE_ISP` | AVR-ISP programmer (AtMega/AtTiny): `src/module_program/module_prog` + `.../submodule_isp` |
+| `module_program` (репо) | `-D PROGTYPE_SWD` | SWD programmer (STM32 F1/F4): `src/module_program/module_prog` + `.../submodule_swd` |
 | `module_gpio` | `-D MODULE_GPIO` | GPIO control via web |
 | `module_lcd-i2c` | `-D MODULE_LCD_I2C` | LCD I2C display control (LiquidCrystal_I2C, маски date/time, backlight) |
 | `module_udp` | `-D MODULE_UDP` | UDP broadcast for device discovery |
@@ -123,9 +140,9 @@ The main loop (`loop()` in `main.cpp`):
 ### Key class hierarchy
 
 ```
-Class_ProgBase (module_prog/module_prog.h)
-├── Class_SubIsp (submodule_isp/) — AVR-ISP
-└── Class_SubSwd (submodule_swd/) — STM32 SWD
+Class_ProgBase (module_program/module_prog/module_prog.h)
+├── Class_SubIsp (module_program/submodule_isp/) — AVR-ISP
+└── Class_SubSwd (module_program/submodule_swd/) — STM32 SWD
 
 CLASS_CORE_OTA (core_ota/core_ota.h)
 └── CLASS_MODULE_OTACLIENT (module_otaclient/) — extended OTA client
@@ -144,7 +161,7 @@ CLASS_CORE_OTA (core_ota/core_ota.h)
 Составные названия функции пишутся через подчёркивание: `I2C_MAPPER`, `I2C_LCD`.
 
 Исключения (не переименовывать):
-- `Class_ProgBase` (module_prog) — база субмодулей.
+- `Class_ProgBase` (module_program/module_prog) — база субмодулей.
 - `Class_SubIsp` / `Class_SubSwd` (submodule_*) — особый случай.
 - Библиотечные/инфраструктурные классы (`SerialTerminal`, `AsyncWebServer*` и т.п.).
 
@@ -211,10 +228,12 @@ Modules are added per-target:
 ```ini
 [env:esp32-swd]
 extends = env:esp32
-src_filter = ${platformio.src_filter} +<module_prog/> +<submodule_swd/> +<module_udp/>
+src_filter = ${platformio.src_filter} +<module_program/module_prog/> +<module_program/submodule_swd/> +<module_udp/>
 build_flags = ${env.build_flags} -D MODULE_UDP=1 -D PROGTYPE_SWD=1 -D SWDPIN_CLK=21 -D SWDPIN_DATA=19
 ```
 После изменения `src_filter`/`build_flags` в env — перезапустить `python/module_registry_gen.py --env <env>`.
+`extra_configs` в `platformio.ini` использует glob-маски (`src/*/*.ini`, `src/*/*/*.ini`) — env
+подхватываются автоматически из склонированных в `src/` компонентов без ручной регистрации.
 
 ### Web page structure
 
@@ -222,7 +241,7 @@ build_flags = ${env.build_flags} -D MODULE_UDP=1 -D PROGTYPE_SWD=1 -D SWDPIN_CLK
 - If a module has `web/_menu.html`, its content is used directly
 - Otherwise, `.html` files are scanned for `<title>` or first heading
 
-Module web files (e.g. `module_prog/web/prog.html`, `submodule_isp/web/avrcfg.html`) are copied into the FS build directory by `4_fs_builder.py`.
+Module web files (e.g. `module_program/module_prog/web/prog.html`, `module_program/submodule_isp/web/avrcfg.html`) are copied into the FS build directory by `4_fs_builder.py`.
 
 ### File system config files (in `core_sys/web/`, `core_web/web/` and module `web/` dirs)
 
@@ -233,11 +252,11 @@ Module web files (e.g. `module_prog/web/prog.html`, `submodule_isp/web/avrcfg.ht
 | `config_wifi0-3.json` | `core_sys/web/` | 4 Wi-Fi profiles (SSID, password, DHCP/static IP) |
 | `secret.json` | `core_sys/web/` | HTTP auth login/password (hidden from FS browser) |
 | `page_head.html` | `core_web/web/` | HTML template for the device main page (with menu marker) |
-| `config_prog.json` | `module_prog/web/` | Programmer project config (chip, project name) |
+| `config_prog.json` | `module_program/module_prog/web/` | Programmer project config (chip, project name) |
 | `config_udp.json` | `module_udp/web/` | UDP module config |
 | `config_otaclient.json` | `module_otaclient/web/` | OTA client config |
-| `avrisp_cfg.json` | `submodule_isp/web/` | AVR chip database (signature, flash size, page size) |
-| `swd_cfg.json` | `submodule_swd/web/` | SWD chip database (IDCODE, flash params) |
+| `avrisp_cfg.json` | `module_program/submodule_isp/web/` | AVR chip database (signature, flash size, page size) |
+| `swd_cfg.json` | `module_program/submodule_swd/web/` | SWD chip database (IDCODE, flash params) |
 
 ### Serial terminal
 
@@ -251,7 +270,7 @@ Module web files (e.g. `module_prog/web/prog.html`, `submodule_isp/web/avrcfg.ht
 - `udpp` / `udpc` / `udps` — UDP module debug
 - `avr` — AVR-ISP module debug
 
-### Format handlers (`module_prog/`)
+### Format handlers (`module_program/module_prog/`)
 
 - `format_bin.h` — BIN file read API (open/read/close/isFormat)
 - `format_hex.h` — Intel HEX parser with streaming validation, callback-based flash write (`hexFileParseStreamWrite`), binary size estimation (`hexFileGetBinarySize`)
@@ -374,13 +393,12 @@ avr-fota/
 │   ├── core_json/           # JSON utilities core module
 │   ├── core_led/            # LED indication core module
 │   ├── core_terminal/       # Serial terminal core module
-│   ├── module_prog/         # Base programmer module (base class)
-│   ├── module_gpio/         # GPIO control module
-│   ├── module_udp/          # UDP broadcast module
-│   ├── module_otaclient/    # OTA client module
-│   ├── submodule_isp/       # AVR-ISP programmer submodule
-│   ├── submodule_swd/       # STM32 SWD programmer submodule
-│   └── *version.h           # Auto-generated per-module version headers
+│   ├── module_template/     # Шаблон модуля (эталон для создания новых, остаётся в ядре)
+│   └── <module_*|submodule_*|device_*>/
+│                           # Внешние компоненты: отдельные git-репозитории,
+│                           # клонируются в src/<имя> (вне учёта ядра, см. .gitignore).
+│                           # Программатор: src/module_program/{module_prog,submodule_isp,submodule_swd}.
+│   └── *version.h           # Auto-generated per-module version headers (игнорируются)
 ├── targets/                 # PlatformIO target configs
 │   ├── targets_example.ini  # Example target definitions
 │   └── targets_user.ini     # User target definitions

@@ -88,8 +88,8 @@
 
 | Модуль | Директория | Флаг активации | Назначение |
 |--------|-----------|---------------|-----------|
-| **module_prog_isp** | `src/module_prog_isp/` | `-D PROGTYPE_ISP` | AVR-ISP программатор (AtMega/AtTiny) |
-| **module_prog_swd** | `src/module_prog_swd/` | `-D PROGTYPE_SWD` | SWD программатор (STM32) |
+| **module_program** (ISP) | `src/module_program/` (module_prog + submodule_isp) | `-D PROGTYPE_ISP` | AVR-ISP программатор (AtMega/AtTiny) |
+| **module_program** (SWD) | `src/module_program/` (module_prog + submodule_swd) | `-D PROGTYPE_SWD` | SWD программатор (STM32) |
 | **module_gpio** | `src/module_gpio/` | `-D MODULE_GPIO` | Управление GPIO через веб-интерфейс |
 | **module_udp** | `src/module_udp/` | `-D MODULE_UDP` | UDP-широковещание, обнаружение устройств в сети |
 | **module_otaclient** | `src/module_otaclient/` | `-D MODULE_OTACLIENT=1` | OTA-клиент (получение обновлений с удалённого сервера) |
@@ -116,7 +116,7 @@
 ```ini
 [env:esp32-swd]
 extends = env:esp32
-src_filter = ${platformio.src_filter} +<module_prog_swd/> +<module_udp/>
+src_filter = ${platformio.src_filter} +<module_program/module_prog/> +<module_program/submodule_swd/> +<module_udp/>
 build_flags=
     ${env.build_flags}
     ${env:esp32.build_flags}
@@ -130,7 +130,7 @@ build_flags=
 ```ini
 [env:esp32-isp]
 extends = env:esp32
-src_filter = ${platformio.src_filter} +<module_prog_isp/> +<module_udp/>
+src_filter = ${platformio.src_filter} +<module_program/module_prog/> +<module_program/submodule_isp/> +<module_udp/>
 build_flags=
     ${env.build_flags}
     ${env:esp32.build_flags}
@@ -381,7 +381,7 @@ MAJOR.MINOR.DATE.BUILD
     "core_json": {"version": "1", "date": "20260403"},
     "core_led": {"version": "1", "date": "20260403"},
     "core_terminal": {"version": "1", "date": "20260403"},
-    "module_prog_swd": {"version": "1", "date": "20260403"},
+    "module_program/submodule_swd": {"version": "1", "date": "20260403"},
     "module_udp": {"version": "1", "date": "20260403"}
   },
   "fs_size": 1048576,
@@ -712,8 +712,8 @@ ESP при включении сканирует эфир в течение за
 1. **Main** (`/index.html`) — текущая информация об устройстве, основные настройки;
 2. **Device configuration** (`/system.html`) — имя устройства, серийный номер, настройки Wi-Fi сканирования и времени жизни AP;
 3. **NTP Settings** (`/ntp.html`) — настройка NTP серверов, времени опроса, часового пояса, летнего/зимнего времени;
-4. **AVR fOTA** (`/avr.html`) — прошивка AVR чипа, информация о версиях, редактирование fuse битов (доступен только при подключении модуля `module_prog_isp`);
-5. **STM32 SWD** (`/swd.html`) — прошивка STM32 чипов через SWD (доступен только при подключении модуля `module_prog_swd`);
+4. **AVR fOTA** (`/avr.html`) — прошивка AVR чипа, информация о версиях, редактирование fuse битов (доступен только при подключении модуля `module_program`/`submodule_isp`);
+5. **STM32 SWD** (`/swd.html`) — прошивка STM32 чипов через SWD (доступен только при подключении модуля `module_program`/`submodule_swd`);
 6. **ESP8266/ESP32 Network Configuration** (`/wifi.html`) — редактирование настроек ТД;
 7. **ESP8266/ESP32 Network Information** — отображение информации о текущем сетевом подключении;
 8. **ESP8266/ESP32 System Setting** (`/system.html`) — кнопка "Restart", редактирование логина и пароля;
@@ -727,7 +727,7 @@ ESP при включении сканирует эфир в течение за
 
 ## Программатор AVR-ISP
 
-*Подключаемый модуль: `module_prog_isp`, флаг `-D PROGTYPE_ISP`.*
+*Подключаемый модуль: `module_program` (`submodule_isp`), флаг `-D PROGTYPE_ISP`.*
 
 ### Подключение AVR чипа. Распиновка.
 
@@ -833,7 +833,7 @@ ESP при включении сканирует эфир в течение за
 
 ## Программатор SWD (STM32)
 
-*Подключаемый модуль: `module_prog_swd`, флаг `-D PROGTYPE_SWD`.*
+*Подключаемый модуль: `module_program` (`submodule_swd`), флаг `-D PROGTYPE_SWD`.*
 
 ### Подключение STM32 чипа. Распиновка.
 

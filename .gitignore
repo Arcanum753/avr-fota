@@ -23,3 +23,13 @@ task_progress.md
 
 # Запасные варианты реализации (не входят в сборку/коммиты)
 /alt_clock-mech-isr/
+
+# Генерируемые pre-скриптами артефакты (пересоздаются при каждой сборке)
+version_counter.txt
+src/modules_registry.*
+
+# Внешние компоненты: отдельные git-репозитории, клонируются пользователем в src/
+/src/module_*/
+/src/submodule_*/
+/src/device_*/
+!/src/module_template/
