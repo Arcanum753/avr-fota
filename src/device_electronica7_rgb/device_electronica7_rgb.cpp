@@ -9,6 +9,8 @@
 #include "device_electronica7_rgb_version.h"
 #include "core_sys/eertos.h"
 
+#include <math.h>
+
 // ============================================================
 // Глобальные объекты и переменные
 // ============================================================
@@ -25,10 +27,15 @@ CLASS_DEVICE_E7RGB::CLASS_DEVICE_E7RGB(bool _in) {
     _pendingSave = false;
     _pendingApply = false;
     _pendingDataPin = -1;
+    _animPhase = 0.0f;
+    _fxLap = 0;
+    for (int i = 0; i < E7_FX_MAX_COLORS; i++) { _fxOrder[i] = (uint8_t)i; }
 }
 
 // Forward-объявления свободных функций, используемых в шаблонном блоке
 void e7rgbSecondTask();
+void e7rgbAnimTask();
+static void e7SeedRng();
 static String e7TimeHhMm();
 static uint32_t e7HexStringToUint32(const String& hexStr);
 static String e7HexColor(uint32_t c);
@@ -53,6 +60,9 @@ void CLASS_DEVICE_E7RGB::begin() {
     _pendingReinit = false;
     _pendingSave = false;
     _pendingApply = false;
+    _fxLap = 0;
+    for (int i = 0; i < E7_FX_MAX_COLORS; i++) { _fxOrder[i] = (uint8_t)i; }
+    e7SeedRng();
 
     defaultConfig();
     if (loadConfig() == false) { saveConfig(); }
@@ -62,7 +72,9 @@ void CLASS_DEVICE_E7RGB::begin() {
     initMatrix();
     applyMode();
 
+    _animPhase = 0.0f;
     SetTimerTask(e7rgbSecondTask, 1000);
+    SetTimerTask(e7rgbAnimTask, E7RGB_ANIM_MS);
 }
 
 void CLASS_DEVICE_E7RGB::begin(ModContext& ctx) {
@@ -109,7 +121,17 @@ void CLASS_DEVICE_E7RGB::handleInfo(AsyncWebServerRequest *request) {
     values += "mode|"          + String(_config.mode)          + "|input\n";
     values += "dataPin|"       + String(_config.dataPin)       + "|input\n";
     values += "brightness|"    + String(_config.brightness)    + "|input\n";
+    values += "effect|"        + String(_config.effect)        + "|input\n";
+    values += "effectDir|"     + String(_config.effectDir)     + "|input\n";
     values += "digitsColor|"   + e7HexColor(_config.digitsColor) + "|input\n";
+    values += "digitsColor2|"  + e7HexColor(_config.digitsColor2) + "|input\n";
+    values += "animSpeed|"     + String(_config.animSpeed)     + "|input\n";
+    values += "colorsCount|"   + String(_config.colorsCount)   + "|input\n";
+    values += "cycleMode|"     + String(_config.cycleMode)     + "|input\n";
+    for (uint8_t i = 0; i < E7_FX_MAX_COLORS; i++) {
+        String pn = "palette" + String(i);
+        values += pn + "|" + e7HexColor(_config.palette[i]) + "|input\n";
+    }
     values += "origin|"        + String(_config.origin)        + "|input\n";
     values += "direction|"     + String(_config.direction)     + "|input\n";
     values += "layout|"        + String(_config.layout)        + "|input\n";
@@ -149,8 +171,39 @@ void CLASS_DEVICE_E7RGB::handleSave(AsyncWebServerRequest *request) {
             _config.brightness = (uint8_t)constrain(val.toInt(), 0, 255);
             continue;
         }
+        if (name == "effect") {
+            _config.effect = (uint8_t)constrain(val.toInt(), E7_EFFECT_MONO, E7_EFFECT_COLORCYCLE);
+            continue;
+        }
+        if (name == "effectDir") {
+            _config.effectDir = (uint8_t)constrain(val.toInt(), 0, 5);
+            continue;
+        }
+        if (name == "colorsCount") {
+            _config.colorsCount = (uint8_t)constrain(val.toInt(), 1, E7_FX_MAX_COLORS);
+            continue;
+        }
+        if (name == "cycleMode") {
+            _config.cycleMode = (uint8_t)constrain(val.toInt(), E7_CYCLE_SEQUENTIAL, E7_CYCLE_RAINBOW);
+            continue;
+        }
+        if (name.startsWith("palette")) {
+            int idx = name.substring(7).toInt();   // palette0..palette7
+            if (idx >= 0 && idx < E7_FX_MAX_COLORS) {
+                _config.palette[idx] = e7HexStringToUint32(val);
+            }
+            continue;
+        }
         if (name == "digitsColor") {
             _config.digitsColor = e7HexStringToUint32(val);
+            continue;
+        }
+        if (name == "digitsColor2") {
+            _config.digitsColor2 = e7HexStringToUint32(val);
+            continue;
+        }
+        if (name == "animSpeed") {
+            _config.animSpeed = (uint8_t)constrain(val.toInt(), 1, 50);
             continue;
         }
         if (name == "origin") {
@@ -243,7 +296,21 @@ void CLASS_DEVICE_E7RGB::defaultConfig() {
     _config.mode        = E7_MODE_WORK;
     _config.dataPin     = 16;
     _config.brightness  = 25;
+    _config.effect      = E7_EFFECT_MONO;
+    _config.effectDir   = E7_FXDIR_TL;
     _config.digitsColor = 0xFF0000;
+    _config.digitsColor2 = 0x0000FF;
+    _config.animSpeed   = 45;
+    _config.colorsCount = 4;
+    _config.cycleMode   = E7_CYCLE_SEQUENTIAL;
+    _config.palette[0]  = 0xFF0000;
+    _config.palette[1]  = 0xFFFF00;
+    _config.palette[2]  = 0x00FF00;
+    _config.palette[3]  = 0x00FFFF;
+    _config.palette[4]  = 0x0000FF;
+    _config.palette[5]  = 0x8000FF;
+    _config.palette[6]  = 0xFF8000;
+    _config.palette[7]  = 0xFFFFFF;
     _config.origin      = E7_ORIGIN_BOTTOM_LEFT;   // спаянная матрица: первый LED внизу слева
     _config.direction   = E7_DIR_UP;               // порядок: снизу вверх, слева направо
     _config.layout      = E7_LAYOUT_PARALLEL;      // развёртка: параллельно (по умолчанию)
@@ -259,7 +326,20 @@ bool CLASS_DEVICE_E7RGB::loadConfig() {
     _config.mode        = (uint8_t)constrain(doc["mode"].as<int>(), E7_MODE_WORK, E7_MODE_MANUAL);
     _config.dataPin     = (int16_t)constrain(doc["dataPin"].as<int>(), -1, 33);
     _config.brightness  = (uint8_t)constrain(doc["brightness"].as<int>(), 0, 255);
+    _config.effect      = (uint8_t)constrain(doc["effect"].as<int>(), E7_EFFECT_MONO, E7_EFFECT_COLORCYCLE);
+    _config.effectDir   = (uint8_t)constrain(doc["effectDir"].as<int>(), 0, 5);
     _config.digitsColor = doc["digitsColor"].as<uint32_t>() & 0xFFFFFF;
+    _config.digitsColor2 = doc["digitsColor2"].as<uint32_t>() & 0xFFFFFF;
+    _config.animSpeed   = (uint8_t)constrain(doc["animSpeed"].as<int>(), 1, 50);
+    _config.colorsCount = (uint8_t)constrain(doc["colorsCount"].as<int>(), 1, E7_FX_MAX_COLORS);
+    _config.cycleMode   = (uint8_t)constrain(doc["cycleMode"].as<int>(), E7_CYCLE_SEQUENTIAL, E7_CYCLE_RAINBOW);
+
+    if (doc["palette"].is<JsonArray>()) {
+        JsonArray arr = doc["palette"].as<JsonArray>();
+        for (uint8_t i = 0; i < E7_FX_MAX_COLORS; i++) {
+            if (i < arr.size()) { _config.palette[i] = arr[i].as<uint32_t>() & 0xFFFFFF; }
+        }
+    }
     _config.origin      = (uint8_t)constrain(doc["origin"].as<int>(), 0, 3);
     _config.direction   = (uint8_t)constrain(doc["direction"].as<int>(), 0, 3);
     _config.layout      = (uint8_t)constrain(doc["layout"].as<int>(), 0, 1);
@@ -283,14 +363,26 @@ bool CLASS_DEVICE_E7RGB::saveConfig() {
     doc["mode"]        = _config.mode;
     doc["dataPin"]     = _config.dataPin;
     doc["brightness"]  = _config.brightness;
+    doc["effect"]      = _config.effect;
+    doc["effectDir"]   = _config.effectDir;
     doc["digitsColor"] = _config.digitsColor;
+    doc["digitsColor2"] = _config.digitsColor2;
+    doc["animSpeed"]   = _config.animSpeed;
+    doc["colorsCount"] = _config.colorsCount;
+    doc["cycleMode"]   = _config.cycleMode;
+
+    JsonArray palArr = doc["palette"].to<JsonArray>();
+    palArr.clear();
+    for (uint8_t i = 0; i < E7_FX_MAX_COLORS; i++) {
+        palArr.add(_config.palette[i]);
+    }
+
+    doc.remove("cells");   // старые поля координатной сетки не сохраняем
     doc["origin"]      = _config.origin;
     doc["direction"]   = _config.direction;
     doc["layout"]      = _config.layout;
     doc["fontFile"]    = _config.fontFile;
     doc["manualText"]  = _config.manualText;
-
-    doc.remove("cells");   // старые поля координатной сетки не сохраняем
 
     return core_json.jsonFileSaveDoc(CONFIG_FILE_E7RGB, doc);
 }
@@ -356,6 +448,129 @@ static uint32_t e7HexStringToUint32(const String& hexStr) {
     clean.replace("0x", "");
     clean.replace("0X", "");
     return (uint32_t)strtoul(clean.c_str(), NULL, 16);
+}
+
+// ============================================================
+// Помощники спецэффектов окраски
+// ============================================================
+
+static uint32_t e7HsvToRgb(float h, float s, float v) {
+    while (h < 0.0f) { h += 360.0f; }
+    while (h >= 360.0f) { h -= 360.0f; }
+    float c = v * s;
+    float x = c * (1.0f - fabsf(fmodf(h / 60.0f, 2.0f) - 1.0f));
+    float m = v - c;
+    float r = 0.0f, g = 0.0f, b = 0.0f;
+    if (h < 60.0f)      { r = c; g = x; }
+    else if (h < 120.0f) { r = x; g = c; }
+    else if (h < 180.0f) { g = c; b = x; }
+    else if (h < 240.0f) { g = x; b = c; }
+    else if (h < 300.0f) { r = x; b = c; }
+    else                { r = c; b = x; }
+    uint8_t r8 = (uint8_t)((r + m) * 255.0f);
+    uint8_t g8 = (uint8_t)((g + m) * 255.0f);
+    uint8_t b8 = (uint8_t)((b + m) * 255.0f);
+    return ((uint32_t)r8 << 16) | ((uint32_t)g8 << 8) | b8;
+}
+
+static uint32_t e7LerpColor(uint32_t c1, uint32_t c2, float t) {
+    if (t <= 0.0f) { return c1; }
+    if (t >= 1.0f) { return c2; }
+    uint8_t r1 = (c1 >> 16) & 0xFF, g1 = (c1 >> 8) & 0xFF, b1 = c1 & 0xFF;
+    uint8_t r2 = (c2 >> 16) & 0xFF, g2 = (c2 >> 8) & 0xFF, b2 = c2 & 0xFF;
+    uint8_t r = (uint8_t)(r1 + (r2 - r1) * t);
+    uint8_t g = (uint8_t)(g1 + (g2 - g1) * t);
+    uint8_t b = (uint8_t)(b1 + (b2 - b1) * t);
+    return ((uint32_t)r << 16) | ((uint32_t)g << 8) | b;
+}
+
+// Простой xorshift-ГПСЧ для «случайного» порядка палитры
+static uint32_t e7Rng = 0x9E3779B9;
+static void e7SeedRng() {
+    e7Rng = micros() ^ 0x9E3779B9;
+    if (e7Rng == 0) { e7Rng = 0x12345678; }
+}
+static uint32_t e7Rand() {
+    e7Rng ^= e7Rng << 13;
+    e7Rng ^= e7Rng >> 17;
+    e7Rng ^= e7Rng << 5;
+    return e7Rng;
+}
+static void e7ShuffleOrder(uint8_t* arr, int n) {
+    for (int i = n - 1; i > 0; i--) {
+        int j = (int)(e7Rand() % (uint32_t)(i + 1));
+        uint8_t t = arr[i]; arr[i] = arr[j]; arr[j] = t;
+    }
+}
+
+// Нормированная позиция (0..1) вдоль оси выбранного направления
+static float e7PosOnAxis(int x, int y, uint8_t dir) {
+    float fx = x / (float)(E7_WIDTH - 1);
+    float fy = y / (float)(E7_HEIGHT - 1);
+    switch (dir) {
+        case E7_FXDIR_TL: return (fx + fy) * 0.5f;
+        case E7_FXDIR_TR: return ((1.0f - fx) + fy) * 0.5f;
+        case E7_FXDIR_BL: return (fx + (1.0f - fy)) * 0.5f;
+        case E7_FXDIR_BR: return ((1.0f - fx) + (1.0f - fy)) * 0.5f;
+        case E7_FXDIR_TB: return fy;
+        case E7_FXDIR_BT: return 1.0f - fy;
+    }
+    return fy;
+}
+
+// Цвет пикселя (x,y) под текущим эффектом; phaseDeg — фаза анимации 0..360.
+// order — текущий порядок обхода палитры (только для плавной смены цвета).
+static uint32_t e7FxColor(const strE7RgbConfig& cfg, int x, int y, float phaseDeg, const uint8_t* order) {
+    switch (cfg.effect) {
+        case E7_EFFECT_RAINBOW: {
+            float t = e7PosOnAxis(x, y, cfg.effectDir);
+            float hue = fmodf(phaseDeg + t * 300.0f, 360.0f);
+            return e7HsvToRgb(hue, 1.0f, 1.0f);
+        }
+        case E7_EFFECT_GRAD_STATIC: {
+            float t = e7PosOnAxis(x, y, cfg.effectDir);
+            return e7LerpColor(cfg.digitsColor, cfg.digitsColor2, t);
+        }
+        case E7_EFFECT_GRAD_DYNAMIC: {
+            float t = e7PosOnAxis(x, y, cfg.effectDir);
+            float ph = fmodf(phaseDeg, 360.0f) / 360.0f;
+            float w = 0.5f - 0.5f * cosf(6.2831853f * (t - ph));
+            return e7LerpColor(cfg.digitsColor, cfg.digitsColor2, w);
+        }
+        case E7_EFFECT_COLORCYCLE:
+            // Плавная смена цвета: весь экран в одном плавно меняющемся цвете
+            if (cfg.cycleMode == E7_CYCLE_RAINBOW) {
+                return e7HsvToRgb(phaseDeg, 1.0f, 1.0f);
+            }
+            {
+                uint8_t n = (cfg.colorsCount < 1) ? 1 : (cfg.colorsCount > E7_FX_MAX_COLORS ? E7_FX_MAX_COLORS : cfg.colorsCount);
+                float segLen = 360.0f / (float)n;
+                int seg = (int)(phaseDeg / segLen);
+                if (seg >= n) { seg = n - 1; }
+                float frac = phaseDeg - (float)seg * segLen;
+                if (frac > segLen) { frac = segLen; }
+                float t = frac / segLen;
+                // плавный переход (сглаживание синусом)
+                t = 0.5f - 0.5f * cosf(3.14159265f * t);
+                int iFrom, iTo;
+                if (cfg.cycleMode == E7_CYCLE_RANDOM && order != NULL) {
+                    iFrom = order[seg];
+                    iTo = order[(seg + 1) % n];
+                } else {
+                    iFrom = seg;
+                    iTo = (seg + 1) % n;
+                }
+                return e7LerpColor(cfg.palette[iFrom], cfg.palette[iTo], t);
+            }
+        case E7_EFFECT_MONO:
+        default:
+            return cfg.digitsColor;
+    }
+}
+
+static bool e7FxAnimated(uint8_t effect) {
+    return (effect == E7_EFFECT_RAINBOW || effect == E7_EFFECT_GRAD_DYNAMIC ||
+            effect == E7_EFFECT_COLORCYCLE);
 }
 
 bool CLASS_DEVICE_E7RGB::loadFont() {
@@ -440,14 +655,45 @@ void CLASS_DEVICE_E7RGB::drawGlyphAt(uint8_t x0, const uint8_t* mask) {
     if (mask == NULL) { return; }
     // Маска хранится как [ряд][колонка] значениями 0/1 (см. e7rgb_font.h);
     // ряд 0 = верх глифа -> верх панели (y = E7_HEIGHT - 1).
+    // Цвет каждой lit-клетки определяется текущим спецэффектом.
     for (int r = 0; r < E7_GLYPH_H; r++) {
         for (int c = 0; c < E7_GLYPH_W; c++) {
             if (mask[r * E7_GLYPH_W + c]) {
-                _matrix.setPixel((int)x0 + c, (E7_HEIGHT - 1) - r,
-                                 _config.digitsColor, _config.brightness);
+                int px = (int)x0 + c;
+                int py = (E7_HEIGHT - 1) - r;
+                uint32_t color = e7FxColor(_config, px, py, _animPhase, _fxOrder);
+                _matrix.setPixel(px, py, color, _config.brightness);
             }
         }
     }
+}
+
+// ============================================================
+// Периодическая задача анимации эффектов (main-loop).
+// Двигает фазу и перерисовывает кадр для динамических эффектов
+// (радуга, динамический градиент). Show() безопасен: loop-контекст.
+// ============================================================
+void e7rgbAnimTask() {
+    CLASS_DEVICE_E7RGB& d = device_electronica7_rgb;
+
+    if (e7FxAnimated(d._config.effect)) {
+        float next = d._animPhase + (float)d._config.animSpeed;
+        if (next >= 360.0f) {
+            next -= 360.0f;
+            d._fxLap++;
+            // при «случайном» обходе палитры каждый круг — новый порядок
+            if (d._config.effect == E7_EFFECT_COLORCYCLE && d._config.cycleMode == E7_CYCLE_RANDOM) {
+                uint8_t n = d._config.colorsCount;
+                if (n < 1) { n = 1; }
+                if (n > E7_FX_MAX_COLORS) { n = E7_FX_MAX_COLORS; }
+                e7ShuffleOrder(d._fxOrder, n);
+            }
+        }
+        d._animPhase = next;
+        d.applyMode();
+    }
+
+    SetTimerTask(e7rgbAnimTask, E7RGB_ANIM_MS);
 }
 
 // ============================================================
