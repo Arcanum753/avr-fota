@@ -14,10 +14,10 @@ __pycache__/
 /web_debug/
 .version_hashes
 build_counter.txt
-.module_versions
-.module_hashes
 task_progress.md
-*version.h
+# Игнорируется только мажорный заголовок прошивки (генерируется при сборке);
+# заголовки версий модулей (*_version.h) отслеживаются в git
+/src/version.h
 /.kilo
 /example
 

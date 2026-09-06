@@ -1,4 +1,5 @@
 import os
+import re
 import sys
 import subprocess
 import datetime
@@ -20,9 +21,6 @@ CORE_PREFIX = "core_"                     # префикс ядерных мод
 MODULE_PREFIX = "module_"                 # префикс модулей
 SUBMODULE_PREFIX = "submodule_"           # префикс субмодулей
 DEVICE_PREFIX = "device_"                 # префикс девайс-модулей
-
-# ========== ФАЙЛЫ СЧЁТЧИКОВ ==========
-VERSION_STORAGE_FILE = ".module_versions"  # файл для хранения версий модулей
 
 # ========== ФОРМАТ ВЫВОДА ==========
 SHOW_INFO = True                          # показывать информацию в консоль
@@ -93,6 +91,36 @@ def get_folder_hash(project_dir, folder_path):
     return None
 
 
+def get_folder_code_hash(project_dir, folder_rel, header_filename):
+    """
+    Хэш последнего коммита, затрагивающего КОД папки компонента.
+
+    Файл собственного заголовка версии (*_version.h) исключается из pathspec,
+    поэтому коммит, меняющий только этот заголовок, НЕ вызывает приращение версии.
+    """
+    cwd, git_path = _git_cwd_and_path(project_dir, folder_rel)
+
+    if git_path == ".":
+        paths = [".", f":(exclude){header_filename}"]
+    else:
+        paths = [git_path, f":(exclude){git_path}/{header_filename}"]
+
+    try:
+        result = subprocess.run(
+            ["git", "log", "-1", "--format=%H", "--"] + paths,
+            cwd=cwd,
+            capture_output=True,
+            text=True,
+            check=False
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            return result.stdout.strip()
+    except Exception as e:
+        debug_print(f"Git code-hash error for {folder_rel}: {e}")
+
+    return None
+
+
 def get_commit_date(project_dir, folder_path, str_format=False):
     """Возвращает дату последнего коммита для указанной папки.
     Если str_format=True, возвращает в формате yyyy.mm.dd hh.mm.
@@ -124,46 +152,38 @@ def get_commit_date(project_dir, folder_path, str_format=False):
 
     return None
 
-def read_module_versions(project_dir):
-    """
-    Читает сохранённые версии модулей из файла.
-    """
-    version_file = project_dir / VERSION_STORAGE_FILE
-    versions = {}
-    
-    if version_file.exists():
-        try:
-            with open(version_file, 'r') as f:
-                for line in f:
-                    line = line.strip()
-                    if '=' in line:
-                        module, version = line.split('=', 1)
-                        versions[module] = int(version)
-            debug_print(f"Read versions for {len(versions)} modules")
-        except Exception as e:
-            debug_print(f"Error reading version file: {e}")
-    
-    return versions
 
-def write_module_versions(project_dir, versions):
+def read_existing_header(version_file: Path, macro_prefix: str):
     """
-    Записывает версии модулей в файл.
+    Читает из существующего *_version.h пару (version, code_hash).
+
+    Закоммиченный заголовок — источник правды: версия не сбрасывается в свежем
+    клоне, а приращение происходит только при изменении code-hash папки.
     """
-    version_file = project_dir / VERSION_STORAGE_FILE
     try:
-        with open(version_file, 'w') as f:
-            for module, version in sorted(versions.items()):
-                f.write(f"{module}={version}\n")
-        debug_print(f"Written versions for {len(versions)} modules")
-    except Exception as e:
-        debug_print(f"Error writing version file: {e}")
+        text = version_file.read_text(encoding='utf-8')
+    except OSError:
+        return None, None
 
-def generate_module_header(module_name, version, commit_date, commit_date_str, env_name):
+    version = None
+    m = re.search(rf"#define\s+{macro_prefix}_VERSION\s+(\d+)", text)
+    if m:
+        version = int(m.group(1))
+
+    code_hash = None
+    m = re.search(rf"#define\s+{macro_prefix}_COMMIT_HASH\s+\"([0-9a-fA-F]{{6,40}})\"", text)
+    if m:
+        code_hash = m.group(1)
+
+    return version, code_hash
+
+
+def generate_module_header(module_name, version, commit_date, commit_date_str, env_name, code_hash):
     """
     Генерирует содержимое заголовочного файла для модуля.
     """
     now = datetime.datetime.now()
-    
+
     # Разбираем дату для отдельных компонентов (из стандартного формата)
     if commit_date:
         try:
@@ -186,11 +206,11 @@ def generate_module_header(module_name, version, commit_date, commit_date_str, e
         commit_hour = 0
         commit_minute = 0
         commit_date_str = "1970.01.01 00.00"
-    
+
     # Имя файла: module_name_version.h (например, core_ntp_version.h)
     macro_prefix = module_name.upper().replace('-', '_').replace('.', '_')
     guard_name = f"{macro_prefix}_VERSION_H"
-    
+
     content = f'''// Auto-generated version file for module: {module_name}
 // Generated: {now.strftime('%Y-%m-%d %H:%M')}
 // Environment: {env_name}
@@ -207,6 +227,9 @@ def generate_module_header(module_name, version, commit_date, commit_date_str, e
 
 // Строковая версия
 #define {macro_prefix}_VERSION_STR "{version}"
+
+// Хэш последнего обработанного коммита кода (без учёта *_version.h)
+#define {macro_prefix}_COMMIT_HASH "{code_hash}"
 
 // ============================================================
 // ДАТА ПОСЛЕДНЕГО ИЗМЕНЕНИЯ
@@ -235,6 +258,7 @@ def generate_module_header(module_name, version, commit_date, commit_date_str, e
 #endif // {guard_name}
 '''
     return content
+
 
 # ============================================================
 # ОСНОВНАЯ ФУНКЦИЯ
@@ -282,112 +306,80 @@ def discover_module_dirs(src_dir: Path) -> List[Path]:
 
 def generate_module_versions():
     """
-    Генерирует файлы версий для всех core_* и module_* папок.
-    Отслеживает изменения по хэшам и инкрементирует счётчики.
+    Генерирует файлы версий для всех core_* и module_*/device_* папок.
+
+    Источник правды — закоммиченный *_version.h в репозитории компонента:
+    - заголовок отсутствует      -> создаётся база с версией 0;
+    - code-hash папки изменился  -> версия = предыдущая + 1 (файл переписывается);
+    - code-hash не изменился     -> файл не трогается (идемпотентно, git чистый).
+
+    code-hash считается по git-коммитам папки БЕЗ учёта её собственного *_version.h,
+    поэтому коммит одного лишь заголовка не даёт приращения версии.
     """
-    
+
     env_name = env.subst("$PIOENV")
     project_dir = Path(env.subst("$PROJECT_DIR"))
     src_dir = project_dir / SRC_FOLDER
-    
+
     info_print(f"\n{'='*60}")
     info_print(f"MODULE VERSION GENERATOR for: {env_name}")
     info_print(f"{'='*60}")
-    
+
     if not src_dir.exists():
         info_print(f"ERROR: Source directory not found: {src_dir}")
         return
-    
+
     # Собираем папки компонентов (в т.ч. вложенные в контейнерные папки)
     modules = discover_module_dirs(src_dir)
-    
+
     if not modules:
         info_print("No core_* or module_* folders found")
         return
-    
+
     info_print(f"Found {len(modules)} modules to process")
     info_print("-" * 60)
-    
-    # Читаем сохранённые версии
-    stored_versions = read_module_versions(project_dir)
-    current_versions = {}
+
     generated_count = 0
-    
+
     for module_path in modules:
         module_name = module_path.name
         module_rel = module_path.relative_to(project_dir).as_posix()   # напр. src/module_program/submodule_swd
         version_file = module_path / f"{module_name}_version.h"
-        
+        macro_prefix = module_name.upper().replace('-', '_').replace('.', '_')
+        header_filename = f"{module_name}_version.h"
+
         info_print(f"Processing: {module_name}")
-        
-        # Получаем текущий хэш папки
-        current_hash = get_folder_hash(project_dir, module_rel)
-        
-        # Получаем сохранённый хэш и версию
-        stored_key = f"{module_name}_hash"
-        stored_version = stored_versions.get(module_rel, 0)
-        
-        # Проверяем, изменился ли хэш
-        hash_file = project_dir / ".module_hashes"
-        stored_hash = None
-        if hash_file.exists():
-            try:
-                with open(hash_file, 'r') as f:
-                    for line in f:
-                        if line.startswith(f"{module_rel}="):
-                            stored_hash = line.strip().split('=')[1]
-                            break
-            except:
-                pass
-        
-        # Если хэш изменился или нет сохранённого, инкрементируем версию
-        new_version = stored_version
-        if current_hash and (stored_hash != current_hash):
-            new_version = stored_version + 1
-            info_print(f"  Module changed: version {stored_version} -> {new_version}")
-            
-            # Сохраняем новый хэш
-            hashes = {}
-            if hash_file.exists():
-                try:
-                    with open(hash_file, 'r') as f:
-                        for line in f:
-                            if '=' in line:
-                                k, v = line.strip().split('=', 1)
-                                hashes[k] = v
-                except:
-                    pass
-            
-            hashes[module_rel] = current_hash
-            try:
-                with open(hash_file, 'w') as f:
-                    for k, v in hashes.items():
-                        f.write(f"{k}={v}\n")
-            except Exception as e:
-                debug_print(f"Error writing hash file: {e}")
+
+        old_version = None
+        old_code_hash = None
+        if version_file.exists():
+            old_version, old_code_hash = read_existing_header(version_file, macro_prefix)
+
+        # Хэш последнего коммита, меняющего код модуля (без учёта собственного *_version.h)
+        code_hash = get_folder_code_hash(project_dir, module_rel, header_filename)
+
+        changed = bool(code_hash) and code_hash != old_code_hash
+
+        if version_file.exists() and not changed:
+            info_print(f"  Module unchanged: version {old_version}")
+            info_print("-" * 40)
+            continue    # файл не перезаписываем — закоммиченный заголовок остаётся стабильным
+
+        # Заголовка нет (база) либо был реальный коммит кода -> bump
+        if old_version is None:
+            new_version = 0
         else:
-            new_version = stored_version
-            info_print(f"  Module unchanged: version {stored_version}")
-        
-        current_versions[module_rel] = new_version
-        
-        # Получаем дату последнего коммита в двух форматах
+            new_version = old_version + 1
+        info_print(f"  Module changed: version {old_version if old_version is not None else 'new'} -> {new_version}")
+
         commit_date = get_commit_date(project_dir, module_rel, str_format=False)  # для парсинга
         commit_date_str = get_commit_date(project_dir, module_rel, str_format=True)  # для строки
-        
         if not commit_date_str:
             commit_date_str = "1970.01.01 00.00"
-        
-        # Генерируем содержимое файла
-        content = generate_module_header(
-            module_name,
-            new_version,
-            commit_date,
-            commit_date_str,
-            env_name
-        )
-        
-        # Записываем файл
+
+        content = generate_module_header(module_name, new_version, commit_date,
+                                         commit_date_str, env_name, code_hash)
+
         try:
             version_file.write_text(content, encoding='utf-8')
             info_print(f"  Generated: {version_file.relative_to(project_dir)}")
@@ -396,12 +388,9 @@ def generate_module_versions():
             generated_count += 1
         except Exception as e:
             info_print(f"  ERROR writing file: {e}")
-        
+
         info_print("-" * 40)
-    
-    # Сохраняем обновлённые версии
-    write_module_versions(project_dir, current_versions)
-    
+
     info_print(f"\nGenerated {generated_count} module version files")
     info_print(f"{'='*60}\n")
 
