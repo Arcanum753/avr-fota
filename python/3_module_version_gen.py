@@ -95,15 +95,17 @@ def get_folder_code_hash(project_dir, folder_rel, header_filename):
     """
     Хэш последнего коммита, затрагивающего КОД папки компонента.
 
-    Файл собственного заголовка версии (*_version.h) исключается из pathspec,
-    поэтому коммит, меняющий только этот заголовок, НЕ вызывает приращение версии.
+    Файл собственного заголовка версии (*_version.h) и .gitignore исключаются
+    из pathspec, поэтому коммиты, меняющие только их, НЕ вызывают приращение версии.
     """
     cwd, git_path = _git_cwd_and_path(project_dir, folder_rel)
 
     if git_path == ".":
-        paths = [".", f":(exclude){header_filename}"]
+        paths = [".", f":(exclude){header_filename}", ":(exclude).gitignore"]
     else:
-        paths = [git_path, f":(exclude){git_path}/{header_filename}"]
+        paths = [git_path,
+                 f":(exclude){git_path}/{header_filename}",
+                 f":(exclude){git_path}/.gitignore"]
 
     try:
         result = subprocess.run(
