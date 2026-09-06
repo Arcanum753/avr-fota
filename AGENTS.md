@@ -38,6 +38,29 @@ glob-масками `src/*/*.ini` и `src/*/*/*.ini` в `[platformio] extra_conf
 Репозиторий ядра игнорирует внешние папки через `.gitignore` (`/src/module_*/`, `/src/device_*/`,
 `!/src/module_template/`).
 
+**Репозитории (под аккаунтом `Arcanum753`, ветка `main`):**
+
+| Репозиторий | Папка в `src/` | Содержимое |
+|-------------|----------------|------------|
+| `avr-fota` | — (ядро) | этот репозиторий: core_*, common, core_sys, core_web, python/, targets/, `module_template` |
+| `module_program` | `src/module_program/` | контейнер программатора: `module_prog/` + `submodule_isp/` + `submodule_swd/` |
+| `module_udp` | `src/module_udp/` | UDP broadcast |
+| `module_ds3231` | `src/module_ds3231/` | часы реального времени DS3231 |
+| `module_gpio` | `src/module_gpio/` | GPIO через web |
+| `module_lcd-i2c` | `src/module_lcd-i2c/` | LCD I2C |
+| `module_macros` | `src/module_macros/` | макросы/сценарии |
+| `module_otaclient` | `src/module_otaclient/` | OTA-клиент |
+| `module_rgb` | `src/module_rgb/` | RGB-матрица (WS2812) |
+| `module_i2c-mapper` | `src/module_i2c-mapper/` | I2C-сканер |
+| `device_clock-mech` | `src/device_clock-mech/` | часы механические |
+| `device_mech-ring` | `src/device_mech-ring/` | часы механические с боем |
+| `device_electronica7_rgb` | `src/device_electronica7_rgb/` | часы Электроника-7 RGB |
+
+**Локальная разработка:** в рабочей копии ядра все 12 компонентов клонированы в `src/` (у каждого
+своя `.git`, ветка `main`). Ядро их игнорирует. Коммиты/пуши выполняются отдельно в каждой папке;
+правки «всё сразу» — как обычные изменения файлов в одном окне VS Code. `module_template` — часть
+ядра (не клон).
+
 ### Core modules (always compiled)
 
 | Module | Directory | Purpose |
@@ -58,10 +81,25 @@ glob-масками `src/*/*.ini` и `src/*/*/*.ini` в `[platformio] extra_conf
 | `module_program` (репо) | `-D PROGTYPE_SWD` | SWD programmer (STM32 F1/F4): `src/module_program/module_prog` + `.../submodule_swd` |
 | `module_gpio` | `-D MODULE_GPIO` | GPIO control via web |
 | `module_lcd-i2c` | `-D MODULE_LCD_I2C` | LCD I2C display control (LiquidCrystal_I2C, маски date/time, backlight) |
+| `module_ds3231` | `-D MODULE_DS3231` | Часы реального времени DS3231 |
+| `module_macros` | `-D MODULE_MACROS` | Макросы/сценарии |
+| `module_rgb` | `-D MODULE_RGB` | RGB-матрица (NeoPixelBus/WS2812) |
 | `module_udp` | `-D MODULE_UDP` | UDP broadcast for device discovery |
 | `module_otaclient` | `-D MODULE_OTACLIENT=1` | OTA client (auto-update from remote server) |
-| `module_template` | `-D MODULE_TEMPLATE` | Шаблон модуля — основа для создания новых модулей |
+| `module_template` | `-D MODULE_TEMPLATE` | Шаблон модуля — основа для создания новых модулей (в ядре) |
 | `module_i2c-mapper` | `-D MODULE_I2C_MAPPER` | I2C bus scanner (web interface, Wire0) |
+
+### Devices (device_*) — отдельные репозитории, клонируются в `src/device_*`
+
+| Device | Env-примеры | Назначение |
+|--------|-------------|------------|
+| `device_clock-mech` | `esp32_clock-mech` | Механические часы |
+| `device_mech-ring` | `esp32_clock-mech_ring` | Механические часы с боем |
+| `device_electronica7_rgb` | `esp32_electronica7_rgb` | Часы «Электроника-7» RGB (матрица) |
+
+Устройства описывают «рецепт» сборки: их `.ini` в `src_filter` перечисляют нужные модули
+(например `device_mech-ring.ini` подтягивает `module_udp`, `module_ds3231`, `module_otaclient`).
+Для сборки устройства должны быть склонированы и само устройство, и все указанные модули.
 
 ### module_template — шаблон нового модуля
 
@@ -207,7 +245,7 @@ loop = 0       # есть loop() — вызывается в *_loop
 - `loop` — 1 если у модуля есть `loop()`. Для `device_*` вызывается в `dev_loop()`, для остальных — в `modules_loop()`.
 
 Особые случаи:
-- `module_otaclient` (`module_otaclient`) при активном `-D MODULE_OTACLIENT` включаются/istр в **core**-группах
+- `module_otaclient` (`module_otaclient`) при активном `-D MODULE_OTACLIENT` включается в **core**-группах
   (begin/web/loop) вместе с базовым OTA, а не в modules-группах.
 - `module_udp` (`module_udp`) — `begin()` вызывается из `core_wifi` при подключении, поэтому
   `begin` в registry не дублируется; регистрируется только `web_Init()`.
@@ -217,8 +255,10 @@ loop = 0       # есть loop() — вызывается в *_loop
 - `core_led` вне контракта — инициализируется вручную в `main.cpp` (`ledInit()`).
 
 **ВАЖНОЕ ОГРАНИЧЕНИЕ:** `src/modules_registry.cpp` сгенерирован под ОДИН env и не содержит
-`#if defined(...)`. При сборке другого env или при смене набора модулей необходимо
-**перезапустить генератор** с новым `--env`, иначе линковка упадёт.
+`#if defined(...)`. Файл НЕ хранится в git (добавлен в `.gitignore`): pre-скрипт
+`1_registry_pre_build.py` перегенерирует его при каждой сборке под выбранный env, поэтому
+при смене env/набора модулей достаточно просто собрать заново. Ручной запуск
+`python/module_registry_gen.py --env <env>` нужен только вне сборки.
 
 Source files are filtered by `src_filter` in `platformio.ini`:
 ```ini
@@ -326,18 +366,19 @@ Module versions: independent numeric version per module, incremented when module
 
 ### CI/CD
 
-GitHub Actions (`.github/workflows/platformio_ci.yml`):
-- Triggers: push/PR to main/master/dev
-- Matrix builds across 6 targets
-- Caches PlatformIO dependencies
-- Uploads build logs on failure
+Планируется: GitHub Actions workflow (например `.github/workflows/platformio_ci.yml`), который
+для заданного набора компонентов (ядро + модули/устройства по списку) клонирует их, собирает env
+и публикует артефакты. В ядре `.github/` пока отсутствует; у компонентов CI может быть свой.
 
 ### Version files
+
+Всё ниже — генерируемые файлы, **не хранятся в git** (правила `.gitignore` ядра; у компонентов
+`*_version.h` игнорируются их собственным `.gitignore`):
 
 - `version_counter.txt` — MAJOR (line 1), MINOR (line 2)
 - `build_counter.txt` — BUILD number
 - `.last_commit_hash` — tracked by `2_version_builder.py`
-- `.module_versions` — current module version numbers
+- `.module_versions` — current module version numbers (ключи — rel-путь от src/ для вложенных)
 - `.module_hashes` — content hashes per module (for change detection)
 - `src/version.h` — auto-generated C header with all version macros + git info
 - `src/*_version.h` — per-module version headers (e.g., `core_wifi_version.h`)
@@ -384,8 +425,8 @@ avr-fota/
 │   │   └── web/             # Device main page: index.html, GetJson.js, GetMarkup.js,
 │   │                        #   style.css, page_head.html, page_bottom.html, esp.gif, logo.gif, favicon.ico
 │   ├── ESPAsyncWebServer.h  # Library fork (in src root so -Isrc overrides libdeps)
-│   ├── modules_registry.h/cpp # Generated module registry (begin/web_Init/loop)
-│   ├── version.h            # Auto-generated version header
+│   ├── modules_registry.h/cpp # Generated per env (не в git, пересоздаются pre-скриптом сборки)
+│   ├── version.h            # Auto-generated version header (не в git)
 │   ├── core_wifi/           # Wi-Fi core module
 │   ├── core_ntp/            # NTP core module
 │   ├── core_ota/            # OTA core module
@@ -393,11 +434,10 @@ avr-fota/
 │   ├── core_json/           # JSON utilities core module
 │   ├── core_led/            # LED indication core module
 │   ├── core_terminal/       # Serial terminal core module
-│   ├── module_template/     # Шаблон модуля (эталон для создания новых, остаётся в ядре)
-│   └── <module_*|submodule_*|device_*>/
-│                           # Внешние компоненты: отдельные git-репозитории,
-│                           # клонируются в src/<имя> (вне учёта ядра, см. .gitignore).
-│                           # Программатор: src/module_program/{module_prog,submodule_isp,submodule_swd}.
+│   ├── module_template/     # Шаблон модуля (эталон для создания новых; остаётся в ядре, не клон)
+│   └── module_*/device_*/   # Клоны внешних репозиториев (в dev-копии лежат все 12), каждый со
+│                           # своей .git; вне учёта ядра (см. .gitignore). Программатор:
+│                           # src/module_program/{module_prog,submodule_isp,submodule_swd}.
 │   └── *version.h           # Auto-generated per-module version headers (игнорируются)
 ├── targets/                 # PlatformIO target configs
 │   ├── targets_example.ini  # Example target definitions
@@ -408,7 +448,6 @@ avr-fota/
 ├── partitions.csv           # ESP32 partition table
 ├── platformio.ini           # PlatformIO project config
 ├── library.json             # Library metadata
-├── .github/workflows/       # CI/CD configs
 └── AGENTS.md                # This file
 ```
 
