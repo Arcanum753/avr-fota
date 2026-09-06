@@ -167,7 +167,7 @@ def safe_copy_file(src: Path, dst: Path, retry_count: int = FILE_COPY_RETRY_COUN
 def parse_src_filter(src_filter: str) -> Dict[str, str]:
     """Возвращает {имя_компонента: rel_путь_папки_от src}.
 
-    Компонент может лежать вложенно (напр. +<module_programm/submodule_swd/>):
+    Компонент может лежать вложенно (напр. +<module_program/submodule_swd/>):
     последний сегмент токена — имя, предыдущие — контейнерный путь внутри src/.
     """
     if not src_filter:

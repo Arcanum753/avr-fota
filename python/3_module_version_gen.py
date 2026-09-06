@@ -52,7 +52,7 @@ def _git_cwd_and_path(project_dir, folder_path):
     (есть .git) — команда выполняется из этого корня с относительным путём.
     Иначе папка принадлежит репозиторию проекта (ядру).
     folder_path может быть абсолютным или относительным от project_dir
-    (например "src/module_programm/submodule_swd").
+    (например "src/module_program/submodule_swd").
     """
     folder = Path(folder_path)
     if not folder.is_absolute():
@@ -258,8 +258,8 @@ def discover_module_dirs(src_dir: Path) -> List[Path]:
     - Папки верхнего уровня src/ с префиксами core_/module_/submodule_/device_, в корне
       которых есть код (это сами компоненты).
     - Если папка с префиксом не содержит кода в корне — это контейнер (например
-      src/module_programm/), тогда компонентами считаются её вложенные папки с теми же
-      префиксами (src/module_programm/module_prog, .../submodule_isp, ...).
+      src/module_program/), тогда компонентами считаются её вложенные папки с теми же
+      префиксами (src/module_program/module_prog, .../submodule_isp, ...).
     """
     found: List[Path] = []
     prefixes = (CORE_PREFIX, MODULE_PREFIX, SUBMODULE_PREFIX, DEVICE_PREFIX)
@@ -315,7 +315,7 @@ def generate_module_versions():
     
     for module_path in modules:
         module_name = module_path.name
-        module_rel = module_path.relative_to(project_dir).as_posix()   # напр. src/module_programm/submodule_swd
+        module_rel = module_path.relative_to(project_dir).as_posix()   # напр. src/module_program/submodule_swd
         version_file = module_path / f"{module_name}_version.h"
         
         info_print(f"Processing: {module_name}")

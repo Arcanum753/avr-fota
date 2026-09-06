@@ -167,7 +167,7 @@ def parse_src_filter(src_filter: str) -> List[Tuple[str, str]]:
     """Возвращает список (имя_компонента, rel_путь_папки_от src).
 
     Компонент — папка с префиксом module_/submodule_/device_. Путь может быть
-    вложенным (например +<module_programm/submodule_swd/>): последний сегмент
+    вложенным (например +<module_program/submodule_swd/>): последний сегмент
     токена — имя компонента, предыдущие — контейнерный путь внутри src/.
     """
     components = set()
@@ -181,7 +181,7 @@ def parse_src_filter(src_filter: str) -> List[Tuple[str, str]]:
                      or name.startswith(DEVICE_PREFIX))
         if not prefix_ok:
             continue
-        rel_dir = "/".join(parts)   # напр. "module_udp" или "module_programm/submodule_swd"
+        rel_dir = "/".join(parts)   # напр. "module_udp" или "module_program/submodule_swd"
         components.add((name, rel_dir))
     return sorted(components)
 
@@ -191,7 +191,7 @@ def read_registry_ini(project_dir: Path, module_name: str,
     """Читает секцию [registry] из src/<rel_dir>/<module_name>.ini.
 
     rel_dir — папка компонента от src/ (может быть вложенной, напр.
-    "module_programm/submodule_swd"); если не задана, используется module_name.
+    "module_program/submodule_swd"); если не задана, используется module_name.
     """
     rel = rel_dir or module_name
     ini = project_dir / SRC_FOLDER / rel / f"{module_name}.ini"
