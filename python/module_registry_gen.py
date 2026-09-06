@@ -24,12 +24,13 @@
 
 import argparse
 import configparser
+import glob
 import json
 import os
 import re
 import sys
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 PLATFORMIO_INI = "platformio.ini"
 SRC_FOLDER = "src"
@@ -80,9 +81,16 @@ def load_ini_files(project_dir: Path) -> "configparser.ConfigParser":
                 p = Path(line)
                 if not p.is_absolute():
                     p = project_dir / p
-                p = p.resolve()
-                if p.exists() and p not in to_read:
-                    to_read.append(p)
+                # Поддержка glob-масок в extra_configs (напр. src/*/*.ini, src/*/*/*.ini).
+                if any(ch in line for ch in "*?["):
+                    for match in sorted(glob.glob(str(p))):
+                        m = Path(match).resolve()
+                        if m.exists() and m not in to_read:
+                            to_read.append(m)
+                else:
+                    p = p.resolve()
+                    if p.exists() and p not in to_read:
+                        to_read.append(p)
 
     for f in to_read:
         try:
@@ -155,18 +163,38 @@ def get_all_env_names(cp: "configparser.ConfigParser") -> List[str]:
     return envs
 
 
-def parse_src_filter(src_filter: str) -> List[str]:
-    """Извлекает включённые модули из src_filter по +<префикс>имя/>."""
-    modules = set()
-    for prefix in (MODULE_PREFIX, SUBMODULE_PREFIX, DEVICE_PREFIX):
-        for m in re.findall(r"\+<" + prefix + r"([^>/]+)", src_filter):
-            modules.add(f"{prefix}{m}")
-    return sorted(modules)
+def parse_src_filter(src_filter: str) -> List[Tuple[str, str]]:
+    """Возвращает список (имя_компонента, rel_путь_папки_от src).
+
+    Компонент — папка с префиксом module_/submodule_/device_. Путь может быть
+    вложенным (например +<module_programm/submodule_swd/>): последний сегмент
+    токена — имя компонента, предыдущие — контейнерный путь внутри src/.
+    """
+    components = set()
+    for token in re.findall(r"\+<([^>]+)>", src_filter or ""):
+        parts = [s for s in token.split("/") if s]
+        if not parts:
+            continue
+        name = parts[-1]
+        prefix_ok = (name.startswith(MODULE_PREFIX)
+                     or name.startswith(SUBMODULE_PREFIX)
+                     or name.startswith(DEVICE_PREFIX))
+        if not prefix_ok:
+            continue
+        rel_dir = "/".join(parts)   # напр. "module_udp" или "module_programm/submodule_swd"
+        components.add((name, rel_dir))
+    return sorted(components)
 
 
-def read_registry_ini(project_dir: Path, module_name: str) -> Optional[Dict[str, str]]:
-    """Читает секцию [registry] из src/<module>/<module>.ini."""
-    ini = project_dir / SRC_FOLDER / module_name / f"{module_name}.ini"
+def read_registry_ini(project_dir: Path, module_name: str,
+                      rel_dir: Optional[str] = None) -> Optional[Dict[str, str]]:
+    """Читает секцию [registry] из src/<rel_dir>/<module_name>.ini.
+
+    rel_dir — папка компонента от src/ (может быть вложенной, напр.
+    "module_programm/submodule_swd"); если не задана, используется module_name.
+    """
+    rel = rel_dir or module_name
+    ini = project_dir / SRC_FOLDER / rel / f"{module_name}.ini"
     if not ini.exists():
         return None
     cp = configparser.ConfigParser(interpolation=None, delimiters=("=",))
@@ -416,13 +444,13 @@ def main():
     dev_loop: List[str] = []
     seen_includes = set(includes)
 
-    for mod in included:
-        ini_path = project_dir / SRC_FOLDER / mod / f"{mod}.ini"
+    for mod, rel_dir in included:
+        ini_path = project_dir / SRC_FOLDER / rel_dir / f"{mod}.ini"
         if not ini_path.exists():
             # Могут быть модули без ini (например module_prog) — у них нет [registry], пропускаем.
             log_warning(f"Module {mod}: {ini_path} not found — skipping")
             continue
-        reg = read_registry_ini(project_dir, mod)
+        reg = read_registry_ini(project_dir, mod, rel_dir)
         if reg is None:
             log_warning(f"Module {mod}: [registry] section not found — skipping")
             continue
@@ -433,7 +461,7 @@ def main():
         web_flag = reg.get("web", "0").strip() == "1"
         loop_flag = reg.get("loop", "0").strip() == "1"
 
-        hdr = f'"{mod}/{mod}.h"'
+        hdr = f'"{rel_dir}/{mod}.h"'
         if hdr not in seen_includes:
             seen_includes.add(hdr)
             includes.append(hdr)

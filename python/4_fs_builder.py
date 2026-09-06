@@ -164,33 +164,36 @@ def safe_copy_file(src: Path, dst: Path, retry_count: int = FILE_COPY_RETRY_COUN
             return False
     return False
 
-def parse_src_filter(src_filter: str) -> List[str]:
+def parse_src_filter(src_filter: str) -> Dict[str, str]:
+    """Возвращает {имя_компонента: rel_путь_папки_от src}.
+
+    Компонент может лежать вложенно (напр. +<module_programm/submodule_swd/>):
+    последний сегмент токена — имя, предыдущие — контейнерный путь внутри src/.
+    """
     if not src_filter:
-        return []
-    
-    modules: Set[str] = set()
-    
-    prefixes = [MODULE_PREFIX, SUBMODULE_PREFIX, DEVICE_PREFIX]
-    
-    pattern_prefix_pairs = []
-    for prefix in prefixes:
-        pattern_prefix_pairs.append((r'\+<' + prefix + r'([^>/]+)', prefix))
-        pattern_prefix_pairs.append((r'\+' + prefix + r'([^/\s]+)', prefix))
-    
-    for pattern, prefix in pattern_prefix_pairs:
-        matches = re.findall(pattern, src_filter)
-        for match in matches:
-            module_name = f"{prefix}{match}"
-            if validate_module_name(module_name):
-                modules.add(module_name)
-    
-    result = sorted(list(modules))
-    
+        return {}
+
+    modules: Dict[str, str] = {}
+
+    for token in re.findall(r'\+<([^>]+)>', src_filter):
+        parts = [s for s in token.split('/') if s]
+        if not parts:
+            continue
+        name = parts[-1]
+        if not (name.startswith(MODULE_PREFIX) or name.startswith(SUBMODULE_PREFIX)
+                or name.startswith(DEVICE_PREFIX)):
+            continue
+        rel_dir = '/'.join(parts)
+        if validate_module_name(name):
+            modules[name] = rel_dir
+
+    result = dict(sorted(modules.items()))
+
     if result:
         log_info(f"Found included modules from src_filter: {', '.join(result)}")
     else:
         log_debug("No module_* patterns found in src_filter")
-    
+
     return result
 
 def get_core_modules_with_web(src_dir: Path) -> List[str]:
@@ -738,13 +741,14 @@ def prepare_fs_image() -> Optional[Path]:
     
     # 6. Добавляем core_* модули с web
     core_modules = get_core_modules_with_web(src_dir)
+    module_dirs = dict(included_modules)
     all_web_modules = []
     
     for module in included_modules:
-        if module not in all_web_modules:
-            all_web_modules.append(module)
+        all_web_modules.append(module)
     
     for module in core_modules:
+        module_dirs[module] = module
         if module not in all_web_modules:
             all_web_modules.append(module)
     
@@ -760,7 +764,8 @@ def prepare_fs_image() -> Optional[Path]:
             log_error(f"Skipping invalid module name: {module_name}")
             continue
         
-        module_web = src_dir / module_name / WEB_FOLDER_NAME
+        module_rel = module_dirs.get(module_name, module_name)
+        module_web = src_dir / module_rel / WEB_FOLDER_NAME
         if not module_web.exists():
             log_debug(f"Module {module_name} has no web folder")
             continue
@@ -816,17 +821,19 @@ def prepare_fs_image() -> Optional[Path]:
     # 8. Генерируем динамический page_head.html на основе включённых модулей
     if _HAS_PAGE_HEAD_GEN:
         try:
-            # Используем module_* и submodule_* имена (не core_*) для правой колонки меню
+            # Используем module_* и submodule_* имена (не core_*) для правой колонки меню.
+            # В gen_page_head передаём rel-пути папок (вложенные компоненты тоже работают).
             module_only_names = [m for m in all_web_modules 
                                  if m.startswith(MODULE_PREFIX) or m.startswith(SUBMODULE_PREFIX) or m.startswith(DEVICE_PREFIX)]
+            module_only_dirs = [module_dirs.get(m, m) for m in module_only_names]
             
-            page_head_html = generate_page_head(module_only_names, src_dir=str(src_dir))
+            page_head_html = generate_page_head(module_only_dirs, src_dir=str(src_dir))
             page_head_path = target_web_dir / "page_head.html"
             
             with open(page_head_path, 'w', encoding='utf-8') as f:
                 f.write(page_head_html)
             
-            log_info(f"Generated dynamic page_head.html for modules: {module_only_names}")
+            log_info(f"Generated dynamic page_head.html for modules: {module_only_dirs}")
         except Exception as e:
             log_warning(f"Failed to generate page_head.html: {e}")
             log_warning("Using static page_head.html from data/ folder")

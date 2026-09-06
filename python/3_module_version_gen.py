@@ -4,6 +4,7 @@ import subprocess
 import datetime
 import hashlib
 from pathlib import Path
+from typing import List
 Import("env")
 
 # ============================================================
@@ -43,15 +44,43 @@ def info_print(*args, **kwargs):
     if SHOW_INFO:
         print(*args, **kwargs)
 
+def _git_cwd_and_path(project_dir, folder_path):
+    """
+    Возвращает (cwd, git_path) для git log по папке компонента.
+
+    Если папка (или её предок) является корнем собственного git-репозитория
+    (есть .git) — команда выполняется из этого корня с относительным путём.
+    Иначе папка принадлежит репозиторию проекта (ядру).
+    folder_path может быть абсолютным или относительным от project_dir
+    (например "src/module_programm/submodule_swd").
+    """
+    folder = Path(folder_path)
+    if not folder.is_absolute():
+        folder = project_dir / folder
+    target = folder.resolve()
+
+    probe = target
+    while True:
+        if (probe / ".git").exists():
+            rel = os.path.relpath(str(target), str(probe)).replace("\\", "/")
+            return str(probe), rel
+        if probe.parent == probe:
+            break
+        probe = probe.parent
+
+    if not Path(folder_path).is_absolute():
+        return str(project_dir), folder_path.replace("\\", "/")
+    rel = os.path.relpath(str(target), str(project_dir.resolve())).replace("\\", "/")
+    return str(project_dir), rel
+
+
 def get_folder_hash(project_dir, folder_path):
-    """
-    Вычисляет хэш содержимого папки на основе Git.
-    Возвращает хэш последнего коммита для папки.
-    """
+    """Возвращает хэш последнего коммита для папки."""
     try:
+        cwd, git_path = _git_cwd_and_path(project_dir, folder_path)
         result = subprocess.run(
-            ["git", "log", "-1", "--format=%H", folder_path],
-            cwd=str(project_dir),
+            ["git", "log", "-1", "--format=%H", git_path],
+            cwd=cwd,
             capture_output=True,
             text=True,
             check=False
@@ -60,21 +89,20 @@ def get_folder_hash(project_dir, folder_path):
             return result.stdout.strip()
     except Exception as e:
         debug_print(f"Git error for {folder_path}: {e}")
-    
+
     return None
 
+
 def get_commit_date(project_dir, folder_path, str_format=False):
-    """
-    Возвращает дату последнего коммита для указанной папки.
-    Если str_format=True, возвращает в формате yyyy.mm.dd hh.mm
-    Иначе возвращает в формате YYYY-MM-DD HH:MM для парсинга
+    """Возвращает дату последнего коммита для указанной папки.
+    Если str_format=True, возвращает в формате yyyy.mm.dd hh.mm.
     """
     try:
+        cwd, git_path = _git_cwd_and_path(project_dir, folder_path)
         if str_format:
-            # Запрашиваем сразу в нужном формате
             result = subprocess.run(
-                ["git", "log", "-1", "--format=%ad", f"--date=format:{DATE_FORMAT}", folder_path],
-                cwd=str(project_dir),
+                ["git", "log", "-1", "--format=%ad", f"--date=format:{DATE_FORMAT}", git_path],
+                cwd=cwd,
                 capture_output=True,
                 text=True,
                 check=False
@@ -82,10 +110,9 @@ def get_commit_date(project_dir, folder_path, str_format=False):
             if result.returncode == 0 and result.stdout.strip():
                 return result.stdout.strip()
         else:
-            # Стандартный формат для парсинга
             result = subprocess.run(
-                ["git", "log", "-1", "--format=%ad", "--date=format:%Y-%m-%d %H:%M", folder_path],
-                cwd=str(project_dir),
+                ["git", "log", "-1", "--format=%ad", "--date=format:%Y-%m-%d %H:%M", git_path],
+                cwd=cwd,
                 capture_output=True,
                 text=True,
                 check=False
@@ -94,7 +121,7 @@ def get_commit_date(project_dir, folder_path, str_format=False):
                 return result.stdout.strip()
     except Exception as e:
         debug_print(f"Git date error for {folder_path}: {e}")
-    
+
     return None
 
 def read_module_versions(project_dir):
@@ -213,6 +240,46 @@ def generate_module_header(module_name, version, commit_date, commit_date_str, e
 # ОСНОВНАЯ ФУНКЦИЯ
 # ============================================================
 
+def _has_own_code(folder: Path) -> bool:
+    """Папка считается модулем, если в её корне есть код (.cpp/.h/.c/.hpp) или .ini."""
+    try:
+        for item in folder.iterdir():
+            if item.is_file() and (item.suffix.lower() in (".cpp", ".h", ".c", ".hpp")
+                                   or item.name.endswith(".ini")):
+                return True
+    except OSError:
+        return False
+    return False
+
+
+def discover_module_dirs(src_dir: Path) -> List[Path]:
+    """Собирает папки компонентов для генерации версий.
+
+    - Папки верхнего уровня src/ с префиксами core_/module_/submodule_/device_, в корне
+      которых есть код (это сами компоненты).
+    - Если папка с префиксом не содержит кода в корне — это контейнер (например
+      src/module_programm/), тогда компонентами считаются её вложенные папки с теми же
+      префиксами (src/module_programm/module_prog, .../submodule_isp, ...).
+    """
+    found: List[Path] = []
+    prefixes = (CORE_PREFIX, MODULE_PREFIX, SUBMODULE_PREFIX, DEVICE_PREFIX)
+
+    def is_component_dir(p: Path) -> bool:
+        return p.is_dir() and any(p.name.startswith(pr) for pr in prefixes)
+
+    for item in sorted(src_dir.iterdir()):
+        if not is_component_dir(item):
+            continue
+        if _has_own_code(item):
+            found.append(item)
+            continue
+        # Контейнер: ищем вложенные компоненты (один уровень вглубь)
+        for sub in sorted(item.iterdir()):
+            if is_component_dir(sub):
+                found.append(sub)
+    return found
+
+
 def generate_module_versions():
     """
     Генерирует файлы версий для всех core_* и module_* папок.
@@ -231,12 +298,8 @@ def generate_module_versions():
         info_print(f"ERROR: Source directory not found: {src_dir}")
         return
     
-    # Собираем все папки с префиксами core_, module_ и submodule_
-    modules = []
-    for item in src_dir.iterdir():
-        if item.is_dir():
-            if item.name.startswith(CORE_PREFIX) or item.name.startswith(MODULE_PREFIX) or item.name.startswith(SUBMODULE_PREFIX) or item.name.startswith(DEVICE_PREFIX):
-                modules.append(item)
+    # Собираем папки компонентов (в т.ч. вложенные в контейнерные папки)
+    modules = discover_module_dirs(src_dir)
     
     if not modules:
         info_print("No core_* or module_* folders found")
@@ -252,16 +315,17 @@ def generate_module_versions():
     
     for module_path in modules:
         module_name = module_path.name
+        module_rel = module_path.relative_to(project_dir).as_posix()   # напр. src/module_programm/submodule_swd
         version_file = module_path / f"{module_name}_version.h"
         
         info_print(f"Processing: {module_name}")
         
         # Получаем текущий хэш папки
-        current_hash = get_folder_hash(project_dir, f"src/{module_name}")
+        current_hash = get_folder_hash(project_dir, module_rel)
         
         # Получаем сохранённый хэш и версию
         stored_key = f"{module_name}_hash"
-        stored_version = stored_versions.get(module_name, 0)
+        stored_version = stored_versions.get(module_rel, 0)
         
         # Проверяем, изменился ли хэш
         hash_file = project_dir / ".module_hashes"
@@ -270,7 +334,7 @@ def generate_module_versions():
             try:
                 with open(hash_file, 'r') as f:
                     for line in f:
-                        if line.startswith(f"{module_name}="):
+                        if line.startswith(f"{module_rel}="):
                             stored_hash = line.strip().split('=')[1]
                             break
             except:
@@ -294,7 +358,7 @@ def generate_module_versions():
                 except:
                     pass
             
-            hashes[module_name] = current_hash
+            hashes[module_rel] = current_hash
             try:
                 with open(hash_file, 'w') as f:
                     for k, v in hashes.items():
@@ -305,11 +369,11 @@ def generate_module_versions():
             new_version = stored_version
             info_print(f"  Module unchanged: version {stored_version}")
         
-        current_versions[module_name] = new_version
+        current_versions[module_rel] = new_version
         
         # Получаем дату последнего коммита в двух форматах
-        commit_date = get_commit_date(project_dir, f"src/{module_name}", str_format=False)  # для парсинга
-        commit_date_str = get_commit_date(project_dir, f"src/{module_name}", str_format=True)  # для строки
+        commit_date = get_commit_date(project_dir, module_rel, str_format=False)  # для парсинга
+        commit_date_str = get_commit_date(project_dir, module_rel, str_format=True)  # для строки
         
         if not commit_date_str:
             commit_date_str = "1970.01.01 00.00"
