@@ -677,6 +677,7 @@
             switch(ext){
               case "txt":
               case "tcl":
+              case "lua":
               case "htm":
               case "html":
               case "js":
@@ -783,7 +784,8 @@
           if(typeof ext !== "undefined"){
             switch(ext){
               case "txt":
-              case "tcl": lang = "plain"; break;
+              case "tcl":
+              case "lua": lang = "plain"; break;
               case "htm": lang = "html"; break;
               case "js": lang = "javascript"; break;
               case "c":  lang = "c_cpp"; break;

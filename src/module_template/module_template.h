@@ -39,7 +39,6 @@ typedef struct {
 
 class CLASS_MODULE_TEMPLATE {
 public:
-    CLASS_MODULE_TEMPLATE(bool _in);
 #if ESP32
     void setFs(fs::LittleFSFS* fs);
 #elif defined(ESP8266)
@@ -74,7 +73,6 @@ private:
     static void blinkTimerTask();
 
 protected:
-    bool dumb;
 #if ESP32
     fs::LittleFSFS*               _fs;
 #elif defined(ESP8266)

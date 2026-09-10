@@ -13,8 +13,7 @@
 #include <avr/pgmspace.h>
 #endif
 
-CLASS_MODULE_TEMPLATE module_template(false);
-CLASS_MODULE_TEMPLATE::CLASS_MODULE_TEMPLATE(bool _in) { dumb = _in; }
+CLASS_MODULE_TEMPLATE module_template;
 
 // ============================================================
 // Паттерн демо-моргания (кассета модуля)

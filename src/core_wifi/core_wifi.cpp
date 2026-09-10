@@ -32,7 +32,7 @@
 
 #include "core_sys/eertos.h"
 
-CLASS_CORE_WIFI 	core_wifi(false);
+CLASS_CORE_WIFI 	core_wifi;
 DNSServer 		dnsServer;
 
 // Пауза между повторными сканами, когда сеть не находится и AP выключена (сек)
@@ -51,10 +51,6 @@ static const char patWifiDisc[]     PROGMEM = "*.........";
 static const char patWifiAP[]       PROGMEM = "*.*.*......";
 static const char patWifiConn[]     PROGMEM = "*.*..";
 static const char patWifiErr[]      PROGMEM = "*.*.*";
-
-CLASS_CORE_WIFI :: CLASS_CORE_WIFI (bool _in) {
-	 dumb = _in;
- }
 
 #if defined(ESP32)
 void CLASS_CORE_WIFI::begin(fs::LittleFSFS* fs)

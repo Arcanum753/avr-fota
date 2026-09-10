@@ -67,7 +67,6 @@ struct fileCompareResult {
 
 class  CLASS_CORE_OTA    {
 public:
-    CLASS_CORE_OTA (bool _in);
 
 #if ESP32
     fs::LittleFSFS*               _fs = nullptr;
@@ -123,7 +122,6 @@ public:
 
 protected: 
     uint16_t fileUpadedpercent = 0;
-    bool  dumb = false;
     String _browserFileMD5 = "";
     uint32_t _updateFileSize = 0;
     String _updateFileName = "";

@@ -24,7 +24,6 @@
 class  CLASS_CORE_JSON    {
     
 public:    
-    CLASS_CORE_JSON (bool _in);
     void web_Init(void);
     void begin(ModContext& ctx);
 private:
@@ -105,7 +104,6 @@ public:
     bool jsonFileSaveDoc(const String& file, JsonDocument& doc);
     
 protected:
-    bool  dumb = false;
 
 };
 

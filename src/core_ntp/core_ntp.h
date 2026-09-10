@@ -44,7 +44,6 @@ typedef struct {
 
 class  CLASS_CORE_NTP    {
     public:
-    CLASS_CORE_NTP (bool _in);
 
     #if ESP32
     fs::LittleFSFS*               _fs;
@@ -86,7 +85,6 @@ private:
     bool updateTimeFromNTP  = false;
     int _ntpServerCount         = 0;
     String _ntpServerNow = "";
-    bool  dumb = false;
 };
 
 extern CLASS_CORE_NTP core_ntp;

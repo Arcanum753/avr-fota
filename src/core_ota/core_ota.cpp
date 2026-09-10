@@ -15,7 +15,7 @@
 #include "core_json/core_json.h"
 #include "core_led/core_led.h"
 
-CLASS_CORE_OTA core_ota(false);
+CLASS_CORE_OTA core_ota;
 
 // Global flag to prevent double _fs->end() crashes
 bool _ota_fsEndCalled = false;
@@ -28,10 +28,6 @@ static const char patOtaFw[]    PROGMEM = "*.*.*.*.*.*.*.*.*.*";
 static const char patOtaFs[]    PROGMEM = "***...***...***...";
 static const char patOtaErr[]   PROGMEM = "*.*.*";
 
-CLASS_CORE_OTA :: CLASS_CORE_OTA (bool _in) {
-	 dumb = _in;
- }
- 
 #if ESP32
     void CLASS_CORE_OTA::setFs(fs::LittleFSFS* fs)
 #elif defined(ESP8266)

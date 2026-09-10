@@ -776,7 +776,7 @@ def prepare_fs_image() -> Optional[Path]:
         
         try:
             # Рекурсивный обход: подпапки web/ копируются с сохранением пути
-            # (например web/macros/ex_10s.tcl -> FS /macros/ex_10s.tcl).
+            # (например web/macros/ex_10s.lua -> FS /macros/ex_10s.lua).
             for item in sorted(module_web.rglob("*")):
                 if item.is_dir():
                     continue

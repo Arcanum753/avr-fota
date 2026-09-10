@@ -12,9 +12,7 @@
 #include "common/common.h"
 #include "core_ntp_version.h"
 
-CLASS_CORE_NTP core_ntp(false);
-
-CLASS_CORE_NTP :: CLASS_CORE_NTP (bool _in) { dumb = _in; }
+CLASS_CORE_NTP core_ntp;
 
 // ============================================================
 // begin()

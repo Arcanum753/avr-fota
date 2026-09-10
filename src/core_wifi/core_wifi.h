@@ -80,7 +80,6 @@ typedef enum {
 
 class  CLASS_CORE_WIFI    {
     public:
-    CLASS_CORE_WIFI (bool _in);
     #if ESP32
     fs::LittleFSFS*               _fs;
     #elif defined(ESP8266)
@@ -173,7 +172,6 @@ private:
     bool anySlotFree();         // есть ли слот с _wifiFailCount < MAX_WIFI_FAIL_COUNT
 protected: 
     int32_t scanTime = 1;       // бюджет попытки подключения в STA (сек), 0/отрицательное -> внутренний дефолт
-    bool  dumb = false;
     uint32_t _stateSeconds = 0;     // счётчик секунд автомата (независимо от состояния)
     bool     _enterApPending = false; // запрос входа в AP из WiFi-события (обрабатывается в loop)
     bool     _ignoreDisconnect = false; // подавление событий от собственных WiFi.disconnect()
