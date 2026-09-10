@@ -9,6 +9,7 @@
 /log/
 __pycache__/
 /hex_bin/
+/otasyncer-server/
 *.bin
 # Web debug folders
 /web_debug/
