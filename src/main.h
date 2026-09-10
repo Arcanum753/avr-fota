@@ -25,5 +25,4 @@
 //#define RELEASE  // Comment to enable debug output
 
 void printGitInfo() ;
-
 bool isFsMounted() ;

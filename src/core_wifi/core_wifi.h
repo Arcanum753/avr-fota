@@ -119,6 +119,7 @@ class  CLASS_CORE_WIFI    {
     volatile uint16_t   _apUptime = 0;      // секунды AP без активности (таймер «жизни» AP)
     volatile bool       _apClientActivity = false;
     void notifyApClientActivity() { if (wifiStatus == FS_STAT_APMODE) { _apClientActivity = true; } }
+    void notifyRestart() { wifiStatus = FS_STAT_RESET; }
     
     static void s_secondTick();
     void web_Init();

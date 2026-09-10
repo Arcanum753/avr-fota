@@ -38,8 +38,6 @@
 #define FS_VERSION_COMPARE_MISSING          "NO_JSON"
 #define FS_VERSION_COMPARE_ERROR            "ERROR"
 
-#define FS_VERSION_JSON_PATH "/_version_fs.json"
-
 enum UpdateTypeFile {
        FILE_TYPE_UNSUPPORTED = -1
     ,  FILE_TYPE_FIRMWARE = 0
@@ -93,12 +91,6 @@ public:
     // New: compare file version with current FS JSON or firmware
     int8_t compareWithCurrentFsVersion(fileCompareResult* result, const String& filename);
     
-    // Public getters for cached FS version (for external modules)
-    int64_t getCachedFsDate() { return _cachedFsDate; }
-    int32_t getCachedFsBuild() { return _cachedFsBuild; }
-    int32_t getCachedFsMajor() { return _cachedFsMajor; }
-    int32_t getCachedFsMinor() { return _cachedFsMinor; }
-    
     // FS management helpers (reduces code duplication with module_otaclient)
     void fsEnd();
     void fsRemount();
@@ -134,18 +126,6 @@ protected:
     UpdateTypeFile  typeOTAfile;
     uint32_t freeSketchSpace   ;
     
-    // Cached FS version info
-    bool _fsVersionCached = false;
-    bool _fsVersionValid = false;
-    int64_t _cachedFsDate = 0;
-    int32_t _cachedFsBuild = 0;
-    int32_t _cachedFsMajor = 0;
-    int32_t _cachedFsMinor = 0;
-    String _cachedFsVersionStr = "";
-    
-    void cacheFsVersionInfo();
-    bool parseVersionFromJson(const String& jsonStr, int64_t& date, int32_t& build, int32_t& major, int32_t& minor);
-
 };
 
 extern CLASS_CORE_OTA core_ota;

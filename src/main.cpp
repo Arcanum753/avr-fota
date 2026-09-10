@@ -11,6 +11,7 @@
 
 #include "main.h"
 #include "core_web/FSWebServerLib.h"
+#include "core_sys/core_sys.h"
 #include "core_sys/eertos.h"
 
 #include "modules_registry.h"
@@ -85,8 +86,8 @@ void printGitInfo() {
     DBG_MOD("[SYS] ", "Envoirement: %s\r\n", String(BUILD_ENV).c_str());
     
     DBG_MOD("[SYS] ", "Chip firmware ver: %s\r\n", String(FIRMWARE_VERSION).c_str());
-    DBG_MOD("[SYS] ", "File system ver: %s\r\n", ESPHTTPServer.getFsVersionStr().c_str());
-    DBG_MOD("[SYS] ", "Reset reason: %s\r\n", ESPHTTPServer.getResetReason().c_str());
+    DBG_MOD("[SYS] ", "File system ver: %s\r\n", core_sys.getFsVersionStr().c_str());
+    DBG_MOD("[SYS] ", "Reset reason: %s\r\n", core_sys.getResetReason().c_str());
     
     DBG_MOD("[SYS] ", "Git Branch: %s\r\n", String(GIT_BRANCH).c_str());
     DBG_MOD("[SYS] ", "Git Commit: %s\r\n", String(GIT_COMMIT).c_str());

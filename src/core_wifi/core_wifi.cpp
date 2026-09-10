@@ -16,6 +16,7 @@
 
 #include "core_json/core_json.h"
 #include "core_wifi/core_wifi.h"
+#include "core_sys/core_sys.h"
 
 #if defined(MODULE_UDP)
 #include "module_udp/module_udp.h"
@@ -62,7 +63,7 @@ void CLASS_CORE_WIFI::begin(fs::LittleFSFS* fs)
 	_fs = fs;
 	if (!_fs) { _fs->begin();  }// If LittleFS is not started
 	connectionTimout = 0;
-	String hostName = ESPHTTPServer.getHostName();
+	String hostName = core_sys.getHostName();
 	WiFi.hostname(hostName.c_str());
 	// Отключаем энергосбережение WiFi - иначе при длительном
 	// простое вкладки ESP уходит в modem-sleep и сбрасывается (~5 мин)
@@ -84,6 +85,13 @@ void CLASS_CORE_WIFI::begin(fs::LittleFSFS* fs)
 	DEBUGLOGWIFI("_strWifis[2] %s\r\n", _strWifi2);
 	DEBUGLOGWIFI("_strWifis[3] %s\r\n", _strWifi3);
 
+	if (AP_ENABLE_BUTTON >= 0) {
+		// Кнопка AP читается после загрузки конфигов, чтобы конфиг её не перезаписал.
+		// Нажатие принудительно включает AP, но не отключает AP при отсутствии конфигов.
+		pinMode(AP_ENABLE_BUTTON, INPUT_PULLUP);
+		if (!digitalRead(AP_ENABLE_BUTTON)) {	_apConfig.APenable = true;	}
+		DEBUGLOGWIFI("AP Enable = %d\n", _apConfig.APenable);
+	}
 	if (AP_ENABLE_BUTTON >= 0) {
 		// Set AP mode if AP button was pressed
 		if (_apConfig.APenable) {	configureWifiAP();	}
@@ -744,16 +752,16 @@ void CLASS_CORE_WIFI::configureWifiAP() {
 #if defined(MODULE_UDP)
 		module_udp.stop();	// always stop!
 #endif
-	String APname = ESPHTTPServer.getHostName();
+	String APname = core_sys.getHostName();
 	_suppressDisc = 3;   // события от собственного отключения STA игнорируем
 	_ignoreDisconnect = true;
 	if (WiFi.status() == WL_CONNECTED) { WiFi.disconnect();	}
 	WiFi.mode(WIFI_AP);
 	_ignoreDisconnect = false;
 	wifiStatus = FS_STAT_APMODE;
-	if (ESPHTTPServer._httpAuth.auth) {
-		WiFi.softAP(APname, ESPHTTPServer._httpAuth.wwwPassword);
-		DEBUGLOGWIFI("AP Pass enabled: %s \r\n", ESPHTTPServer._httpAuth.wwwPassword.c_str());
+	if (core_sys.httpAuthEnabled()) {
+		WiFi.softAP(APname, core_sys.getHttpPassword());
+		DEBUGLOGWIFI("AP Pass enabled: %s \r\n", core_sys.getHttpPassword().c_str());
 	}
 	else {
 		WiFi.softAP(APname.c_str());

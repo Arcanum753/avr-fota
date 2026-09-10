@@ -16,6 +16,7 @@
 #include "core_terminal/core_terminal.h"
 #include "core_ntp/core_ntp.h"
 #include "core_led/core_led.h"
+#include "core_sys/core_sys.h"
 #include "core_sys/ident_store.h"
 
 #if defined(MODULE_UDP)
@@ -91,7 +92,7 @@ void TerminalEcho (void)    {   term.EchoOnOff();  }
 // Terminals shows actual net info
 void InfoShow() {    
     printGitInfo();
-    ESPHTTPServer.serialShowAbout();  
+    core_sys.serialShowAbout();  
 }
 // show list of files at SPIFS
 void DirsShow() {
@@ -247,8 +248,8 @@ void TermIdent() {
     char *arg1 = term.getNext();
 
     if (arg1 == NULL) {
-        Serial.printf("Device name:   %s\r\n", ESPHTTPServer._sysConfig.deviceName.c_str());
-        Serial.printf("Device serial: %s\r\n", ESPHTTPServer._sysConfig.deviceSerial.c_str());
+        Serial.printf("Device name:   %s\r\n", core_sys.getDeviceName().c_str());
+        Serial.printf("Device serial: %s\r\n", core_sys.getDeviceSerial().c_str());
         Serial.println("Usage: id <serial> | id name <name> | id reset");
         return;
     }
@@ -256,7 +257,7 @@ void TermIdent() {
     String cmd(arg1);
     if (cmd == "reset") {
         // Восстановить дефолт: имя платформы + уникальный ID чипа
-        ESPHTTPServer.defaultConfigSys();
+        core_sys.defaultConfigSys();
     }
     else if (cmd == "name") {
         char *arg2 = term.getNext();
@@ -269,7 +270,7 @@ void TermIdent() {
             Serial.printf("Error: name length must be 1..%d\r\n", IDENT_MAX_NAME);
             return;
         }
-        ESPHTTPServer._sysConfig.deviceName = name;
+        core_sys.setDeviceName(name);
     }
     else {
         String serial(arg1);
@@ -277,12 +278,12 @@ void TermIdent() {
             Serial.printf("Error: serial length must be 1..%d\r\n", IDENT_MAX_SERIAL);
             return;
         }
-        ESPHTTPServer._sysConfig.deviceSerial = serial;
+        core_sys.setDeviceSerial(serial);
     }
 
-    ESPHTTPServer.saveSysIdentStore();
-    ESPHTTPServer.save_configSys();
+    core_sys.saveSysIdentStore();
+    core_sys.save_configSys();
     Serial.println("Identity saved. Reboot needed to apply hostname/mDNS.");
-    Serial.printf("Device name:   %s\r\n", ESPHTTPServer._sysConfig.deviceName.c_str());
-    Serial.printf("Device serial: %s\r\n", ESPHTTPServer._sysConfig.deviceSerial.c_str());
+    Serial.printf("Device name:   %s\r\n", core_sys.getDeviceName().c_str());
+    Serial.printf("Device serial: %s\r\n", core_sys.getDeviceSerial().c_str());
 }

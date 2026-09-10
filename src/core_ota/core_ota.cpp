@@ -12,7 +12,7 @@
 #include "common/common.h"
 #include "core_ota.h"
 #include "core_ota_version.h"
-#include "core_json/core_json.h"
+#include "core_sys/core_sys.h"
 #include "core_led/core_led.h"
 
 CLASS_CORE_OTA core_ota;
@@ -253,7 +253,7 @@ void CLASS_CORE_OTA::updateFileExecute (AsyncWebServerRequest *request) {
 			needReboot = true;
 			message = "UPDATE_COMPLETE_REBOOT";
 			DEBUGOTA("FS update on ESP32: reboot needed\n");
-			_fsVersionCached = false;
+			core_sys.invalidateFsVersionCache();
 		}
 #endif
 	}
@@ -266,7 +266,7 @@ void CLASS_CORE_OTA::updateFileExecute (AsyncWebServerRequest *request) {
 	delay(100);
 	
 	if (needReboot && !Update.hasError()) {
-		_fsVersionCached = false;
+		core_sys.invalidateFsVersionCache();
 		ESPHTTPServer.restart_esp();
 	}
 }
@@ -413,7 +413,7 @@ void CLASS_CORE_OTA::html_uploadUpdateFile(AsyncWebServerRequest *request, Strin
 #if defined(ESP32)
             if (typeOTAfile == FILE_TYPE_FILESYSTEM) {
                 DEBUGOTA("FS update on ESP32: will reboot\n");
-                _fsVersionCached = false;
+                core_sys.invalidateFsVersionCache();
             }
 #endif
             // FIX: use _updateFileSize instead of request->contentLength()
@@ -459,15 +459,8 @@ void CLASS_CORE_OTA::html_ver_get(AsyncWebServerRequest *request) {
     // Current firmware version (from version.h macros)
     values += "fwVersion|"      + String(FIRMWARE_VERSION) + "|div\n";
     
-    // Current filesystem version (from cache or version_fs.json)
-    if (!_fsVersionCached) {
-        cacheFsVersionInfo();
-    }
-    if (_cachedFsVersionStr != "") {
-        values += "fsVersion|"  + _cachedFsVersionStr + "|div\n";
-    } else {
-        values += "fsVersion|"  + String((int)_cachedFsMajor) + "." + String((int)_cachedFsMinor) + "." + String((long long)_cachedFsDate) + "." + String((long)_cachedFsBuild) + "|div\n";
-    }
+    // Current filesystem version (единый источник — core_sys)
+    values += "fsVersion|"      + core_sys.getFsVersionStr() + "|div\n";
     
     request->send(200, "text/plain", values);
 }
@@ -573,56 +566,8 @@ int8_t CLASS_CORE_OTA::compareVersionDiffs(int32_t majorDiff, int32_t minorDiff,
  }
 
 // ============================================================
-// NEW: Cache FS version info from version_fs.json
-// ============================================================
-
-void CLASS_CORE_OTA::cacheFsVersionInfo() {
-    if (_fsVersionCached) return;
-    
-    if (!_fs) {
-        DEBUGOTA("cacheFsVersionInfo: No FS mounted\n");
-        _fsVersionValid = false;
-        return;
-    }
-    
-    File jsonFile = _fs->open(FS_VERSION_JSON_PATH, "r");
-    if (!jsonFile) {
-        DEBUGOTA("cacheFsVersionInfo: version_fs.json not found\n");
-        _fsVersionCached = true;
-        _fsVersionValid = false;
-        return;
-    }
-    
-    String jsonStr;
-    while (jsonFile.available()) {
-        jsonStr += (char)jsonFile.read();
-    }
-    jsonFile.close();
-    
-    DEBUGOTA("cacheFsVersionInfo: Read %d bytes\n", jsonStr.length());
-    
-    _fsVersionValid = parseVersionFromJson(jsonStr, _cachedFsDate, _cachedFsBuild, _cachedFsMajor, _cachedFsMinor);
-    _fsVersionCached = true;
-}
-
-bool CLASS_CORE_OTA::parseVersionFromJson(const String& jsonStr, int64_t& date, int32_t& build, int32_t& major, int32_t& minor) {
-    if (!core_json.jsonParseNestedInt(jsonStr, "filesystem|version|major", major)) return false;
-    if (!core_json.jsonParseNestedInt(jsonStr, "filesystem|version|minor", minor)) return false;
-    
-    if (!core_json.jsonParseNestedInt64(jsonStr, "filesystem|version|date", date)) return false;
-    
-    if (!core_json.jsonParseNestedInt(jsonStr, "filesystem|version|build", build)) return false;
-    
-    core_json.jsonParseNestedStr(jsonStr, "filesystem|version|full_string", _cachedFsVersionStr);
-    
-    DEBUGOTA("parseVersionFromJson: FS version %d.%d.%lld.%d (%s)\n", 
-             major, minor, date, build, _cachedFsVersionStr.c_str());
-    
-    return true;
-}
-
-// ============================================================
-// NEW: Compare file version with current FS JSON or firmware
+// Compare file version with current FS JSON or firmware
+// (FS-версия читается централизованно в core_sys)
 // ============================================================
 
 int8_t CLASS_CORE_OTA::compareWithCurrentFsVersion(fileCompareResult* result, const String& filename) {
@@ -632,18 +577,17 @@ int8_t CLASS_CORE_OTA::compareWithCurrentFsVersion(fileCompareResult* result, co
         result->fsCurrentDate = VERSION_DATE;
         result->fsCurrentBuild = VERSION_BUILD;
     } else {
-        if (!_fsVersionCached) {
-            cacheFsVersionInfo();
-        }
-        if (!_fsVersionValid) {
+        int64_t fsDate = 0;
+        int32_t fsBuild = 0, fsMajor = 0, fsMinor = 0;
+        if (!core_sys.getFsVersion(fsDate, fsBuild, fsMajor, fsMinor)) {
             result->fsVersionCompare = -2;
             DEBUGOTA("compareWithCurrentFsVersion: FS version data invalid\n");
             return result->fsVersionCompare;
         }
-        result->fsCurrentMajor = _cachedFsMajor;
-        result->fsCurrentMinor = _cachedFsMinor;
-        result->fsCurrentDate = _cachedFsDate;
-        result->fsCurrentBuild = _cachedFsBuild;
+        result->fsCurrentMajor = fsMajor;
+        result->fsCurrentMinor = fsMinor;
+        result->fsCurrentDate = fsDate;
+        result->fsCurrentBuild = fsBuild;
     }
     
     result->fsVersionCompare = compareVersionDiffs(result->majorDiff, result->minorDiff, result->dateDiff, result->buildDiff);
@@ -776,17 +720,10 @@ int8_t CLASS_CORE_OTA::fileNameCheck(String filename, fileCompareResult* result)
     int32_t currentBuild;
     
     if (result->fileType == FILE_TYPE_FILESYSTEM) {
-        if (!_fsVersionCached) {
-            cacheFsVersionInfo();
-        }
-        if (!_fsVersionValid) {
+        if (!core_sys.getFsVersion(currentDate, currentBuild, currentMajor, currentMinor)) {
             DEBUGOTA("\t FS version data invalid, update blocked\r\n");
             return -1;
         }
-        currentMajor = _cachedFsMajor;
-        currentMinor = _cachedFsMinor;
-        currentDate = _cachedFsDate;
-        currentBuild = _cachedFsBuild;
         DEBUGOTA("\t Current (FS): major=%d, minor=%d, date=%lld, build=%d\r\n", 
                  currentMajor, currentMinor, currentDate, currentBuild);
     } else {

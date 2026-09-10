@@ -21,6 +21,15 @@ void dbg_printf(const char* prefix, const char* fmt, ...);
 #define DEBUGLOG(...)
 #endif
 
+// DEBUGHTTP — отдельный выключатель логирования горячего пути отдачи
+// статических файлов (handleFileRead). По умолчанию выключен, чтобы в обычных
+// сборках не логировать каждый запрос ассета.
+#if !defined(RELEASE) && defined(DEBUG_HTTP)
+#define DEBUGHTTP(...) DBG_MOD("[C_HTTP] ", __VA_ARGS__)
+#else
+#define DEBUGHTTP(...)
+#endif
+
 #define DBG_HADLEFILEWXIST  0
 
 #if (DBG_HADLEFILEWXIST > 0 )
