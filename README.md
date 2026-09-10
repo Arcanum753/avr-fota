@@ -77,7 +77,6 @@
 | **core_wifi** | `src/core_wifi/` | Wi-Fi клиент/точка доступа, управление 4 профилями подключения, сканирование эфира |
 | **core_ntp** | `src/core_ntp/` | NTP клиент с поддержкой 3 серверов (основной + 2 резервных), автоматическое переключение |
 | **core_ota** | `src/core_ota/` | Самообновление прошивки ESP (FOTA) через веб-интерфейс, проверка версий файловой системы |
-| **core_editor** | `src/core_editor/` | Браузер файловой системы, редактор .html/.txt/.json/.js файлов, загрузка/удаление файлов |
 | **core_json** | `src/core_json/` | Утилиты для работы с JSON-документами (сохранение/загрузка) |
 | **core_led** | `src/core_led/` | LED-индикация, макросы для отображения событий (Wi-Fi, ошибки, успех, ожидание) |
 | **core_terminal** | `src/core_terminal/` | Serial-терминал с набором команд для отладки и управления |
@@ -93,6 +92,7 @@
 | **module_gpio** | `src/module_gpio/` | `-D MODULE_GPIO` | Управление GPIO через веб-интерфейс |
 | **module_udp** | `src/module_udp/` | `-D MODULE_UDP` | UDP-широковещание, обнаружение устройств в сети |
 | **module_otaclient** | `src/module_otaclient/` | `-D MODULE_OTACLIENT=1` | OTA-клиент (получение обновлений с удалённого сервера) |
+| **module_editor** | `src/module_editor/` | `-D MODULE_EDITOR` | Браузер файловой системы, редактор .html/.txt/.json/.js файлов (форк Ace), загрузка/удаление |
 
 ---
 
@@ -377,12 +377,12 @@ MAJOR.MINOR.DATE.BUILD
     "core_wifi": {"version": "1", "date": "20260403"},
     "core_ntp": {"version": "1", "date": "20260403"},
     "core_ota": {"version": "1", "date": "20260403"},
-    "core_editor": {"version": "1", "date": "20260403"},
     "core_json": {"version": "1", "date": "20260403"},
     "core_led": {"version": "1", "date": "20260403"},
     "core_terminal": {"version": "1", "date": "20260403"},
     "module_program/submodule_swd": {"version": "1", "date": "20260403"},
-    "module_udp": {"version": "1", "date": "20260403"}
+    "module_udp": {"version": "1", "date": "20260403"},
+    "module_editor": {"version": "0", "date": "20260403"}
   },
   "fs_size": 1048576,
   "fs_used": 524288,

@@ -45,7 +45,6 @@ STATIC_MENU_LINKS = """    <div>
         <a href="ntp.html">NTP configuration</a>
         <a href="system.html">System configuration</a>
         <a href="wifi.html">WiFi Configuration</a>
-        <a target=_tab href="edit.html">SPIFFS File editor</a>
         <a href="update.html">Esp Firmware & FS OTA update</a>
     </div>
 """
@@ -67,11 +66,11 @@ def log_error(msg: str) -> None:
     print(f"[gen_page_head] ERROR: {msg}")
 
 
-def parse_menu_links(menu_html: str) -> List[Tuple[str, str, Optional[str]]]:
+def parse_menu_links(menu_html: str) -> List[Tuple[str, str, Optional[str], Optional[str]]]:
     """
     Парсит HTML-строку и извлекает все теги <a>.
     
-    Возвращает список кортежей (href, text, id_or_None).
+    Возвращает список кортежей (href, text, id_or_None, target_or_None).
     """
     links = []
     # Ищем <a ... href="..." ...>...</a>
@@ -85,22 +84,30 @@ def parse_menu_links(menu_html: str) -> List[Tuple[str, str, Optional[str]]]:
         all_attrs = match.group(1) + ' ' + match.group(3)
         id_match = re.search(r'id="([^"]*)"', all_attrs)
         elem_id = id_match.group(1).strip() if id_match else None
+
+        # Извлекаем target (в кавычках или без)
+        target_match = (re.search(r'target\s*=\s*"([^"]*)"', all_attrs)
+                        or re.search(r'target\s*=\s*([^\s>]+)', all_attrs))
+        target = target_match.group(1).strip() if target_match else None
         
         if href and text:
-            links.append((href, text, elem_id))
+            links.append((href, text, elem_id, target))
     
     return links
 
 
-def build_link_html(href: str, text: str, elem_id: Optional[str] = None) -> str:
+def build_link_html(href: str, text: str, elem_id: Optional[str] = None,
+                    target: Optional[str] = None) -> str:
     """Формирует HTML-строку ссылки для пункта меню."""
+    attrs = ""
     if elem_id:
-        return f'        <a id="{elem_id}" href="{href}">{text}</a>'
-    else:
-        return f'        <a href="{href}">{text}</a>'
+        attrs += f' id="{elem_id}"'
+    if target:
+        attrs += f' target="{target}"'
+    return f'        <a{attrs} href="{href}">{text}</a>'
 
 
-def get_default_links(web_dir: Path) -> List[Tuple[str, str, Optional[str]]]:
+def get_default_links(web_dir: Path) -> List[Tuple[str, str, Optional[str], Optional[str]]]:
     """
     Генерирует ссылки по умолчанию из .html файлов в папке web модуля.
     Исключает файлы, начинающиеся с '_'.
@@ -121,14 +128,14 @@ def get_default_links(web_dir: Path) -> List[Tuple[str, str, Optional[str]]]:
                 continue
             
             name_without_ext = item.name[:-5]  # удаляем .html
-            links.append((item.name, name_without_ext, None))
+            links.append((item.name, name_without_ext, None, None))
     except Exception as e:
         log_warning(f"Error scanning {web_dir} for default links: {e}")
     
     return links
 
 
-def get_module_menu_links(module_name: str, src_dir: Path) -> List[Tuple[str, str, Optional[str]]]:
+def get_module_menu_links(module_name: str, src_dir: Path) -> List[Tuple[str, str, Optional[str], Optional[str]]]:
     """
     Получает пункты меню для указанного модуля.
     
@@ -136,7 +143,7 @@ def get_module_menu_links(module_name: str, src_dir: Path) -> List[Tuple[str, st
     1. _menu.html в папке web модуля (с проверкой существования файлов)
     2. Если _menu.html нет/пуст/все ссылки невалидны — автогенерация из .html файлов
     
-    Возвращает список кортежей (href, text, id_or_None).
+    Возвращает список кортежей (href, text, id_or_None, target_or_None).
     """
     web_dir = src_dir / module_name / WEB_FOLDER_NAME
     
@@ -164,10 +171,10 @@ def get_module_menu_links(module_name: str, src_dir: Path) -> List[Tuple[str, st
             
             # Проверяем существование файлов, на которые ссылаются
             valid_links = []
-            for href, text, elem_id in parsed_links:
+            for href, text, elem_id, target in parsed_links:
                 target_file = web_dir / href
                 if target_file.exists() and target_file.is_file():
-                    valid_links.append((href, text, elem_id))
+                    valid_links.append((href, text, elem_id, target))
                 else:
                     log_warning(f"  {module_name}: file '{href}' not found in web folder, skipping menu link")
             
@@ -209,8 +216,8 @@ def generate_right_column(modules: List[str], src_dir: Path) -> str:
     for module_name in modules:
         module_links = get_module_menu_links(module_name, src_dir)
         
-        for href, text, elem_id in module_links:
-            link_html = build_link_html(href, text, elem_id)
+        for href, text, elem_id, target in module_links:
+            link_html = build_link_html(href, text, elem_id, target)
             lines.append(link_html)
             has_items = True
     
@@ -272,19 +279,19 @@ def generate_page_head(
     # Ищем маркер для замены: комментарий <!-- MODULES_RIGHT_COLUMN -->
     # вместе со следующим за ним пустым <div></div>
     marker_block = "<!-- MODULES_RIGHT_COLUMN -->\n    <div>\n    </div>"
-    if marker_block in template:
-        # Меню целиком строится из левой колонки STATIC_MENU_LINKS и правой
-        # колонки модулей — шаблон используется только для шапки и структуры.
-        # Так левая колонка и запасное меню не расходятся.
-        if '<div class="menu">' in template:
-            head = template.split('<div class="menu">', 1)[0]
-            result = head + '<div class="menu">\n' + STATIC_MENU_LINKS + right_column + '\n</div>\n'
-        else:
-            result = template.replace(marker_block, right_column)
+    if '<div class="menu">' in template:
+        # Меню целиком строится из STATIC_MENU_LINKS (левая колонка) и правой
+        # колонки модулей — левая колонка шаблона не используется как источник
+        # истины, чтобы списки в page_head.html и STATIC_MENU_LINKS не расходились.
+        head = template.split('<div class="menu">', 1)[0]
+        result = head + '<div class="menu">\n' + STATIC_MENU_LINKS + right_column + '\n</div>\n'
+        log_info("Generated menu from STATIC_MENU_LINKS + module links")
+    elif marker_block in template:
+        result = template.replace(marker_block, right_column)
         log_info("Replaced marker + empty div with generated menu")
     else:
-        # Если маркера нет — ищем пустой <div></div> после первого <div>
-        # и заменяем его на сгенерированную правую колонку
+        # Если шаблон неизвестной структуры — ищем пустой <div></div> после первого
+        # <div> и заменяем его на сгенерированную правую колонку
         pattern = r'(<div>\s*\n\s*</div>)'
         match = re.search(pattern, template)
         if match:

@@ -45,6 +45,7 @@ glob-масками `src/*/*.ini` и `src/*/*/*.ini` в `[platformio] extra_conf
 | `avr-fota` | — (ядро) | этот репозиторий: core_*, common, core_sys, core_web, python/, targets/, `module_template` |
 | `module_program` | `src/module_program/` | контейнер программатора: `module_prog/` + `submodule_isp/` + `submodule_swd/` |
 | `module_udp` | `src/module_udp/` | UDP broadcast |
+| `module_editor` | `src/module_editor/` | файловый редактор FS (форк Ace) |
 | `module_ds3231` | `src/module_ds3231/` | часы реального времени DS3231 |
 | `module_gpio` | `src/module_gpio/` | GPIO через web |
 | `module_lcd-i2c` | `src/module_lcd-i2c/` | LCD I2C |
@@ -56,7 +57,7 @@ glob-масками `src/*/*.ini` и `src/*/*/*.ini` в `[platformio] extra_conf
 | `device_mech-ring` | `src/device_mech-ring/` | часы механические с боем |
 | `device_electronica7_rgb` | `src/device_electronica7_rgb/` | часы Электроника-7 RGB |
 
-**Локальная разработка:** в рабочей копии ядра все 12 компонентов клонированы в `src/` (у каждого
+**Локальная разработка:** в рабочей копии ядра все 13 компонентов клонированы в `src/` (у каждого
 своя `.git`, ветка `main`). Ядро их игнорирует. Коммиты/пуши выполняются отдельно в каждой папке;
 правки «всё сразу» — как обычные изменения файлов в одном окне VS Code. `module_template` — часть
 ядра (не клон).
@@ -65,10 +66,10 @@ glob-масками `src/*/*.ini` и `src/*/*/*.ini` в `[platformio] extra_conf
 
 | Module | Directory | Purpose |
 |--------|-----------|---------|
+| `core_sys` | `src/core_sys/` | System core: identity (device name/serial, NVRAM store), `config_sys.json`, HTTP-auth/recovery (`secret.json`), system info (reset reason, chipinfo, about), centralized FS-version reading (`_version_fs.json`), EERTOS |
 | `core_wifi` | `src/core_wifi/` | Wi-Fi client/AP, 4 profile management, scanning |
 | `core_ntp` | `src/core_ntp/` | NTP client with 3 servers (primary + 2 fallback) |
 | `core_ota` | `src/core_ota/` | Self-update (FOTA) via web, FS version checking |
-| `core_editor` | `src/core_editor/` | FS browser, file editor (html/txt/json/js), upload/delete |
 | `core_json` | `src/core_json/` | JSON utilities (save/load/parse) |
 | `core_led` | `src/core_led/` | LED indication macros (WiFi, errors, success, waiting) |
 | `core_terminal` | `src/core_terminal/` | Serial terminal with debug/management commands |
@@ -88,6 +89,7 @@ glob-масками `src/*/*.ini` и `src/*/*/*.ini` в `[platformio] extra_conf
 | `module_otaclient` | `-D MODULE_OTACLIENT=1` | OTA client (auto-update from remote server) |
 | `module_template` | `-D MODULE_TEMPLATE` | Шаблон модуля — основа для создания новых модулей (в ядре) |
 | `module_i2c-mapper` | `-D MODULE_I2C_MAPPER` | I2C bus scanner (web interface, Wire0) |
+| `module_editor` | `-D MODULE_EDITOR` | FS browser, file editor (html/txt/json/js), upload/delete — форк Ace (опционально) |
 
 ### Devices (device_*) — отдельные репозитории, клонируются в `src/device_*`
 
@@ -186,6 +188,10 @@ CLASS_CORE_OTA (core_ota/core_ota.h)
 └── CLASS_MODULE_OTACLIENT (module_otaclient/) — extended OTA client
 ```
 
+Ядро `CLASS_CORE_SYS` (`core_sys/core_sys.h`) не входит в иерархию программатора: владеет
+идентичностью/конфигом системы, HTTP-auth и информацией о системе; `AsyncFSWebServer`
+оставляет лишь web-инфраструктуру и тонкие форвардеры к `core_sys`.
+
 ### Именование классов: паттерн `CLASS_<ПРИНАДЛЕЖНОСТЬ>_<ФУНКЦИЯ>`
 
 Имена классов образуются по паттерну `CLASS_<ПРИНАДЛЕЖНОСТЬ>_<ФУНКЦИЯ>`, где
@@ -249,6 +255,9 @@ loop = 0       # есть loop() — вызывается в *_loop
   (begin/web/loop) вместе с базовым OTA, а не в modules-группах.
 - `module_udp` (`module_udp`) — `begin()` вызывается из `core_wifi` при подключении, поэтому
   `begin` в registry не дублируется; регистрируется только `web_Init()`.
+- `core_sys` — всегда компилируется; в `core_begin` идёт сразу после `core_json`
+  (загружает identity/auth и заполняет `ctx.hostname`/`ctx.password` до `core_wifi` и mDNS);
+  `web_Init()` регистрирует `/system/*` и `/recover*`.
 - `core_terminal` — без класса; `TerminalInit()` вызывается в `core_begin`,
   `TerminalLoop()` — в `core_loop` (базовые команды регистрируются в begin, слоты
   модулей применяются лениво при первом вызове `TerminalLoop()`).
@@ -287,9 +296,9 @@ Module web files (e.g. `module_program/module_prog/web/prog.html`, `module_progr
 
 | File | Location | Purpose |
 |------|----------|---------|
-| `config_sys.json` | `core_sys/web/` | Device name, serial, WiFi scan time, AP lifetime |
-| `config_ntp.json` | `core_sys/web/` | NTP server addresses, timezone, DST |
-| `config_wifi0-3.json` | `core_sys/web/` | 4 Wi-Fi profiles (SSID, password, DHCP/static IP) |
+| `config_sys.json` | `core_sys/web/` | Device name, serial |
+| `config_ntp.json` | `core_ntp/web/` | NTP server addresses, timezone, DST |
+| `config_wifi0-3.json` | `core_wifi/web/` | 4 Wi-Fi profiles (SSID, password, DHCP/static IP) |
 | `secret.json` | `core_sys/web/` | HTTP auth login/password (hidden from FS browser) |
 | `page_head.html` | `core_web/web/` | HTML template for the device main page (with menu marker) |
 | `config_prog.json` | `module_program/module_prog/web/` | Programmer project config (chip, project name) |
@@ -415,11 +424,12 @@ avr-fota/
 │   ├── main.h/cpp            # Entry point (setup/loop), project-wide defines
 │   ├── debug.h / debug_prefix.cpp # Debug logging macros + DBG_MOD
 │   ├── mod_context.h         # Module init context (fs, hostname, password)
-│   ├── core_sys/             # System core (non-module files)
+│   ├── core_sys/             # System core: identity/auth/config + system info (CLASS_CORE_SYS)
+│   │   ├── core_sys.h/cpp    # CLASS_CORE_SYS: config_sys.json, secret.json, hostname, FS-version
+│   │   ├── ident_store.h/cpp # NVRAM identity (name/serial)
 │   │   ├── eertos.h/cpp      # Cooperative task scheduler
-│   │   └── web/              # System pages/configs: system.html, wifi.html,
-│   │                         #   wifi-slot.js, update.html, 404.html, spark-md5.js,
-│   │                         #   config_sys.json, secret.json, config_wifi0-3.json, config_ntp.json
+│   │   └── web/              # System pages: system.html, recover.html, 404.html,
+│   │                         #   config_sys.json, secret.json
 │   ├── core_web/            # Web-server core
 │   │   ├── FSWebServerLib.h/cpp # Async web server + routing (AsyncFSWebServer)
 │   │   └── web/             # Device main page: index.html, GetJson.js, GetMarkup.js,
@@ -427,17 +437,17 @@ avr-fota/
 │   ├── ESPAsyncWebServer.h  # Library fork (in src root so -Isrc overrides libdeps)
 │   ├── modules_registry.h/cpp # Generated per env (не в git, пересоздаются pre-скриптом сборки)
 │   ├── version.h            # Auto-generated version header (не в git)
-│   ├── core_wifi/           # Wi-Fi core module
-│   ├── core_ntp/            # NTP core module
-│   ├── core_ota/            # OTA core module
-│   ├── core_editor/         # FS editor core module
+│   ├── core_wifi/           # Wi-Fi core module (+ web/wifi.html, wifi-slot.js, config_wifi0-3.json)
+│   ├── core_ntp/            # NTP core module (+ web/ntp.html, config_ntp.json)
+│   ├── core_ota/            # OTA core module (+ web/update.html, spark-md5.js)
 │   ├── core_json/           # JSON utilities core module
 │   ├── core_led/            # LED indication core module
 │   ├── core_terminal/       # Serial terminal core module
 │   ├── module_template/     # Шаблон модуля (эталон для создания новых; остаётся в ядре, не клон)
-│   └── module_*/device_*/   # Клоны внешних репозиториев (в dev-копии лежат все 12), каждый со
+│   └── module_*/device_*/   # Клоны внешних репозиториев (в dev-копии лежат все 13), каждый со
 │                           # своей .git; вне учёта ядра (см. .gitignore). Программатор:
-│                           # src/module_program/{module_prog,submodule_isp,submodule_swd}.
+│                           # src/module_program/{module_prog,submodule_isp,submodule_swd};
+│                           # редактор FS: src/module_editor/.
 │   └── *version.h           # Auto-generated per-module version headers (игнорируются)
 ├── targets/                 # PlatformIO target configs
 │   ├── targets_example.ini  # Example target definitions
@@ -454,10 +464,11 @@ avr-fota/
 ### Debug macros
 
 Each module has a dedicated debug flag and macro:
+- `DEBUG_SYS` → `DEBUGSYS(...)` (`[C_SYS]`)
 - `DEBUG_OTA` → `DEBUGOTA(...)`
 - `DEBUG_NTP` → `DEBUGNTP(...)`
 - `DEBUG_JSON` → `DEBUGJSON(...)`
-- `DEBUG_EDITOR` → `DEBUGEDIT(...)`
+- `DEBUG_EDITOR` → `DEBUGEDITOR(...)` (`[M_EDITOR]`)
 - `DEBUG_LED` → `DEBUGLOGLED(...)`
 - `DEBUGLOG_WIFI` → `DEBUGLOGWIFI(...)`
 - `DEBUG_PROG` → `DEBUGLOGPROG(...)`

@@ -278,6 +278,41 @@ def _has_own_code(folder: Path) -> bool:
     return False
 
 
+def is_external_component_without_git(project_dir: Path, folder_rel: str) -> bool:
+    """
+    True, если папка — внешний компонент (игнорируется .gitignore ядра) и не
+    содержит собственного .git в цепочке до корня проекта.
+
+    Для таких компонентов git-история ядра по этому же относительному пути не
+    описывает их код (путь мог существовать раньше под другим именем), поэтому
+    code-hash/дата считаются неопределёнными, а не историческим коммитом ядра.
+    """
+    folder = (project_dir / folder_rel).resolve()
+    root = project_dir.resolve()
+
+    probe = folder
+    while True:
+        if probe == root:
+            break
+        if (probe / ".git").exists():
+            return False
+        if probe.parent == probe:
+            break
+        probe = probe.parent
+
+    try:
+        result = subprocess.run(
+            ["git", "check-ignore", "-q", str(folder)],
+            cwd=str(root),
+            capture_output=True,
+            text=True,
+            check=False
+        )
+        return result.returncode == 0
+    except Exception:
+        return False
+
+
 def discover_module_dirs(src_dir: Path) -> List[Path]:
     """Собирает папки компонентов для генерации версий.
 
@@ -358,9 +393,18 @@ def generate_module_versions():
             old_version, old_code_hash = read_existing_header(version_file, macro_prefix)
 
         # Хэш последнего коммита, меняющего код модуля (без учёта собственного *_version.h)
-        code_hash = get_folder_code_hash(project_dir, module_rel, header_filename)
+        git_hash = get_folder_code_hash(project_dir, module_rel, header_filename)
 
-        changed = bool(code_hash) and code_hash != old_code_hash
+        # Внешний компонент без собственного .git: git-история ядра по этому пути
+        # не описывает код компонента — не выводим версию/дату из чужой истории.
+        external_no_git = is_external_component_without_git(project_dir, module_rel)
+        code_hash = "" if external_no_git else git_hash
+
+        if external_no_git:
+            # Один раз очищаем ранее записанный чужой хэш из заголовка (без bump).
+            changed = bool(old_code_hash)
+        else:
+            changed = bool(code_hash) and code_hash != old_code_hash
 
         if version_file.exists() and not changed:
             info_print(f"  Module unchanged: version {old_version}")
@@ -370,12 +414,18 @@ def generate_module_versions():
         # Заголовка нет (база) либо был реальный коммит кода -> bump
         if old_version is None:
             new_version = 0
+        elif external_no_git:
+            new_version = old_version   # очистка заголовка без приращения версии
         else:
             new_version = old_version + 1
         info_print(f"  Module changed: version {old_version if old_version is not None else 'new'} -> {new_version}")
 
-        commit_date = get_commit_date(project_dir, module_rel, str_format=False)  # для парсинга
-        commit_date_str = get_commit_date(project_dir, module_rel, str_format=True)  # для строки
+        if external_no_git:
+            commit_date = None
+            commit_date_str = None
+        else:
+            commit_date = get_commit_date(project_dir, module_rel, str_format=False)  # для парсинга
+            commit_date_str = get_commit_date(project_dir, module_rel, str_format=True)  # для строки
         if not commit_date_str:
             commit_date_str = "1970.01.01 00.00"
 

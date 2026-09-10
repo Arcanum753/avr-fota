@@ -395,29 +395,31 @@ def main():
 
     # ---- Ядра ----
     includes: List[str] = [
+        '"core_sys/core_sys.h"',
         '"core_wifi/core_wifi.h"',
         '"core_ntp/core_ntp.h"',
         '"core_json/core_json.h"',
-        '"core_editor/core_editor.h"',
         '"core_ota/core_ota.h"',
         '"core_terminal/core_terminal.h"',
     ]
     core_begin = [
         # core_json должен инициализироваться первым: его _fs используется
-        # core_wifi/core_ntp (загрузка конфигов) и всем остальным begin(ctx).
+        # core_sys/core_wifi/core_ntp (загрузка конфигов) и всем остальным begin(ctx).
         "core_json.begin(ctx);",
+        # core_sys идёт сразу после core_json: загружает identity/auth и заполняет
+        # ctx.hostname / ctx.password до core_wifi и mDNS.
+        "core_sys.begin(ctx);",
         "core_wifi.begin(ctx);",
         "core_ntp.begin(ctx);",
-        "core_editor.begin(ctx);",
         # Терминал без класса: базовые команды регистрируются здесь,
         # слоты модулей применяются лениво в первом вызове TerminalLoop().
         "TerminalInit();",
     ]
     core_web = [
+        "core_sys.web_Init();",
         "core_wifi.web_Init();",
         "core_ntp.web_Init();",
         "core_json.web_Init();",
-        "core_editor.web_Init();",
     ]
     core_loop: List[str] = [
         # Терминал читает сериал первым в цикле; первый вызов также применяет
