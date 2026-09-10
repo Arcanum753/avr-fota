@@ -1,0 +1,16 @@
+# ESP32 Partition Table — только для env esp32_macrotest (module_macros/Lua)
+# 4MB flash (0x400000)
+# Отличие от partitions_esp32.csv: app0/app1 увеличены на 128 КБ каждый (Lua-движок),
+# spiffs уменьшен с 0x18E000 до 0x14E000 (содержимое FS макротеста ~0.83 МБ помещается).
+#
+# Total: 0x9000 + 0x5000 + 0x2000 + 0x150000 + 0x150000 + 0x14E000 + 0x1000 + 0x1000 = 0x400000
+#        36KB + 20KB + 8KB + 1344KB + 1344KB + 1336KB + 4KB + 4KB = 4096KB = 4MB OK
+
+# Name,   Type, SubType, Offset,   Size,      Flags
+nvs,       data, nvs,     0x9000,   0x5000,
+otadata,   data, ota,     0xE000,   0x2000,
+app0,      app,  ota_0,   0x10000,  0x150000,
+app1,      app,  ota_1,   0x160000, 0x150000,
+spiffs,    data, spiffs,  0x2B0000, 0x14E000,
+sysid,     data, undefined,0x3FE000, 0x1000,
+nvs_key,   data, nvs_keys,0x3FF000, 0x1000,
