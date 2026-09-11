@@ -15,6 +15,7 @@
 #include <Arduino.h>
 #include <string.h>
 #include "ident_store.h"
+#include "common_module.h"
 
 #if defined(ESP32)
 #include <esp_partition.h>
@@ -39,24 +40,6 @@
 
 // Буфер для операций чтения/записи.
 static uint8_t s_identBuf[IDENT_STORE_SIZE];
-
-// ============================================================
-// CRC32
-// ============================================================
-
-// Расчёт CRC по всей записи, но с пропуском поля crc (байты skipOff..skipOff+skipLen).
-static uint32_t identCrcSkip(uint8_t *data, size_t len, size_t skipOff, size_t skipLen) {
-    uint32_t crc = 0xFFFFFFFF;
-    for (size_t i = 0; i < len; i++) {
-        if (i >= skipOff && i < skipOff + skipLen) { continue; }
-        crc ^= data[i];
-        for (uint8_t bit = 0; bit < 8; bit++) {
-            uint32_t mask = (crc & 1) ? 0xEDB88320 : 0;
-            crc = (crc >> 1) ^ mask;
-        }
-    }
-    return ~crc;
-}
 
 // ============================================================
 // Низкоуровневый доступ к сектору хранения
@@ -124,7 +107,7 @@ static size_t identEncode(const String &name, const String &serial) {
     memcpy(&s_identBuf[IDENT_HEADER_LEN + nameLen], serial.c_str(), serialLen);
 
     size_t total = IDENT_HEADER_LEN + nameLen + serialLen;
-    uint32_t crc = identCrcSkip(s_identBuf, total, 8, 4);
+    uint32_t crc = ns_core_sys::identCrcSkip(s_identBuf, total, 8, 4);
     s_identBuf[8]  = (uint8_t)(crc & 0xFF);
     s_identBuf[9]  = (uint8_t)(crc >> 8);
     s_identBuf[10] = (uint8_t)(crc >> 16);
@@ -148,7 +131,7 @@ static bool identDecode(String &name, String &serial) {
                         ((uint32_t)s_identBuf[9] << 8) |
                         ((uint32_t)s_identBuf[10] << 16) |
                         ((uint32_t)s_identBuf[11] << 24);
-    if (identCrcSkip(s_identBuf, total, 8, 4) != crcSaved) { return false; }
+    if (ns_core_sys::identCrcSkip(s_identBuf, total, 8, 4) != crcSaved) { return false; }
 
     name.reserve(nameLen);
     serial.reserve(serialLen);

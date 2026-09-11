@@ -9,6 +9,11 @@ boolean checkRange(String Value);
 String urldecode(String input); // (based on https://code.google.com/p/avr-netino/)
 unsigned char h2int(char c);
 
+// Экранирование строки для вставки в HTML и защиты разделителей CVT (| и перевод строки)
+String escapeHtml(const String& s);
+// Экранирование строки для вставки в JSON (кавычки, управляющие символы)
+String escapeJson(const String& s);
+
 
 #endif // _COMMON_h
 

@@ -17,6 +17,7 @@
 #include "core_json/core_json.h"
 #include "core_wifi/core_wifi.h"
 #include "core_sys/ident_store.h"
+#include "core_sys/common_module.h"
 #include "core_sys_version.h"
 
 CLASS_CORE_SYS core_sys;
@@ -83,9 +84,7 @@ void CLASS_CORE_SYS::web_Init() {
 	// recover (восстановление забытого пароля) — публичные маршруты без авторизации
 	ESPHTTPServer.on("/recover", HTTP_GET, [this](AsyncWebServerRequest *request) {
 		core_wifi.notifyApClientActivity();
-		if (!ESPHTTPServer.handleFileRead("/recover.html", request)) {
-			request->send(404, "text/plain", "FileNotFound");
-		}
+		if (!ESPHTTPServer.handleFileRead("/recover.html", request)) { request->send(404, "text/plain", "FileNotFound"); }
 	});
 
 	ESPHTTPServer.on("/recover/status", HTTP_GET, [this](AsyncWebServerRequest *request) {
@@ -182,17 +181,6 @@ void CLASS_CORE_SYS::send_wwwauth_configuration_values_html(AsyncWebServerReques
 	request->send(200, "text/plain", values);
 }
 
-// Валидация пароля администратора: 8-63 символа, только латинские буквы и цифры
-static bool isAdminPassValid(const String& pass) {
-	if (pass.length() < 8 || pass.length() > 63) { return false; }
-	for (unsigned int i = 0; i < pass.length(); i++) {
-		char c = pass.charAt(i);
-		bool ok = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9');
-		if (!ok) { return false; }
-	}
-	return true;
-}
-
 void CLASS_CORE_SYS::set_wwwauth_configuration(AsyncWebServerRequest *request)	{
 	DEBUGSYS(__PRETTY_FUNCTION__);	DEBUGSYS("\r\n");
 	DEBUGSYS("%s %d\n", __FUNCTION__, request->args());
@@ -258,7 +246,7 @@ void CLASS_CORE_SYS::set_wwwauth_configuration(AsyncWebServerRequest *request)	{
 				request->send(400, "text/plain", "User must be filled");
 				return;
 			}
-			if (newPass != oldPass && !isAdminPassValid(newPass)) {
+			if (newPass != oldPass && !ns_core_sys::isAdminPassValid(newPass)) {
 				request->send(400, "text/plain", "Password: 8-63 chars, only latin letters and digits");
 				return;
 			}
@@ -280,7 +268,7 @@ void CLASS_CORE_SYS::set_wwwauth_configuration(AsyncWebServerRequest *request)	{
 			saveHTTPAuth();
 			bool changed = (oldAuth != newAuth) || (oldUser != newUser) || (oldPass != newPass)
 				|| (oldSecQ != newSecQ) || (oldSecA != newSecA);
-			if (changed) {
+			if (changed == true) {
 				// Применяем новый/убранный пароль ко всем механизмам (HTTP auth, AP, OTA):
 				// ArduinoOTA фиксирует пароль при старте, поэтому требуется перезагрузка.
 				request->send_P(200, "text/html", Page_IndexRefresh);
@@ -293,33 +281,13 @@ void CLASS_CORE_SYS::set_wwwauth_configuration(AsyncWebServerRequest *request)	{
 	}
 }
 
-// Экранирование для вставки в HTML (div) и защиты разделителей CVT (| и перевод строки)
-static String escHtml(const String& s) {
-	String out;
-	out.reserve(s.length());
-	for (unsigned int i = 0; i < s.length(); i++) {
-		char c = s.charAt(i);
-		switch (c) {
-			case '&':  out += "&amp;";   break;
-			case '<':  out += "&lt;";    break;
-			case '>':  out += "&gt;";    break;
-			case '"':  out += "&quot;";  break;
-			case '|':  out += "&#124;";  break;
-			case '\r':
-			case '\n': out += ' ';       break;
-			default:   out += c;         break;
-		}
-	}
-	return out;
-}
-
 // Статус восстановления для публичной страницы /recover (формат ApplyCVT)
 void CLASS_CORE_SYS::recover_status_values_html(AsyncWebServerRequest *request) {
 	DEBUGSYS(__FUNCTION__);	DEBUGSYS("\r\n");
 	String values = "";
 	if (_httpAuth.wwwQuestion.length() > 0 && _httpAuth.wwwAnswer.length() > 0) {
 		values += "recover_cfg|1|div\n";
-		values += "recover_q|" + escHtml(_httpAuth.wwwQuestion) + "|div\n";
+		values += "recover_q|" + escapeHtml(_httpAuth.wwwQuestion) + "|div\n";
 	}
 	else {
 		values += "recover_cfg|0|div\n";

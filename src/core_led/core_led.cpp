@@ -14,6 +14,7 @@
 
 #include "core_sys/eertos.h"
 #include "core_led.h"
+#include "common_module.h"
 
 // ============================================================
 // Глобальные объекты и переменные
@@ -30,20 +31,6 @@ typedef struct {
 static LedSlot ledSlots[LED_PRIO_COUNT];
 static bool ledSteadyOn = false;                 // базовое состояние «горит постоянно»
 static char ledManualPattern[LEDSTRINGLIMIT + 1];// буфер терминальной команды blink (без heap)
-
-// ============================================================
-// Доступ к PROGMEM-строкам (кассеты модулей передают flash-указатели)
-// ============================================================
-
-#if defined(ESP8266)
-static uint8_t ledPatLen(const char* p)  { return (uint8_t)strlen_P(p); }
-static char    ledPatAt(const char* p, uint8_t i) { return (char)pgm_read_byte(p + i); }
-#endif
-#if defined(ESP32)
-static uint8_t ledPatLen(const char* p)  { return (uint8_t)strlen(p); }
-static char    ledPatAt(const char* p, uint8_t i) { return p[i]; }
-#endif
-
 
 #if defined(ESP8266)
 void espLedOn ()    {	if (CONNECTION_LED >= 0) {digitalWrite(CONNECTION_LED, LOW);} }
@@ -69,7 +56,7 @@ static LedSlot* ledTopSlot() {
 static void ledApplyOutput() {
 	LedSlot* s = ledTopSlot();
 	if (s) {
-		if (ledPatAt(s->pattern, s->position) == '*') { espLedOn(); }
+		if (ns_core_led::ledPatAt(s->pattern, s->position) == '*') { espLedOn(); }
 		else { espLedOff(); }
 	} else {
 		if (ledSteadyOn) { espLedOn(); }
@@ -93,7 +80,7 @@ void ledSetState(LedPriority prio, const char* pattern, int16_t times) {
 		if (s.active && s.times != -1) { return; }
 	}
 	s.pattern = pattern;
-	s.length = ledPatLen(pattern);
+	s.length = ns_core_led::ledPatLen(pattern);
 	if (s.length == 0) { ledClearState(prio); return; }
 	s.position = 0;
 	s.times = times;

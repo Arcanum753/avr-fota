@@ -25,8 +25,6 @@
 #define HTML_INDEX  "index.html"
 
 
-String getContentType(String filename, AsyncWebServerRequest *request);
-
 class AsyncFSWebServer : public AsyncWebServer {
 public:
     AsyncFSWebServer(uint16_t port);

@@ -211,6 +211,47 @@ CLASS_CORE_OTA (core_ota/core_ota.h)
 
 Глобальные объекты модулей НЕ переименовываются — только типы.
 
+### Вспомогательные функции: `common/` и локальные `common_module`
+
+Вспомогательные (чистые, без состояния) функции выносятся из основной логики компонента:
+
+- **Общие для нескольких компонентов** — в `src/common/common.h/.cpp` (глобальное пространство
+  имён). В частности, экранирование строк:
+  - `String escapeHtml(const String&)` — вставка в HTML + защита разделителей CVT
+    (`& < > "`, `|`→`&#124;`, CR/LF→пробел);
+  - `String escapeJson(const String&)` — кавычки, `\`, `\b \f \n \r \t`, `\uXXXX` для байтов `< 0x20`.
+  Дублирующие `escHtml`/`escapeJsonStr`/`macroJsonEscape` запрещены — использовать только эти две.
+- **Локальные для компонента** — в `common_module.h/.cpp` внутри папки компонента, обёрнутые
+  в namespace **`ns_<dirname>`** (дефисы → подчёркивания): `ns_core_sys`, `ns_core_web`,
+  `ns_core_led`, `ns_module_ds3231`, `ns_module_macros`, `ns_module_rgb`,
+  `ns_device_electronica7_rgb`. Префикс `ns_` обязателен: namespace с «голым» именем компонента
+  конфликтует с глобальным объектом (`CLASS_MODULE_DS3231 module_ds3231;`). Include из файлов
+  компонента — локальный: `#include "common_module.h"`.
+
+Правила переноса (что считается вспомогательной функцией):
+
+- переносятся только **чистые stateless** свободные/статические функции: преобразования
+  (BCD/hex), форматирование даты/времени/цвета, парсинг/сборка, математика/цветовые утилиты;
+- **НЕ переносятся**: методы классов, обработчики прерываний (`IRAM_ATTR`), обёртки таймеров/задач
+  EERTOS, функции регистрации терминальных команд, C-callback-мосты (Lua/`cron`), работа с
+  аппаратурой и любые функции, читающие/пишущие глобальные переменные модуля;
+- исключения: сторонние форкнутые библиотеки (`NTPClientLib.*`, `ErriezSerialTerminal.*`,
+  `ESPAsyncWebServer.h`) и уже выделенные helper-файлы (`module_prog/format_bin.*`,
+  `format_hex.*`) не трогаются; `common_module` не создаётся, если подходящих функций нет;
+- include guard каждого `common_module.h` уникален: `_<DIR>_COMMON_MODULE_h`.
+
+Текущие локальные `common_module`:
+
+| Компонент | Namespace | Содержимое |
+|-----------|-----------|------------|
+| `core_sys` | `ns_core_sys` | `isAdminPassValid`, `identCrcSkip` |
+| `core_web` | `ns_core_web` | `getContentType` (перенесён из `FSWebServerLib.h`) |
+| `core_led` | `ns_core_led` | `ledPatLen`, `ledPatAt` |
+| `module_ds3231` | `ns_module_ds3231` | BCD/alarm-хелперы, `_formatAlarmTime/_formatAlarmStamp` (ESP32) |
+| `module_macros` | `ns_module_macros` | `macroFileBaseName` |
+| `module_rgb` | `ns_module_rgb` | `hexStringToUint32` |
+| `device_electronica7_rgb` | `ns_device_electronica7_rgb` | `e7*` (HSV/Lerp/ГПСЧ/эффекты/сэмплер) |
+
 ### Inclusion mechanism: единый контракт модулей + автогенерация registry
 
 Все ядра/модули/устройства приводятся к единому контракту:
@@ -418,7 +459,7 @@ avr-fota/
 │   └── build_all.py          # Build all envs (manual orchestrator)
 ├── src/                     # Source code
 │   ├── common/              # Low-level utilities (time + string + common)
-│   │   ├── common.h/cpp     # hex2bin, urldecode, formatBytes, checkRange
+│   │   ├── common.h/cpp     # hex2bin, urldecode, formatBytes, checkRange, escapeHtml, escapeJson
 │   │   ├── TimeLib.h/cpp    # Time library fork
 │   │   └── StringArray.h    # Linked list utility (fork)
 │   ├── main.h/cpp            # Entry point (setup/loop), project-wide defines
@@ -426,12 +467,14 @@ avr-fota/
 │   ├── mod_context.h         # Module init context (fs, hostname, password)
 │   ├── core_sys/             # System core: identity/auth/config + system info (CLASS_CORE_SYS)
 │   │   ├── core_sys.h/cpp    # CLASS_CORE_SYS: config_sys.json, secret.json, hostname, FS-version
+│   │   ├── common_module.h/cpp # ns_core_sys: isAdminPassValid, identCrcSkip
 │   │   ├── ident_store.h/cpp # NVRAM identity (name/serial)
 │   │   ├── eertos.h/cpp      # Cooperative task scheduler
 │   │   └── web/              # System pages: system.html, recover.html, 404.html,
 │   │                         #   config_sys.json, secret.json
 │   ├── core_web/            # Web-server core
 │   │   ├── FSWebServerLib.h/cpp # Async web server + routing (AsyncFSWebServer)
+│   │   ├── common_module.h/cpp # ns_core_web: getContentType
 │   │   └── web/             # Device main page: index.html, GetJson.js, GetMarkup.js,
 │   │                        #   style.css, page_head.html, page_bottom.html, esp.gif, logo.gif, favicon.ico
 │   ├── ESPAsyncWebServer.h  # Library fork (in src root so -Isrc overrides libdeps)
@@ -441,7 +484,7 @@ avr-fota/
 │   ├── core_ntp/            # NTP core module (+ web/ntp.html, config_ntp.json)
 │   ├── core_ota/            # OTA core module (+ web/update.html, spark-md5.js)
 │   ├── core_json/           # JSON utilities core module
-│   ├── core_led/            # LED indication core module
+│   ├── core_led/            # LED indication core module (common_module.h/cpp: ledPatLen, ledPatAt)
 │   ├── core_terminal/       # Serial terminal core module
 │   ├── module_template/     # Шаблон модуля (эталон для создания новых; остаётся в ядре, не клон)
 │   └── module_*/device_*/   # Клоны внешних репозиториев (в dev-копии лежат все 13), каждый со

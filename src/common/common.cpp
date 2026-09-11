@@ -1,5 +1,6 @@
 
 #include <stdint.h>
+#include <stdio.h>
 // #include "debug.h"
 
 #if defined(ARDUINO) && ARDUINO >= 100
@@ -68,5 +69,52 @@ String urldecode(String input) { // (based on https://code.google.com/p/avr-neti
 boolean checkRange(String Value) {
 	if (Value.toInt() < 0 || Value.toInt() > 255) {		return false;	}
 	else {		return true;	}
+}
+
+// Экранирование для вставки в HTML (div) и защиты разделителей CVT (| и перевод строки)
+String escapeHtml(const String& s) {
+	String out;
+	out.reserve(s.length());
+	for (unsigned int i = 0; i < s.length(); i++) {
+		char c = s.charAt(i);
+		switch (c) {
+			case '&':  out += "&amp;";   break;
+			case '<':  out += "&lt;";    break;
+			case '>':  out += "&gt;";    break;
+			case '"':  out += "&quot;";  break;
+			case '|':  out += "&#124;";  break;
+			case '\r':
+			case '\n': out += ' ';       break;
+			default:   out += c;         break;
+		}
+	}
+	return out;
+}
+
+// Экранирование для вставки в JSON (кавычки, обратный слэш, управляющие символы)
+String escapeJson(const String& s) {
+	String out;
+	out.reserve(s.length());
+	for (unsigned int i = 0; i < s.length(); i++) {
+		char c = s.charAt(i);
+		switch (c) {
+			case '"':  out += "\\\""; break;
+			case '\\': out += "\\\\"; break;
+			case '\b': out += "\\b";  break;
+			case '\f': out += "\\f";  break;
+			case '\n': out += "\\n";  break;
+			case '\r': out += "\\r";  break;
+			case '\t': out += "\\t";  break;
+			default:
+				if ((unsigned char)c < 0x20) {
+					char buf[8];
+					snprintf(buf, sizeof(buf), "\\u%04x", (unsigned char)c);
+					out += buf;
+				} else {
+					out += c;
+				}
+		}
+	}
+	return out;
 }
 
