@@ -283,6 +283,10 @@ def h_content() -> str:
         "void modules_begin(ModContext& ctx);\n"
         "void dev_begin(ModContext& ctx);\n"
         "\n"
+        "void core_register_resources();\n"
+        "void modules_register_resources();\n"
+        "void dev_register_resources();\n"
+        "\n"
         "void core_web_Init();\n"
         "void modules_web_Init();\n"
         "void dev_web_Init();\n"
@@ -298,6 +302,7 @@ def h_content() -> str:
 def cpp_content(env_name: str,
                 includes: List[str],
                 core_begin: List[str], modules_begin: List[str], dev_begin: List[str],
+                core_res: List[str], modules_res: List[str], dev_res: List[str],
                 core_web: List[str], modules_web: List[str], dev_web: List[str],
                 core_loop: List[str], modules_loop: List[str], dev_loop: List[str]) -> str:
     L: List[str] = []
@@ -329,6 +334,9 @@ def cpp_content(env_name: str,
     func("core_begin", core_begin)
     func("modules_begin", modules_begin)
     func("dev_begin", dev_begin)
+    func("core_register_resources", core_res)
+    func("modules_register_resources", modules_res)
+    func("dev_register_resources", dev_res)
     func("core_web_Init", core_web)
     func("modules_web_Init", modules_web)
     func("dev_web_Init", dev_web)
@@ -401,6 +409,8 @@ def main():
         '"core_json/core_json.h"',
         '"core_ota/core_ota.h"',
         '"core_terminal/core_terminal.h"',
+        '"core_state/core_state.h"',
+        '"core_task/core_task.h"',
     ]
     core_begin = [
         # core_json должен инициализироваться первым: его _fs используется
@@ -409,6 +419,11 @@ def main():
         # core_sys идёт сразу после core_json: загружает identity/auth и заполняет
         # ctx.hostname / ctx.password до core_wifi и mDNS.
         "core_sys.begin(ctx);",
+        # Шина и задачи инициализируются до регистрации ресурсов.
+        "core_state.begin(ctx);",
+        "core_task.begin(ctx);",
+        # Регистрация ресурсов ядра/модулей/устройств до begin() периферии.
+        "core_register_resources();",
         "core_wifi.begin(ctx);",
         "core_ntp.begin(ctx);",
         # Терминал без класса: базовые команды регистрируются здесь,
@@ -420,8 +435,12 @@ def main():
         "core_wifi.web_Init();",
         "core_ntp.web_Init();",
         "core_json.web_Init();",
+        "core_state.web_Init();",
     ]
     core_loop: List[str] = [
+        # Шина раздаёт события и таймауты до обработки остальных задач.
+        "core_state.loop();",
+        "core_task.loop();",
         # Терминал читает сериал первым в цикле; первый вызов также применяет
         # слоты модулей (TerminalRegisterModule).
         "TerminalLoop();",
@@ -437,6 +456,34 @@ def main():
         core_web.append("core_ota.web_Init();")
         core_loop.append("core_ota.loop();")
 
+    # ---- Ресурсы ядровых ----
+    def core_registry(core_name: str, default_ns: str, default_res: int):
+        reg = read_registry_ini(project_dir, core_name, core_name)
+        if reg is None:
+            return default_ns, default_res, 0
+        ns = reg.get("namespace", default_ns).strip() or default_ns
+        res = 1 if reg.get("res", "").strip() == "1" else default_res
+        priv = 1 if reg.get("priv", "").strip() == "1" else 0
+        return ns, res, priv
+
+    core_res: List[str] = []
+    for cname, dns, dres in [
+        ("core_sys", "system", 1),
+        ("core_state", "system", 1),
+        ("core_wifi", "wifi", 1),
+        ("core_ntp", "time", 1),
+        ("core_ota", "ota", 1),
+    ]:
+        ns, res, priv = core_registry(cname, dns, dres)
+        if not res:
+            continue
+        core_res.append(f'core_state.setNamespace("{ns}");')
+        # Ядро всегда привилегированное.
+        core_res.append("core_state.setPrivileged(true);")
+        core_res.append(f"{cname}.register_resources();")
+    if core_res:
+        core_res.append("core_state.clearNamespace();")
+
     # ---- Модули / субмодули / устройства ----
     modules_begin: List[str] = []
     modules_web: List[str] = []
@@ -444,6 +491,9 @@ def main():
     dev_begin: List[str] = []
     dev_web: List[str] = []
     dev_loop: List[str] = []
+    modules_res_entries: List[Tuple[int, int, str, str, int]] = []
+    dev_res_entries: List[Tuple[int, int, str, str, int]] = []
+    res_seq = 0
     seen_includes = set(includes)
 
     for mod, rel_dir in included:
@@ -462,17 +512,34 @@ def main():
             continue
         web_flag = reg.get("web", "0").strip() == "1"
         loop_flag = reg.get("loop", "0").strip() == "1"
+        res_flag = reg.get("res", "0").strip() == "1"
+        ns = reg.get("namespace", "").strip()
+        priv = 1 if reg.get("priv", "").strip() == "1" else 0
+        try:
+            prio = int(reg.get("prio", "50").strip() or "50")
+        except ValueError:
+            prio = 50
 
         hdr = f'"{rel_dir}/{mod}.h"'
         if hdr not in seen_includes:
             seen_includes.add(hdr)
             includes.append(hdr)
 
+        is_device = mod.startswith(DEVICE_PREFIX)
+
+        if res_flag:
+            entry = (prio, res_seq, obj, ns, priv)
+            res_seq += 1
+            if is_device:
+                dev_res_entries.append(entry)
+            else:
+                modules_res_entries.append(entry)
+
         if mod == "module_otaclient" and is_otaclient:
             # OTA-клиент уже обработан в core-группах — не дублируем в modules.
             continue
 
-        if mod.startswith(DEVICE_PREFIX):
+        if is_device:
             dev_begin.append(f"{obj}.begin(ctx);")
             if web_flag:
                 dev_web.append(f"{obj}.web_Init();")
@@ -489,6 +556,27 @@ def main():
             if loop_flag:
                 modules_loop.append(f"{obj}.loop();")
 
+    # Регистрация ресурсов идёт до begin() периферии соответствующей группы.
+    modules_begin.insert(0, "modules_register_resources();")
+    dev_begin.insert(0, "dev_register_resources();")
+
+    def build_res_calls(entries) -> List[str]:
+        # prio: больше = важнее; при равенстве сохраняется исходный порядок (FCFS).
+        ordered = sorted(entries, key=lambda e: (-e[0], e[1]))
+        calls: List[str] = []
+        for prio, seq, obj, ns, priv in ordered:
+            if ns:
+                calls.append(f'core_state.setNamespace("{ns}");')
+            if priv:
+                calls.append("core_state.setPrivileged(true);")
+            calls.append(f"{obj}.register_resources();")
+        if calls:
+            calls.append("core_state.clearNamespace();")
+        return calls
+
+    modules_res = build_res_calls(modules_res_entries)
+    dev_res = build_res_calls(dev_res_entries)
+
     h_out = project_dir / SRC_FOLDER / "modules_registry.h"
     cpp_out = project_dir / SRC_FOLDER / "modules_registry.cpp"
 
@@ -497,6 +585,7 @@ def main():
         env_name,
         includes,
         core_begin, modules_begin, dev_begin,
+        core_res, modules_res, dev_res,
         core_web, modules_web, dev_web,
         core_loop, modules_loop, dev_loop,
     ))

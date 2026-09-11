@@ -58,6 +58,7 @@ class  CLASS_CORE_NTP    {
     void begin(ModContext& ctx);
     void ntpOnConnected ();
     void ntpOnDisconected ();
+    void register_resources();
     void web_Init();
     
     void ntpSwitchReserv ();

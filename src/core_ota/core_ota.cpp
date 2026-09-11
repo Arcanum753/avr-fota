@@ -14,8 +14,20 @@
 #include "core_ota_version.h"
 #include "core_sys/core_sys.h"
 #include "core_led/core_led.h"
+#include "core_state/core_state.h"
 
 CLASS_CORE_OTA core_ota;
+
+// Индексы ota.state (порядок = enum в register_resources).
+#define OTA_ST_IDLE     0
+#define OTA_ST_UPLOAD   1
+#define OTA_ST_VERIFY   2
+#define OTA_ST_DONE     3
+#define OTA_ST_ERROR    4
+
+static const char* const otaStateNames[5] = {
+    "idle", "upload", "verify", "done", "error",
+};
 
 // Global flag to prevent double _fs->end() crashes
 bool _ota_fsEndCalled = false;
@@ -43,11 +55,25 @@ void CLASS_CORE_OTA::begin(String _hostname, String _password){
 	DEBUGOTA(__FUNCTION__);	DEBUGOTA("\r\n");
 	prepareSizesForUpdate();
 	ConfigureOTA(_hostname, _password);
+
+	core_state.signal("ota.state", BusValue::en(OTA_ST_IDLE));
+	core_state.signal("ota.server_reachable", BusValue::bo(true));
  }
 
 void CLASS_CORE_OTA::begin(ModContext& ctx){
 	_fs = ctx.fs;
 	begin(ctx.hostname, ctx.password);
+}
+
+// ============================================================
+// register_resources()
+// ============================================================
+void CLASS_CORE_OTA::register_resources() {
+	DEBUGOTA("%s\r\n", __FUNCTION__);
+
+	core_state.regEnum("state", 5, otaStateNames, "OTA state");
+	core_state.regState("server_reachable", BusValue::BOOL,
+	                    "OTA server reachable", false);
 }
 
 // ============================================================
@@ -366,9 +392,14 @@ void CLASS_CORE_OTA::html_uploadUpdateFile(AsyncWebServerRequest *request, Strin
         // Моргание обновления: прошивка или файловая система
         if (typeOTAfile == FILE_TYPE_FIRMWARE) { ledMacrosUpdateFirmware(); }
         if (typeOTAfile == FILE_TYPE_FILESYSTEM) { ledMacrosUpdateFilesystem(); }
+
+        core_state.signal("ota.state", BusValue::en(OTA_ST_UPLOAD));
     }
     
-    if (errorOccurred)  { return; }
+    if (errorOccurred)  {
+        core_state.signal("ota.state", BusValue::en(OTA_ST_ERROR));
+        return;
+    }
     if (responseSent)   { return; }
     
     totalSize += len;
@@ -421,6 +452,7 @@ void CLASS_CORE_OTA::html_uploadUpdateFile(AsyncWebServerRequest *request, Strin
             DEBUGOTA("Update Success: %u\nRebooting...\r\n", _updateFileSize);
             // Do NOT send response here - updateFileExecute() will handle it
             // request->send() removed to prevent double-response with updateFileExecute()
+            core_state.signal("ota.state", BusValue::en(OTA_ST_DONE));
         } else {
             updateHash = Update.md5String();
             DEBUGOTA("Upload failed. Calculated MD5: %s\r\n", updateHash.c_str());
@@ -428,6 +460,7 @@ void CLASS_CORE_OTA::html_uploadUpdateFile(AsyncWebServerRequest *request, Strin
             Update.printError(DEBUGOTASER);
 #endif
             ledMacrosUpdateError();
+            core_state.signal("ota.state", BusValue::en(OTA_ST_ERROR));
             fsRemount();
         }
     }

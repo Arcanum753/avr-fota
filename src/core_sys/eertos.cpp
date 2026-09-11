@@ -56,6 +56,9 @@ static struct
     uint32_t Time;
 } MainTimer[MainTimerQueueSize];
 
+/* Счётчик задач/таймеров, потерянных из-за переполнения очередей. */
+static uint32_t EertosDropped = 0;
+
 
 /**
  * @brief Initialise Tasks and Timer Queue
@@ -75,16 +78,22 @@ void InitRTOS(void) {
  *
  * @param TS Pointer to the task function
  */
-void SetTask(TPTR TS) {
+bool SetTaskEx(TPTR TS) {
     EERTOS_ENTER_CRITICAL();
     for (uint32_t index = 0; index < TaskQueueSize; index++) {
         if (TaskQueue[index] == Idle_task) {
             TaskQueue[index] = TS;
             EERTOS_EXIT_CRITICAL();
-            return;
+            return true;
         }
     }
+    EertosDropped++;
     EERTOS_EXIT_CRITICAL();
+    return false;
+}
+
+void SetTask(TPTR TS) {
+    SetTaskEx(TS);
 }
 
 /**
@@ -114,40 +123,40 @@ void SetTaskFromISR(TPTR TS) {
  * @param TS Pointer to the task function
  * @param NewTime New timer value
  */
-void SetTimerTask(TPTR TS, uint32_t NewTime) {
+bool SetTimerTaskEx(TPTR TS, uint32_t NewTime) {
     EERTOS_ENTER_CRITICAL();
-    
-    uint32_t Idle_i = 0;
+
+    int32_t Idle_i = -1;
     // Сначала ищем существующий таймер для этой задачи
     for (uint32_t index = 0; index < MainTimerQueueSize; index++) {
         if (MainTimer[index].GoToTask == TS) {
             MainTimer[index].Time = NewTime;
             EERTOS_EXIT_CRITICAL();
-            return;
+            return true;
         }
         // Запоминаем первый свободный слот
-        if ((MainTimer[index].GoToTask == Idle_task) && (Idle_i == 0)) { Idle_i = index; }
+        if ((MainTimer[index].GoToTask == Idle_task) && (Idle_i < 0)) { Idle_i = (int32_t)index; }
     }
 
     // Если таймер не найден, используем первый свободный слот
-    if (Idle_i < MainTimerQueueSize) {
+    if (Idle_i >= 0) {
         MainTimer[Idle_i].GoToTask = TS;
         MainTimer[Idle_i].Time = NewTime;
         EERTOS_EXIT_CRITICAL();
-        return;
+        return true;
     }
-    
-    // Если свободных слотов нет - ищем любой свободный (на всякий случай)
-    for (uint32_t index = 0; index < MainTimerQueueSize; index++) {
-        if (MainTimer[index].GoToTask == Idle_task) {
-            MainTimer[index].GoToTask = TS;
-            MainTimer[index].Time = NewTime;
-            EERTOS_EXIT_CRITICAL();
-            return;
-        }
-    }
-    
+
+    EertosDropped++;
     EERTOS_EXIT_CRITICAL();
+    return false;
+}
+
+void SetTimerTask(TPTR TS, uint32_t NewTime) {
+    SetTimerTaskEx(TS, NewTime);
+}
+
+uint32_t EertosDroppedCount(void) {
+    return EertosDropped;
 }
 
 /**

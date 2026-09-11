@@ -18,6 +18,12 @@ extern void SetTimerTask(TPTR TS, uint32_t NewTime);
 extern void DelTimerTask(TPTR TS);
 extern void TaskManager(void);
 
+// Диагностические варианты: возвращают false при переполнении очереди.
+// Старые void-функции реализованы поверх них.
+extern bool SetTaskEx(TPTR TS);
+extern bool SetTimerTaskEx(TPTR TS, uint32_t NewTime);
+extern uint32_t EertosDroppedCount(void);
+
 extern void TimerService(void);
 
 

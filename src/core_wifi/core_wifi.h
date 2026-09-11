@@ -122,6 +122,7 @@ class  CLASS_CORE_WIFI    {
     void notifyRestart() { wifiStatus = FS_STAT_RESET; }
     
     static void s_secondTick();
+    void register_resources();
     void web_Init();
     String getMacAddress();
     int scanWifi();

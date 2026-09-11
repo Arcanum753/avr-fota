@@ -18,6 +18,7 @@
 #include "core_wifi/core_wifi.h"
 #include "core_sys/ident_store.h"
 #include "core_sys/common_module.h"
+#include "core_state/core_state.h"
 #include "core_sys_version.h"
 
 CLASS_CORE_SYS core_sys;
@@ -37,6 +38,21 @@ void CLASS_CORE_SYS::begin(ModContext& ctx) {
 	// чтобы core_wifi и mDNS получили корректные hostname/password.
 	ctx.hostname = getHostName();
 	ctx.password = _httpAuth.wwwPassword;
+
+	core_state.signal("system.hostname", BusValue::str(ctx.hostname));
+	core_state.signal("system.safe", BusValue::bo(false));
+	core_state.signal("system.idle", BusValue::bo(false));
+}
+
+// ============================================================
+// register_resources()
+// ============================================================
+void CLASS_CORE_SYS::register_resources() {
+	DEBUGSYS("%s\r\n", __FUNCTION__);
+
+	core_state.regState("safe", BusValue::BOOL, "safe flag (parallel to any mode)", false);
+	core_state.regState("idle", BusValue::BOOL, "idle flag (parallel to any mode)", false);
+	core_state.regState("hostname", BusValue::STR, "device hostname", false);
 }
 
 // ============================================================

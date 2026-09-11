@@ -1,45 +1,45 @@
-// Auto-generated version file for module: core_ota
-// Generated: 2026-09-11 12:07
+// Auto-generated version file for module: core_state
+// Generated: 2026-09-12 00:43
 // Environment: esp32_electronica7_rgb
 
-#ifndef CORE_OTA_VERSION_H
-#define CORE_OTA_VERSION_H
+#ifndef CORE_STATE_VERSION_H
+#define CORE_STATE_VERSION_H
 
 // ============================================================
-// ВЕРСИЯ МОДУЛЯ core_ota
+// ВЕРСИЯ МОДУЛЯ core_state
 // ============================================================
 
 // Числовая версия (для сравнений)
-#define CORE_OTA_VERSION 2
+#define CORE_STATE_VERSION 0
 
 // Строковая версия
-#define CORE_OTA_VERSION_STR "2"
+#define CORE_STATE_VERSION_STR "0"
 
 // Хэш последнего обработанного коммита кода (без учёта *_version.h)
-#define CORE_OTA_COMMIT_HASH "430b431676981ac04897cde4bc145b90b5b3b0ac"
+#define CORE_STATE_COMMIT_HASH "None"
 
 // ============================================================
 // ДАТА ПОСЛЕДНЕГО ИЗМЕНЕНИЯ
 // ============================================================
 
 // Дата в формате yyyy.mm.dd hh.mm (как строка)
-#define CORE_OTA_COMMIT_DATE_STR "2026.09.11 01:27"
+#define CORE_STATE_COMMIT_DATE_STR "1970.01.01 00.00"
 
 // Компоненты даты (для числовых операций)
-#define CORE_OTA_COMMIT_YEAR 2026
-#define CORE_OTA_COMMIT_MONTH 9
-#define CORE_OTA_COMMIT_DAY 11
-#define CORE_OTA_COMMIT_HOUR 1
-#define CORE_OTA_COMMIT_MINUTE 27
+#define CORE_STATE_COMMIT_YEAR 1970
+#define CORE_STATE_COMMIT_MONTH 1
+#define CORE_STATE_COMMIT_DAY 1
+#define CORE_STATE_COMMIT_HOUR 0
+#define CORE_STATE_COMMIT_MINUTE 0
 
 // Полная дата в формате YYYY-MM-DD HH:MM (для отладки)
-#define CORE_OTA_COMMIT_DATE "2026-09-11 01:27"
+#define CORE_STATE_COMMIT_DATE "1970-01-01 00:00"
 
 // ============================================================
 // ИНФОРМАЦИЯ О ГЕНЕРАЦИИ
 // ============================================================
 
-#define CORE_OTA_GENERATED_TIME "2026-09-11 12:07"
-#define CORE_OTA_GENERATED_TIMESTAMP "20260911_120754"
+#define CORE_STATE_GENERATED_TIME "2026-09-12 00:43"
+#define CORE_STATE_GENERATED_TIMESTAMP "20260912_004307"
 
-#endif // CORE_OTA_VERSION_H
+#endif // CORE_STATE_VERSION_H

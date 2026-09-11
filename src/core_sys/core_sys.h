@@ -55,6 +55,7 @@ Please Wait....Configuring.
 class CLASS_CORE_SYS {
 public:
     void begin(ModContext& ctx);
+    void register_resources();
     void web_Init();
 
     // --- Идентичность и системный конфиг ---

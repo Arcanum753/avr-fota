@@ -80,6 +80,7 @@ public:
 
     void begin(String _hostname, String _password);
     void begin(ModContext& ctx);
+    void register_resources();
     virtual void web_Init();
     void loop();
     

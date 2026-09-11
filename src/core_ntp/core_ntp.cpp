@@ -10,6 +10,7 @@
 #endif
 
 #include "common/common.h"
+#include "core_state/core_state.h"
 #include "core_ntp_version.h"
 
 CLASS_CORE_NTP core_ntp;
@@ -29,12 +30,27 @@ void CLASS_CORE_NTP::begin (){
 	_ntpServerNow = _ntpConfig.ntpServerName0;
 	// Enable NTP sync
 	if (_ntpConfig.updateNTPTimeEvery > 0) { updateTimeFromNTP = true;	}		
+
+	core_state.signal("time.valid", BusValue::bo(false));
+	core_state.signal("time.source", BusValue::str(_ntpServerNow));
 }
 
 // унифицированный конструктор контекста
 void CLASS_CORE_NTP::begin (ModContext& ctx){
 	_fs = ctx.fs;
 	begin();
+}
+
+// ============================================================
+// register_resources()
+// ============================================================
+void CLASS_CORE_NTP::register_resources() {
+	DEBUGNTP("%s\r\n", __FUNCTION__);
+
+	core_state.regState("now",    BusValue::TIME, "current local time (epoch)", false);
+	core_state.regState("valid",  BusValue::BOOL, "NTP synced", false);
+	core_state.regState("source", BusValue::STR,  "current NTP server", false);
+	core_state.regEvent("synced", "NTP time synced");
 }
 
 // ============================================================
@@ -237,6 +253,11 @@ void CLASS_CORE_NTP::ntpOnSyncHandler(NTPSyncEvent_t event)	{
 		DEBUGNTP("NTP_timeSyncd: "); 	
 		DEBUGNTP(NTP.getTimeDateString(NTP.getLastNTPSync()).c_str() );	
 		DEBUGNTP(" \r\n");
+
+		core_state.signal("time.now", BusValue::tm((int64_t)now()));
+		core_state.signal("time.valid", BusValue::bo(true));
+		core_state.signal("time.source", BusValue::str(_ntpServerNow));
+		core_state.emit("time.synced");
 	}
 	if ( _ntpevent == noResponse) 		{ DEBUGNTP("NTP_noResponse \r\n"); 		}
 	if ( _ntpevent == invalidAddress) 	{ DEBUGNTP("NTP_invalidAddress \r\n"); 	}
@@ -247,6 +268,11 @@ void CLASS_CORE_NTP::ntpOnSyncHandler(NTPSyncEvent_t event)	{
 	if ( _ntpevent == noResponse) 		{	ntpSwitchReserv();	}
 	if ( _ntpevent == invalidAddress) 	{	ntpSwitchReserv();	}
 	if ( _ntpevent == responseError) 	{	ntpSwitchReserv();	}
+
+	if ( _ntpevent == noResponse || _ntpevent == invalidAddress
+	     || _ntpevent == responseError) {
+		core_state.signal("time.valid", BusValue::bo(false));
+	}
 				
 	if (WiFi.status() != WL_CONNECTED) 	{
 		NTP.stop(); 

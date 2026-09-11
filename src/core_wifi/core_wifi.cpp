@@ -25,6 +25,7 @@
 #include "core_ntp/core_ntp.h"
 
 #include "core_led/core_led.h"
+#include "core_state/core_state.h"
 #include "core_wifi_version.h"
 
 #ifdef MODULE_OTACLIENT
@@ -121,6 +122,19 @@ void CLASS_CORE_WIFI::begin(fs::LittleFSFS* fs)
 void CLASS_CORE_WIFI::begin(ModContext& ctx) {
 	_fs = ctx.fs;
 	begin(ctx.fs);
+}
+
+// ============================================================
+// register_resources()
+// ============================================================
+void CLASS_CORE_WIFI::register_resources() {
+    DEBUGLOGWIFI("%s\r\n", __FUNCTION__);
+
+    core_state.regState("connected", BusValue::BOOL, "STA connected", false);
+    core_state.regState("rssi",      BusValue::I32,  "Wi-Fi RSSI (dBm)", false);
+    core_state.regState("ip",        BusValue::STR,  "STA IP address", false);
+    core_state.regEvent("just_connected", "Wi-Fi just connected");
+    core_state.regEvent("just_disconnected", "Wi-Fi just disconnected");
 }
 
 // ============================================================
@@ -861,6 +875,12 @@ void CLASS_CORE_WIFI::onWiFiConnectedGotIP(WiFiEventStationModeGotIP data) {
 	wifiStatus = FS_STAT_CONNECTED;
 	_enterApPending = false;
 	_suppressDisc = 0;
+
+	core_state.signal("wifi.connected", BusValue::bo(true));
+	core_state.signal("wifi.rssi", BusValue::i32((int32_t)WiFi.RSSI()));
+	core_state.signal("wifi.ip", BusValue::str(WiFi.localIP().toString()));
+	core_state.emit("wifi.just_connected");
+
 #if defined(MODULE_UDP)
 //udp start to listen
 	module_udp.begin();
@@ -916,6 +936,9 @@ void CLASS_CORE_WIFI::onWiFiDisconnected(WiFiEventStationModeDisconnected data) 
 
 	wifiStatus = FS_STAT_CONNECTING;
 	connectionTimout = 0;
+
+	core_state.signal("wifi.connected", BusValue::bo(false));
+	core_state.emit("wifi.just_disconnected");
 
 	if (authFail) {
 		DEBUGLOGWIFI("Auth fail (wrong password?): %s\r\n", _wifiConfig.ssid.c_str());

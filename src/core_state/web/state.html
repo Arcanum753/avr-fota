@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Resources</title>
+    <meta http-equiv="Content-type" content="text/html; charset=utf-8">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <markup>./page_head.html</markup>
+    <h2 class="title" style="background: #7D8EE2"> <span id="devicename"></span> Resources / state bus</h2>
+
+    <div class="content" style="text-align: center;">
+        <table class="scan" style="width: auto; margin: 0 auto;">
+            <tr><th colspan="3">System mode</th></tr>
+            <tr>
+                <td class="label">mode</td>
+                <td>
+                    <select id="sysModeSelect">
+                        <option value="0">init</option>
+                        <option value="1">normal</option>
+                        <option value="2">ota</option>
+                        <option value="3">fs_update</option>
+                        <option value="4">prog</option>
+                        <option value="5">test</option>
+                    </select>
+                </td>
+                <td><input type="button" value="Set" class="button-prog" onclick="setMode()"> <span id="modeStatus" style="margin-left:8px;font-size:12px;"></span></td>
+            </tr>
+        </table>
+    </div>
+
+    <div class="content" style="text-align: center;">
+        <table class="scan" style="width: auto; margin: 0 auto;">
+            <tr><th colspan="4">Registered resources <input type="button" value="Refresh" onclick="loadCatalog()"> <span id="catStatus" style="font-size:12px;"></span></th></tr>
+            <tr><th>Name</th><th>Kind</th><th>Flags</th><th>Value</th></tr>
+            <tbody id="catBody"></tbody>
+        </table>
+    </div>
+
+    <div class="footer">
+        Core version: <span id="stateversion"> </span> &nbsp;|&nbsp;
+        Build: <span id="stategentime"> </span> <br>
+    </div>
+
+    <markup>./page_bottom.html</markup>
+    <script src="GetJson.js" defer></script>
+    <script src="GetMarkup.js" defer></script>
+    <script>
+        async function loadCatalog() {
+            const statusEl = document.getElementById('catStatus');
+            statusEl.innerHTML = '...';
+            try {
+                const resp = await fetch('/state/catalog', { cache: 'no-store' });
+                const data = await resp.json();
+                const body = document.getElementById('catBody');
+                body.innerHTML = '';
+                const list = data.resources || [];
+                for (const r of list) {
+                    const tr = document.createElement('tr');
+                    const flags = [];
+                    if (r.rw) { flags.push('rw'); }
+                    if (r.e) { flags.push('event'); }
+                    if (r.f) { flags.push('func'); }
+                    if (r.a) { flags.push('async'); }
+                    tr.innerHTML = '<td style="text-align:left">' + r.full + '</td>'
+                        + '<td>' + (r.kind || '') + '</td>'
+                        + '<td>' + flags.join(',') + '</td>'
+                        + '<td>' + (r.desc || '') + '</td>';
+                    body.appendChild(tr);
+                }
+                statusEl.innerHTML = list.length + ' items';
+            } catch (e) {
+                statusEl.innerHTML = 'Error';
+            }
+        }
+        async function setMode() {
+            const v = document.getElementById('sysModeSelect').value;
+            const statusEl = document.getElementById('modeStatus');
+            statusEl.innerHTML = '...';
+            try {
+                const resp = await fetch('/state/set?name=system.mode&value=' + v, { cache: 'no-store' });
+                const text = await resp.text();
+                statusEl.innerHTML = text;
+            } catch (e) {
+                statusEl.innerHTML = 'Error';
+            }
+        }
+        window.onload = function() {
+            setTimeout(() => {
+                ApplyCVT("/system/version").then(() => ApplyCVT("/state/ver"));
+            }, 500);
+            loadCatalog();
+        };
+    </script>
+</body>
+</html>

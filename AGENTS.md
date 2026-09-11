@@ -18,6 +18,7 @@ The project is split into **two categories**:
 
 1. **Cores (core_\*)** — always present, provide base functionality
 2. **Modules (module_\*)** — optional, added via `src_filter` and `build_flags` in target config
+3. **Devices (device_\*)** — optional, added via `src_filter` and `build_flags` in target config. Uses for using devices with stable hardware.
 
 Submodules (`submodule_*`) inherit from `Class_ProgBase` and implement specific programmers. The base programmer logic lives in `module_prog/`.
 
@@ -73,6 +74,12 @@ glob-масками `src/*/*.ini` и `src/*/*/*.ini` в `[platformio] extra_conf
 | `core_json` | `src/core_json/` | JSON utilities (save/load/parse) |
 | `core_led` | `src/core_led/` | LED indication macros (WiFi, errors, success, waiting) |
 | `core_terminal` | `src/core_terminal/` | Serial terminal with debug/management commands |
+| `core_state` | `src/core_state/` | Ресурсная шина: реестр ресурсов, события, async-вызовы, режимы ядра (`system.mode`) |
+| `core_task` | `src/core_task/` | Именованные задачи поверх EERTOS (`every`/`after`/`cancel`) + диагностика переполнения |
+
+Редактор FS ранее входил в ядро (`core_editor`); теперь это **опциональный** `module_editor`
+(отдельный репозиторий, включается флагом `-D MODULE_EDITOR`, инициализируется в
+`modules_begin()`/`modules_web_Init()` через registry). В `core_begin()` его больше нет.
 
 ### Optional modules
 
@@ -165,7 +172,7 @@ The main loop (`loop()` in `main.cpp`):
 2. `LittleFS.begin()` — mount filesystem
 3. `ESPHTTPServer.begin(&LittleFS)` — starts the web server (`src/core_web/FSWebServerLib.cpp`):
    - Fills global `ModContext` (fs, hostname, password)
-   - `core_begin(ModContext)` — core init (WiFi, NTP, JSON, editor, OTA)
+   - `core_begin(ModContext)` — core init (WiFi, NTP, JSON, OTA)
    - `modules_begin(ModContext)` — optional modules init
    - `dev_begin(ModContext)` — devices init
    - `serverInit()` — register core HTTP routes
@@ -324,6 +331,69 @@ build_flags = ${env.build_flags} -D MODULE_UDP=1 -D PROGTYPE_SWD=1 -D SWDPIN_CLK
 После изменения `src_filter`/`build_flags` в env — перезапустить `python/module_registry_gen.py --env <env>`.
 `extra_configs` в `platformio.ini` использует glob-маски (`src/*/*.ini`, `src/*/*/*.ini`) — env
 подхватываются автоматически из склонированных в `src/` компонентов без ручной регистрации.
+
+### Ресурсная шина и реестр (`core_state`)
+
+**Правило:** любое межмодульное взаимодействие — только через `core_state`. Прямые
+`#include` соседних `module_*` запрещены (кроме включения своего `common_module` и ядровых
+заголовков).
+
+- `core_state` (`CLASS_CORE_STATE`, объект `core_state`) — реестр ресурсов:
+  - **pull (состояния):** модуль читает значения по имени в своём `loop()`/задаче;
+  - **push (события):** `emit` при изменении, подписка через `on`;
+  - системный тик — 1 с через EERTOS; раздача очереди — в `core_state.loop()`.
+- `core_task` (`CLASS_CORE_TASK`, объект `core_task`) — именованные периодические/отложенные
+  задачи поверх EERTOS: `every(name, fn, period, fire_now)`, `after(name, fn, delay)`,
+  `cancel(name)`. Второго планировщика нет; каждый слот использует свою статическую
+  trampoline-функцию (EERTOS `SetTimerTask` идемпотентен по указателю).
+
+**Имена ресурсов:** `namespace.field` (один сегмент namespace, lowercase + `_`).
+Namespace задаётся в `[registry]` ini компонента (`namespace = otaclient`) — генератор
+выставляет его через `core_state.setNamespace()` перед вызовом `register_resources()`.
+`regState(name, ...)` авто-префиксует namespace; `regStateAs(full, ...)` — полное имя вручную.
+
+**Контракт модуля:** третий фронтенд наряду с `web_Init` и `TerminalInit` — метод
+`register_resources()`. Поля `[registry]`: `object`, `define`, `web`, `loop`, `namespace`,
+`res = 1` (есть `register_resources()`), `prio = 0..100` (больше = важнее, дефолт `50`),
+`priv = 1` (привилегированный namespace — ядро/macros). Генератор формирует
+`core_register_resources()`, `modules_register_resources()`, `dev_register_resources()`;
+регистрация выполняется до `begin()` соответствующей группы, порядок — по `prio` (при равенстве
+FCFS).
+
+**Типы:** `BOOL / I32 / F32 / STR / TIME / ENUM`. F32 в UI/JSON — 3 знака после запятой.
+ENUM хранит индекс, значения задаются `regEnum`.
+
+**Коды возврата:** `0` — успех, `>0` — коды модуля (`regFuncCode`), `<0` — ошибки ядра
+(`-1` NOT_REGISTERED, `-2` NOT_FOUND, `-3` BAD_TYPE, `-4` BAD_ARGC, `-5` BAD_VALUE,
+`-6` READONLY, `-7` DISABLED, `-8` BUSY, `-9` NOT_READY, `-10` TIMEOUT, `-11` INTERNAL,
+`-12` NOT_SUPPORTED, `-13` DENIED).
+
+**Async:** модуль регистрирует `regFuncAsync` (`async = 1`, таймаут дефолт 10 с); модули
+завершают вызов через `core_state.asyncComplete(handle, rc, value)`. `call()` для async и
+`call_async()` для sync — `ERR_BAD_TYPE`. До 3 параллельных на владельца
+(`setAsyncOwner`/`asyncCancelFor`). Callback получает rc первым аргументом.
+
+**Права:** `regState` фиксирует owner-namespace. Запись в чужой ресурс не запрещается, но при
+активном caller-контексте и `DEBUG_STATE` логируется warning. Ядро и `macros` —
+привилегированные.
+
+**Режимы модуля:** `off / auto / macro`. `idle` — не режим, а флаг ядра (`system.idle`).
+Режим хранится в `config_xxx.json` (`"mode"`), модуль сам читает/пишет. Модуль публикует
+`regState("mode", ENUM, ...)` и sync-функцию `mode`; `core_state.mode(ns, v)` читает/пишет
+(`v < 0` — чтение). Переключение режима не сбрасывает внутреннюю логику модуля. Без
+`module_macros` режим `macro` невозможен — модуль молча работает как `auto`.
+
+**Режимы ядра (`system.mode`):** `init / normal / ota / fs_update / prog / test`.
+`system.safe` — булев флаг, параллелен любому режиму. Блокировка — через режим, не mutex.
+Ручной `test` имеет таймаут (дефолт 30 мин, `/config_state.json` → `test_timeout_s`),
+длительные операции — абсолютный таймаут (`op_timeout_s`). Пока идёт длительная операция,
+вход в `test` — `ERR_BUSY`; пока пользователь в `test` — автономные `ota`/`fs_update` ждут.
+При конфликте длительных операций разрешает `prio` (при равенстве FCFS). Модуль узнаёт о смене
+режима через `getMode()`/`requestMode()` или событие `system.mode_changed`.
+
+**Веб:** `core_state.web_Init()` регистрирует `/state/catalog`, `/state/info`, `/state/set`,
+`/state/call`, `/state/ver` (+ страница `state.html`). Каталог отдаётся `catalogToJson()` и
+используется деревом ресурсов в `module_macros` (`/macros/resources`).
 
 ### Web page structure
 
