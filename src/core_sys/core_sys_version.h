@@ -1,5 +1,5 @@
 // Auto-generated version file for module: core_sys
-// Generated: 2026-09-11 15:14
+// Generated: 2026-09-12 17:51
 // Environment: esp32_electronica7_rgb
 
 #ifndef CORE_SYS_VERSION_H
@@ -10,36 +10,36 @@
 // ============================================================
 
 // Числовая версия (для сравнений)
-#define CORE_SYS_VERSION 2
+#define CORE_SYS_VERSION 3
 
 // Строковая версия
-#define CORE_SYS_VERSION_STR "2"
+#define CORE_SYS_VERSION_STR "3"
 
 // Хэш последнего обработанного коммита кода (без учёта *_version.h)
-#define CORE_SYS_COMMIT_HASH "59665ac9818c861f042e2fe46bcf0152cfdc29ec"
+#define CORE_SYS_COMMIT_HASH "936295d50b3279fbb8d48bdd106af12aadd559fd"
 
 // ============================================================
 // ДАТА ПОСЛЕДНЕГО ИЗМЕНЕНИЯ
 // ============================================================
 
 // Дата в формате yyyy.mm.dd hh.mm (как строка)
-#define CORE_SYS_COMMIT_DATE_STR "2026.09.11 14:56"
+#define CORE_SYS_COMMIT_DATE_STR "2026.09.12 00:51"
 
 // Компоненты даты (для числовых операций)
 #define CORE_SYS_COMMIT_YEAR 2026
 #define CORE_SYS_COMMIT_MONTH 9
-#define CORE_SYS_COMMIT_DAY 11
-#define CORE_SYS_COMMIT_HOUR 14
-#define CORE_SYS_COMMIT_MINUTE 56
+#define CORE_SYS_COMMIT_DAY 12
+#define CORE_SYS_COMMIT_HOUR 0
+#define CORE_SYS_COMMIT_MINUTE 51
 
 // Полная дата в формате YYYY-MM-DD HH:MM (для отладки)
-#define CORE_SYS_COMMIT_DATE "2026-09-11 14:56"
+#define CORE_SYS_COMMIT_DATE "2026-09-12 00:51"
 
 // ============================================================
 // ИНФОРМАЦИЯ О ГЕНЕРАЦИИ
 // ============================================================
 
-#define CORE_SYS_GENERATED_TIME "2026-09-11 15:14"
-#define CORE_SYS_GENERATED_TIMESTAMP "20260911_151422"
+#define CORE_SYS_GENERATED_TIME "2026-09-12 17:51"
+#define CORE_SYS_GENERATED_TIMESTAMP "20260912_175116"
 
 #endif // CORE_SYS_VERSION_H

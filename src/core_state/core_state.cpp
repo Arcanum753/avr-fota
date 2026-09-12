@@ -226,17 +226,13 @@ bool CLASS_CORE_STATE::regStateAs(const char* full_name, BusValue::Kind kind,
         r.ownerId = (_currentNs >= 0) ? (uint8_t)_currentNs : 255;
     }
 
+    // При обновлении существующего ресурса не сбрасываем поля функции/события:
+    // regEnum() создаёт состояние, а regFunc()/regEvent() дополняют его тем же
+    // именем (e7.mode = ENUM-состояние + sync-функция записи).
     BusRes& r = _res[idx];
     r.kind = kind;
-    r.desc = desc;
+    if (desc != nullptr) { r.desc = desc; }
     r.writable = writable;
-    r.isEvent = false;
-    r.isFunc = false;
-    r.async = false;
-    r.fn = nullptr;
-    r.afn = nullptr;
-    r.user = nullptr;
-    r.timeoutMs = 0;
     return true;
 }
 
@@ -266,18 +262,27 @@ bool CLASS_CORE_STATE::regEnum(const char* name, int count, const char* const* v
 bool CLASS_CORE_STATE::regEvent(const char* name, const char* desc) {
     char full[CORE_STATE_NAME_LEN];
     makeFullName(full, name);
-    if (regStateAs(full, BusValue::NONE, desc, false) == false) { return false; }
     int idx = findRes(full);
+    if (idx < 0) {
+        if (regStateAs(full, BusValue::NONE, desc, false) == false) { return false; }
+        idx = findRes(full);
+    }
     _res[idx].isEvent = true;
     return true;
 }
 
 bool CLASS_CORE_STATE::regFunc(const char* name, const char* sig, const char* desc,
                                BusCb fn, void* user) {
+    (void)sig;
     char full[CORE_STATE_NAME_LEN];
     makeFullName(full, name);
-    if (regStateAs(full, BusValue::NONE, desc, false) == false) { return false; }
     int idx = findRes(full);
+    if (idx < 0) {
+        if (regStateAs(full, BusValue::NONE, desc, false) == false) { return false; }
+        idx = findRes(full);
+    } else if (desc != nullptr && _res[idx].desc == nullptr) {
+        _res[idx].desc = desc;
+    }
     BusRes& r = _res[idx];
     r.isFunc = true;
     r.async = false;
@@ -289,10 +294,16 @@ bool CLASS_CORE_STATE::regFunc(const char* name, const char* sig, const char* de
 
 bool CLASS_CORE_STATE::regFuncAsync(const char* name, const char* sig, const char* desc,
                                     BusAsyncCb fn, void* user, uint32_t timeout_ms) {
+    (void)sig;
     char full[CORE_STATE_NAME_LEN];
     makeFullName(full, name);
-    if (regStateAs(full, BusValue::NONE, desc, false) == false) { return false; }
     int idx = findRes(full);
+    if (idx < 0) {
+        if (regStateAs(full, BusValue::NONE, desc, false) == false) { return false; }
+        idx = findRes(full);
+    } else if (desc != nullptr && _res[idx].desc == nullptr) {
+        _res[idx].desc = desc;
+    }
     BusRes& r = _res[idx];
     r.isFunc = true;
     r.async = true;
@@ -323,19 +334,19 @@ bool CLASS_CORE_STATE::has(const char* name) {
 
 bool CLASS_CORE_STATE::getBool(const char* name, bool def) {
     int idx = findRes(name);
-    if (idx < 0 || _res[idx].isFunc || _res[idx].isEvent) { return def; }
+    if (idx < 0 || _res[idx].kind == BusValue::NONE) { return def; }
     return busNumeric(_res[idx].value) != 0;
 }
 
 int32_t CLASS_CORE_STATE::getInt(const char* name, int32_t def) {
     int idx = findRes(name);
-    if (idx < 0 || _res[idx].isFunc || _res[idx].isEvent) { return def; }
+    if (idx < 0 || _res[idx].kind == BusValue::NONE) { return def; }
     return (int32_t)busNumeric(_res[idx].value);
 }
 
 float CLASS_CORE_STATE::getF32(const char* name, float def) {
     int idx = findRes(name);
-    if (idx < 0 || _res[idx].isFunc || _res[idx].isEvent) { return def; }
+    if (idx < 0 || _res[idx].kind == BusValue::NONE) { return def; }
     const BusValue& v = _res[idx].value;
     switch (v.kind) {
         case BusValue::F32:  return v.f;
@@ -346,13 +357,13 @@ float CLASS_CORE_STATE::getF32(const char* name, float def) {
 
 String CLASS_CORE_STATE::getStr(const char* name, const String& def) {
     int idx = findRes(name);
-    if (idx < 0 || _res[idx].isFunc || _res[idx].isEvent) { return def; }
+    if (idx < 0 || _res[idx].kind == BusValue::NONE) { return def; }
     return _res[idx].value.s;
 }
 
 int64_t CLASS_CORE_STATE::getTime(const char* name, int64_t def) {
     int idx = findRes(name);
-    if (idx < 0 || _res[idx].isFunc || _res[idx].isEvent) { return def; }
+    if (idx < 0 || _res[idx].kind == BusValue::NONE) { return def; }
     return busNumeric(_res[idx].value);
 }
 
@@ -382,7 +393,9 @@ BusValue CLASS_CORE_STATE::valueToKind(const BusValue& v, BusValue::Kind k) {
 // ============================================================
 int CLASS_CORE_STATE::writeRes(int idx, const BusValue& v, bool checkAccess) {
     BusRes& r = _res[idx];
-    if (r.isFunc || r.isEvent) { return BUS_ERR_BAD_TYPE; }
+    // Чистые функции/события (kind == NONE) не являются значениями.
+    // Ресурс-состояние с функцией записи (kind != NONE, isFunc) допускает запись значения.
+    if (r.kind == BusValue::NONE) { return BUS_ERR_BAD_TYPE; }
     if (checkAccess && !r.writable) { return BUS_ERR_READONLY; }
 
     if (checkAccess && !_privileged && _currentNs >= 0
@@ -789,13 +802,23 @@ void CLASS_CORE_STATE::handleSet(AsyncWebServerRequest *request) {
     }
     BusRes& r = _res[idx];
     String val = request->arg("value");
-    int rc = BUS_OK;
+
+    BusValue arg;
     switch (r.kind) {
-        case BusValue::BOOL: rc = writeRes(idx, BusValue::bo(val == "1" || val == "true"), true); break;
-        case BusValue::F32:  rc = writeRes(idx, BusValue::f32(val.toFloat()), true); break;
-        case BusValue::STR:  rc = writeRes(idx, BusValue::str(val), true); break;
-        case BusValue::TIME: rc = writeRes(idx, BusValue::tm((int64_t)val.toInt()), true); break;
-        default:             rc = writeRes(idx, BusValue::i32(val.toInt()), true); break;
+        case BusValue::BOOL: arg = BusValue::bo(val == "1" || val == "true"); break;
+        case BusValue::F32:  arg = BusValue::f32(val.toFloat()); break;
+        case BusValue::STR:  arg = BusValue::str(val); break;
+        case BusValue::TIME: arg = BusValue::tm((int64_t)val.toInt()); break;
+        default:             arg = BusValue::i32(val.toInt()); break;
+    }
+
+    int rc;
+    if (r.isFunc && !r.async) {
+        // Ресурс-состояние с функцией записи: применяем через функцию.
+        BusValue res;
+        rc = r.fn(r.user, 1, &arg, res);
+    } else {
+        rc = writeRes(idx, arg, true);
     }
     if (rc == BUS_OK) {
         request->send(200, "text/plain", "OK");
