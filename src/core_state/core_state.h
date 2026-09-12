@@ -141,6 +141,7 @@ public:
     void setNamespace(const char* ns);
     void clearNamespace();
     void setPrivileged(bool on);
+    void setModulePrio(int prio);
 
     // --- Чтение значений (pull) ---
     bool   getBool (const char* name, bool def = false);
@@ -181,6 +182,7 @@ public:
 
     // --- Каталог для UI ---
     void catalogToJson(JsonDocument& doc);
+    void catalogModulesToJson(JsonDocument& doc);
 
 private:
     // Версия
@@ -194,6 +196,8 @@ private:
     void handleInfo(AsyncWebServerRequest *request);
     void handleSet(AsyncWebServerRequest *request);
     void handleCall(AsyncWebServerRequest *request);
+    void handleModules(AsyncWebServerRequest *request);
+    void handleModuleMode(AsyncWebServerRequest *request);
 
     // Конфиг
     void defaultConfigState();
@@ -282,6 +286,7 @@ protected:
         char     name[CORE_STATE_NS_NAME_LEN] = { 0 };
         uint8_t  id = 0;
         bool     privileged = false;
+        int16_t  prio = -1;
     };
 
     BusRes      _res[CORE_STATE_MAX_RES];

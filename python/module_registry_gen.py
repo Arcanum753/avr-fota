@@ -460,11 +460,15 @@ def main():
     def core_registry(core_name: str, default_ns: str, default_res: int):
         reg = read_registry_ini(project_dir, core_name, core_name)
         if reg is None:
-            return default_ns, default_res, 0
+            return default_ns, default_res, 0, -1
         ns = reg.get("namespace", default_ns).strip() or default_ns
         res = 1 if reg.get("res", "").strip() == "1" else default_res
         priv = 1 if reg.get("priv", "").strip() == "1" else 0
-        return ns, res, priv
+        try:
+            prio = int(reg.get("prio", "-1").strip() or "-1")
+        except ValueError:
+            prio = -1
+        return ns, res, priv, prio
 
     core_res: List[str] = []
     for cname, dns, dres in [
@@ -474,12 +478,13 @@ def main():
         ("core_ntp", "time", 1),
         ("core_ota", "ota", 1),
     ]:
-        ns, res, priv = core_registry(cname, dns, dres)
+        ns, res, priv, prio = core_registry(cname, dns, dres)
         if not res:
             continue
         core_res.append(f'core_state.setNamespace("{ns}");')
         # Ядро всегда привилегированное.
         core_res.append("core_state.setPrivileged(true);")
+        core_res.append(f"core_state.setModulePrio({prio});")
         core_res.append(f"{cname}.register_resources();")
     if core_res:
         core_res.append("core_state.clearNamespace();")
@@ -569,6 +574,7 @@ def main():
                 calls.append(f'core_state.setNamespace("{ns}");')
             if priv:
                 calls.append("core_state.setPrivileged(true);")
+            calls.append(f"core_state.setModulePrio({prio});")
             calls.append(f"{obj}.register_resources();")
         if calls:
             calls.append("core_state.clearNamespace();")

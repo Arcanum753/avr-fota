@@ -25,6 +25,16 @@ static const char* const coreModeNames[CORE_MODE_COUNT] = {
     "test",
 };
 
+// Собран ли Lua-модуль (для опции macro в UI и проверок).
+static bool modulesMacrosAvailable() {
+#if defined(MODULE_MACROS)
+    return true;
+#endif
+#if !defined(MODULE_MACROS)
+    return false;
+#endif
+}
+
 // ============================================================
 // Вспомогательные преобразования значений
 // ============================================================
@@ -136,6 +146,18 @@ void CLASS_CORE_STATE::web_Init() {
         this->handleCall(request);
     });
 
+    // Список модулей и их режимы (центральная страница управления модулями).
+    ESPHTTPServer.on("/state/modules", HTTP_GET, [this](AsyncWebServerRequest *request) {
+        if (!ESPHTTPServer.checkAuth(request)) { return request->requestAuthentication(); }
+        this->handleModules(request);
+    });
+
+    // Смена режима модуля: off/auto/macro.
+    ESPHTTPServer.on("/state/module_mode", HTTP_GET, [this](AsyncWebServerRequest *request) {
+        if (!ESPHTTPServer.checkAuth(request)) { return request->requestAuthentication(); }
+        this->handleModuleMode(request);
+    });
+
     ESPHTTPServer.on("/state/ver", HTTP_GET, [this](AsyncWebServerRequest *request) {
         this->html_ver_get(request);
     });
@@ -174,6 +196,10 @@ void CLASS_CORE_STATE::clearNamespace() {
 void CLASS_CORE_STATE::setPrivileged(bool on) {
     _privileged = on;
     if (_currentNs >= 0) { _ns[_currentNs].privileged = on; }
+}
+
+void CLASS_CORE_STATE::setModulePrio(int prio) {
+    if (_currentNs >= 0) { _ns[_currentNs].prio = (int16_t)prio; }
 }
 
 // ============================================================
@@ -397,6 +423,12 @@ int CLASS_CORE_STATE::writeRes(int idx, const BusValue& v, bool checkAccess) {
     // Ресурс-состояние с функцией записи (kind != NONE, isFunc) допускает запись значения.
     if (r.kind == BusValue::NONE) { return BUS_ERR_BAD_TYPE; }
     if (checkAccess && !r.writable) { return BUS_ERR_READONLY; }
+    // Ресурсы ядровых namespace (system/wifi/time/ota) не пишутся извне:
+    // режим ядра меняется только через requestMode(), состояния обновляются signal().
+    if (checkAccess && r.ownerId != 255 && r.ownerId < _nsCount
+        && _ns[r.ownerId].privileged) {
+        return BUS_ERR_READONLY;
+    }
 
     if (checkAccess && !_privileged && _currentNs >= 0
         && r.ownerId != 255 && r.ownerId != (uint8_t)_currentNs) {
@@ -761,6 +793,41 @@ void CLASS_CORE_STATE::catalogToJson(JsonDocument& doc) {
     }
 }
 
+// Список модулей (namespace) с их режимами — для страницы управления модулями.
+void CLASS_CORE_STATE::catalogModulesToJson(JsonDocument& doc) {
+    doc["macros_available"] = (modulesMacrosAvailable() ? 1 : 0);
+
+    JsonArray mods = doc["modules"].to<JsonArray>();
+    for (uint8_t i = 0; i < _nsCount; i++) {
+        JsonObject o = mods.add<JsonObject>();
+        o["ns"] = _ns[i].name;
+        o["privileged"] = _ns[i].privileged ? 1 : 0;
+        o["prio"] = _ns[i].prio;
+
+        char full[CORE_STATE_NAME_LEN];
+        snprintf(full, sizeof(full), "%s.mode", _ns[i].name);
+        int mi = findRes(full);
+        if (mi >= 0 && _res[mi].kind == BusValue::ENUM) {
+            o["has_mode"] = 1;
+            o["mode"] = _res[mi].value.i;
+        } else {
+            o["has_mode"] = 0;
+            o["mode"] = -1;
+        }
+
+        // Описание: первый непустой desc ресурса этого namespace.
+        const char* desc = "";
+        for (uint16_t r = 0; r < _resCount; r++) {
+            if (strcmp(_res[r].ns, _ns[i].name) == 0
+                && _res[r].desc != nullptr && _res[r].desc[0] != 0) {
+                desc = _res[r].desc;
+                break;
+            }
+        }
+        o["desc"] = desc;
+    }
+}
+
 // ============================================================
 // Веб-обработчики
 // ============================================================
@@ -834,6 +901,57 @@ void CLASS_CORE_STATE::handleCall(AsyncWebServerRequest *request) {
     }
     BusValue result;
     int rc = call(request->arg("name").c_str(), 0, nullptr, result);
+    if (rc == BUS_OK) {
+        request->send(200, "text/plain", "OK");
+    } else {
+        request->send(200, "text/plain", ns_core_state::busErrStr(rc));
+    }
+}
+
+void CLASS_CORE_STATE::handleModules(AsyncWebServerRequest *request) {
+    JsonDocument doc;
+    catalogModulesToJson(doc);
+    String out;
+    serializeJson(doc, out);
+    request->send(200, "application/json", out);
+}
+
+void CLASS_CORE_STATE::handleModuleMode(AsyncWebServerRequest *request) {
+    if (!request->hasArg("ns") || !request->hasArg("mode")) {
+        request->send(200, "text/plain", "ERR: no ns/mode");
+        return;
+    }
+    const char* ns = request->arg("ns").c_str();
+    int id = findNs(ns, false);
+    if (id < 0) {
+        request->send(200, "text/plain", ns_core_state::busErrStr(BUS_ERR_NOT_FOUND));
+        return;
+    }
+    if (_ns[id].privileged) {
+        // Ядровые namespace переключать извне нельзя.
+        request->send(200, "text/plain", ns_core_state::busErrStr(BUS_ERR_READONLY));
+        return;
+    }
+
+    char full[CORE_STATE_NAME_LEN];
+    snprintf(full, sizeof(full), "%s.mode", ns);
+    int mi = findRes(full);
+    if (mi < 0 || _res[mi].kind != BusValue::ENUM) {
+        request->send(200, "text/plain", ns_core_state::busErrStr(BUS_ERR_NOT_SUPPORTED));
+        return;
+    }
+
+    int m = request->arg("mode").toInt();
+    if (m < 0 || m > 2) {
+        request->send(200, "text/plain", ns_core_state::busErrStr(BUS_ERR_BAD_VALUE));
+        return;
+    }
+    if (m == 2 && !modulesMacrosAvailable()) {
+        request->send(200, "text/plain", ns_core_state::busErrStr(BUS_ERR_NOT_SUPPORTED));
+        return;
+    }
+
+    int rc = mode(ns, m);
     if (rc == BUS_OK) {
         request->send(200, "text/plain", "OK");
     } else {
