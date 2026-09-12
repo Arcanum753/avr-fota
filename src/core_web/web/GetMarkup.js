@@ -14,7 +14,13 @@
         const _import = imports[index];
 
         GetValue(_import.textContent, (data) => {
-            document.body.innerHTML = document.body.innerHTML.replace(_import.outerHTML, data);
+            // Вставляем фрагмент на место тега <markup>, НЕ перезаписывая
+            // document.body.innerHTML: иначе уничтожаются все элементы и
+            // обработчики, навешанные скриптами страницы (кнопки, дерево, сплиттер).
+            if (!_import.parentNode) { return; }
+            const tpl = document.createElement('template');
+            tpl.innerHTML = data;
+            _import.replaceWith(tpl.content);
         });
     }
 

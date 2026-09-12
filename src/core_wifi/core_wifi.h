@@ -125,6 +125,7 @@ protected:
     bool     _ignoreDisconnect = false; // подавление событий от собственных WiFi.disconnect()
     uint8_t  _suppressDisc = 0;  // кол-во секунд, в течение которых события отключения игнорируются
     uint32_t _nextStaScanAt = 0; // тик, с которого можно снова запускать скан (пауза при отсутствии сети)
+    uint8_t  _wifiInitFailCount = 0; // подряд идущие ошибки init/scan (для контролируемого рестарта)
 };
 
 

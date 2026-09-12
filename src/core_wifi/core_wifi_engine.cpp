@@ -201,8 +201,27 @@ void CLASS_CORE_WIFI::staTick() {
 		return;
 	}
 	if (st == WIFI_SCAN_FAILED) {
+		// Скан/драйвер не поднялся. Не дёргаем WiFi.scanNetworks() каждую
+		// секунду — иначе esp_wifi_init зацикливается. Работаем с бэкоффом:
+		// одна повторная попытка за окно WIFI_INIT_FAIL_PAUSE_SEC.
 		connectionTimout = 0;
-		WiFi.scanNetworks(true);	// перезапуск скана
+		_wifiInitFailCount++;
+		if (_wifiInitFailCount >= WIFI_INIT_FAIL_MAX) {
+			int mode = core_state.getMode();
+			if (mode == CORE_MODE_NORMAL || mode == CORE_MODE_INIT) {
+				DEBUG_WIFI("WiFi init failed %d times. Restarting.\r\n", _wifiInitFailCount);
+				ESP.restart();
+				return;
+			}
+			// Длительная операция (OTA/FS/prog) — рестарт откладываем
+			DEBUG_WIFI("WiFi init failed %d times, restart deferred (mode %d)\r\n",
+			           _wifiInitFailCount, mode);
+		}
+		// Запускаем новый скан (статус FAILED сам не сбросится), но не чаще
+		// одного раза за окно бэкоффа.
+		WiFi.scanDelete();
+		WiFi.scanNetworks(true);
+		_nextStaScanAt = _stateSeconds + WIFI_INIT_FAIL_PAUSE_SEC;
 		ledMacrosWifiScan();
 		return;
 	}
@@ -213,6 +232,7 @@ void CLASS_CORE_WIFI::staTick() {
 
 	// Скан завершён
 	connectionTimout = 0;
+	_wifiInitFailCount = 0;
 	int slot = scanWifi();
 	WiFi.scanDelete();
 	if (slot < 0) {
@@ -353,6 +373,7 @@ void CLASS_CORE_WIFI::onWiFiConnectedGotIP(WiFiEventStationModeGotIP data) {
 	DEBUG_WIFI("DNS:        %s\r\n", WiFi.dnsIP().toString().c_str());
 	wifiDisconnectedSince = 0;
 	connectionTimout = 0;
+	_wifiInitFailCount = 0;
 	wifiStatus = FS_STAT_CONNECTED;
 	_enterApPending = false;
 	_suppressDisc = 0;

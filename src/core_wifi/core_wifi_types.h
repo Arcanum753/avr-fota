@@ -32,6 +32,10 @@
 #define WIFI_CONNECT_BUDGET_SEC     20
 // Защита от «зависшего» скана (скан не завершается) — принудительный рестарт (сек)
 #define WIFI_SCAN_STUCK_SEC         60
+// Бэкофф при WIFI_SCAN_FAILED: не пытаться инициализировать драйвер каждую секунду (сек)
+#define WIFI_INIT_FAIL_PAUSE_SEC    20
+// Число подряд идущих ошибок init/scan до контролируемого ESP.restart()
+#define WIFI_INIT_FAIL_MAX          5
 
 typedef struct {
     String ssid;

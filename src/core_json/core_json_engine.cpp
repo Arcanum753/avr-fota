@@ -45,7 +45,9 @@ bool CLASS_CORE_JSON::save_jsonDoc(const JsonDocument& jsonDoc,	const String& fi
 		configFile.close();
 		return false;
 	}
-#ifndef RELEASE
+// Дамп всего JSON-конфига в консоль отключён (очень медленно на 115200,
+// блокирует main-loop). Включать только точечно для отладки флагом JSON_DUMP_LOG.
+#if defined(JSON_DUMP_LOG)
 	String temp;
 	serializeJsonPretty(jsonDoc, temp);
 	DBG_MOD("[C_JSON] ", "%s\r\n", temp.c_str());
