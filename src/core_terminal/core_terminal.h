@@ -1,10 +1,9 @@
 #include <Arduino.h>
 #include "ErriezSerialTerminal.h"
+#include "core_terminal_types.h"
 
 extern SerialTerminal term;
 
-typedef void (*TerminalModuleInit)(void);
-#define TERMINAL_MODULE_SLOTS 8
 void TerminalRegisterModule(TerminalModuleInit initFn);
 
 void TerminalInit();
