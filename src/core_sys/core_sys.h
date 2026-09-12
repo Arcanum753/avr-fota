@@ -16,25 +16,7 @@
 #endif
 
 
-#define CONFIG_FILE_SYS             "/config_sys.json"
-#define SECRET_FILE                 "/secret.json"
-
-#define FS_VERSION_JSON_PATH        "/_version_fs.json"
-
-
-typedef struct {
-    String deviceName;
-    String deviceSerial;
-} strSysConfig;
-
-
-typedef struct {
-    bool auth;
-    String wwwUsername;
-    String wwwPassword;
-    String wwwQuestion;
-    String wwwAnswer;
-} strHTTPAuth;
+#include "core_sys_types.h"
 
 
 const char Page_IndexRefresh[] = R"=====(
