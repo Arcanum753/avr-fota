@@ -9,6 +9,7 @@
 
 
 #include "core_ntp/NtpClientLib.h"
+#include "core_ntp_types.h"
 
 
 
@@ -19,28 +20,10 @@
 #endif
 
 
-#define CONFIG_FILE_NTP "/config_ntp.json"
-
-
-#define NTPSERVER_DFLT0 "pool.ntp.org";
-#define NTPSERVER_DFLT1 "0.ru.pool.ntp.org";
-#define NTPSERVER_DFLT2 "0.gentoo.pool.ntp.org";
-#define NTP_TIMEOUT 5000 // milliseconds
-
 const char Page_GeneralNtp[] = R"=====(
 <meta http-equiv="refresh" content="10; URL=/ntp.html">
 Please Wait....Configuring.
 )=====";
-
-typedef struct {
-    String ntpServerName0;
-    String ntpServerName1;
-    String ntpServerName2;
-    long updateNTPTimeEvery;
-    long timezone;
-    bool daylight;
-} strNtpConfig;
-
 
 class  CLASS_CORE_NTP    {
     public:
