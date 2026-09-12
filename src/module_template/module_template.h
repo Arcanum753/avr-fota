@@ -17,25 +17,7 @@
 #include <LittleFS.h>
 #endif
 
-// Пины для двух GPIO, управляемых с веб-страницы
-#if defined(ESP32)
-#define TEMPLATE_GPIO1  32   // D32
-#define TEMPLATE_GPIO2  33   // D33
-#elif defined(ESP8266)
-#define TEMPLATE_GPIO1  16   // D0
-#define TEMPLATE_GPIO2  14   // D5
-#endif
-
-#define CONFIG_FILE_TEMPLATE    "/config_template.json"
-
-// Структура конфига — сохраняется в config_template.json
-typedef struct {
-    bool gpio1State;
-    bool gpio2State;
-    uint16_t blinkInterval;   // период моргания в мс, 0 = не моргать
-    String demoSampleText;    // демо-поле, ни на что не влияет
-    String demoArray[3];      // пример массива строк — см. load_config_template()
-} strTmplConfig;
+#include "module_template_types.h"
 
 class CLASS_MODULE_TEMPLATE {
 public:
