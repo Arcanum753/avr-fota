@@ -7,6 +7,7 @@
 
 #include "mod_context.h"
 #include "core_sys/eertos.h"
+#include "core_task_types.h"
 
 #if defined(DEBUG_TASK)
 #define DEBUGTASK(...) DBG_MOD("[C_TASK] ", __VA_ARGS__)
@@ -14,9 +15,6 @@
 #if !defined(DEBUG_TASK)
 #define DEBUGTASK(...)
 #endif
-
-#define CORE_TASK_SLOTS        12
-#define CORE_TASK_NAME_LEN     24
 
 // ============================================================
 // Именованные периодические/отложенные задачи поверх EERTOS.
