@@ -128,7 +128,8 @@ glob-масками `src/*/*.ini` и `src/*/*/*.ini` в `[platformio] extra_conf
 
 **Единый порядок функций в .cpp модуля (обязательно для всех core_/module_/device_/submodule_):**
 
-Шаблонный блок — всегда в начале файла, конкретная логика — после него.
+Шаблонный блок — всегда в начале файла, конкретная логика — после него (либо в
+`<module>_engine.cpp`, см. «Слоистая структура модуля» выше).
 
 1. **INCLUDES** — `#include "core_web/FSWebServerLib.h"` первым, затем библиотечные заголовки, `core_*/...`, свой `module_xxx.h`, `common/common.h`, `*_version.h`, `core_sys/eertos.h`.
 2. **ГЛОБАЛЬНЫЕ ОБЪЕКТЫ И ПЕРЕМЕННЫЕ** — глобальный объект класса, конструктор, глобальные/static переменные. Здесь же forward-declarations свободных функций, используемых шаблонным блоком.
@@ -148,6 +149,38 @@ glob-масками `src/*/*.ini` и `src/*/*/*.ini` в `[platformio] extra_conf
 - Управление GPIO через `pinMode`/`digitalWrite` — это только пример. В новом модуле будет своя аппаратная логика.
 - Отображение времени через `/xxx/time` — только как демонстрация периодического AJAX-опроса. В новом модуле заменить на свою периодическую задачу или удалить.
 - Массив `demoArray` в конфиге — только как демонстрация паттерна `is<JsonArray>()`. В реальном модуле заменить на свои поля или удалить.
+
+**Слоистая структура модуля (обязательно для всех core_/module_/device_/submodule_):**
+
+Эталон — `module_macros` (`module_macros.h` + `module_macros.cpp` + `module_macros_engine.h/.cpp`).
+Модуль раскладывается на слои, каждый файл имеет своё назначение:
+
+- `<module>_types.h` — define'ы конфигов/лимитов и `struct`/`enum`/`typedef`, не привязанные к классу.
+  Минимум include'ов. Include guard: `_<DIR>_TYPES_h` (дефисы → подчёркивания, имя каталога модуля).
+- `<module>.h` — класс `CLASS_*` (не дробится: C++ не поддерживает partial class), debug-макрос,
+  `extern` на глобальный объект, HTML-шаблоны `Page_*[]`. Включает `_types.h` (и `_led.h`/`_engine.h`).
+- `<module>.cpp` — **шаблонный блок**: INCLUDES, определение глобального объекта, `setFs`,
+  `begin`/`begin(ctx)`, `web_Init` + веб-обработчики, `register_resources`, конфиг,
+  версионные методы, терминальные команды (регистрация). Порядок — как в разделе
+  «Единый порядок функций» ниже.
+- `<module>_engine.cpp` — **исполнительная логика**: state machine, алгоритмы, ISR-обработчики,
+  колбэки внешних API, специфичные хелперы, реализация LED-макросов, `static`-хелперы,
+  используемые только engine. Не переносить сюда методы-обёртки веб/терминала/конфига.
+- `<module>_led.h` — объявления внешних LED-макросов (например `core_wifi_led.h`,
+  `core_ota_led.h`). НЕ создавать для LED-функций, объявленных как статические методы класса.
+- `<module>_engine.h` — только если engine предоставляет интерфейс наружу или содержит
+  структуры, не влезающие в `_types.h` (например `module_udp_engine.h`).
+
+Правила переноса:
+- Логику не менять — только переносить код. Все `DEBUGXXX`-вызовы сохранять.
+- Глобальные объекты модуля (`core_wifi`, `module_rgb`, …) остаются в `<module>.cpp`; прочие
+  глобальные переменные, используемые только engine, переносятся в engine-файл (`extern` при
+  необходимости).
+- Функция, используемая и шаблоном, и engine, объявляется в `.h` (метод класса) или в
+  `_engine.h` (свободная). `static`-хелпер, нужный обоим файлам, выносится в `common_module`
+  или `_engine.h`, но не дублируется.
+- Новые условные блоки — только `#if`/`#endif` (без `#elif`/`#else`).
+- Файлы `.ini` и генератор registry менять не нужно: `src_filter` включает каталог целиком.
 
 ### EERTOS — Cooperative scheduler
 
@@ -246,6 +279,8 @@ CLASS_CORE_OTA (core_ota/core_ota.h)
   `ESPAsyncWebServer.h`) и уже выделенные helper-файлы (`module_prog/format_bin.*`,
   `format_hex.*`) не трогаются; `common_module` не создаётся, если подходящих функций нет;
 - include guard каждого `common_module.h` уникален: `_<DIR>_COMMON_MODULE_h`.
+- хелпер, используемый только engine-файлом компонента, остаётся `static` в
+  `<module>_engine.cpp` и в `common_module` не выносится.
 
 Текущие локальные `common_module`:
 
@@ -550,7 +585,10 @@ avr-fota/
 │   ├── ESPAsyncWebServer.h  # Library fork (in src root so -Isrc overrides libdeps)
 │   ├── modules_registry.h/cpp # Generated per env (не в git, пересоздаются pre-скриптом сборки)
 │   ├── version.h            # Auto-generated version header (не в git)
-│   ├── core_wifi/           # Wi-Fi core module (+ web/wifi.html, wifi-slot.js, config_wifi0-3.json)
+│   ├── core_wifi/           # Wi-Fi core module; слоистая структура:
+│   │                        #   core_wifi.h + core_wifi_types.h + core_wifi_led.h
+│   │                        #   + core_wifi.cpp (шаблон) + core_wifi_engine.cpp
+│   │                        #   (+ web/wifi.html, wifi-slot.js, config_wifi0-3.json)
 │   ├── core_ntp/            # NTP core module (+ web/ntp.html, config_ntp.json)
 │   ├── core_ota/            # OTA core module (+ web/update.html, spark-md5.js)
 │   ├── core_json/           # JSON utilities core module
@@ -583,7 +621,7 @@ Each module has a dedicated debug flag and macro:
 - `DEBUG_JSON` → `DEBUGJSON(...)`
 - `DEBUG_EDITOR` → `DEBUGEDITOR(...)` (`[M_EDITOR]`)
 - `DEBUG_LED` → `DEBUGLOGLED(...)`
-- `DEBUGLOG_WIFI` → `DEBUGLOGWIFI(...)`
+- `DEBUG_WIFI` → `DEBUG_WIFI(...)`
 - `DEBUG_PROG` → `DEBUGLOGPROG(...)`
 - `DEBUG_ISP` → `DEBUGLOGISP(...)`
 - `DEBUG_SWD` → `DEBUGLOGSWD(...)`
