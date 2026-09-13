@@ -95,6 +95,9 @@ public:
     void catalogToJson(JsonDocument& doc);
     void catalogModulesToJson(JsonDocument& doc);
 
+    // Приведение значения к целевому типу ресурса (чистый stateless-хелпер).
+    BusValue valueToKind(const BusValue& v, BusValue::Kind k);
+
 private:
     // Версия
     String getVersionStr();
@@ -120,7 +123,6 @@ private:
     int  findFunc(const char* name);
     int  findNs(const char* ns, bool create);
     void makeFullName(char* out, const char* name);
-    BusValue valueToKind(const BusValue& v, BusValue::Kind k);
     int  writeRes(int idx, const BusValue& v, bool checkAccess);
     void queueEvent(const char* evt, const BusValue& v);
     void dispatchEvents();

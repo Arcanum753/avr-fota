@@ -146,9 +146,13 @@ void CLASS_CORE_STATE::catalogModulesToJson(JsonDocument& doc) {
 
     JsonArray mods = doc["modules"].to<JsonArray>();
     for (uint8_t i = 0; i < _nsCount; i++) {
+        // Ядро — не модуль управления: у него нет режима off/auto/macro.
+        // В список модулей для центральной страницы не попадает.
+        if (_ns[i].privileged) { continue; }
+
         JsonObject o = mods.add<JsonObject>();
         o["ns"] = _ns[i].name;
-        o["privileged"] = _ns[i].privileged ? 1 : 0;
+        o["privileged"] = 0;
         o["prio"] = _ns[i].prio;
 
         char full[CORE_STATE_NAME_LEN];
