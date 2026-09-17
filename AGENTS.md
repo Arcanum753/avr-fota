@@ -1,28 +1,28 @@
-# AVR-FOTA Architecture & Build System
+# AVR-FOTA: архитектура и система сборки
 
-## Overview
+## Обзор
 
-Universal firmware for **ESP8266** and **ESP32** with a web interface for programming AVR (AtMega/AtTiny) and STM32 microcontrollers over LAN, plus remote device management. Forked from [FSBrowserNG](https://github.com/gmag11/FSBrowserNG) with ISP programming logic from [Standalone-Arduino-AVR-ISP-programmer](https://github.com/adafruit/Standalone-Arduino-AVR-ISP-programmer/) and SWD logic from [ESP32_nRF52_SWD](https://github.com/atc1441/ESP32_nRF52_SWD) / [blackmagic](https://codeberg.org/blackmagic-debug/blackmagic).
+Универсальная прошивка для **ESP8266** и **ESP32** с веб-интерфейсом для программирования AVR (AtMega/AtTiny) и STM32 микроконтроллеров по локальной сети, а также для удалённого управления устройствами. Форк [FSBrowserNG](https://github.com/gmag11/FSBrowserNG) с логикой ISP-программирования из [Standalone-Arduino-AVR-ISP-programmer](https://github.com/adafruit/Standalone-Arduino-AVR-ISP-programmer/) и логикой SWD из [ESP32_nRF52_SWD](https://github.com/atc1441/ESP32_nRF52_SWD) / [blackmagic](https://codeberg.org/blackmagic-debug/blackmagic).
 
-## Code style conventions
+## Соглашения о стиле кода
 
 - **Сохранять существующий стиль кода.** Не менять форматирование, отступы, расположение скобок или пробелы без необходимости.
 - **Запрещён `#elif`.** Все условные блоки оформляются только через `#if` / `#endif`. Никаких `#elif`/ `#else`. 
 - **Новые комментарии — на русском языке.** Существующие комментарии (на любом языке) сохранять как есть, если они остаются актуальными. Устаревшие комментарии можно удалять или обновлять, заменяя на русский.
 
-## Architecture
+## Архитектура
 
-### Modular design
+### Модульная структура
 
-The project is split into **two categories**:
+Проект разделён на **две категории**:
 
-1. **Cores (core_\*)** — always present, provide base functionality
-2. **Modules (module_\*)** — optional, added via `src_filter` and `build_flags` in target config
-3. **Devices (device_\*)** — optional, added via `src_filter` and `build_flags` in target config. Uses for using devices with stable hardware.
+1. **Ядра (`core_*`)** — присутствуют всегда, обеспечивают базовую функциональность
+2. **Модули (`module_*`)** — опциональны, добавляются через `src_filter` и `build_flags` в конфиге таргета
+3. **Устройства (`device_*`)** — опциональны, добавляются через `src_filter` и `build_flags` в конфиге таргета. Используются для устройств со стабильным железом.
 
-Submodules (`submodule_*`) inherit from `Class_ProgBase` and implement specific programmers. The base programmer logic lives in `module_prog/`.
+Субмодули (`submodule_*`) наследуются от `Class_ProgBase` и реализуют конкретных программаторов. Базовая логика программатора находится в `module_prog/`.
 
-### Multi-repository layout
+### Мульти-репозиторная компоновка
 
 Ядро — единый git-репозиторий (этот файл). Компоненты (`module_*`, `device_*`, контейнер
 программатора) — **отдельные git-репозитории**, которые клонируются пользователем в `src/<имя>`
@@ -63,17 +63,17 @@ glob-масками `src/*/*.ini` и `src/*/*/*.ini` в `[platformio] extra_conf
 правки «всё сразу» — как обычные изменения файлов в одном окне VS Code. `module_template` — часть
 ядра (не клон).
 
-### Core modules (always compiled)
+### Ядровые модули (компилируются всегда)
 
-| Module | Directory | Purpose |
+| Модуль | Каталог | Назначение |
 |--------|-----------|---------|
-| `core_sys` | `src/core_sys/` | System core: identity (device name/serial, NVRAM store), `config_sys.json`, HTTP-auth/recovery (`secret.json`), system info (reset reason, chipinfo, about), centralized FS-version reading (`_version_fs.json`), EERTOS |
-| `core_wifi` | `src/core_wifi/` | Wi-Fi client/AP, 4 profile management, scanning |
-| `core_ntp` | `src/core_ntp/` | NTP client with 3 servers (primary + 2 fallback) |
-| `core_ota` | `src/core_ota/` | Self-update (FOTA) via web, FS version checking |
-| `core_json` | `src/core_json/` | JSON utilities (save/load/parse) |
-| `core_led` | `src/core_led/` | LED indication macros (WiFi, errors, success, waiting) |
-| `core_terminal` | `src/core_terminal/` | Serial terminal with debug/management commands |
+| `core_sys` | `src/core_sys/` | Ядро системы: идентичность (имя/серийник устройства, хранилище в NVRAM), `config_sys.json`, HTTP-аутентификация/восстановление (`secret.json`), информация о системе (причина сброса, chipinfo, about), централизованное чтение версии FS (`_version_fs.json`), EERTOS |
+| `core_wifi` | `src/core_wifi/` | Wi-Fi клиент/AP, управление 4 профилями, сканирование |
+| `core_ntp` | `src/core_ntp/` | NTP-клиент с 3 серверами (основной + 2 запасных) |
+| `core_ota` | `src/core_ota/` | Самообновление (FOTA) через web, проверка версии FS |
+| `core_json` | `src/core_json/` | Утилиты JSON (сохранение/загрузка/разбор) |
+| `core_led` | `src/core_led/` | Макросы индикации светодиодом (WiFi, ошибки, успех, ожидание) |
+| `core_terminal` | `src/core_terminal/` | Последовательный терминал с отладочными/управляющими командами |
 | `core_state` | `src/core_state/` | Ресурсная шина: реестр ресурсов, события, async-вызовы, режимы ядра (`system.mode`) |
 | `core_task` | `src/core_task/` | Именованные задачи поверх EERTOS (`every`/`after`/`cancel`) + диагностика переполнения |
 
@@ -81,26 +81,26 @@ glob-масками `src/*/*.ini` и `src/*/*/*.ini` в `[platformio] extra_conf
 (отдельный репозиторий, включается флагом `-D MODULE_EDITOR`, инициализируется в
 `modules_begin()`/`modules_web_Init()` через registry). В `core_begin()` его больше нет.
 
-### Optional modules
+### Опциональные модули
 
-| Module | Flag | Purpose |
+| Модуль | Флаг | Назначение |
 |--------|------|---------|
-| `module_program` (репо) | `-D PROGTYPE_ISP` | AVR-ISP programmer (AtMega/AtTiny): `src/module_program/module_prog` + `.../submodule_isp` |
-| `module_program` (репо) | `-D PROGTYPE_SWD` | SWD programmer (STM32 F1/F4): `src/module_program/module_prog` + `.../submodule_swd` |
-| `module_gpio` | `-D MODULE_GPIO` | GPIO control via web |
-| `module_lcd-i2c` | `-D MODULE_LCD_I2C` | LCD I2C display control (LiquidCrystal_I2C, маски date/time, backlight) |
+| `module_program` (репо) | `-D PROGTYPE_ISP` | AVR-ISP программатор (AtMega/AtTiny): `src/module_program/module_prog` + `.../submodule_isp` |
+| `module_program` (репо) | `-D PROGTYPE_SWD` | SWD программатор (STM32 F1/F4): `src/module_program/module_prog` + `.../submodule_swd` |
+| `module_gpio` | `-D MODULE_GPIO` | Управление GPIO через web |
+| `module_lcd-i2c` | `-D MODULE_LCD_I2C` | Управление LCD I2C дисплеем (LiquidCrystal_I2C, маски date/time, подсветка) |
 | `module_ds3231` | `-D MODULE_DS3231` | Часы реального времени DS3231 |
 | `module_macros` | `-D MODULE_MACROS` | Макросы/сценарии |
 | `module_rgb` | `-D MODULE_RGB` | RGB-матрица (NeoPixelBus/WS2812) |
-| `module_udp` | `-D MODULE_UDP` | UDP broadcast for device discovery |
-| `module_otaclient` | `-D MODULE_OTACLIENT=1` | OTA client (auto-update from remote server) |
+| `module_udp` | `-D MODULE_UDP` | UDP broadcast для обнаружения устройств |
+| `module_otaclient` | `-D MODULE_OTACLIENT=1` | OTA-клиент (автообновление с удалённого сервера) |
 | `module_template` | `-D MODULE_TEMPLATE` | Шаблон модуля — основа для создания новых модулей (в ядре) |
-| `module_i2c-mapper` | `-D MODULE_I2C_MAPPER` | I2C bus scanner (web interface, Wire0) |
-| `module_editor` | `-D MODULE_EDITOR` | FS browser, file editor (html/txt/json/js), upload/delete — форк Ace (опционально) |
+| `module_i2c-mapper` | `-D MODULE_I2C_MAPPER` | Сканер шины I2C (веб-интерфейс, Wire0) |
+| `module_editor` | `-D MODULE_EDITOR` | Браузер FS, редактор файлов (html/txt/json/js), загрузка/удаление — форк Ace (опционально) |
 
-### Devices (device_*) — отдельные репозитории, клонируются в `src/device_*`
+### Устройства (device_*) — отдельные репозитории, клонируются в `src/device_*`
 
-| Device | Env-примеры | Назначение |
+| Устройство | Env-примеры | Назначение |
 |--------|-------------|------------|
 | `device_clock-mech` | `esp32_clock-mech` | Механические часы |
 | `device_mech-ring` | `esp32_clock-mech_ring` | Механические часы с боем |
@@ -182,42 +182,42 @@ glob-масками `src/*/*.ini` и `src/*/*/*.ini` в `[platformio] extra_conf
 - Новые условные блоки — только `#if`/`#endif` (без `#elif`/`#else`).
 - Файлы `.ini` и генератор registry менять не нужно: `src_filter` включает каталог целиком.
 
-### EERTOS — Cooperative scheduler
+### EERTOS — кооперативный планировщик
 
-`src/core_sys/eertos.h` + `src/core_sys/eertos.cpp` implement a cooperative task/timer dispatcher (not an RTOS):
-- `SetTask(TPTR)` — queue a function for execution in the main loop
-- `SetTimerTask(TPTR, uint32_t)` — schedule a function after N milliseconds
-- `DelTimerTask(TPTR)` — remove a scheduled timer
-- `TaskManager()` — called from `loop()`, dequeues and runs one task per call
-- `TimerService()` — called from a 1ms Ticker ISR, decrements timer counters and pushes expired tasks
+`src/core_sys/eertos.h` + `src/core_sys/eertos.cpp` реализуют кооперативный диспетчер задач/таймеров (не RTOS):
+- `SetTask(TPTR)` — поставить функцию в очередь на выполнение в главном цикле
+- `SetTimerTask(TPTR, uint32_t)` — запланировать функцию через N миллисекунд
+- `DelTimerTask(TPTR)` — удалить запланированный таймер
+- `TaskManager()` — вызывается из `loop()`, извлекает и выполняет одну задачу за вызов
+- `TimerService()` — вызывается из ISR Ticker на 1 мс, уменьшает счётчики таймеров и помещает истёкшие задачи в очередь
 
-The main loop (`loop()` in `main.cpp`):
-1. Resets watchdog
-2. Calls `TaskManager()` — runs one queued task
-3. Resets watchdog again
-4. Calls `loop_user()` (user hook, empty by default)
-5. Calls `TerminalLoop()`
-6. Calls `core_loop()`, `modules_loop()`, `dev_loop()` (задача `core_ota.loop()`/`module_otaclient.loop()` вызывается через `core_loop`)
+Главный цикл (`loop()` в `main.cpp`):
+1. Сбрасывает watchdog
+2. Вызывает `TaskManager()` — выполняет одну задачу из очереди
+3. Снова сбрасывает watchdog
+4. Вызывает `loop_user()` (пользовательский хук, по умолчанию пустой)
+5. Вызывает `TerminalLoop()`
+6. Вызывает `core_loop()`, `modules_loop()`, `dev_loop()` (задача `core_ota.loop()`/`module_otaclient.loop()` вызывается через `core_loop`)
 
-### Core initialization flow (`setup()`)
+### Порядок инициализации ядра (`setup()`)
 
-1. `InitRTOS()` — init EERTOS queues
-2. `LittleFS.begin()` — mount filesystem
-3. `ESPHTTPServer.begin(&LittleFS)` — starts the web server (`src/core_web/FSWebServerLib.cpp`):
-   - Fills global `ModContext` (fs, hostname, password)
-   - `core_begin(ModContext)` — core init (WiFi, NTP, JSON, OTA)
-   - `modules_begin(ModContext)` — optional modules init
-   - `dev_begin(ModContext)` — devices init
-   - `serverInit()` — register core HTTP routes
-   - `core_web_Init()`, `modules_web_Init()`, `dev_web_Init()` — register web routes
+1. `InitRTOS()` — инициализация очередей EERTOS
+2. `LittleFS.begin()` — монтирование файловой системы
+3. `ESPHTTPServer.begin(&LittleFS)` — запускает веб-сервер (`src/core_web/FSWebServerLib.cpp`):
+   - Заполняет глобальный `ModContext` (fs, hostname, password)
+   - `core_begin(ModContext)` — инициализация ядра (WiFi, NTP, JSON, OTA)
+   - `modules_begin(ModContext)` — инициализация опциональных модулей
+   - `dev_begin(ModContext)` — инициализация устройств
+   - `serverInit()` — регистрация основных HTTP-маршрутов
+   - `core_web_Init()`, `modules_web_Init()`, `dev_web_Init()` — регистрация веб-маршрутов
    - `MDNS.begin()` — mDNS
    - Инициализация конкретных модулей регистрируется через `modules_registry` (см. ниже)
-4. `TerminalInit()` — serial terminal (вызывается через `core_begin`, см. ниже)
-5. `ledInit()` — LED GPIO init
-6. `ledMacroTimerTask()` — start LED macro timer
-7. `_secondEERtos.attach_ms(1, TimerService)` — start 1ms tick
+4. `TerminalInit()` — последовательный терминал (вызывается через `core_begin`, см. ниже)
+5. `ledInit()` — инициализация GPIO светодиода
+6. `ledMacroTimerTask()` — запуск таймера LED-макросов
+7. `_secondEERtos.attach_ms(1, TimerService)` — запуск тика 1 мс
 
-### Key class hierarchy
+### Иерархия ключевых классов
 
 ```
 Class_ProgBase (module_program/module_prog/module_prog.h)
@@ -225,7 +225,7 @@ Class_ProgBase (module_program/module_prog/module_prog.h)
 └── Class_SubSwd (module_program/submodule_swd/) — STM32 SWD
 
 CLASS_CORE_OTA (core_ota/core_ota.h)
-└── CLASS_MODULE_OTACLIENT (module_otaclient/) — extended OTA client
+└── CLASS_MODULE_OTACLIENT (module_otaclient/) — расширенный OTA-клиент
 ```
 
 Ядро `CLASS_CORE_SYS` (`core_sys/core_sys.h`) не входит в иерархию программатора: владеет
@@ -294,7 +294,7 @@ CLASS_CORE_OTA (core_ota/core_ota.h)
 | `module_rgb` | `ns_module_rgb` | `hexStringToUint32` |
 | `device_electronica7_rgb` | `ns_device_electronica7_rgb` | `e7*` (HSV/Lerp/ГПСЧ/эффекты/сэмплер) |
 
-### Inclusion mechanism: единый контракт модулей + автогенерация registry
+### Механизм подключения: единый контракт модулей + автогенерация registry
 
 Все ядра/модули/устройства приводятся к единому контракту:
 - `begin(ModContext& ctx)` — инициализация периферии + загрузка конфигов. `ModContext`
@@ -352,11 +352,11 @@ loop = 0       # есть loop() — вызывается в *_loop
 при смене env/набора модулей достаточно просто собрать заново. Ручной запуск
 `python/module_registry_gen.py --env <env>` нужен только вне сборки.
 
-Source files are filtered by `src_filter` in `platformio.ini`:
+Исходные файлы фильтруются через `src_filter` в `platformio.ini`:
 ```ini
 src_filter = +<*> -<.git/> -<.vscode/> -<module_*/> -<submodule_*/> -<device_*/>
 ```
-Modules are added per-target:
+Модули добавляются по таргетам:
 ```ini
 [env:esp32-swd]
 extends = env:esp32
@@ -474,101 +474,103 @@ return {
 }
 ```
 - `cond` — декларативно (`res`+`op`+`val`, массив = AND), фронт `false→true`.
-- Мета-cron (`config_macros.json`, колонка `cron`) — **гейт окна** для всех правил файла.
+- Мета-cron (`meta_cron` в таблице сценария, в `config_macros.json` не хранится) — **гейт окна** для всех правил файла.
   Если в файле единственное cron-выражение — его выносят в мета-cron, правило становится телом.
 - `on` — декларативная подписка (движок сам `core_state.on`); `call_async` из Lua запрещён.
 - Handler получает таблицу `event` (`type`, `spec`, `args`, `value`); глобалы между вызовами
   не живут (stateless).
 - `handleList`/`handleResources` защищены от OOM: heap-guard и кэш каталога ресурсов.
 
-### Web page structure
+### Структура веб-страниц
 
-`src/core_web/web/page_head.html` contains a static menu and a marker `<!-- MODULES_RIGHT_COLUMN -->`. The build script `gen_page_head.py` replaces this marker with links generated from each module's `web/` directory:
-- If a module has `web/_menu.html`, its content is used directly
-- Otherwise, `.html` files are scanned for `<title>` or first heading
+`src/core_web/web/page_head.html` содержит статическое меню и маркер `<!-- MODULES_RIGHT_COLUMN -->`. Скрипт сборки `gen_page_head.py` заменяет этот маркер ссылками, сгенерированными из каталога `web/` каждого модуля:
+- Если у модуля есть `web/_menu.html`, его содержимое используется напрямую
+- Иначе файлы `.html` сканируются на наличие `<title>` или первого заголовка
 
-Module web files (e.g. `module_program/module_prog/web/prog.html`, `module_program/submodule_isp/web/avrcfg.html`) are copied into the FS build directory by `4_fs_builder.py`.
+Веб-файлы модулей (например `module_program/module_prog/web/prog.html`, `module_program/submodule_isp/web/avrcfg.html`) копируются в каталог сборки FS скриптом `4_fs_builder.py`.
 
-### File system config files (in `core_sys/web/`, `core_web/web/` and module `web/` dirs)
+### Файлы конфигурации файловой системы (в `core_sys/web/`, `core_web/web/` и каталогах `web/` модулей)
 
-| File | Location | Purpose |
+| Файл | Расположение | Назначение |
 |------|----------|---------|
-| `config_sys.json` | `core_sys/web/` | Device name, serial |
-| `config_ntp.json` | `core_ntp/web/` | NTP server addresses, timezone, DST |
-| `config_wifi0-3.json` | `core_wifi/web/` | 4 Wi-Fi profiles (SSID, password, DHCP/static IP) |
-| `secret.json` | `core_sys/web/` | HTTP auth login/password (hidden from FS browser) |
-| `page_head.html` | `core_web/web/` | HTML template for the device main page (with menu marker) |
-| `config_prog.json` | `module_program/module_prog/web/` | Programmer project config (chip, project name) |
-| `config_udp.json` | `module_udp/web/` | UDP module config |
-| `config_otaclient.json` | `module_otaclient/web/` | OTA client config |
-| `avrisp_cfg.json` | `module_program/submodule_isp/web/` | AVR chip database (signature, flash size, page size) |
-| `swd_cfg.json` | `module_program/submodule_swd/web/` | SWD chip database (IDCODE, flash params) |
+| `config_sys.json` | `core_sys/web/` | Имя устройства, серийный номер |
+| `config_ntp.json` | `core_ntp/web/` | Адреса NTP-серверов, часовой пояс, переход на летнее время |
+| `config_wifi0-3.json` | `core_wifi/web/` | 4 профиля Wi-Fi (SSID, пароль, DHCP/статический IP) |
+| `secret.json` | `core_sys/web/` | Логин/пароль HTTP-аутентификации (скрыт из браузера FS) |
+| `page_head.html` | `core_web/web/` | HTML-шаблон главной страницы устройства (с маркером меню) |
+| `config_prog.json` | `module_program/module_prog/web/` | Конфиг проекта программатора (чип, имя проекта) |
+| `config_udp.json` | `module_udp/web/` | Конфиг UDP-модуля |
+| `config_otaclient.json` | `module_otaclient/web/` | Конфиг OTA-клиента |
+| `avrisp_cfg.json` | `module_program/submodule_isp/web/` | База чипов AVR (signature, размер flash, размер страницы) |
+| `swd_cfg.json` | `module_program/submodule_swd/web/` | База чипов SWD (IDCODE, параметры flash) |
 
-### Serial terminal
+### Последовательный терминал
 
-`core_terminal` wraps the [ErriezSerialTerminal](https://github.com/Erriez/ErriezSerialTerminal) library. Commands registered (via `TerminalInit()`):
-- `info` — system info
-- `reset` — ESP restart
-- `dirs` / `check` — FS operations
-- `blink` — LED test
-- `flash1` / `flash2` — programmer operations
-- `stm32` / `swd` / `swdflash1` / `swdflash` — SWD debug
-- `udpp` / `udpc` / `udps` — UDP module debug
-- `avr` — AVR-ISP module debug
+`core_terminal` оборачивает библиотеку [ErriezSerialTerminal](https://github.com/Erriez/ErriezSerialTerminal). Зарегистрированные команды (через `TerminalInit()`):
+- `help` — список всех команд
+- `reset` — перезагрузка ESP
+- `echo` — вкл/выкл эхо терминала
+- `?` — информация о системе и текущем состоянии Wi-Fi
+- `id` — показать/установить имя и серийник устройства
+- `1` — тест терминала
+- `udpp` / `udpc` / `udps` — отладка UDP-модуля (только при `MODULE_UDP`)
+- `led` — тест светодиода
 
-### Format handlers (`module_program/module_prog/`)
+Команды отладки программатора (`flash`, `flash2`, `stm32`, `swdf`, `avr`) в `TerminalInit()` закомментированы и не регистрируются. Команды `ds-*` (DS3231), `i2c-scan` (I2C-сканер), `macro` (макросы) и `c-*`/`r-*` (механические часы) регистрируются соответствующими модулями и устройствами.
 
-- `format_bin.h` — BIN file read API (open/read/close/isFormat)
-- `format_hex.h` — Intel HEX parser with streaming validation, callback-based flash write (`hexFileParseStreamWrite`), binary size estimation (`hexFileGetBinarySize`)
+### Обработчики форматов (`module_program/module_prog/`)
 
-## Build System
+- `format_bin.h` — API чтения BIN-файлов (open/read/close/isFormat)
+- `format_hex.h` — парсер Intel HEX с потоковой валидацией, запись во flash через callback (`hexFileParseStreamWrite`), оценка размера бинарника (`hexFileGetBinarySize`)
 
-### Platform — PlatformIO
+## Система сборки
 
-- Config: `platformio.ini`
-- Base platforms: `espressif8266`, `espressif32`
-- Framework: `arduino`
-- File system: LittleFS
-- ESP32 partition table: `partitions.csv` (2 OTA slots + spiffs)
+### Платформа — PlatformIO
 
-### Environment presets
+- Конфиг: `platformio.ini`
+- Базовые платформы: `espressif8266`, `espressif32`
+- Фреймворк: `arduino`
+- Файловая система: LittleFS
+- Таблица разделов ESP32: `partitions_esp32.csv` (2 слота OTA + spiffs)
 
-| env | Platform | Board | Notes |
+### Предустановленные окружения
+
+| env | Платформа | Плата | Примечания |
 |-----|----------|-------|-------|
-| `esp8266` | espressif8266 | d1_mini | Base for ESP8266 targets |
-| `esp32` | espressif32 | upesy_wroom | Base for ESP32 targets |
-| `esp32cam` | espressif32 | esp32cam | Extends esp32 |
+| `esp8266` | espressif8266 | d1_mini | База для таргетов ESP8266 |
+| `esp32` | espressif32 | upesy_wroom | База для таргетов ESP32 |
+| `esp32cam` | espressif32 | esp32cam | Расширяет esp32 |
 
-Target-specific configs: `targets/targets_example.ini` (examples) and `targets/targets_user.ini` (user).
+Конфиги конкретных таргетов: `targets/targets_example.ini` (примеры) и `targets/targets_user.ini` (пользовательские).
 
-### Build scripts (`python/`)
+### Скрипты сборки (`python/`)
 
-Run order and purpose:
+Порядок запуска и назначение:
 
-**Pre-scripts** (before compilation, порядок = номер файла):
-1. `1_registry_pre_build.py` — запускает `module_registry_gen.py` под текущий env (см. `### Inclusion mechanism`)
-2. `2_version_builder.py` — generates `src/version.h` with `MAJOR.MINOR.DATE.BUILD`, git info, auto-increment MINOR on commit change, auto-increment BUILD on every build. Protected against double-run via env var.
-3. `3_module_version_gen.py` — generates `*_version.h` for each core/module (git-hash-based change detection)
-4. `4_fs_builder.py` — prepares FS build directory at `web_debug/<env>/`, copies files from `data/` and module `web/` dirs, generates `_version_fs.json`, calls `gen_page_head.py`, redirects `PLATFORMIO_FS_DATA_DIR`
-5. `5_set_fs_data_dir.py` — sets PlatformIO's `PROJECT_DATA_DIR` to the prepared directory
+**Pre-скрипты** (перед компиляцией, порядок = номер файла):
+1. `1_registry_pre_build.py` — запускает `module_registry_gen.py` под текущий env (см. «Механизм подключения: единый контракт модулей + автогенерация registry»)
+2. `2_version_builder.py` — генерирует `src/version.h` с `MAJOR.MINOR.DATE.BUILD`, git-информацией, автоинкрементом MINOR при смене коммита, автоинкрементом BUILD при каждой сборке. Защищён от двойного запуска через переменную окружения.
+3. `3_module_version_gen.py` — генерирует `*_version.h` для каждого ядра/модуля (определение изменений по git-хешу)
+4. `4_fs_builder.py` — готовит каталог сборки FS в `web_debug/web_<env>/`, копирует файлы из `data/` и каталогов `web/` модулей, генерирует `_version_fs.json`, вызывает `gen_page_head.py`, перенаправляет `PLATFORMIO_FS_DATA_DIR`
+5. `5_set_fs_data_dir.py` — устанавливает `PROJECT_DATA_DIR` PlatformIO на подготовленный каталог
 
-**Ручной запуск (before compilation, при смене env/набора модулей):**
-- `module_registry_gen.py` — generates `src/modules_registry.cpp/.h` under selected env (обязательно, см. `### Inclusion mechanism`; также автоматически запускается `1_registry_pre_build.py` при каждой сборке)
+**Ручной запуск (перед компиляцией, при смене env/набора модулей):**
+- `module_registry_gen.py` — генерирует `src/modules_registry.cpp/.h` под выбранный env (обязательно, см. «Механизм подключения: единый контракт модулей + автогенерация registry»; также автоматически запускается `1_registry_pre_build.py` при каждой сборке)
 
-**Post-scripts** (after compilation):
-6. `6_copy_fw.py` — copies `firmware.bin` → `proj_fwbins/{ENV}-FIRMWARE-{VERSION}.bin`
-7. `7_copy_fs.py` — copies `littlefs.bin` → `proj_fwbins/{ENV}-FILESYS-{VERSION}.bin`
+**Пост-скрипты** (после компиляции):
+6. `6_copy_fw.py` — копирует `firmware.bin` → `proj_fwbins/{ENV}-FIRMWARE-{VERSION}.bin`
+7. `7_copy_fs.py` — копирует `littlefs.bin` → `proj_fwbins/{ENV}-FILESYS-{VERSION}.bin`
 
-### Version format
+### Формат версии
 
-`MAJOR.MINOR.DATE.BUILD` (e.g., `0.034.20260614_2351.0801`)
+`MAJOR.MINOR.DATE.BUILD` (например, `0.034.20260614_2351.0801`)
 
-- `MAJOR` (1 digit) — manual in `version_counter.txt`
-- `MINOR` (3 digits) — manual, auto-incremented on git commit change
+- `MAJOR` (1 цифра) — задаётся вручную в `version_counter.txt`
+- `MINOR` (3 цифры) — задаётся вручную, автоинкремент при смене git-коммита
 - `DATE` — `%Y%m%d_%H%M`
-- `BUILD` (4 digits) — auto-incremented each compilation
+- `BUILD` (4 цифры) — автоинкремент при каждой компиляции
 
-Module versions: independent numeric version per module, incremented when module file content hash changes. Stored in `.module_versions` / `.module_hashes`.
+Версии модулей: независимая числовая версия на модуль, инкрементируется при изменении хеша содержимого файлов модуля. Номер и хеш хранятся в `<module>_version.h`; хеш коммита проекта — в `.version_hashes`.
 
 ### CI/CD
 
@@ -576,96 +578,94 @@ Module versions: independent numeric version per module, incremented when module
 для заданного набора компонентов (ядро + модули/устройства по списку) клонирует их, собирает env
 и публикует артефакты. В ядре `.github/` пока отсутствует; у компонентов CI может быть свой.
 
-### Version files
+### Файлы версий
 
-Всё ниже — генерируемые файлы, **не хранятся в git** (правила `.gitignore` ядра; у компонентов
-`*_version.h` игнорируются их собственным `.gitignore`):
+Всё ниже — генерируемые файлы, **не хранятся в git** (правила `.gitignore` ядра):
 
-- `version_counter.txt` — MAJOR (line 1), MINOR (line 2)
-- `build_counter.txt` — BUILD number
-- `.last_commit_hash` — tracked by `2_version_builder.py`
-- `.module_versions` — current module version numbers (ключи — rel-путь от src/ для вложенных)
-- `.module_hashes` — content hashes per module (for change detection)
-- `src/version.h` — auto-generated C header with all version macros + git info
-- `src/*_version.h` — per-module version headers (e.g., `core_wifi_version.h`)
+- `version_counter.txt` — MAJOR (строка 1), MINOR (строка 2)
+- `build_counter.txt` — номер BUILD
+- `.version_hashes` — git-хеши (в т.ч. хеш коммита проекта), отслеживается `2_version_builder.py`
+- `src/version.h` — автогенерируемый C-заголовок со всеми макросами версий + git-информацией
 
-### File system version file
+Заголовки версий модулей `src/*_version.h` (например, `core_wifi_version.h`) в git **отслеживаются**: в них `3_module_version_gen.py` хранит номер версии и хеш последнего обработанного коммита.
 
-`_version_fs.json` is generated by `4_fs_builder.py` and placed in the FS root. Contains:
-- Full firmware version + components
-- Git info (branch, commit, dirty flag, tag)
-- Per-module versions and dates
-- FS statistics (size, used, free, file count, build date)
+### Файл версии файловой системы
 
-## Directory structure
+`_version_fs.json` генерируется `4_fs_builder.py` и помещается в корень FS. Содержит:
+- Полная версия прошивки + компоненты
+- Git-информация (ветка, коммит, флаг dirty, тег)
+- Версии и даты по модулям
+- Статистика FS (размер, занято, свободно, число файлов, дата сборки)
+
+## Структура каталогов
 
 ```
 avr-fota/
 ├── data/                    # Пустая (заглушка для сборщика FS; веб-файлы в src/core_* /web)
-├── python/                  # Build scripts
-│   ├── 1_registry_pre_build.py # Registry regeneration hook (runs module_registry_gen.py)
-│   ├── 2_version_builder.py  # Version header generation
-│   ├── 3_module_version_gen.py # Per-module version generation
-│   ├── 4_fs_builder.py       # FS image preparation
-│   ├── 5_set_fs_data_dir.py  # FS data directory redirect
-│   ├── 6_copy_fw.py          # Firmware binary copy
-│   ├── 7_copy_fs.py          # FS binary copy
-│   ├── module_registry_gen.py # Registry autogeneration under selected env (helper for 1/build_all)
-│   ├── gen_page_head.py      # Dynamic page header generation (helper for 4)
-│   └── build_all.py          # Build all envs (manual orchestrator)
-├── src/                     # Source code
-│   ├── common/              # Low-level utilities (time + string + common)
+├── python/                  # Скрипты сборки
+│   ├── 1_registry_pre_build.py # Хук регенерации registry (запускает module_registry_gen.py)
+│   ├── 2_version_builder.py  # Генерация заголовка версии
+│   ├── 3_module_version_gen.py # Генерация версий по модулям
+│   ├── 4_fs_builder.py       # Подготовка образа FS
+│   ├── 5_set_fs_data_dir.py  # Перенаправление каталога данных FS
+│   ├── 6_copy_fw.py          # Копирование бинарника прошивки
+│   ├── 7_copy_fs.py          # Копирование бинарника FS
+│   ├── module_registry_gen.py # Автогенерация registry под выбранный env (помощник для 1/build_all)
+│   ├── gen_page_head.py      # Динамическая генерация заголовка страницы (помощник для 4)
+│   └── build_all.py          # Сборка всех env (ручной оркестратор)
+├── src/                     # Исходный код
+│   ├── common/              # Низкоуровневые утилиты (время + строки + общее)
 │   │   ├── common.h/cpp     # hex2bin, urldecode, formatBytes, checkRange, escapeHtml, escapeJson
-│   │   ├── TimeLib.h/cpp    # Time library fork
-│   │   └── StringArray.h    # Linked list utility (fork)
-│   ├── main.h/cpp            # Entry point (setup/loop), project-wide defines
-│   ├── debug.h / debug_prefix.cpp # Debug logging macros + DBG_MOD
-│   ├── mod_context.h         # Module init context (fs, hostname, password)
-│   ├── core_sys/             # System core: identity/auth/config + system info (CLASS_CORE_SYS)
+│   │   ├── TimeLib.h/cpp    # Форк библиотеки времени
+│   │   └── StringArray.h    # Утилита связного списка (форк)
+│   ├── main.h/cpp            # Точка входа (setup/loop), общие для проекта define
+│   ├── debug.h / debug_prefix.cpp # Отладочные макросы логирования + DBG_MOD
+│   ├── mod_context.h         # Контекст инициализации модулей (fs, hostname, password)
+│   ├── core_sys/             # Ядро системы: идентичность/аутентификация/конфиг + информация о системе (CLASS_CORE_SYS)
 │   │   ├── core_sys.h/cpp    # CLASS_CORE_SYS: config_sys.json, secret.json, hostname, FS-version
 │   │   ├── common_module.h/cpp # ns_core_sys: isAdminPassValid, identCrcSkip
-│   │   ├── ident_store.h/cpp # NVRAM identity (name/serial)
-│   │   ├── eertos.h/cpp      # Cooperative task scheduler
-│   │   └── web/              # System pages: system.html, recover.html, 404.html,
+│   │   ├── ident_store.h/cpp # Идентичность в NVRAM (имя/серийник)
+│   │   ├── eertos.h/cpp      # Кооперативный планировщик задач
+│   │   └── web/              # Системные страницы: system.html, recover.html, 404.html,
 │   │                         #   config_sys.json, secret.json
-│   ├── core_web/            # Web-server core
-│   │   ├── FSWebServerLib.h/cpp # Async web server + routing (AsyncFSWebServer)
+│   ├── core_web/            # Ядро веб-сервера
+│   │   ├── FSWebServerLib.h/cpp # Асинхронный веб-сервер + маршрутизация (AsyncFSWebServer)
 │   │   ├── common_module.h/cpp # ns_core_web: getContentType
-│   │   └── web/             # Device main page: index.html, GetJson.js, GetMarkup.js,
+│   │   └── web/             # Главная страница устройства: index.html, GetJson.js, GetMarkup.js,
 │   │                        #   style.css, page_head.html, page_bottom.html, esp.gif, logo.gif, favicon.ico
-│   ├── ESPAsyncWebServer.h  # Library fork (in src root so -Isrc overrides libdeps)
-│   ├── modules_registry.h/cpp # Generated per env (не в git, пересоздаются pre-скриптом сборки)
-│   ├── version.h            # Auto-generated version header (не в git)
-│   ├── core_wifi/           # Wi-Fi core module; слоистая структура:
+│   ├── ESPAsyncWebServer.h  # Форк библиотеки (в корне src, чтобы -Isrc перекрывал libdeps)
+│   ├── modules_registry.h/cpp # Генерируется под env (не в git, пересоздаётся pre-скриптом сборки)
+│   ├── version.h            # Автогенерируемый заголовок версии (не в git)
+│   ├── core_wifi/           # Ядро Wi-Fi; слоистая структура:
 │   │                        #   core_wifi.h + core_wifi_types.h + core_wifi_led.h
 │   │                        #   + core_wifi.cpp (шаблон) + core_wifi_engine.cpp
 │   │                        #   (+ web/wifi.html, wifi-slot.js, config_wifi0-3.json)
-│   ├── core_ntp/            # NTP core module (+ web/ntp.html, config_ntp.json)
-│   ├── core_ota/            # OTA core module (+ web/update.html, spark-md5.js)
-│   ├── core_json/           # JSON utilities core module
-│   ├── core_led/            # LED indication core module (common_module.h/cpp: ledPatLen, ledPatAt)
-│   ├── core_terminal/       # Serial terminal core module
+│   ├── core_ntp/            # Ядро NTP (+ web/ntp.html, config_ntp.json)
+│   ├── core_ota/            # Ядро OTA (+ web/update.html, spark-md5.js)
+│   ├── core_json/           # Ядро утилит JSON
+│   ├── core_led/            # Ядро индикации светодиодом (common_module.h/cpp: ledPatLen, ledPatAt)
+│   ├── core_terminal/       # Ядро последовательного терминала
 │   ├── module_template/     # Шаблон модуля (эталон для создания новых; остаётся в ядре, не клон)
 │   └── module_*/device_*/   # Клоны внешних репозиториев (в dev-копии лежат все 13), каждый со
 │                           # своей .git; вне учёта ядра (см. .gitignore). Программатор:
 │                           # src/module_program/{module_prog,submodule_isp,submodule_swd};
 │                           # редактор FS: src/module_editor/.
-│   └── *version.h           # Auto-generated per-module version headers (игнорируются)
-├── targets/                 # PlatformIO target configs
-│   ├── targets_example.ini  # Example target definitions
-│   └── targets_user.ini     # User target definitions
-├── web_debug/               # Prepared FS build directory (generated)
-├── proj_fwbins/             # Built firmware + FS binaries (generated)
-├── .pio/                    # PlatformIO build artifacts
-├── partitions.csv           # ESP32 partition table
-├── platformio.ini           # PlatformIO project config
-├── library.json             # Library metadata
-└── AGENTS.md                # This file
+│   └── *version.h           # Заголовки версий модулей (отслеживаются в git)
+├── targets/                 # Конфиги таргетов PlatformIO
+│   ├── targets_example.ini  # Примеры определений таргетов
+│   └── targets_user.ini     # Пользовательские определения таргетов
+├── web_debug/               # Подготовленный каталог сборки FS (генерируется)
+├── proj_fwbins/             # Собранные бинарники прошивки + FS (генерируется)
+├── .pio/                    # Артефакты сборки PlatformIO
+├── partitions_esp32.csv     # Таблица разделов ESP32
+├── platformio.ini           # Конфиг проекта PlatformIO
+├── library.json             # Метаданные библиотеки
+└── AGENTS.md                # Этот файл
 ```
 
-### Debug macros
+### Отладочные макросы
 
-Each module has a dedicated debug flag and macro:
+У каждого модуля есть отдельный отладочный флаг и макрос:
 - `DEBUG_SYS` → `DEBUGSYS(...)` (`[C_SYS]`)
 - `DEBUG_OTA` → `DEBUGOTA(...)`
 - `DEBUG_NTP` → `DEBUGNTP(...)`
@@ -679,7 +679,7 @@ Each module has a dedicated debug flag and macro:
 - `DEBUG_UDP` → `DEBUGUDP(...)`
 - `DEBUG_OTACLIENT` → `DEBUGOTACLIENT(...)`
 - `DEBUG_I2C_MAPPER` → `DEBUGI2CMAPPER(...)`
-- `RELEASE` defined → all debug macros are no-ops
+- `RELEASE` определён → все отладочные макросы становятся пустышками
 
 Все модульные макросы печатают префикс модуля `[C_]/[M_]/[D_]` (например `[C_WIFI]`,
 `[M_UDP]`, `[D_CLOCKMECH]`) в начале каждой строки вывода через общий помощник
@@ -687,15 +687,15 @@ Each module has a dedicated debug flag and macro:
 в начале строки, поэтому паттерн `DEBUGXXX(__FUNCTION__); DEBUGXXX("\r\n");` даёт
 один префикс на строку. `module_macros` и `core_terminal` префиксы не используют.
 
-### Key defines
+### Ключевые define
 
-- `CONNECTION_LED` — GPIO for status LED (default -1 = disabled)
-- `AP_ENABLE_BUTTON` — GPIO for force-AP button (default -1 = disabled)
-- `USE_LITTLEFS` — enable LittleFS filesystem
-- `HIDE_SECRET` — hide secret.json from FS browser
-- `PROGTYPE_ISP` / `PROGTYPE_SWD` — enable programmer submodules
-- `SWDPIN_CLK`, `SWDPIN_DATA` — SWD pin assignment
-- `PIN_MISO`, `PIN_MOSI`, `PIN_SCK`, `PIN_RST` — ISP pin assignment
+- `CONNECTION_LED` — GPIO для статусного светодиода (по умолчанию -1 = отключено)
+- `AP_ENABLE_BUTTON` — GPIO для кнопки принудительного AP (по умолчанию -1 = отключено)
+- `USE_LITTLEFS` — включить файловую систему LittleFS
+- `HIDE_SECRET` — скрыть secret.json из браузера FS
+- `PROGTYPE_ISP` / `PROGTYPE_SWD` — включить субмодули программатора
+- `SWDPIN_CLK`, `SWDPIN_DATA` — назначение выводов SWD
+- `PIN_MISO`, `PIN_MOSI`, `PIN_SCK`, `PIN_RST` — назначение выводов ISP
 
 ## Известные дефекты (требуют исправления)
 
