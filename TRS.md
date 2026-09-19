@@ -141,6 +141,18 @@
                   └── submodule_swd (Class_SubSwd)  → PROGTYPE_SWD
 ```
 
+Документация **опциональных** компонентов (каждый — отдельный репозиторий, подключается
+через `src_filter`/`build_flags`): `module_program` → `src/module_program/AGENTS.md`;
+`module_udp` → `src/module_udp/AGENTS.md`; `module_editor` → `src/module_editor/AGENTS.md`;
+`module_ds3231` → `src/module_ds3231/AGENTS.md`; `module_gpio` → `src/module_gpio/AGENTS.md`;
+`module_lcd-i2c` → `src/module_lcd-i2c/AGENTS.md`; `module_macros` →
+`src/module_macros/AGENTS.md`; `module_otaclient` → `src/module_otaclient/AGENTS.md`;
+`module_rgb` → `src/module_rgb/AGENTS.md`; `module_i2c-mapper` →
+`src/module_i2c-mapper/AGENTS.md`; `module_template` → `src/module_template/AGENTS.md`;
+`device_clock-mech` → `src/device_clock-mech/AGENTS.md`; `device_mech-ring` →
+`src/device_mech-ring/AGENTS.md`; `device_electronica7_rgb` →
+`src/device_electronica7_rgb/AGENTS.md`. Полный реестр — `INVENTORY.md`.
+
 ---
 
 ## 3. Функциональные требования
@@ -396,400 +408,68 @@
 
 ### 3.2. Опциональные модули (`module_*`, `submodule_*`)
 
-> Общее требование для всех подразделов 3.2: модуль **не работоспособен без ядра**, подключается через `src_filter` + `build_flags`, а его `[registry]`-секция генерирует вызовы в `modules_registry.cpp`.
-
-#### 3.2.1. `module_program` → `module_prog` — база программатора
-
-**Каталог:** `src/module_program/module_prog/` · **Класс:** `Class_ProgBase` (абстрактный) · **Объект:** отсутствует · **`.ini`:** отсутствует (обрабатывается генератором как модуль без ini).
-
-**Назначение:** общая база субмодулей программатора. Владеет проектной конфигурацией, списком файлов прошивок, загрузкой файлов в FS (MD5 + размер), информацией о диске, опросом статуса чипа, версионной точкой. Работа с чипом делегирована виртуальным методам.
-
-**Функциональные требования:**
-- FR-MODPROG-1: Абстрактный интерфейс для наследников: `getProgTypePrefix`, `isFlashBusy`, `getFlashPercent`, `chipSpecificInit`, `web_FileUpload2Chip`, `onFlashComplete`, `getChipCfgJsonPath`.
-- FR-MODPROG-2: Конфиг `/config_prog.json` (`project`, `chip_name`), API `cfg_FileStructGet/SaveFromWeb/SetDefault/FileLoad/FileSave`.
-- FR-MODPROG-3: Список `/prog_filelist.json` (`filename`, `upload_date`, `md5`, `prog_date`, `prog_status`, `prog_time`, `prog_error`, `prog_error_stage`, `prog_error_percent`, `prog_speed`).
-- FR-MODPROG-4: Загрузка файлов в FS с MD5 (`web_FileUpload2FS`, `file_ComputeMD5`), удаление (`web_FileDelete`), информация о диске (`web_GetDiskInfo`).
-- FR-MODPROG-5: Миграция старых путей (`config_prog_isp.json`, `config_prog_swd.json`, `isp_filelist.json`, `swd_filelist.json`).
-- FR-MODPROG-6: Коды ошибок `progerr_t`: `-1` SIGN, `-2` BUSY, `-3` FLASH, `-4` ERASE, `-5` HEX, `-6` CFG, `-8` OPENFILE, `-9` INCORRECTFILE, `-10` NOFILE, `-11` HEXCRC, `-12` HEXADDR, `-13` HEXMEMOVER, `-14` CHIP_OFFLINE, `-15` CHIP_MISMATCH, `-16` CHIP_NOT_IN_CFG.
-
-**Общие веб-маршруты (для обоих субмодулей):** `/prog/diskinfo`, `/prog/fileslist`, `/prog/delete`, `POST /prog/uploadfile`, `/prog/uploadstat`, `/prog/setmd5`, `/prog/uploadsize`, `/prog/progress`, `/prog/flash`, `/prog/ver`, `/prog/chipstatus`, `/project/info`, `/project/save`, `/project/chips`, `/project/chipinfo`, `GET /project`, `GET /prog`. Все защищены `checkAuth`.
-**Веб-файлы:** `_menu.html`, `prog.html`, `project.html`, `config_prog.json` (использует shared `spark-md5.js` из `core_ota`).
-**Зависимости:** LittleFS, ArduinoJson, `core_sys/eertos.h`, `core_web`, `core_json`, `core_ntp`, `common/common.h`.
-
----
-
-#### 3.2.2. `submodule_isp` — программатор AVR ISP
-
-**Каталог:** `src/module_program/submodule_isp/` · **Класс:** `Class_SubIsp : public Class_ProgBase` · **Объект:** `progIsp`
-**`[registry]`:** `object=progIsp`, `define=PROGTYPE_ISP`, `web=1`, `loop=0` (без `namespace`/`res`/`prio`).
-
-**Назначение:** программирование AVR (STK500-совместимое, bit-bang SPI + reset), чтение сигнатуры и фьюзов, запись фьюзов, поиск чипа в базе, автомат определения чипа. Обёртка над `ESP_AVRISP avrprog`.
-
-**Функциональные требования:**
-- FR-ISP-1: Читать подпись чипа (`chipSignRead`) и находить в базе `/avrisp_cfg.json` по `signature` (`chipCfg_FindBySignature`).
-- FR-ISP-2: Сверять найденный чип с `chip_name` из `/config_prog.json`; при несовпадении — `HTTP 423`/`ERR_CHIP_MISMATCH`.
-- FR-ISP-3: Для неизвестной сигнатуры без заданного имени — по умолчанию flash 32768 Б, page 128 Б.
-- FR-ISP-4: Прошивать HEX или BIN постранично, кооперативно (`startFlash` + `beginFlashStep`; `FLASH_IDLE/INIT/WRITE/DONE`), с прогрессом (`getPercent`) и верификацией (`chipFlashVerification`).
-- FR-ISP-5: Чтение/запись фьюзов (`chipFusesRead`, `chipFusesWrite`).
-- FR-ISP-6: Определять чип с повторами (15 попыток; `CHIP_IDLE/INIT/PROBE/DONE`).
-- FR-ISP-7: База `/avrisp_cfg.json` — `chips[]`: `signature`, `name`, `flash_size`, `page_size`; поставка: ATmega328P (`0x1E950F`, 32768/128), ATmega168P (`0x1E940B`, 16384/128).
-- FR-ISP-8: Константы: `AVRISP_SPI_FREQLOW=100000`, `AVRISP_SPI_FREQHIGH=500000`, `MEM_PAGE_SIZE=128`.
-- FR-ISP-9: Выводы по умолчанию: `PIN_MISO=19`, `PIN_MOSI=23`, `PIN_SCK=18`, `PIN_RST=5`.
-
-**Веб-маршруты:** `GET /avr/fuseread`, `POST /avr/fusewrite`, `/avr/info`, `POST /avr/save`, `GET /avr/readsignature`, `GET /avrcfg`.
-**Веб-файлы:** `_menu.html`, `avrcfg.html`, `avrisp_cfg.json`, `avrisp.json` (устаревший).
-**Терминал:** активных команд нет.
-**Зависимости:** `SPI.h`, `common/common.h` (`hex2bin`), `format_hex`/`format_bin`.
-
----
-
-#### 3.2.3. `submodule_swd` — программатор STM32 SWD
-
-**Каталог:** `src/module_program/submodule_swd/` · **Класс:** `Class_SubSwd : public Class_ProgBase` · **Объект:** `progSwd`
-**`[registry]`:** `object=progSwd`, `define=PROGTYPE_SWD`, `web=1`, `loop=0`.
-
-**Назначение:** программирование STM32 F1/F4 по SWD (bit-bang SWD поверх GPIO), проверка IDCODE, mass-erase + program + reset. Обёртка над `ESP_PROGSWD swdprog`.
-
-**Функциональные требования:**
-- FR-SWD-1: Читать IDCODE (`swd_init`), находить чип в `/swd_cfg.json` по `idcode` (`chipCfg_FindById`).
-- FR-SWD-2: Сверять чип с `chip_name` из `/config_prog.json`.
-- FR-SWD-3: Применять параметры чипа (`flash_start`, `flash_size`, `page_size`, `word_size`, `csw_value`); выбирать алгоритм F1/F4 по полю `family`.
-- FR-SWD-4: Прошивать HEX потоково или BIN постранично, кооперативно (`startFlash` + `beginFlashStep`), с прогрессом и скоростью (`getSpeed`).
-- FR-SWD-5: Выполнять `mass_erase`/`erase_sector`, запись 16/32-битными словами, halt/unhalt/reset.
-- FR-SWD-6: Значения по умолчанию: `flash_start=0x08000000`, `page_size=1024`, `word_size=2`, `csw_value=0xA2000002`.
-- FR-SWD-7: База `/swd_cfg.json` — `chips[]`: `idcode`, `name`, `family`, `flash_size`, `flash_start`, `page_size`, `word_size`, `csw_value`; поставка: STM32F103C8 (`0x1BA01477`, `stm32f1`, 65536 Б), STM32F411 (`0x2BA01477`, `stm32f4`, 524288 Б).
-- FR-SWD-8: Выводы по умолчанию: `SWDPIN_CLK=21`, `SWDPIN_DATA=19`.
-
-**Веб-маршруты:** только общие маршруты `module_prog`; собственных нет.
-**Веб-файлы:** `_menu.html`, `swd_cfg.json`.
-**Терминал:** активных команд нет.
-**Зависимости:** GPIO, `ESP_PROGSWD`, формат-хелперы.
-
----
-
-#### 3.2.4. Формат-хелперы программатора
-
-**Каталоги:** `module_prog/format_hex.*`, `module_prog/format_bin.*`
-
-- FR-FMT-1: Intel HEX — `hexFileLineParser`, `hexFileParseStream` (валидация), `hexFileParseStreamWrite` (потоковая запись через callback), `hexFileIsFormat`, `hexFileGetBinarySize`.
-- FR-FMT-2: Проверки HEX: CRC, монотонность адресов, переполнение памяти чипа (коды −9/−10/−11/−12/−13), ошибка записи −14.
-- FR-FMT-3: BIN — `binFileOpen/GetSize/ReadPage/Close/IsFormat` (`.bin`/`.binary`).
-- FR-FMT-4: Формат определяется по расширению в `startFlash()`; неизвестное расширение — BIN.
-
----
-
-#### 3.2.5. `module_udp` — UDP broadcast
-
-**Каталог:** `src/module_udp/` · **Класс:** `CLASS_MODULE_UDPBROADCAST` · **Объект:** `module_udp`
-**`[registry]`:** `object=module_udp`, `define=MODULE_UDP`, `web=1`, `loop=0`.
-
-**Назначение:** UDP-обнаружение (broadcast/unicast) и телеметрия; строка-«пароль» (`Ave_Omnissiah`), режим ответа, отслеживание доступности сервера с фоллбэком на broadcast.
-
-**Функциональные требования:**
-- FR-UDP-1: Конфиг `/config_udp.json`: `udpPortTx`, `udpPortRx`, `udpTimeOut`, `udpkeyword`, `udpPowerOn`, `udpResponse`, `udpMissLimit`.
-- FR-UDP-2: Отправка broadcast (`broadcastSend`) и unicast (`unicastSend`), тест (`broadcastTest`), останов (`stop`).
-- FR-UDP-3: Отслеживание сервера (`serverOnlineGet`, `serverIpGet`, `lastContactMsGet`) с фоллбэком при пропуске лимита.
-- FR-UDP-4: Порт по умолчанию `UDP_PORT=40001`.
-- FR-UDP-5: `begin()` вызывается **не** из registry, а из `core_wifi` при подключении к сети; `stop()` — при потере соединения.
-
-**Веб-маршруты:** `POST /udp.html`, `GET /udp/info`, `/udp/test`, `GET /udp/status`, `/udp/ver`.
-**Веб-файлы:** `udp.html`, `_menu.html`, `config_udp.json`.
-**Терминал:** `udpp`/`udpc`/`udps` реализованы в `core_terminal` и вызывают API модуля.
-**Зависимости:** `AsyncUDP.h` (ESP32) / `ESPAsyncUDP.h` (ESP8266).
-
----
-
-#### 3.2.6. `module_editor` — редактор файловой системы
-
-**Каталог:** `src/module_editor/` · **Класс:** `CLASS_MODULE_EDITOR` · **Объект:** `module_editor`
-**`[registry]`:** `object=module_editor`, `define=MODULE_EDITOR`, `web=1`, `loop=0`.
-
-**Назначение:** браузер/редактор LittleFS (форк Ace): список, создание, удаление, загрузка, чтение/запись текстовых файлов; информация об использовании ФС. Ранее входил в ядро (`core_editor`), теперь опционален.
-
-**Функциональные требования:**
-- FR-EDITOR-1: `GET /editor/list` — список файлов; `GET /editor/fsinfo` — использование ФС.
-- FR-EDITOR-2: `GET /editor/edit` — страница; `PUT /editor/edit` — создание; `DELETE /editor/edit` — удаление; `POST /editor/edit` — загрузка.
-- FR-EDITOR-3: Ограничение загрузки `MAX_UPLOAD_SIZE=1 МБ`.
-- FR-EDITOR-4: Интеграция с `module_macros` («Open in editor»).
-
-**Веб-файлы:** `edit.html`, `ace.js`, `mode-*.js`, `theme-*.js`, `_menu.html`.
-**Конфиги:** нет. **Зависимости:** LittleFS (Ace — vendored JS).
-
----
-
-#### 3.2.7. `module_ds3231` — часы реального времени DS3231
-
-**Каталог:** `src/module_ds3231/` · **Класс:** `CLASS_MODULE_DS3231` · **Объект:** `module_ds3231`
-**`[registry]`:** `object=module_ds3231`, `define=MODULE_DS3231`, `web=1`, `loop=0`.
-
-**Назначение:** RTC DS3231 по I2C: чтение/установка времени, Alarm1/Alarm2, температура, регистры управления/статуса, мониторинг SQW/INT# (ESP32).
-
-**Функциональные требования:**
-- FR-DS3231-1: Чтение/установка времени (`getTime`, `setTime`), проверка связи (`isConnected`, `getAddr`, `getLastError`).
-- FR-DS3231-2: Будильники Alarm1/Alarm2 (`getAlarm1/setAlarm1`, `getAlarm2/setAlarm2`), фиксация срабатывания (`getAlarmFired1/2`, `getLastAlarm1/2Time`).
-- FR-DS3231-3: Температура (`getTemperature`), регистр статуса (`getStatusReg`).
-- FR-DS3231-4: SQW-вывод (ESP32): `sqwGpioInit/Reinit/Stop`, `sqwEnable/DisableInterrupt`, `getSqwLevel`; пин `DS3231_SQW_PIN=13`.
-- FR-DS3231-5: Конфиг `/config_ds3231.json`: `addr`, `autoPoll`, `pollInterval`, `sqwEnabled`, `sqwMode`, `sqwLevelActive`, `ctrlBbsqw`, `ctrlRs`, `ctrlIntcn`, `ctrlA1ie`, `ctrlA2ie`.
-
-**Веб-маршруты:** `GET /ds3231/read`, `/ds3231/poll`, `POST /ds3231/set_time`, `/ds3231/set_alarm1`, `/ds3231/set_alarm2`, `/ds3231/set_reg`, `/ds3231/save`, `GET /ds3231/info`, `/ds3231/ver`.
-**Терминал:** `ds-alarm`, `ds-sqw`, `ds-sqr`.
-**Зависимости:** `Wire`, `common/TimeLib`, `core_ntp/NtpClientLib`.
-
----
-
-#### 3.2.8. `module_gpio` — GPIO через web
-
-**Каталог:** `src/module_gpio/` · **Класс:** `CLASS_MODULE_GPIO` · **Объект:** `module_gpio`
-**`[registry]`:** `object=module_gpio`, `define=MODULE_GPIO`, `web=1`, `loop=0`.
-
-**Назначение:** минимальный веб-модуль управления GPIO (демонстрационный). Разбирает аргументы формы `uartstr`/`led1..led4`.
-
-**Функциональные требования:**
-- FR-GPIO-1: `POST /gpio` — приём параметров формы; запись выходов выполняет обработчик.
-- FR-GPIO-2: Конфиг отсутствует.
-
-**Веб-файлы:** `gpio.html`, `_menu.html`.
-**Примечание:** `html_ver_get` существует, но маршрут `/gpio/ver` не зарегистрирован; функциональность неполная — модуль-заглушка.
-
----
-
-#### 3.2.9. `module_lcd-i2c` — LCD I2C
-
-**Каталог:** `src/module_lcd-i2c/` · **Класс:** `CLASS_MODULE_I2C_LCD` · **Объект:** `module_lcd_i2c`
-**`[registry]`:** `object=module_lcd_i2c`, `define=MODULE_LCD_I2C`, `web=1`, `loop=0`.
-
-**Назначение:** управление LCD-дисплеем I2C: до 4 строк, подсветка, настройка адреса/столбцов/строк, раскрытие масок `date`/`time`, задача перерисовки 1 с.
-
-**Функциональные требования:**
-- FR-LCD-1: Инициализация дисплея по I2C (`LCD_I2C_SDA/SCL`); лимиты `LCD_I2C_MAX_ROWS=4`, `LCD_I2C_MAX_LINE_LEN=40`.
-- FR-LCD-2: Конфиг `/config_lcd-i2c.json`: `i2cAddr` (по умолчанию `0x27`), `cols`, `rows`, `backlight`, `display_lines[]`.
-- FR-LCD-3: Поддержка масок даты/времени в строках; перерисовка раз в секунду.
-- FR-LCD-4: Включение/выключение подсветки без перезагрузки.
-
-**Веб-маршруты:** `GET /lcd-i2c/info`, `POST /lcd-i2c/save_content`, `/lcd-i2c/save_config`, `GET /lcd-i2c/sysinfo`, `POST /lcd-i2c/backlight`, `GET /lcd-i2c/ver`.
-**Веб-файлы:** `lcd-i2c.html`, `lcd-i2c2.html`, `_menu.html`.
-**Зависимости:** `LiquidCrystal_I2C`, `Wire`.
-
----
-
-#### 3.2.10. `module_macros` — макросы/сценарии (Lua)
-
-**Каталог:** `src/module_macros/` · **Класс:** `CLASS_MODULE_MACROS` · **Объект:** `module_macros`
-**`[registry]`:** `object=module_macros`, `define=MODULE_MACROS`, `namespace=macros`, `web=1`, `loop=0`, `res=1`, `prio=60`, `priv=1`.
-
-**Назначение:** пользовательские сценарии на Lua с триггерами cron/cond/event и декларативными действиями через ресурсную шину; единый Lua-интерпретатор на модуль; веб-менеджер файлов.
-
-**Функциональные требования:**
-- FR-MACROS-1: Единый `lua_State` на модуль (не на файл) — иначе heap исчерпывается и `AsyncWebServer` падает.
-- FR-MACROS-2: Файл-сценарий — Lua-чанк, возвращающий таблицу: `desc` (опц.), `meta_cron` (опц.), `handlers` (опц.), `rules` (обязательно, 1..`MACRO_MAX_RULES`).
-- FR-MACROS-3: Правило содержит не более одного триггера из `cron`/`term`/`button`/`on` (внутри `when`) и ровно одно действие: `set`, `call`, `calls` или `run`.
-- FR-MACROS-4: `cond` — `{res, op, val}` или массив (AND), до `MACRO_MAX_CONDS=4`; операторы `== != < <= > >= changed`; фронт `false→true`.
-- FR-MACROS-5: Cron — 6 полей (секунды первыми), 5/7 полей нормализуются; требует NTP; `meta_cron` — необязательное поле возвращаемой сценарием таблицы `.lua` (гейт окна для всех правил файла), в `config_macros.json` не сохраняется.
-- FR-MACROS-6: Действия `call`/`calls` — декларативные bus-вызовы (до `MACRO_MAX_ACTIONS=4`, до `MACRO_CALL_MAX_ARGS=4`); `run` — named-handler с перечитыванием файла (тяжёлый).
-- FR-MACROS-7: Lua bus API: `get`, `set`, `call`, `has`, `mode`, `info`, `puts`/`print`, `clock`, `now`; `call_async` из Lua запрещён.
-- FR-MACROS-8: Handler получает таблицу `event` (`type`, `spec`, `args`, `value`); глобалы между вызовами не живут.
-- FR-MACROS-9: Конфиг `/config_macros.json`: `enabled` (bool), `files[]` (`name`, `prio` 0..7, `run`, `created`).
-- FR-MACROS-10: Лимиты: `MACRO_MAX_FILES=30`, `MACRO_MAX_RULES=8`, `MACRO_EV_QUEUE=8`, `MACRO_MAX_EVENT_SUBS=8`, `MACRO_HEAP_BUDGET=100 КБ`, `MACRO_HEAP_CRIT_PCT=95%`, `MACRO_LUA_MAX_OPS=100000`, `MACRO_PARSE_PER_TICK=2`, `MACRO_PARSE_MAX_RETRY=3`.
-- FR-MACROS-11: Ресурсы bus: `macros.enabled` (BOOL), `macros.files` (I32); функция `macros.reload`; namespace `macros` привилегированный.
-- FR-MACROS-12: Редактирование/сохранение сценария разрешено только для остановленного файла.
-- FR-MACROS-13: Защита от OOM в `/macros/list` (порог 6000 Б) и `/macros/resources` (8000 Б), страховка `doc.overflowed()`.
-- FR-MACROS-14: Конфиг сохраняется только по действию пользователя (не автоматически в тике).
-
-**Веб-маршруты:** `GET /macros/list`, `/macros/create`, `/macros/delete`, `/macros/rename`, `/macros/state`, `/macros/prio`, `/macros/reload`, `/macros/fire`, `/macros/resources`, `/macros/validate`, `/macros/heap`, `/macros/save`, `/macros/get`, `/macros/ver`.
-**Терминал:** `macro` с подкомандами `list`, `reload [file]`, `run <file>`, `stop <file>`, `prio <file> <delta>`, `msg <words...>`, `btn <words...>`.
-**Веб-файлы:** `macros.html`, `cron.html`, `macros_help.html`, `_menu.html`, примеры `web/macros/*.lua`.
-**Зависимости:** vendored EspLuaEngine (Lua 5.4.7), `ccronexpr`, `core_state`, `core_json`, NTP. **Только ESP32.**
-
----
-
-#### 3.2.11. `module_otaclient` — OTA-клиент
-
-**Каталог:** `src/module_otaclient/` · **Класс:** `CLASS_MODULE_OTACLIENT : public CLASS_CORE_OTA` · **Объект:** `module_otaclient`
-**`[registry]`:** только `object=module_otaclient`, `define=MODULE_OTACLIENT`; размещается в **core**-группах (begin/web_Init/loop) рядом с базовым OTA.
-
-**Назначение:** автоматическое удалённое обновление — опрос манифеста по HTTP, сравнение версий FW/FS, загрузка и прошивка с повторами и прогрессом.
-
-**Функциональные требования:**
-- FR-OTACLIENT-1: Периодический опрос манифеста (`checkForUpdates`) по `serverAddress:serverPort/manifestPath` с таймаутом `timeOut`.
-- FR-OTACLIENT-2: Сравнение версий FW/FS, загрузка и прошивка при необходимости; `OTACLIENT_MAX_RETRIES=3`, `OTACLIENT_CHUNK_SIZE=1024/512`, до `OTACLIENT_MAX_MANIFEST_ENTRIES=20` записей.
-- FR-OTACLIENT-3: Запуск проверки по подключению Wi-Fi (`onWiFiConnect`) и/или по включению питания (`powerOn`).
-- FR-OTACLIENT-4: Конфиг `/config_otaclient.json`: `timeOut`, `powerOn`, `serverAddress`, `serverPort`, `manifestPath`.
-- FR-OTACLIENT-5: Тестовое подключение (`/otaclient/test`, `/otaclient/teststatus`).
-- FR-OTACLIENT-6: Наследует общие маршруты OTA (`/update*`) и ресурсы `ota.state`, `ota.server_reachable`.
-
-**Веб-маршруты:** `POST /otaclient.html`, `GET /otaclient/info`, `/otaclient/test`, `/otaclient/teststatus`, `/otaclient/update`, `/otaclient/ver`.
-**Веб-файлы:** `otaclient.html`, `_menu.html`.
-**Зависимости:** `WiFiClient`, `Update.h` (ESP32) / `ArduinoOTA` (ESP8266), `core_ota`, `core_json`, NTP.
-
----
-
-#### 3.2.12. `module_rgb` — RGB-лента/матрица WS2812
-
-**Каталог:** `src/module_rgb/` · **Класс:** `CLASS_MODULE_RGB` · **Объект:** `module_rgb`
-**`[registry]`:** `object=module_rgb`, `define=MODULE_RGB`, `web=1`, `loop=0`.
-
-**Назначение:** управление лентой/матрицей WS2812 (NeoPixelBus): режимы solid/rainbow/gradient/individual/equalizer, яркость, анимационный таймер, отложенное применение/сохранение конфига.
-
-**Функциональные требования:**
-- FR-RGB-1: Конфиг `/config_rgb.json`: `dataPin`, `numLeds`, `brightness`, `mode` (0..4), `effectSpeed`, `solidColor`, `gradStartColor`, `gradEndColor`, `individualColors[]`, `eqBands`, `eqLedsPerBand`.
-- FR-RGB-2: Лимиты `RGB_MAX_LEDS=100`, `RGB_DEFAULT_LEDS=10`.
-- FR-RGB-3: Режимы: сплошной цвет, радуга, статичный градиент, индивидуальные цвета, эквалайзер.
-- FR-RGB-4: Установка пикселя (`/rgb/setPixel`) и сохранение конфига (`/rgb/save`); чтение `/rgb/info`, `/rgb/ver`.
-- FR-RGB-5: Анимация — таймером EERTOS; применение конфига — отложенной задачей.
-
-**Веб-файлы:** `rgb.html`, `_menu.html`.
-**Зависимости:** `makuna/NeoPixelBus` (ESP32 RMT, ESP8266 UART1).
-
----
-
-#### 3.2.13. `module_i2c-mapper` — сканер I2C
-
-**Каталог:** `src/module_i2c-mapper/` · **Класс:** `CLASS_MODULE_I2C_MAPPER` · **Объект:** `module_i2c_mapper`
-**`[registry]`:** `object=module_i2c_mapper`, `define=MODULE_I2C_MAPPER`, `web=1`, `loop=0`.
-
-**Назначение:** сканирование адресов шины I2C 0x01..0x7E (Wire0) с кормлением watchdog; результат через web и последовательную карту.
-
-**Функциональные требования:**
-- FR-I2CMAP-1: `POST /i2cmapper/scan` возвращает JSON-массив найденных адресов вида `"0xNN"`.
-- FR-I2CMAP-2: Сканирование с кормлением `esp_task_wdt` (ESP32).
-- FR-I2CMAP-3: Выводы `I2C_MAPPER_SDA/SCL` (ESP32 21/22, ESP8266 4/5).
-- FR-I2CMAP-4: Терминальная команда `i2c-scan` печатает ASCII-карту шины.
-
-**Веб-файлы:** `i2cmapper.html`, `_menu.html`.
-**Зависимости:** `Wire`, `esp_task_wdt.h`.
-
----
-
-#### 3.2.14. `module_template` — шаблон нового модуля
-
-**Каталог:** `src/module_template/` (в ядре, не клон) · **Класс:** `CLASS_MODULE_TEMPLATE` · **Объект:** `module_template`
-**`[registry]`:** `object=module_template`, `define=MODULE_TEMPLATE`, `web=1`, `loop=0`.
-
-**Назначение:** эталонный пример опционального модуля — два GPIO-выхода (мигание), конфиг с массивом, AJAX-страница с `GetJson.js`/`GetMarkup.js`.
-
-**Функциональные требования:**
-- FR-TEMPLATE-1: Образец структуры: `.h` + `.cpp` (шаблонный блок) + `_types.h` + `_engine.cpp` + `web/`.
-- FR-TEMPLATE-2: Образец порядка функций: INCLUDES → объекты → `setFs` → `begin`/`begin(ctx)` → `web_Init` → веб-обработчики → конфиг → версии → логика.
-- FR-TEMPLATE-3: Образец паттернов: AJAX-сохранение без перезагрузки, чтение/запись массивов JSON, отложенное сохранение.
-- FR-TEMPLATE-4: Не включать в реальные сборки как функциональный модуль (только эталон).
-
-**Веб-маршруты:** `POST /template/save`, `POST /template/save_demo`, `GET /template/info`, `/template/time`, `/template/ver`.
-**Веб-файлы:** `template.html`, `template2.html`, `_menu.html`, `config_template.json`.
+> Общее требование для всех подразделов 3.2: модуль **не работоспособен без ядра**, подключается через `src_filter` + `build_flags`, а его `[registry]`-секция генерирует вызовы в `modules_registry.cpp`. Полные требования (`FR-*`), интерфейсы, конфиги и руководства пользователя вынесены в `AGENTS.md` соответствующего модуля (документация живёт в том же репозитории, что и код).
+
+| Модуль | AGENTS.md | Требования |
+|--------|--------|-----------|
+| `module_program` — контейнер (`module_prog`, `Class_ProgBase`) | `src/module_program/AGENTS.md` | FR-MODPROG-1…6, FR-FMT-1…4, OPEN-9 |
+| `submodule_isp` (в `module_program`) | `src/module_program/AGENTS.md` | FR-ISP-1…9, AC-7 |
+| `submodule_swd` (в `module_program`) | `src/module_program/AGENTS.md` | FR-SWD-1…8, AC-8 |
+| `module_udp` | `src/module_udp/AGENTS.md` | FR-UDP-1…5, AC-14 |
+| `module_editor` | `src/module_editor/AGENTS.md` | FR-EDITOR-1…4, AC-9, OPEN-7 |
+| `module_ds3231` | `src/module_ds3231/AGENTS.md` | FR-DS3231-1…5 |
+| `module_gpio` | `src/module_gpio/AGENTS.md` | FR-GPIO-1…2, AC-15, OPEN-7 |
+| `module_lcd-i2c` | `src/module_lcd-i2c/AGENTS.md` | FR-LCD-1…4 |
+| `module_macros` | `src/module_macros/AGENTS.md` | FR-MACROS-1…14, AC-11, OPEN-4/5/6 |
+| `module_otaclient` | `src/module_otaclient/AGENTS.md` | FR-OTACLIENT-1…6 |
+| `module_rgb` | `src/module_rgb/AGENTS.md` | FR-RGB-1…5, OPEN-7 |
+| `module_i2c-mapper` | `src/module_i2c-mapper/AGENTS.md` | FR-I2CMAP-1…4 |
+| `module_template` | `src/module_template/AGENTS.md` | FR-TEMPLATE-1…4, AC-15 |
 
 ---
 
 ### 3.3. Устройства (`device_*`)
 
-> Общее требование для всех подразделов 3.3: устройство **не работоспособно без ядра**; для сборки необходимо клонировать само устройство и все указанные в его `.ini` модули.
+> Общее требование для всех подразделов 3.3: устройство **не работоспособно без ядра**; для сборки необходимо клонировать само устройство и все указанные в его `.ini` модули. Полные требования (`FR-*`), интерфейсы, конфиги и зависимости — в `AGENTS.md` соответствующего устройства.
 
-#### 3.3.1. `device_clock-mech` — механические часы (шаговый двигатель)
-
-**Каталог:** `src/device_clock-mech/` · **Класс:** `CLASS_DEVICE_CLOCKMECH` · **Объект:** `device_clock_mech`
-**`[registry]`:** `object=device_clock_mech`, `define=DEVICE_CLOCKMECH`, `web=1`, `loop=0`.
-**Env:** `esp32_clock-mech` (extends `env:esp32`); `src_filter`: `+<module_udp/> +<module_otaclient/> +<device_clock-mech/> +<module_ds3231/>`; флаги: `MODULE_UDP=1`, `MODULE_OTACLIENT=1`, `MODULE_DS3231=1`, `DS3231_SQW_PIN=13`, `DEVICE_CLOCKMECH=1`, `DEBUG_*`.
-
-**Назначение:** управление механизмом часов через шаговый двигатель (STEP/DIR/EN драйвера A4988), парковка/обнуление часовой и минутной стрелок по двум оптическим датчикам и подсветке датчиков, подсчёт шагов на оборот (калибровка), опрос реального времени и вывод стрелок в целевое положение.
-
-**Функциональные требования:**
-- FR-CLOCKMECH-1: Два режима `enable_status`: DEBUG (ручное управление) и WORK (автономная работа).
-- FR-CLOCKMECH-2: Калибровка `stepsPerRevolution` и лимит ошибки `errorLimitSteps`.
-- FR-CLOCKMECH-3: Источник времени `timeSource`: `ds3231` (I2C RTC + SQW пин 13) или `ntp` (`now()`).
-- FR-CLOCKMECH-4: Установка стрелок в целевое время (`cmdSetArrows`, `/clock-mech/set-xx00`, `/clock-mech/set-12xx`).
-- FR-CLOCKMECH-5: Управление драйвером: `cmdStep`, `cmdDir`, `cmdEn`, `cmdSled` (подсветка датчиков), `cmdSens` (чтение датчиков).
-- FR-CLOCKMECH-6: Периодический опрос `pollInterval`; при превышении `errorLimitSteps` — индикация ошибки (`ledMacrosClockMechError`).
-- FR-CLOCKMECH-7: Сохранение конфига — только web `handleSave` и терминал `c-save` (bus-функции `save` нет).
-- FR-CLOCKMECH-8: Выводы: DIR=33, STEP=12, EN=14, SENS_LED=27, SENS_MIN=26, SENS_HOUR=25; `CONNECTION_LED=2`.
-
-**Веб-маршруты:** `POST /clock-mech/save`, `/clock-mech/reset`, `/clock-mech/count`; GET: `/clock-mech/info`; GET: `/clock-mech/step|dir|en|sled|sens|n|reset|set-xx00|set-12xx|count|status|ver`.
-**Веб-файлы:** `clock-mech.html`, `_menu.html`.
-**Конфиг:** `/config_clock-mech.json`: `enable_status`, `timeSource`, `stepsPerRevolution`, `pollInterval`, `errorLimitSteps`, `sensorLedEnabled`.
-**Зависимости модулей:** `module_udp`, `module_otaclient`, `module_ds3231`.
-
----
-
-#### 3.3.2. `device_mech-ring` — механические часы с боем
-
-**Каталог:** `src/device_mech-ring/` · **Класс:** `CLASS_DEVICE_RINGMECH` · **Объект:** `device_mech_ring`
-**`[registry]`:** `object=device_mech_ring`, `define=DEVICE_RINGMECH`, `web=1`, `loop=0`.
-**Env:** `esp32_clock-mech_ring` (extends `env:esp32`); `src_filter` включает `module_udp`, `module_otaclient`, `device_clock-mech`, `module_ds3231`, `device_mech-ring`.
-
-**Назначение:** бой часов (молоток/звонковое колесо): парковка по метке датчика, калибровка по шагам, поворот N полных оборотов с настраиваемыми паузами, а в начале нового часа (в окне `time_begin..time_end`) — отбивание соответствующего числа ударов.
-
-**Функциональные требования:**
-- FR-RINGMECH-1: Два режима `enable_status`; парковка (`cmdHome`), подсчёт оборотов (`cmdCount`), поворот (`cmdTurn`).
-- FR-RINGMECH-2: Отбивание часа: число ударов = текущий час, только в окне `time_begin..time_end`.
-- FR-RINGMECH-3: Паузы боя `ringPauseOne`, `ringPauseTwo`; начальное положение `firstPosition`.
-- FR-RINGMECH-4: Источник времени `timeSource` (`ds3231`/`ntp`), период `pollInterval`, лимит `errorLimitSteps`.
-- FR-RINGMECH-5: Датчик `SENS=32` (`INPUT_PULLUP`, срабатывание по LOW), подсветка `SENS_LED=27`, STEP=17, EN=16.
-- FR-RINGMECH-6: Требует наличия `device_clock-mech` в сборке.
-- FR-RINGMECH-7: Сохранение конфига — web `handleSave` и терминал `r-save`; bus-функции `save` нет.
-
-**Веб-маршруты:** `POST /ring-mech/save`, `GET /ring-mech/info`; GET: `/ring-mech/turn|en|sens|home|count|status|reset|ver`.
-**Веб-файлы:** `ring-mech.html`, `_menu.html`.
-**Конфиг:** `/config_ring-mech.json`: `enable_status`, `stepsPerRevolution`, `pollInterval`, `errorLimitSteps`, `ringPauseOne`, `ringPauseTwo`, `firstPosition`, `time_begin`, `time_end`, `timeSource`.
-**Зависимости модулей:** `module_udp`, `module_otaclient`, `module_ds3231`, `device_clock-mech`.
-
----
-
-#### 3.3.3. `device_electronica7_rgb` — часы «Электроника-7» RGB
-
-**Каталог:** `src/device_electronica7_rgb/` · **Класс:** `CLASS_DEVICE_E7RGB` · **Объект:** `device_electronica7_rgb`
-**`[registry]`:** `object=device_electronica7_rgb`, `define=DEVICE_E7RGB`, `namespace=e7`, `web=1`, `loop=0`, `res=1`, `prio=70`.
-**Env:** `esp32_electronica7_rgb` и `esp32_electronica7_rgb_macros` (с `module_macros` и таблицей `partitions_esp32_macro.csv`).
-
-**Назначение:** вывод HH:MM (или ручного 4-символьного текста) на матрице WS2812 7×16 со шрифтами из ФС; цветовые эффекты, 12 типов переходных эффектов при смене времени, эффект «дождя»/«оседания» до синхронизации NTP; режимы шины off/auto/macro.
-
-**Функциональные требования:**
-- FR-E7RGB-1: Отображать время HH:MM или `manualText`; шрифт из `fontFile` (по умолчанию `/e7fonts/digital7.fnt`), кэшировать путь+размер.
-- FR-E7RGB-2: Эффекты `effect` (моно, радуга, градиент статичный/динамичный, цикл цвета) с `effectDir`, `animSpeed`, `palette[8]`, `colorsCount`, `cycleMode`.
-- FR-E7RGB-3: Переходные эффекты `timeFx` (12 типов), `timeFxFreq`, `timeFxDur`, `timeFxBg`.
-- FR-E7RGB-4: Вступительный «дождь»: `rainEnabled`, `rainDurMin`, `rainIntensity`, `rainSettleDur`.
-- FR-E7RGB-5: Публичные сеттеры (`setEffect`, `setBrightness`, `setSpeed`, `setDigitsColor`, `setManualText`, `setBusMode`) применяют изменения в RAM/на экране, но **не сохраняют** конфиг; сигналят на шину; планируют отложенное применение.
-- FR-E7RGB-6: `saveNow()` и web `handleSave` сохраняют конфиг; bus-функция `e7.save` ставит отложенное сохранение.
-- FR-E7RGB-7: Режимы шины `off/auto/macro` (`busMode`); bus-запись (кроме `mode`) разрешена только в `macro`, иначе `BUS_ERR_DENIED`.
-- FR-E7RGB-8: Конфиг `/config_e7rgb.json`: `busMode`, `mode`, `dataPin` (16), `brightness` (25), `effect`, `effectDir`, `digitsColor`, `digitsColor2`, `animSpeed`, `colorsCount`, `cycleMode`, `palette[8]`, `origin`, `direction`, `layout`, `timeFx`, `timeFxFreq`, `timeFxDur`, `timeFxBg`, `rainEnabled`, `rainDurMin`, `rainIntensity`, `rainSettleDur`, `fontFile`, `manualText`.
-- FR-E7RGB-9: Аппаратно 112 светодиодов WS2812 (7×16) через NeoPixelBus; RMT при `-D E7_USE_RMT=1`, иначе I2S0; `dataPin=-1` — выключено.
-
-**Ресурсы шины (namespace `e7`):**
-- состояния: `e7.mode` (ENUM off/auto/macro), `e7.effect` (ENUM), `e7.brightness` (I32), `e7.speed` (I32), `e7.color` (I32), `e7.text` (STR);
-- функции: `e7.mode`, `e7.effect`, `e7.brightness`, `e7.speed`, `e7.color`, `e7.text`, `e7.save`.
-
-**Веб-маршруты:** `GET /e7rgb/save`, `/e7rgb/info`, `/e7rgb/fonts`, `/e7rgb/ver`.
-**Веб-файлы:** `electronica7-rgb.html`, `_menu.html`, `config_e7rgb.json`, `e7fonts/digital7.fnt`, макросы `web/macros/*.lua`.
-**Зависимости модулей:** `module_udp`, `module_otaclient`, (`module_macros` — только в macros-env).
+| Устройство | AGENTS.md | Требования |
+|-----------|--------|-----------|
+| `device_clock-mech` | `src/device_clock-mech/AGENTS.md` | FR-CLOCKMECH-1…8, AC-13 |
+| `device_mech-ring` | `src/device_mech-ring/AGENTS.md` | FR-RINGMECH-1…7 |
+| `device_electronica7_rgb` | `src/device_electronica7_rgb/AGENTS.md` | FR-E7RGB-1…9, AC-12 |
 
 ---
 
 ### 3.4. Реестр компонентов (сводно)
 
-| Компонент | Тип | Класс | Объект | Namespace | web | loop | res | prio |
-|-----------|-----|-------|--------|-----------|-----|------|-----|------|
-| core_json | ядро | `CLASS_CORE_JSON` | `core_json` | — | 1 | 0 | 0 | — |
-| core_sys | ядро | `CLASS_CORE_SYS` | `core_sys` | `system` | 1 | 0 | 1 | 85 |
-| core_state | ядро | `CLASS_CORE_STATE` | `core_state` | `system` | 1 | 1 | 1 | 100 |
-| core_task | ядро | `CLASS_CORE_TASK` | `core_task` | `task` | 0 | 1 | 0 | 90 |
-| core_wifi | ядро | `CLASS_CORE_WIFI` | `core_wifi` | `wifi` | 1 | 0 | 1 | 80 |
-| core_ntp | ядро | `CLASS_CORE_NTP` | `core_ntp` | `time` | 1 | 0 | 1 | 70 |
-| core_ota | ядро | `CLASS_CORE_OTA` | `core_ota` | `ota` | 1 | 1 | 1 | 75 |
-| core_led | ядро | — | — | — | 0 | 0 | 0 | — |
-| core_terminal | ядро | — | `term` | — | 0 | 0 | 0 | — |
-| core_web | ядро | `AsyncFSWebServer` | `ESPHTTPServer` | — | — | — | — | — |
-| module_prog | модуль | `Class_ProgBase` | — | — | 0 | 0 | 0 | — |
-| submodule_isp | субмодуль | `Class_SubIsp` | `progIsp` | — | 1 | 0 | 0 | — |
-| submodule_swd | субмодуль | `Class_SubSwd` | `progSwd` | — | 1 | 0 | 0 | — |
-| module_udp | модуль | `CLASS_MODULE_UDPBROADCAST` | `module_udp` | — | 1 | 0 | 0 | — |
-| module_editor | модуль | `CLASS_MODULE_EDITOR` | `module_editor` | — | 1 | 0 | 0 | — |
-| module_ds3231 | модуль | `CLASS_MODULE_DS3231` | `module_ds3231` | — | 1 | 0 | 0 | — |
-| module_gpio | модуль | `CLASS_MODULE_GPIO` | `module_gpio` | — | 1 | 0 | 0 | — |
-| module_lcd-i2c | модуль | `CLASS_MODULE_I2C_LCD` | `module_lcd_i2c` | — | 1 | 0 | 0 | — |
-| module_macros | модуль | `CLASS_MODULE_MACROS` | `module_macros` | `macros` | 1 | 0 | 1 | 60 |
-| module_otaclient | модуль | `CLASS_MODULE_OTACLIENT` | `module_otaclient` | (`ota`) | 1 | 1 | 1 | — |
-| module_rgb | модуль | `CLASS_MODULE_RGB` | `module_rgb` | — | 1 | 0 | 0 | — |
-| module_i2c-mapper | модуль | `CLASS_MODULE_I2C_MAPPER` | `module_i2c_mapper` | — | 1 | 0 | 0 | — |
-| module_template | модуль | `CLASS_MODULE_TEMPLATE` | `module_template` | — | 1 | 0 | 0 | — |
-| device_clock-mech | устройство | `CLASS_DEVICE_CLOCKMECH` | `device_clock_mech` | — | 1 | 0 | 0 | — |
-| device_mech-ring | устройство | `CLASS_DEVICE_RINGMECH` | `device_mech_ring` | — | 1 | 0 | 0 | — |
-| device_electronica7_rgb | устройство | `CLASS_DEVICE_E7RGB` | `device_electronica7_rgb` | `e7` | 1 | 0 | 1 | 70 |
+| Компонент | Тип | Класс | Объект | Namespace | web | loop | res | prio | Документация |
+|-----------|-----|-------|--------|-----------|-----|------|-----|------|--------------|
+| core_json | ядро | `CLASS_CORE_JSON` | `core_json` | — | 1 | 0 | 0 | — | TRS §3.1.6 |
+| core_sys | ядро | `CLASS_CORE_SYS` | `core_sys` | `system` | 1 | 0 | 1 | 85 | TRS §3.1.2 |
+| core_state | ядро | `CLASS_CORE_STATE` | `core_state` | `system` | 1 | 1 | 1 | 100 | TRS §3.1.9 |
+| core_task | ядро | `CLASS_CORE_TASK` | `core_task` | `task` | 0 | 1 | 0 | 90 | TRS §3.1.10 |
+| core_wifi | ядро | `CLASS_CORE_WIFI` | `core_wifi` | `wifi` | 1 | 0 | 1 | 80 | TRS §3.1.3 |
+| core_ntp | ядро | `CLASS_CORE_NTP` | `core_ntp` | `time` | 1 | 0 | 1 | 70 | TRS §3.1.4 |
+| core_ota | ядро | `CLASS_CORE_OTA` | `core_ota` | `ota` | 1 | 1 | 1 | 75 | TRS §3.1.5 |
+| core_led | ядро | — | — | — | 0 | 0 | 0 | — | TRS §3.1.7 |
+| core_terminal | ядро | — | `term` | — | 0 | 0 | 0 | — | TRS §3.1.8 |
+| core_web | ядро | `AsyncFSWebServer` | `ESPHTTPServer` | — | — | — | — | — | TRS §3.1.1 |
+| module_prog | модуль | `Class_ProgBase` | — | — | 0 | 0 | 0 | — | `src/module_program/AGENTS.md` |
+| submodule_isp | субмодуль | `Class_SubIsp` | `progIsp` | — | 1 | 0 | 0 | — | `src/module_program/AGENTS.md` |
+| submodule_swd | субмодуль | `Class_SubSwd` | `progSwd` | — | 1 | 0 | 0 | — | `src/module_program/AGENTS.md` |
+| module_udp | модуль | `CLASS_MODULE_UDPBROADCAST` | `module_udp` | — | 1 | 0 | 0 | — | `src/module_udp/AGENTS.md` |
+| module_editor | модуль | `CLASS_MODULE_EDITOR` | `module_editor` | — | 1 | 0 | 0 | — | `src/module_editor/AGENTS.md` |
+| module_ds3231 | модуль | `CLASS_MODULE_DS3231` | `module_ds3231` | — | 1 | 0 | 0 | — | `src/module_ds3231/AGENTS.md` |
+| module_gpio | модуль | `CLASS_MODULE_GPIO` | `module_gpio` | — | 1 | 0 | 0 | — | `src/module_gpio/AGENTS.md` |
+| module_lcd-i2c | модуль | `CLASS_MODULE_I2C_LCD` | `module_lcd_i2c` | — | 1 | 0 | 0 | — | `src/module_lcd-i2c/AGENTS.md` |
+| module_macros | модуль | `CLASS_MODULE_MACROS` | `module_macros` | `macros` | 1 | 0 | 1 | 60 | `src/module_macros/AGENTS.md` |
+| module_otaclient | модуль | `CLASS_MODULE_OTACLIENT` | `module_otaclient` | (`ota`) | 1 | 1 | 1 | — | `src/module_otaclient/AGENTS.md` |
+| module_rgb | модуль | `CLASS_MODULE_RGB` | `module_rgb` | — | 1 | 0 | 0 | — | `src/module_rgb/AGENTS.md` |
+| module_i2c-mapper | модуль | `CLASS_MODULE_I2C_MAPPER` | `module_i2c_mapper` | — | 1 | 0 | 0 | — | `src/module_i2c-mapper/AGENTS.md` |
+| module_template | модуль | `CLASS_MODULE_TEMPLATE` | `module_template` | — | 1 | 0 | 0 | — | `src/module_template/AGENTS.md` |
+| device_clock-mech | устройство | `CLASS_DEVICE_CLOCKMECH` | `device_clock_mech` | — | 1 | 0 | 0 | — | `src/device_clock-mech/AGENTS.md` |
+| device_mech-ring | устройство | `CLASS_DEVICE_RINGMECH` | `device_mech_ring` | — | 1 | 0 | 0 | — | `src/device_mech-ring/AGENTS.md` |
+| device_electronica7_rgb | устройство | `CLASS_DEVICE_E7RGB` | `device_electronica7_rgb` | `e7` | 1 | 0 | 1 | 70 | `src/device_electronica7_rgb/AGENTS.md` |
 
 ---
 
@@ -906,29 +586,33 @@
 
 ### 6.4. Аппаратные интерфейсы
 
-| Интерфейс | Назначение | Выводы по умолчанию | Компонент |
-|-----------|-----------|---------------------|-----------|
-| AVR ISP | MISO/MOSI/SCK/RST | 19 / 23 / 18 / 5 | `submodule_isp` |
-| STM32 SWD | CLK/DATA | 21 / 19 | `submodule_swd` |
-| I2C (DS3231) | SDA/SCL | ESP32 21/22, ESP8266 4/5 | `module_ds3231` |
-| I2C (LCD) | SDA/SCL | ESP32 21/22, ESP8266 4/5 | `module_lcd-i2c` |
-| I2C (сканер) | SDA/SCL | ESP32 21/22, ESP8266 4/5 | `module_i2c-mapper` |
-| WS2812 (лента) | DATA | из `config_rgb.json` | `module_rgb` |
-| WS2812 (матрица) | DATA | 16 | `device_electronica7_rgb` |
-| DS3231 SQW/INT# | прерывание | 13 | `module_ds3231`, `device_clock-mech`, `device_mech-ring` |
-| Шаговый драйвер | STEP/DIR/EN | 12 / 33 / 14 | `device_clock-mech` |
-| Датчики часов | SENS_MIN/SENS_HOUR | 26 / 25 | `device_clock-mech` |
-| Подсветка датчиков | SENS_LED | 27 | `device_clock-mech`, `device_mech-ring` |
-| Бой часов | STEP/EN/SENS | 17 / 16 / 32 | `device_mech-ring` |
-| Статусный светодиод | CONNECTION_LED | 2 (ESP8266/ESP32), 4 (cam), `-1` = выкл | `core_led` |
-| Кнопка AP | AP_ENABLE_BUTTON | `-1` = выкл | `core_wifi` |
-| GPIO-демо (шаблон) | GPIO1/GPIO2 | ESP32 32/33, ESP8266 16/14 | `module_template` |
+Аппаратные интерфейсы **опциональных** компонентов описаны в `AGENTS.md` этих компонентов; ниже — сводная таблица со ссылками. Ядровые строки (светодиод, кнопка AP) остаются здесь.
+
+| Интерфейс | Назначение | Выводы по умолчанию | Компонент | Документация |
+|-----------|-----------|---------------------|-----------|--------------|
+| AVR ISP | MISO/MOSI/SCK/RST | 19 / 23 / 18 / 5 | `submodule_isp` | `src/module_program/AGENTS.md` |
+| STM32 SWD | CLK/DATA | 21 / 19 | `submodule_swd` | `src/module_program/AGENTS.md` |
+| I2C (DS3231) | SDA/SCL | ESP32 21/22, ESP8266 4/5 | `module_ds3231` | `src/module_ds3231/AGENTS.md` |
+| I2C (LCD) | SDA/SCL | ESP32 21/22, ESP8266 4/5 | `module_lcd-i2c` | `src/module_lcd-i2c/AGENTS.md` |
+| I2C (сканер) | SDA/SCL | ESP32 21/22, ESP8266 4/5 | `module_i2c-mapper` | `src/module_i2c-mapper/AGENTS.md` |
+| WS2812 (лента) | DATA | из `config_rgb.json` | `module_rgb` | `src/module_rgb/AGENTS.md` |
+| WS2812 (матрица) | DATA | 16 | `device_electronica7_rgb` | `src/device_electronica7_rgb/AGENTS.md` |
+| DS3231 SQW/INT# | прерывание | 13 | `module_ds3231` (канонично), `device_clock-mech`, `device_mech-ring` | `src/module_ds3231/AGENTS.md` |
+| Шаговый драйвер | STEP/DIR/EN | 12 / 33 / 14 | `device_clock-mech` | `src/device_clock-mech/AGENTS.md` |
+| Датчики часов | SENS_MIN/SENS_HOUR | 26 / 25 | `device_clock-mech` | `src/device_clock-mech/AGENTS.md` |
+| Подсветка датчиков | SENS_LED | 27 | `device_clock-mech`, `device_mech-ring` | `src/device_clock-mech/AGENTS.md` |
+| Бой часов | STEP/EN/SENS | 17 / 16 / 32 | `device_mech-ring` | `src/device_mech-ring/AGENTS.md` |
+| Статусный светодиод | CONNECTION_LED | 2 (ESP8266/ESP32), 4 (cam), `-1` = выкл | `core_led` | TRS §3.1.7 |
+| Кнопка AP | AP_ENABLE_BUTTON | `-1` = выкл | `core_wifi` | TRS §3.1.3 |
+| GPIO-демо (шаблон) | GPIO1/GPIO2 | ESP32 32/33, ESP8266 16/14 | `module_template` | `src/module_template/AGENTS.md` |
 
 ---
 
 ## 7. Требования к данным
 
 ### 7.1. Файлы конфигурации на FS
+
+Ядровые конфиги:
 
 | Файл | Владелец | Основные поля |
 |------|----------|---------------|
@@ -939,20 +623,24 @@
 | `config_wifi.json` | core_wifi | `scantime`, `aptime` |
 | `config_ntp.json` | core_ntp | `ntp0`, `ntp1`, `ntp2`, `NTPperiod`, `timeZone`, `daylight` |
 | `config_state.json` | core_state | `test_timeout_s`, `op_timeout_s` |
-| `config_prog.json` | module_prog | `project`, `chip_name` |
-| `prog_filelist.json` | module_prog | `filename`, `upload_date`, `md5`, `prog_date`, `prog_status`, `prog_time`, `prog_error`, `prog_error_stage`, `prog_error_percent`, `prog_speed` |
-| `avrisp_cfg.json` | submodule_isp | `chips[]`: `signature`, `name`, `flash_size`, `page_size` |
-| `swd_cfg.json` | submodule_swd | `chips[]`: `idcode`, `name`, `family`, `flash_size`, `flash_start`, `page_size`, `word_size`, `csw_value` |
-| `config_udp.json` | module_udp | `udpPortTx`, `udpPortRx`, `udpTimeOut`, `udpkeyword`, `udpPowerOn`, `udpResponse`, `udpMissLimit` |
-| `config_ds3231.json` | module_ds3231 | `addr`, `autoPoll`, `pollInterval`, `sqw*`, `ctrl*` |
-| `config_lcd-i2c.json` | module_lcd-i2c | `i2cAddr`, `cols`, `rows`, `backlight`, `display_lines[]` |
-| `config_macros.json` | module_macros | `enabled`, `files[]` (`name`, `prio`, `run`, `created`) |
-| `config_otaclient.json` | module_otaclient | `timeOut`, `powerOn`, `serverAddress`, `serverPort`, `manifestPath` |
-| `config_rgb.json` | module_rgb | `dataPin`, `numLeds`, `brightness`, `mode`, `effectSpeed`, `solidColor`, `grad*Color`, `individualColors[]`, `eqBands`, `eqLedsPerBand` |
-| `config_template.json` | module_template | `gpio1State`, `gpio2State`, `blinkInterval`, `demoSampleText`, `demoArray[3]` |
-| `config_clock-mech.json` | device_clock-mech | `enable_status`, `timeSource`, `stepsPerRevolution`, `pollInterval`, `errorLimitSteps`, `sensorLedEnabled` |
-| `config_ring-mech.json` | device_mech-ring | `enable_status`, `stepsPerRevolution`, `pollInterval`, `errorLimitSteps`, `ringPauseOne`, `ringPauseTwo`, `firstPosition`, `time_begin`, `time_end`, `timeSource` |
-| `config_e7rgb.json` | device_electronica7_rgb | `busMode`, `mode`, `dataPin`, `brightness`, `effect`, `effectDir`, `digitsColor*`, `animSpeed`, `colorsCount`, `cycleMode`, `palette[8]`, `origin`, `direction`, `layout`, `timeFx*`, `rain*`, `fontFile`, `manualText` |
+
+Конфиги **опциональных** модулей и устройств (полное описание полей — в `AGENTS.md` владельца):
+
+| Файл | Владелец | Документация |
+|------|----------|--------------|
+| `config_prog.json`, `prog_filelist.json` | module_prog | `src/module_program/AGENTS.md` |
+| `avrisp_cfg.json` | submodule_isp | `src/module_program/AGENTS.md` |
+| `swd_cfg.json` | submodule_swd | `src/module_program/AGENTS.md` |
+| `config_udp.json` | module_udp | `src/module_udp/AGENTS.md` |
+| `config_ds3231.json` | module_ds3231 | `src/module_ds3231/AGENTS.md` |
+| `config_lcd-i2c.json` | module_lcd-i2c | `src/module_lcd-i2c/AGENTS.md` |
+| `config_macros.json` | module_macros | `src/module_macros/AGENTS.md` |
+| `config_otaclient.json` | module_otaclient | `src/module_otaclient/AGENTS.md` |
+| `config_rgb.json` | module_rgb | `src/module_rgb/AGENTS.md` |
+| `config_template.json` | module_template | `src/module_template/AGENTS.md` |
+| `config_clock-mech.json` | device_clock-mech | `src/device_clock-mech/AGENTS.md` |
+| `config_ring-mech.json` | device_mech-ring | `src/device_mech-ring/AGENTS.md` |
+| `config_e7rgb.json` | device_electronica7_rgb | `src/device_electronica7_rgb/AGENTS.md` |
 
 ### 7.2. Данные пользователя на FS
 
@@ -991,15 +679,9 @@
 - AC-4: NTP-синхронизация выполняется после подключения; ресурсы `time.now/valid/source` корректны.
 - AC-5: Веб-обновление: файл с корректным именем принимается, MD5 подтверждается, устройство перезагружается с новой версией; при несоответствии версии — предупреждение; запись `littlefs.bin` монтирует новую ФС.
 - AC-6: `module_otaclient` при доступном сервере обнаруживает новую версию, скачивает и прошивает; при недоступном — сообщает об ошибке без блокировки.
-- AC-7: AVR ISP: чтение сигнатуры/фьюзов, прошивка HEX/BIN, верификация, прогресс; при неверном чипе — ошибка без повреждения конфига.
-- AC-8: STM32 SWD: чтение IDCODE, определение чипа, mass-erase + прошивка + reset; алгоритмы F1/F4 выбираются верно.
-- AC-9: Редактор ФС: список, создание, редактирование, сохранение, удаление, загрузка (до 1 МБ), занятость ФС.
 - AC-10: `/state/catalog` содержит ресурсы всех включённых компонентов; `/state/set` и `/state/call` работают; ошибки соответствуют кодам `-1..-13`.
-- AC-11: Макросы: сценарий запускается, cron/cond/on-триггеры срабатывают, `set`/`call`/`calls`/`run` выполняются, stop останавливает файл; при переполнении heap — предупреждение без падения.
-- AC-12: `device_electronica7_rgb`: `call("e7.save")` и веб-Save персистят конфиг, а `set("e7.effect", ...)` — нет; режимы `off/auto/macro` соблюдаются.
-- AC-13: `device_clock-mech`/`device_mech-ring`: калибровка по датчикам, установка/отслеживание времени; сохранение только по явному действию.
-- AC-14: UDP: broadcast-обнаружение и ответ на ключевое слово, статус сервера, фоллбэк; `begin()` вызывается при подключении Wi-Fi.
-- AC-15: `module_template`/`module_gpio` собираются и открывают свои страницы.
+
+> Критерии приёмки **опциональных** компонентов вынесены в `AGENTS.md` этих компонентов: AC-7/AC-8 — `src/module_program/AGENTS.md`; AC-9 — `src/module_editor/AGENTS.md`; AC-11 — `src/module_macros/AGENTS.md`; AC-12 — `src/device_electronica7_rgb/AGENTS.md`; AC-13 — `src/device_clock-mech/AGENTS.md`; AC-14 — `src/module_udp/AGENTS.md`; AC-15 — `src/module_template/AGENTS.md`.
 
 ### 8.2. Нефункциональные
 
@@ -1009,52 +691,48 @@
 - AC-19: `modules_registry.cpp` содержит вызовы только для компонентов выбранного env (без `#if`) и перегенерируется при смене env.
 - AC-20: Устройство не уходит в циклический ресет; при неисправном Wi-Fi — предсказуемое поведение без watchdog-сбоев.
 - AC-21: Heap-бюджет макросов соблюдается (`/macros/heap`); открытие `macros.html` не вызывает `abort()`.
-- AC-22: Ни один `module_*`/`device_*` не компилируется без ядра; сборка ядра без внешних компонентов (`TestSolo32`/`TestSolo8266`) работает.
+- AC-22: Ни один `module_*`/`device_*` не компилируется без ядра; сборка ядра без внешних компонентов (`TestCore32`/`TestCore8266`) работает.
 
 ### 8.3. Открытые требования (не реализовано; учесть при приёмке)
 
 - OPEN-1: bus-функция `<namespace>.save` реализована только у `device_electronica7_rgb` (`e7.save`); `core_*.save` и `save` у остальных модулей отсутствуют. Масштабировать правило apply/save на все компоненты с resource-bus.
 - OPEN-2: `handleSave` сохраняет конфиг целиком; нужно сохранять только реально изменённые поля.
 - OPEN-3: Guard от цикла `esp_wifi_init` (`WIFI_SCAN_FAILED` → бэкофф → рестарт) не проверен инъекцией реального отказа драйвера; в небезопасных режимах рестарт откладывается бессрочно.
-- OPEN-4: `module_macros`: после сдвига массива `_files` указатели upvalue активных интерпретаторов устаревают — нужно пересоздание интерпретаторов или стабильные id/указатели.
-- OPEN-5: UI `macros.html` (сплиттер, чекбоксы `SEL`/`CUR_EDIT`, `indeterminate`, кнопки start/stop) в браузере не проверялся.
-- OPEN-6: `desc` остановленного макрос-файла остаётся в таблице до перезагрузки (косметика).
-- OPEN-7: `module_rgb`/`module_gpio`/`module_editor` не имеют resource-bus и недоступны из макросов.
 - OPEN-8: `targets/targets_user.ini` и `src/module_rgb/esp32_macrotest.ini` отсутствуют, но упомянуты в `extra_configs`.
-- OPEN-9: Отладочные команды программатора в терминале закомментированы.
-- OPEN-10: README.md частично устарел (не отражает `core_state`/`core_task`/`module_macros`).
+
+> Открытые требования **опциональных** компонентов вынесены в `AGENTS.md`: OPEN-4/OPEN-5/OPEN-6 — `src/module_macros/AGENTS.md`; OPEN-7 — `src/module_rgb/AGENTS.md` (ссылки из `module_gpio`, `module_editor`); OPEN-9 — `src/module_program/AGENTS.md`; OPEN-10 — корневой `README.md` (пометка `> TODO: уточнить`).
 
 ---
 
 ## Приложение A. Определения `define` и флагов сборки
 
-| Флаг | Значение |
-|------|----------|
-| `USE_LITTLEFS` | Включить LittleFS (задаётся в env ESP8266/ESP32) |
-| `HIDE_SECRET` | Скрыть `secret.json` из браузера ФС (403) |
-| `HIDE_CONFIG` | Скрыть `config_sys.json` из браузера ФС (403) |
-| `RELEASE` | Превратить все отладочные макросы в пустышки |
-| `CONNECTION_LED` | GPIO статусного светодиода: в env — 2 (ESP8266/ESP32), 4 (esp32cam); fallback в `main.h` — `-1` (выключено) |
-| `AP_ENABLE_BUTTON` | GPIO кнопки принудительного AP (`-1` — выключено) |
-| `PROGTYPE_ISP` | Сборка с AVR ISP (определяется env/`src_filter`) |
-| `PROGTYPE_SWD` | Сборка с STM32 SWD |
-| `PIN_MISO` / `PIN_MOSI` / `PIN_SCK` / `PIN_RST` | Выводы ISP |
-| `SWDPIN_CLK` / `SWDPIN_DATA` | Выводы SWD |
-| `MODULE_UDP` | Модуль UDP broadcast |
-| `MODULE_EDITOR` | Модуль редактора ФС |
-| `MODULE_GPIO` | Модуль GPIO |
-| `MODULE_LCD_I2C` | Модуль LCD I2C |
-| `MODULE_DS3231` | Модуль DS3231 |
-| `MODULE_MACROS` | Модуль макросов (ESP32) |
-| `MODULE_OTACLIENT` | OTA-клиент (внедряется в core-группы) |
-| `MODULE_RGB` | Модуль RGB |
-| `MODULE_I2C_MAPPER` | Модуль сканера I2C |
-| `MODULE_TEMPLATE` | Шаблон модуля |
-| `DEVICE_CLOCKMECH` / `DEVICE_RINGMECH` / `DEVICE_E7RGB` | Устройства |
-| `DS3231_SQW_PIN` | Пин SQW/INT# DS3231 (по умолчанию 13) |
-| `E7_USE_RMT` | Использовать RMT-метод NeoPixelBus в `device_electronica7_rgb` |
-| `JSON_DUMP_LOG` | Включить дамп JSON в лог (по умолчанию выключен) |
-| `DEBUG_*` | Отладочные макросы по компонентам (`DEBUGSYS`, `DEBUG_WIFI`, `DEBUGNTP`, `DEBUGOTA`, `DEBUGJSON`, `DEBUGLOGLED`, `DEBUGSTATE`, `DEBUGTASK`, `DEBUG_PROG`, `DEBUG_ISP`, `DEBUG_SWD`, `DEBUG_UDP`, `DEBUGEDITOR`, `DEBUGDS3231`, `DEBUGLCD`, `DEBUGMACROS`, `DEBUGOTACLIENT`, `DEBUG_RGB`, `DEBUGI2CMAPPER`, `DEBUGTEMPLATE`, `DEBUG_GPIO`, `DEBUG_CLOCKMECH`, `DEBUG_RINGMECH`, `DEBUG_E7RGB`) |
+| Флаг | Значение | Документация |
+|------|----------|--------------|
+| `USE_LITTLEFS` | Включить LittleFS (задаётся в env ESP8266/ESP32) | ядро |
+| `HIDE_SECRET` | Скрыть `secret.json` из браузера ФС (403) | TRS §3.1.2 |
+| `HIDE_CONFIG` | Скрыть `config_sys.json` из браузера ФС (403) | TRS §3.1.1 |
+| `RELEASE` | Превратить все отладочные макросы в пустышки | TRS §4.5 (NFR-MAINT-5) |
+| `CONNECTION_LED` | GPIO статусного светодиода: в env — 2 (ESP8266/ESP32), 4 (esp32cam); fallback в `main.h` — `-1` (выключено) | TRS §3.1.7 |
+| `AP_ENABLE_BUTTON` | GPIO кнопки принудительного AP (`-1` — выключено) | TRS §3.1.3 |
+| `PROGTYPE_ISP` | Сборка с AVR ISP (определяется env/`src_filter`) | `src/module_program/AGENTS.md` |
+| `PROGTYPE_SWD` | Сборка с STM32 SWD | `src/module_program/AGENTS.md` |
+| `PIN_MISO` / `PIN_MOSI` / `PIN_SCK` / `PIN_RST` | Выводы ISP | `src/module_program/AGENTS.md` |
+| `SWDPIN_CLK` / `SWDPIN_DATA` | Выводы SWD | `src/module_program/AGENTS.md` |
+| `MODULE_UDP` | Модуль UDP broadcast | `src/module_udp/AGENTS.md` |
+| `MODULE_EDITOR` | Модуль редактора ФС | `src/module_editor/AGENTS.md` |
+| `MODULE_GPIO` | Модуль GPIO | `src/module_gpio/AGENTS.md` |
+| `MODULE_LCD_I2C` | Модуль LCD I2C | `src/module_lcd-i2c/AGENTS.md` |
+| `MODULE_DS3231` | Модуль DS3231 | `src/module_ds3231/AGENTS.md` |
+| `MODULE_MACROS` | Модуль макросов (ESP32) | `src/module_macros/AGENTS.md` |
+| `MODULE_OTACLIENT` | OTA-клиент (внедряется в core-группы) | `src/module_otaclient/AGENTS.md` |
+| `MODULE_RGB` | Модуль RGB | `src/module_rgb/AGENTS.md` |
+| `MODULE_I2C_MAPPER` | Модуль сканера I2C | `src/module_i2c-mapper/AGENTS.md` |
+| `MODULE_TEMPLATE` | Шаблон модуля | `src/module_template/AGENTS.md` |
+| `DEVICE_CLOCKMECH` / `DEVICE_RINGMECH` / `DEVICE_E7RGB` | Устройства | `src/device_clock-mech/AGENTS.md`, `src/device_mech-ring/AGENTS.md`, `src/device_electronica7_rgb/AGENTS.md` |
+| `DS3231_SQW_PIN` | Пин SQW/INT# DS3231 (по умолчанию 13) | `src/module_ds3231/AGENTS.md` |
+| `E7_USE_RMT` | Использовать RMT-метод NeoPixelBus в `device_electronica7_rgb` | `src/device_electronica7_rgb/AGENTS.md` |
+| `JSON_DUMP_LOG` | Включить дамп JSON в лог (по умолчанию выключен) | TRS §3.1.6 |
+| `DEBUG_*` | Отладочные макросы по компонентам (`DEBUGSYS`, `DEBUG_WIFI`, `DEBUGNTP`, `DEBUGOTA`, `DEBUGJSON`, `DEBUGLOGLED`, `DEBUGSTATE`, `DEBUGTASK`, `DEBUG_PROG`, `DEBUG_ISP`, `DEBUG_SWD`, `DEBUG_UDP`, `DEBUGEDITOR`, `DEBUGDS3231`, `DEBUGLCD`, `DEBUGMACROS`, `DEBUGOTACLIENT`, `DEBUG_RGB`, `DEBUGI2CMAPPER`, `DEBUGTEMPLATE`, `DEBUG_GPIO`, `DEBUG_CLOCKMECH`, `DEBUG_RINGMECH`, `DEBUG_E7RGB`) | ядро/`AGENTS.md` модулей |
 
 ---
 
