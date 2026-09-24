@@ -66,6 +66,13 @@ void CLASS_CORE_WIFI::secondTick() {
 		}
 	}
 
+	// Применение только что сохранённого конфига Wi-Fi (отложено из web-обработчика)
+	if (_applyWifiPending) {
+		_applyWifiPending = false;
+		applyWifiConfigNow();
+		return;
+	}
+
 	if (wifiStatus == FS_STAT_APMODE) {
 		//DNS captive
 		dnsServer.processNextRequest();
@@ -119,7 +126,7 @@ void CLASS_CORE_WIFI::leaveApToScan() {
 	dnsServer.stop();
 	_suppressDisc = 3;   // события от переключения режимов игнорируем
 	_ignoreDisconnect = true;
-	WiFi.softAPdisconnect(true);
+	WiFi.softAPdisconnect(false);
 	WiFi.mode(WIFI_STA);
 	_ignoreDisconnect = false;
 	wifiStatus = FS_STAT_CONNECTING;
@@ -127,6 +134,8 @@ void CLASS_CORE_WIFI::leaveApToScan() {
 	connectionTimout = 0;
 	_apUptime = 0;
 	_apClientActivity = false;
+	_scanActive = true;
+	_apScanPhaseUntil = _stateSeconds + WIFI_AP_RETRY_PHASE_SEC;
 	_nextStaScanAt = _stateSeconds;
 	WiFi.scanNetworks(true);
 	ledMacrosWifiScan();
@@ -139,6 +148,8 @@ void CLASS_CORE_WIFI::enterApWait() {
 		_apUptime = 0;
 		return;
 	}
+	_scanActive = false;
+	_apScanPhaseUntil = 0;
 	if (_wifiAPLifeTime == 0) {
 		wifiStatus = FS_STAT_CONNECTING;
 		WifiScan = WF_STAT_SCANING;
@@ -180,6 +191,15 @@ void CLASS_CORE_WIFI::staTick() {
 		return;
 	}
 
+	// Скан ещё не запущен — запускаем асинхронный скан
+	if (!_scanActive) {
+		_scanActive = true;
+		connectionTimout = 0;
+		WiFi.scanNetworks(true);
+		ledMacrosWifiScan();
+		return;
+	}
+
 	int st = WiFi.scanComplete();
 	if (st == WIFI_SCAN_RUNNING) {
 		// Защита от «зависшего» скана: если скан не завершается дольше порога —
@@ -188,6 +208,7 @@ void CLASS_CORE_WIFI::staTick() {
 			DEBUG_WIFI("Scan stuck %lu sec. Restarting.\r\n", (unsigned long)WIFI_SCAN_STUCK_SEC);
 			connectionTimout = 0;
 			WiFi.scanDelete();
+			_scanActive = false;
 			if (_wifiAPLifeTime > 0) {
 				enterApWait();
 			} else {
@@ -217,10 +238,9 @@ void CLASS_CORE_WIFI::staTick() {
 			DEBUG_WIFI("WiFi init failed %d times, restart deferred (mode %d)\r\n",
 			           _wifiInitFailCount, mode);
 		}
-		// Запускаем новый скан (статус FAILED сам не сбросится), но не чаще
-		// одного раза за окно бэкоффа.
+		// Не дёргаем драйвер каждую секунду: ждём окно бэкоффа, затем пробуем снова
 		WiFi.scanDelete();
-		WiFi.scanNetworks(true);
+		_scanActive = false;
 		_nextStaScanAt = _stateSeconds + WIFI_INIT_FAIL_PAUSE_SEC;
 		ledMacrosWifiScan();
 		return;
@@ -231,18 +251,22 @@ void CLASS_CORE_WIFI::staTick() {
 	}
 
 	// Скан завершён
+	_scanActive = false;
 	connectionTimout = 0;
 	_wifiInitFailCount = 0;
-	int slot = scanWifi();
-	WiFi.scanDelete();
+	int slot = (st > 0) ? scanWifi() : -1;
+	if (st > 0) { WiFi.scanDelete(); }
 	if (slot < 0) {
-		// Сети из конфигов нет (или все SSID заблокированы счётчиками неудач)
-		if (_wifiAPLifeTime > 0) {
+		// Сети из конфигов нет (или все SSID заблокированы счётчиками неудач).
+		// Если после выхода из AP скан-фаза ещё не истекла — продолжаем сканировать,
+		// иначе возвращаемся в AP (или ждём следующего скана при выключенном AP).
+		if (_wifiAPLifeTime > 0 && _stateSeconds >= _apScanPhaseUntil) {
+			_apScanPhaseUntil = 0;
 			enterApWait();
-		} else {
-			_nextStaScanAt = _stateSeconds + WIFI_RESCAN_PAUSE_SEC;
-			ledMacrosWifiScan();
+			return;
 		}
+		_nextStaScanAt = _stateSeconds + WIFI_RESCAN_PAUSE_SEC;
+		ledMacrosWifiScan();
 		return;
 	}
 
@@ -288,6 +312,8 @@ void CLASS_CORE_WIFI::configureWifiAP() {
 	connectionTimout = 0;
 	_apUptime = 0;
 	_apClientActivity = false;
+	_scanActive = false;
+	_apScanPhaseUntil = 0;
 	ledSetSteady(false);
 	ledMacrosWifiAP();	// вход в AP-режим
 }
@@ -338,9 +364,21 @@ void CLASS_CORE_WIFI::configureWifi() { // вход в STA-режим: скан 
 	ledSetSteady(false);	// выход из steady-on при подключении
 	_apUptime = 0;
 	_apClientActivity = false;
+	_scanActive = true;
+	_apScanPhaseUntil = 0;
 	_nextStaScanAt = _stateSeconds;
 	WiFi.scanNetworks(true);
 	ledMacrosWifiScan();
+}
+
+// Применить только что сохранённый слот Wi-Fi: сразу пересканировать сеть,
+// чтобы новый SSID/пароль подхватились без перезагрузки.
+void CLASS_CORE_WIFI::applyWifiConfigNow() {
+	if (wifiStatus == FS_STAT_APMODE) {
+		leaveApToScan();
+	} else {
+		configureWifi();
+	}
 }
 
 #if defined(ESP32)
@@ -374,6 +412,8 @@ void CLASS_CORE_WIFI::onWiFiConnectedGotIP(WiFiEventStationModeGotIP data) {
 	wifiDisconnectedSince = 0;
 	connectionTimout = 0;
 	_wifiInitFailCount = 0;
+	_scanActive = false;
+	_apScanPhaseUntil = 0;
 	wifiStatus = FS_STAT_CONNECTED;
 	_enterApPending = false;
 	_suppressDisc = 0;
@@ -438,6 +478,8 @@ void CLASS_CORE_WIFI::onWiFiDisconnected(WiFiEventStationModeDisconnected data) 
 
 	wifiStatus = FS_STAT_CONNECTING;
 	connectionTimout = 0;
+	_scanActive = false;
+	_apScanPhaseUntil = 0;
 
 	core_state.signal("wifi.connected", BusValue::bo(false));
 	core_state.emit("wifi.just_disconnected");

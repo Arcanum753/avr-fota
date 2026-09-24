@@ -36,6 +36,9 @@
 #define WIFI_INIT_FAIL_PAUSE_SEC    20
 // Число подряд идущих ошибок init/scan до контролируемого ESP.restart()
 #define WIFI_INIT_FAIL_MAX          5
+// Сколько секунд STA сканирует сеть после выхода из AP, прежде чем вернуться
+// в AP (если сеть так и не найдена). Даёт вернувшемуся роутеру окно для реконнекта.
+#define WIFI_AP_RETRY_PHASE_SEC     60
 
 typedef struct {
     String ssid;

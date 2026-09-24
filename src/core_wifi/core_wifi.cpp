@@ -282,6 +282,7 @@ void CLASS_CORE_WIFI::send_network_configuration_html(AsyncWebServerRequest *req
 		if (_saveIn == 1) {save_configWifi(1);}
 		if (_saveIn == 2) {save_configWifi(2);}
 		if (_saveIn == 3) {save_configWifi(3);}
+		_applyWifiPending = true;   // применить конфиг в следующем тике loop
 
 	}
 	else {
@@ -355,6 +356,7 @@ void CLASS_CORE_WIFI::handle_slot_post(AsyncWebServerRequest *request, int slot)
         if (saveResult) {
             request->send(200, "application/json", "{\"success\":true}");
             DEBUG_WIFI("Saved slot %d ok.\n", slot);
+            this->_applyWifiPending = true;   // применить конфиг в следующем тике loop
         } else {
             request->send(500, "application/json", "{\"success\":false,\"error\":\"Save failed\"}");
             DEBUG_WIFI("Saved slot %d failed.\n", slot);
@@ -447,6 +449,12 @@ bool CLASS_CORE_WIFI::save_configWifi(int _in) {
 	DEBUG_WIFI("Save config\r\n");
 	char filename[40];
 	sprintf(filename, "/%s%d.json", WIFI_CONFIG_FILE_NAME, _in);
+	// Синхронизируем in-memory SSID слота: scanWifi() сравнивает по _strWifiN,
+	// иначе новый SSID подхватится только после перезагрузки.
+	if (_in == 0)  { sprintf(_strWifi0, "%s", _wifiConfig.ssid.c_str()); _wifiFailCount[0] = 0; }
+	if (_in == 1)  { sprintf(_strWifi1, "%s", _wifiConfig.ssid.c_str()); _wifiFailCount[1] = 0; }
+	if (_in == 2)  { sprintf(_strWifi2, "%s", _wifiConfig.ssid.c_str()); _wifiFailCount[2] = 0; }
+	if (_in == 3)  { sprintf(_strWifi3, "%s", _wifiConfig.ssid.c_str()); _wifiFailCount[3] = 0; }
 	return core_json.jsonFileSaveSlot(filename, _wifiConfig.ssid, _wifiConfig.password, _wifiConfig.dhcp,
 	                                      _wifiConfig.ip, _wifiConfig.netmask, _wifiConfig.gateway, _wifiConfig.dns);
 }

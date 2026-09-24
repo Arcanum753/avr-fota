@@ -117,15 +117,19 @@ private:
     void enterApWait();         // вход в AP-ожидание (или STA-реконнект при _wifiAPLifeTime==0)
     void leaveApToScan();       // выход из AP и запуск скана сети
     void rescanSoon();          // разрешить пересканирование в ближайший тик
+    void applyWifiConfigNow();  // применить сохранённый слот: сразу пересканировать сеть
     bool anySlotFree();         // есть ли слот с _wifiFailCount < MAX_WIFI_FAIL_COUNT
 protected: 
     int32_t scanTime = 1;       // бюджет попытки подключения в STA (сек), 0/отрицательное -> внутренний дефолт
     uint32_t _stateSeconds = 0;     // счётчик секунд автомата (независимо от состояния)
     bool     _enterApPending = false; // запрос входа в AP из WiFi-события (обрабатывается в loop)
+    bool     _applyWifiPending = false; // запрос применения сохранённого конфига Wi-Fi (обрабатывается в loop)
     bool     _ignoreDisconnect = false; // подавление событий от собственных WiFi.disconnect()
     uint8_t  _suppressDisc = 0;  // кол-во секунд, в течение которых события отключения игнорируются
     uint32_t _nextStaScanAt = 0; // тик, с которого можно снова запускать скан (пауза при отсутствии сети)
     uint8_t  _wifiInitFailCount = 0; // подряд идущие ошибки init/scan (для контролируемого рестарта)
+    bool     _scanActive = false;    // асинхронный скан запущен (WiFi.scanNetworks) и результат ещё не обработан
+    uint32_t _apScanPhaseUntil = 0;  // тик _stateSeconds, до которого после выхода из AP держимся в STA-скане (0 = фаза неактивна)
 };
 
 
