@@ -540,8 +540,10 @@ return {
 | `esp8266` | espressif8266 | d1_mini | База для таргетов ESP8266 |
 | `esp32` | espressif32 | upesy_wroom | База для таргетов ESP32 |
 | `esp32cam` | espressif32 | esp32cam | Расширяет esp32 |
+| `TestCore32` | espressif32 | — | «Ядро без внешних компонентов» (`targets/targets_example.ini`), L3/AC-22 |
+| `TestCore8266` | espressif8266 | — | «Ядро без внешних компонентов» (`targets/targets_example.ini`), L3/AC-22 |
 
-Конфиги конкретных таргетов: `targets/targets_example.ini` (примеры) и `targets/targets_user.ini` (пользовательские).
+Конфиги конкретных таргетов: `targets/targets_example.ini` (примеры) и `targets/targets_user.ini` (пользовательские). Оба подключены в `extra_configs`; `targets_user.ini` может отсутствовать — PlatformIO это допускает. `TestCore32`/`TestCore8266` определены в `targets_example.ini` и используются в L3 и `platformio_ci.yml`.
 
 ### Скрипты сборки (`python/`)
 
@@ -574,9 +576,59 @@ return {
 
 ### CI/CD
 
-Планируется: GitHub Actions workflow (например `.github/workflows/platformio_ci.yml`), который
-для заданного набора компонентов (ядро + модули/устройства по списку) клонирует их, собирает env
-и публикует артефакты. В ядре `.github/` пока отсутствует; у компонентов CI может быть свой.
+GitHub Actions в ядре:
+
+- `.github/workflows/platformio_ci.yml` — сборка firmware для матрицы env
+  (ядро + клонированные компоненты), загрузка артефактов.
+- `.github/workflows/tests-core.yml` — юнит-тесты ядра: job `core-tests`
+  (L1+L2+L3 через `bash tests/scripts/run_core.sh`) на push/PR и job `core-http`
+  (L4, self-hosted с платой, `workflow_dispatch`/тег).
+
+### Юнит-тестирование ядра (`tests/`)
+
+Отдельная система тестирования **только ядра** (`core_*`, `common/`, EERTOS);
+модули/устройства вне скоупа. Уровни:
+
+- **L1** — host-тесты чистой логики (`env:native`, Unity); для
+  `ParseCVT`/`ApplyCVT` (`core_web/web/GetJson.js`) — Node.js (`node --test`).
+- **L2** — host-тесты с моками (LittleFS, `core_json`, `core_state`, EERTOS).
+- **L3** — compile matrix ядровых env (общий шаг, `tests/compile_matrix/run_matrix.py`).
+  Сейчас собираются только `TestCore32`/`TestCore8266` («ядро без внешних
+  компонентов», AC-22); полные `esp32`/`esp8266`/`esp32cam` намеренно исключены
+  ради времени (в `envs.txt` — закомментированным списком «на будущее»).
+- **L4** — HTTP API на реальной плате (pytest); без `DEVICE_HOST` — auto-skip.
+
+Запуск:
+
+```bash
+bash tests/scripts/run_core.sh              # L1+L2+L3 (L4 skip без DEVICE_HOST)
+bash tests/core/core_state/run.sh           # один модуль
+bash tests/scripts/run_core.sh --only common
+```
+
+Контракт модульного скрипта: `run.sh` определяет `MODULE`/`ROOT`/`OUT` и вызывает
+`tests/scripts/run_module.sh`; exit code: `0` — зелено, `1` — фейлы, `2` —
+конфигурационная ошибка (нет `pio`, нет `[env:*]`, нечего запускать,
+`--with-device` без `DEVICE_HOST`, для threshold-модулей нет данных покрытия).
+
+Моки централизованы в `tests/core/native/mocks/` (библиотека подключается через
+`lib_extra_dirs`); реальные заголовки ядра подменяются `override_prelude.h`
+(include-guard'ы). Тесты подключают нужные `src/**.cpp` напрямую в свой TU —
+это осознанное отступление от `test_build_src` (в PIO 6.x `src_dir` вне проекта
+не компилируется, а `src` в include-порядке идёт раньше моков). Один native-env
+на модуль. Покрытие (`gcovr`, при наличии) пишется в
+`test_reports/core/<module>/coverage.md`; для `common`/`core_ota`/`core_led`
+порог ≥80% — жёсткий гейт. Отчёты: `test_reports/core/` (gitignored).
+
+Окружение: скрипты сами добавляют `~/.local/bin` (pipx: `pio`/`gcovr`/`pytest`) и
+`~/.platformio/penv/bin` в `PATH`, а интерпретатор Python резолвят как `python3`
+(на Ubuntu `python` не существует). L3 собирает ESP только при наличии
+Linux-тулчейнов в `~/.platformio/packages/`; без них env помечаются `skip`
+(не `fail`) и валидируются в CI, а AC-19 (чистота `modules_registry.cpp`) и
+AC-22 (негативная сборка без ядра) проверяются всегда — тулчейны им не нужны.
+
+Подробности — `tests/core/README.md`, `tests/core/INVENTORY.md`,
+`tests/core/SYSTEM.md`, `tests/core/REPORT.md`.
 
 ### Файлы версий
 
@@ -656,8 +708,14 @@ avr-fota/
 │                           # редактор FS: src/module_editor/.
 │   └── *version.h           # Заголовки версий модулей (отслеживаются в git)
 ├── targets/                 # Конфиги таргетов PlatformIO
-│   ├── targets_example.ini  # Примеры определений таргетов
-│   └── targets_user.ini     # Пользовательские определения таргетов
+│   ├── targets_example.ini  # Примеры определений таргетов (+ TestCore32/TestCore8266)
+│   └── targets_user.ini     # Пользовательские определения таргетов (может отсутствовать)
+├── tests/                   # Юнит-тесты ядра (см. раздел «Юнит-тестирование ядра»)
+│   ├── core/<module>/       # run.sh + platformio.ini + test/ (+ http_api/) на модуль
+│   ├── core/native/mocks/   # Централизованные host-моки Arduino/ESP
+│   ├── compile_matrix/      # L3: run_matrix.py, envs.txt, negative_nocore/
+│   └── scripts/             # run_core.sh, run_module.sh, gen_report.py, gen_coverage.py
+├── test_reports/            # JUnit/логи/coverage юнит-тестов (генерируется, gitignored)
 ├── web_debug/               # Подготовленный каталог сборки FS (генерируется)
 ├── proj_fwbins/             # Собранные бинарники прошивки + FS (генерируется)
 ├── .pio/                    # Артефакты сборки PlatformIO
