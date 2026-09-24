@@ -1,0 +1,8 @@
+{
+  "name": "mocks",
+  "version": "1.0.0",
+  "description": "Централизованные host-моки Arduino/ESP для юнит-тестов ядра avr-fota",
+  "build": {
+    "flags": ["-DESP8266"]
+  }
+}

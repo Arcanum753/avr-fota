@@ -13,6 +13,8 @@ __pycache__/
 *.bin
 # Web debug folders
 /web_debug/
+# Отчёты юнит-тестов ядра (JUnit/логи/сводки)
+/test_reports/
 .version_hashes
 build_counter.txt
 task_progress.md
