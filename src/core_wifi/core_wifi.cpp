@@ -48,17 +48,17 @@ void CLASS_CORE_WIFI::begin(fs::LittleFSFS* fs)
 	if (!load_configWifi(0)) { defaultConfigWifi(0); _apConfig.APenable = true;		}
 	if (!load_configWifiSys()) { defaultConfigWifiSys(); }
 	scanTime = _wifiScanTime * MINUTES;
-	DEBUG_WIFI("_strWifis[0] %s\r\n", _strWifi0);
-	DEBUG_WIFI("_strWifis[1] %s\r\n", _strWifi1);
-	DEBUG_WIFI("_strWifis[2] %s\r\n", _strWifi2);
-	DEBUG_WIFI("_strWifis[3] %s\r\n", _strWifi3);
+	DEBUG_CORE_WIFI("_strWifis[0] %s\r\n", _strWifi0);
+	DEBUG_CORE_WIFI("_strWifis[1] %s\r\n", _strWifi1);
+	DEBUG_CORE_WIFI("_strWifis[2] %s\r\n", _strWifi2);
+	DEBUG_CORE_WIFI("_strWifis[3] %s\r\n", _strWifi3);
 
 	if (AP_ENABLE_BUTTON >= 0) {
 		// Кнопка AP читается после загрузки конфигов, чтобы конфиг её не перезаписал.
 		// Нажатие принудительно включает AP, но не отключает AP при отсутствии конфигов.
 		pinMode(AP_ENABLE_BUTTON, INPUT_PULLUP);
 		if (!digitalRead(AP_ENABLE_BUTTON)) {	_apConfig.APenable = true;	}
-		DEBUG_WIFI("AP Enable = %d\n", _apConfig.APenable);
+		DEBUG_CORE_WIFI("AP Enable = %d\n", _apConfig.APenable);
 	}
 	if (AP_ENABLE_BUTTON >= 0) {
 		// Set AP mode if AP button was pressed
@@ -95,7 +95,7 @@ void CLASS_CORE_WIFI::begin(ModContext& ctx) {
 // register_resources()
 // ============================================================
 void CLASS_CORE_WIFI::register_resources() {
-    DEBUG_WIFI("%s\r\n", __FUNCTION__);
+    DEBUG_CORE_WIFI("%s\r\n", __FUNCTION__);
 
     core_state.regState("connected", BusValue::BOOL, "STA connected", false);
     core_state.regState("rssi",      BusValue::I32,  "Wi-Fi RSSI (dBm)", false);
@@ -196,7 +196,7 @@ void CLASS_CORE_WIFI::web_Init () {
 // ============================================================
 
 void CLASS_CORE_WIFI::send_info_values_html(AsyncWebServerRequest *request) {
-	DEBUG_WIFI(__FUNCTION__);	DEBUG_WIFI("\r\n");
+	DEBUG_CORE_WIFI(__FUNCTION__);	DEBUG_CORE_WIFI("\r\n");
 	String state = "N/A";
 	String Networks = "";
 	if (WiFi.status() == 0) {	state = "Idle";	}
@@ -229,17 +229,17 @@ void CLASS_CORE_WIFI::send_scanwifi(AsyncWebServerRequest *request) {
 }
 
 void CLASS_CORE_WIFI::send_scanwifi_trigger(AsyncWebServerRequest *request) {
-    DEBUG_WIFI(__FUNCTION__); DEBUG_WIFI("\r\n");
+    DEBUG_CORE_WIFI(__FUNCTION__); DEBUG_CORE_WIFI("\r\n");
     int scanStatus = WiFi.scanComplete();
     String json = "{";
     
     if (scanStatus == WIFI_SCAN_RUNNING) {
         json += "\"status\":\"already_running\"";
-        DEBUG_WIFI("Scan already running\n");
+        DEBUG_CORE_WIFI("Scan already running\n");
     } else {
         WiFi.scanNetworks(true);
         json += "\"status\":\"started\"";
-        DEBUG_WIFI("Scan triggered\n");
+        DEBUG_CORE_WIFI("Scan triggered\n");
     }
     
     json += "}";
@@ -247,14 +247,14 @@ void CLASS_CORE_WIFI::send_scanwifi_trigger(AsyncWebServerRequest *request) {
 }
 
 void CLASS_CORE_WIFI::send_network_configuration_html(AsyncWebServerRequest *request) {
-	// DEBUG_WIFI(__FUNCTION__);	DEBUG_WIFI("\r\n");
+	// DEBUG_CORE_WIFI(__FUNCTION__);	DEBUG_CORE_WIFI("\r\n");
 	int _saveIn = 0;
 	if (request->args() > 0)  // Save Settings
 	{
 		//String temp = "";
 		//bool oldDHCP = _wifiConfig.dhcp; // Save status to avoid general.html cleares it
 		for (uint8_t i = 0; i < request->args(); i++) {
-			DEBUG_WIFI("Arg %d: %s\r\n", i, request->arg(i).c_str());
+			DEBUG_CORE_WIFI("Arg %d: %s\r\n", i, request->arg(i).c_str());
 			if (request->argName(i) == "ssid") 		{ _wifiConfig.ssid = urldecode(request->arg(i));	continue; }
 			if (request->argName(i) == "password")	{ _wifiConfig.password = urldecode(request->arg(i)); continue; }
 			if (request->argName(i) == "ip_0")  { if (checkRange(request->arg(i))) 	_wifiConfig.ip[0] = request->arg(i).toInt(); continue; }
@@ -286,15 +286,15 @@ void CLASS_CORE_WIFI::send_network_configuration_html(AsyncWebServerRequest *req
 
 	}
 	else {
-		DEBUG_WIFI("%s\r\n", request->url().c_str());
+		DEBUG_CORE_WIFI("%s\r\n", request->url().c_str());
 		ESPHTTPServer.handleFileRead(request->url(), request);
 	}
-	DEBUG_WIFI(__PRETTY_FUNCTION__);	DEBUG_WIFI("\r\n");
+	DEBUG_CORE_WIFI(__PRETTY_FUNCTION__);	DEBUG_CORE_WIFI("\r\n");
 }
 // wifi.html ^^^
 
 void CLASS_CORE_WIFI::send_slot_json(AsyncWebServerRequest *request, int slot) {
-    DEBUG_WIFI("Sending slot %d data as JSON\n", slot);
+    DEBUG_CORE_WIFI("Sending slot %d data as JSON\n", slot);
     load_configWifi(slot);
 
     String response = core_json.jsonBuildSlotConfig(
@@ -315,7 +315,7 @@ void CLASS_CORE_WIFI::handle_slot_post(AsyncWebServerRequest *request, int slot)
     
     if (request->_tempObject != NULL) {
         String body = String((char*)request->_tempObject);
-        DEBUG_WIFI("Received body for slot %d: %s\n", slot, body.c_str());
+        DEBUG_CORE_WIFI("Received body for slot %d: %s\n", slot, body.c_str());
         
         String ssid, password;
         bool dhcp = false;
@@ -338,7 +338,7 @@ void CLASS_CORE_WIFI::handle_slot_post(AsyncWebServerRequest *request, int slot)
         request->_tempObject = NULL;
         
         if (parsed == 0) {
-            DEBUG_WIFI("JSON parse error\n");
+            DEBUG_CORE_WIFI("JSON parse error\n");
             request->send(400, "application/json", "{\"success\":false,\"error\":\"JSON parse error\"}");
             return;
         }
@@ -355,14 +355,14 @@ void CLASS_CORE_WIFI::handle_slot_post(AsyncWebServerRequest *request, int slot)
         
         if (saveResult) {
             request->send(200, "application/json", "{\"success\":true}");
-            DEBUG_WIFI("Saved slot %d ok.\n", slot);
+            DEBUG_CORE_WIFI("Saved slot %d ok.\n", slot);
             this->_applyWifiPending = true;   // применить конфиг в следующем тике loop
         } else {
             request->send(500, "application/json", "{\"success\":false,\"error\":\"Save failed\"}");
-            DEBUG_WIFI("Saved slot %d failed.\n", slot);
+            DEBUG_CORE_WIFI("Saved slot %d failed.\n", slot);
         }
     } else {
-        DEBUG_WIFI("No body data for slot %d\n", slot);
+        DEBUG_CORE_WIFI("No body data for slot %d\n", slot);
         request->send(400, "application/json", "{\"success\":false,\"error\":\"No data\"}");
     }
 }
@@ -380,7 +380,7 @@ void CLASS_CORE_WIFI::handle_slot_upload(AsyncWebServerRequest *request, uint8_t
 }
 
 void CLASS_CORE_WIFI::send_wifi_sysconf_json(AsyncWebServerRequest *request) {
-    DEBUG_WIFI("send_wifi_sysconf_json\n");
+    DEBUG_CORE_WIFI("send_wifi_sysconf_json\n");
     String values = "";
     values += "scantime_hours|" + String(_wifiScanTime / 60) + "|input\n";
     values += "scantime_mins|" + String(_wifiScanTime % 60) + "|input\n";
@@ -389,7 +389,7 @@ void CLASS_CORE_WIFI::send_wifi_sysconf_json(AsyncWebServerRequest *request) {
 }
 
 void CLASS_CORE_WIFI::handle_wifi_sysconf_post(AsyncWebServerRequest *request) {
-    DEBUG_WIFI("handle_wifi_sysconf_post\n");
+    DEBUG_CORE_WIFI("handle_wifi_sysconf_post\n");
     if (!ESPHTTPServer.checkAuth(request)) {
         if (request->_tempObject) { free(request->_tempObject); request->_tempObject = NULL; }
         return request->requestAuthentication();
@@ -418,7 +418,7 @@ void CLASS_CORE_WIFI::handle_wifi_sysconf_post(AsyncWebServerRequest *request) {
     if (save_configWifiSys()) {
         scanTime = _wifiScanTime * MINUTES;
         request->send(200, "application/json", "{\"success\":true}");
-        DEBUG_WIFI("WiFi sys config saved: scantime=%d, aptime=%d\n", _wifiScanTime, _wifiAPLifeTime);
+        DEBUG_CORE_WIFI("WiFi sys config saved: scantime=%d, aptime=%d\n", _wifiScanTime, _wifiAPLifeTime);
     } else {
         request->send(500, "application/json", "{\"success\":false,\"error\":\"Save failed\"}");
     }
@@ -446,7 +446,7 @@ bool CLASS_CORE_WIFI::load_configWifi(int _in) {
 
 bool CLASS_CORE_WIFI::save_configWifi(int _in) {
 	//flag_config = false;
-	DEBUG_WIFI("Save config\r\n");
+	DEBUG_CORE_WIFI("Save config\r\n");
 	char filename[40];
 	sprintf(filename, "/%s%d.json", WIFI_CONFIG_FILE_NAME, _in);
 	// Синхронизируем in-memory SSID слота: scanWifi() сравнивает по _strWifiN,
@@ -470,11 +470,11 @@ void CLASS_CORE_WIFI::defaultConfigWifi(int _in) {
 	_wifiConfig.dns 		= IPAddress(192, 168, 1, 1);
 	
 	save_configWifi(_in);
-	DEBUG_WIFI(__PRETTY_FUNCTION__);	DEBUG_WIFI("\r\n");
+	DEBUG_CORE_WIFI(__PRETTY_FUNCTION__);	DEBUG_CORE_WIFI("\r\n");
 }
 
 bool CLASS_CORE_WIFI::load_configWifiSys() {
-    DEBUG_WIFI("Loading WiFi sys config\n");
+    DEBUG_CORE_WIFI("Loading WiFi sys config\n");
     JsonDocument doc;
     if (!core_json.jsonFileLoadDoc(WIFI_CONFIG_SYS, doc)) return false;
     _wifiScanTime = doc["scantime"].as<uint16_t>();
@@ -483,7 +483,7 @@ bool CLASS_CORE_WIFI::load_configWifiSys() {
 }
 
 bool CLASS_CORE_WIFI::save_configWifiSys() {
-    DEBUG_WIFI("Saving WiFi sys config\n");
+    DEBUG_CORE_WIFI("Saving WiFi sys config\n");
     JsonDocument doc;
     core_json.jsonFileLoadDoc(WIFI_CONFIG_SYS, doc);
     doc["scantime"] = _wifiScanTime;
@@ -492,7 +492,7 @@ bool CLASS_CORE_WIFI::save_configWifiSys() {
 }
 
 void CLASS_CORE_WIFI::defaultConfigWifiSys() {
-    DEBUG_WIFI("defaultConfigWifiSys\n");
+    DEBUG_CORE_WIFI("defaultConfigWifiSys\n");
     _wifiScanTime = 1;
     _wifiAPLifeTime = 10;
 }
@@ -514,7 +514,7 @@ String CLASS_CORE_WIFI::getCommitDateStr(){
 }
 
 void CLASS_CORE_WIFI::html_ver_get(AsyncWebServerRequest *request) {
-    DEBUG_WIFI("%s\n\r", __FUNCTION__);
+    DEBUG_CORE_WIFI("%s\n\r", __FUNCTION__);
     String values = "";
     values += "wifiversion|"     + getVersionStr()    + "|div\n";
     values += "wifigentime|"     + getGeneratedTime() + "|div\n";

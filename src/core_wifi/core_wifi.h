@@ -7,10 +7,10 @@
 
 #include "mod_context.h"
 
-#ifdef DEBUG_WIFI
-#define DEBUG_WIFI(...) DBG_MOD("[C_WIFI] ", __VA_ARGS__)
+#ifdef DEBUG_CORE_WIFI
+#define DEBUG_CORE_WIFI(...) DBG_MOD("[C_WIFI] ", __VA_ARGS__)
 #else
-#define DEBUG_WIFI(...)
+#define DEBUG_CORE_WIFI(...)
 #endif
 
 

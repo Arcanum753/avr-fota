@@ -5,7 +5,12 @@
 #endif
 
 #include"version.h"
+#if defined(ESP32)
 #include <Update.h>
+#endif
+#if defined(ESP8266)
+#include <Updater.h>
+#endif
 #include "core_web/FSWebServerLib.h"
 #include "common/common.h"
 #include "core_ota.h"

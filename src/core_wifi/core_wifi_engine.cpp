@@ -61,7 +61,7 @@ void CLASS_CORE_WIFI::secondTick() {
 			if (_wifiFailCount[i] >= MAX_WIFI_FAIL_COUNT) { anyBlocked = true; break; }
 		}
 		if (anyBlocked) {
-			DEBUG_WIFI("Periodic reset of wifi fail counters\n");
+			DEBUG_CORE_WIFI("Periodic reset of wifi fail counters\n");
 			resetWifiFailCounters();
 		}
 	}
@@ -114,7 +114,7 @@ void CLASS_CORE_WIFI::apTick() {
 	}
 
 	if ((uint32_t)++_apUptime >= (uint32_t)_wifiAPLifeTime * 60) {
-		DEBUG_WIFI("AP idle %lu sec without activity. Leaving AP to scan.\r\n", (unsigned long)_wifiAPLifeTime * 60);
+		DEBUG_CORE_WIFI("AP idle %lu sec without activity. Leaving AP to scan.\r\n", (unsigned long)_wifiAPLifeTime * 60);
 		leaveApToScan();
 		return;
 	}
@@ -122,7 +122,7 @@ void CLASS_CORE_WIFI::apTick() {
 }
 
 void CLASS_CORE_WIFI::leaveApToScan() {
-	DEBUG_WIFI("AP -> STA scan\r\n");
+	DEBUG_CORE_WIFI("AP -> STA scan\r\n");
 	dnsServer.stop();
 	_suppressDisc = 3;   // события от переключения режимов игнорируем
 	_ignoreDisconnect = true;
@@ -179,7 +179,7 @@ void CLASS_CORE_WIFI::staTick() {
 	if (WifiScan == WF_SCAN_NO_NEED) {
 		uint32_t budget = (scanTime > 0) ? (uint32_t)scanTime : WIFI_CONNECT_BUDGET_SEC;
 		if ((uint32_t)++connectionTimout >= budget) {
-			DEBUG_WIFI("Connect budget expired. Back to AP wait.\r\n");
+			DEBUG_CORE_WIFI("Connect budget expired. Back to AP wait.\r\n");
 			enterApWait();
 		}
 		return;
@@ -205,7 +205,7 @@ void CLASS_CORE_WIFI::staTick() {
 		// Защита от «зависшего» скана: если скан не завершается дольше порога —
 		// перезапускаем через AP-ожидание или повторный скан
 		if ((uint32_t)++connectionTimout >= WIFI_SCAN_STUCK_SEC) {
-			DEBUG_WIFI("Scan stuck %lu sec. Restarting.\r\n", (unsigned long)WIFI_SCAN_STUCK_SEC);
+			DEBUG_CORE_WIFI("Scan stuck %lu sec. Restarting.\r\n", (unsigned long)WIFI_SCAN_STUCK_SEC);
 			connectionTimout = 0;
 			WiFi.scanDelete();
 			_scanActive = false;
@@ -230,12 +230,12 @@ void CLASS_CORE_WIFI::staTick() {
 		if (_wifiInitFailCount >= WIFI_INIT_FAIL_MAX) {
 			int mode = core_state.getMode();
 			if (mode == CORE_MODE_NORMAL || mode == CORE_MODE_INIT) {
-				DEBUG_WIFI("WiFi init failed %d times. Restarting.\r\n", _wifiInitFailCount);
+				DEBUG_CORE_WIFI("WiFi init failed %d times. Restarting.\r\n", _wifiInitFailCount);
 				ESP.restart();
 				return;
 			}
 			// Длительная операция (OTA/FS/prog) — рестарт откладываем
-			DEBUG_WIFI("WiFi init failed %d times, restart deferred (mode %d)\r\n",
+			DEBUG_CORE_WIFI("WiFi init failed %d times, restart deferred (mode %d)\r\n",
 			           _wifiInitFailCount, mode);
 		}
 		// Не дёргаем драйвер каждую секунду: ждём окно бэкоффа, затем пробуем снова
@@ -274,7 +274,7 @@ void CLASS_CORE_WIFI::staTick() {
 	load_configWifi(slot);
 	WifiScan = WF_SCAN_NO_NEED;
 	connectionTimout = 0;
-	DEBUG_WIFI("Connecting to %s\r\n", _wifiConfig.ssid.c_str());
+	DEBUG_CORE_WIFI("Connecting to %s\r\n", _wifiConfig.ssid.c_str());
 	WiFi.begin(_wifiConfig.ssid.c_str(), _wifiConfig.password.c_str());
 	ledMacrosWifiConnecting();
 }
@@ -282,11 +282,11 @@ void CLASS_CORE_WIFI::staTick() {
 void CLASS_CORE_WIFI::startDNSCaptive() {
     // Перехватываем все DNS запросы и направляем на IP точки доступа
     dnsServer.start(53, "*", WiFi.softAPIP());
-    DEBUG_WIFI("DNS captive portal started on port 53\n");
+    DEBUG_CORE_WIFI("DNS captive portal started on port 53\n");
 }
 
 void CLASS_CORE_WIFI::configureWifiAP() {
-	DEBUG_WIFI(__PRETTY_FUNCTION__);	DEBUG_WIFI("\r\n");
+	DEBUG_CORE_WIFI(__PRETTY_FUNCTION__);	DEBUG_CORE_WIFI("\r\n");
 	core_ntp.ntpOnDisconected();
 #if defined(MODULE_UDP)
 		module_udp.stop();	// always stop!
@@ -300,15 +300,15 @@ void CLASS_CORE_WIFI::configureWifiAP() {
 	wifiStatus = FS_STAT_APMODE;
 	if (core_sys.httpAuthEnabled()) {
 		WiFi.softAP(APname, core_sys.getHttpPassword());
-		DEBUG_WIFI("AP Pass enabled: %s \r\n", core_sys.getHttpPassword().c_str());
+		DEBUG_CORE_WIFI("AP Pass enabled: %s \r\n", core_sys.getHttpPassword().c_str());
 	}
 	else {
 		WiFi.softAP(APname.c_str());
-		DEBUG_WIFI("AP Pass disabled \r\n");
+		DEBUG_CORE_WIFI("AP Pass disabled \r\n");
 	}
 	startDNSCaptive();
 	// if (CONNECTION_LED >= 0) {	flashLED(CONNECTION_LED, 5, 250);	}
-	DEBUG_WIFI("AP Mode enabled. SSID: %s IP: %s\r\n", WiFi.softAPSSID().c_str(), WiFi.softAPIP().toString().c_str());
+	DEBUG_CORE_WIFI("AP Mode enabled. SSID: %s IP: %s\r\n", WiFi.softAPSSID().c_str(), WiFi.softAPIP().toString().c_str());
 	connectionTimout = 0;
 	_apUptime = 0;
 	_apClientActivity = false;
@@ -349,7 +349,7 @@ int CLASS_CORE_WIFI::scanWifi() {
 
 void CLASS_CORE_WIFI::configureWifi() { // вход в STA-режим: скан сети / подключение
 	if (wifiStatus == FS_STAT_APMODE) {return;}
-	DEBUG_WIFI(__PRETTY_FUNCTION__);	DEBUG_WIFI("\r\n");
+	DEBUG_CORE_WIFI(__PRETTY_FUNCTION__);	DEBUG_CORE_WIFI("\r\n");
 	//disconnect required here
 	//improves reconnect reliability
 	_suppressDisc = 3;   // события от собственного disconnect() игнорируем
@@ -388,7 +388,7 @@ void CLASS_CORE_WIFI::onWiFiConnected()
 void CLASS_CORE_WIFI::onWiFiConnected(WiFiEventStationModeConnected data)
 #endif
 {
-	DEBUG_WIFI("WiFi Connected: Waiting for DHCP\n\r");
+	DEBUG_CORE_WIFI("WiFi Connected: Waiting for DHCP\n\r");
 	if (CONNECTION_LED >= 0) {espLedOn(); 	}	// Turn LED on
 	wifiDisconnectedSince = 0;
 	// Сбрасываем счётчик неудачных попыток при успешном подключении
@@ -406,9 +406,9 @@ void CLASS_CORE_WIFI::onWiFiConnectedGotIP(WiFiEventStationModeGotIP data) {
 #endif
 	ledMacrosWifiConnected();	// выход из всех wifi-морганий: steady-on
 
-	DEBUG_WIFI("GotIP Address: %s \n", WiFi.localIP().toString().c_str());
-	DEBUG_WIFI("Gateway:    %s\r\n", WiFi.gatewayIP().toString().c_str());
-	DEBUG_WIFI("DNS:        %s\r\n", WiFi.dnsIP().toString().c_str());
+	DEBUG_CORE_WIFI("GotIP Address: %s \n", WiFi.localIP().toString().c_str());
+	DEBUG_CORE_WIFI("Gateway:    %s\r\n", WiFi.gatewayIP().toString().c_str());
+	DEBUG_CORE_WIFI("DNS:        %s\r\n", WiFi.dnsIP().toString().c_str());
 	wifiDisconnectedSince = 0;
 	connectionTimout = 0;
 	_wifiInitFailCount = 0;
@@ -461,7 +461,7 @@ void CLASS_CORE_WIFI::onWiFiDisconnected(WiFiEventStationModeDisconnected data) 
 #if defined(ESP32)
 	reason = info.wifi_sta_disconnected.reason;
 #endif
-	DEBUG_WIFI("STA disconnected, reason: %u\r\n", (unsigned)reason);
+	DEBUG_CORE_WIFI("STA disconnected, reason: %u\r\n", (unsigned)reason);
 
 	// «Неверный пароль» определяем по точной причине из события, а не по WiFi.status().
 	// NO_AP_FOUND (пропал роутер) неверным паролем НЕ считается.
@@ -474,7 +474,7 @@ void CLASS_CORE_WIFI::onWiFiDisconnected(WiFiEventStationModeDisconnected data) 
 #endif
 
 	if (wifiDisconnectedSince == 0) { wifiDisconnectedSince = millis(); }
-	DEBUG_WIFI("Disconnected for %d seconds \r\n", (int)((millis() - wifiDisconnectedSince) / 1000));
+	DEBUG_CORE_WIFI("Disconnected for %d seconds \r\n", (int)((millis() - wifiDisconnectedSince) / 1000));
 
 	wifiStatus = FS_STAT_CONNECTING;
 	connectionTimout = 0;
@@ -485,7 +485,7 @@ void CLASS_CORE_WIFI::onWiFiDisconnected(WiFiEventStationModeDisconnected data) 
 	core_state.emit("wifi.just_disconnected");
 
 	if (authFail) {
-		DEBUG_WIFI("Auth fail (wrong password?): %s\r\n", _wifiConfig.ssid.c_str());
+		DEBUG_CORE_WIFI("Auth fail (wrong password?): %s\r\n", _wifiConfig.ssid.c_str());
 		wifiSsidSetPSWDwrong(_wifiConfig.ssid);
 		ledMacrosWifiDisconnect();
 		if (anySlotFree()) {
@@ -510,7 +510,7 @@ void CLASS_CORE_WIFI::onWiFiDisconnected(WiFiEventStationModeDisconnected data) 
 }
 
 void CLASS_CORE_WIFI::wifiSsidSetPSWDwrong(String _str) {
-	DEBUG_WIFI("wifi ssid wrong password: %s \n", _str.c_str());
+	DEBUG_CORE_WIFI("wifi ssid wrong password: %s \n", _str.c_str());
 	// Вместо безвозвратного удаления SSID — инкрементируем счётчик неудач
 	if (strcmp( _strWifi3,  _str.c_str()) == 0)	{	_wifiFailCount[3]++; }
 	if (strcmp( _strWifi2,  _str.c_str()) == 0)	{	_wifiFailCount[2]++; }
@@ -519,7 +519,7 @@ void CLASS_CORE_WIFI::wifiSsidSetPSWDwrong(String _str) {
 }
 
 void CLASS_CORE_WIFI::resetWifiFailCounters() {
-	DEBUG_WIFI("resetWifiFailCounters\n");
+	DEBUG_CORE_WIFI("resetWifiFailCounters\n");
 	for (int i = 0; i < 4; i++) {
 		_wifiFailCount[i] = 0;
 	}

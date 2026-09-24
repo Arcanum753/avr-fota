@@ -732,7 +732,7 @@
 | `DS3231_SQW_PIN` | Пин SQW/INT# DS3231 (по умолчанию 13) | `src/module_ds3231/AGENTS.md` |
 | `E7_USE_RMT` | Использовать RMT-метод NeoPixelBus в `device_electronica7_rgb` | `src/device_electronica7_rgb/AGENTS.md` |
 | `JSON_DUMP_LOG` | Включить дамп JSON в лог (по умолчанию выключен) | TRS §3.1.6 |
-| `DEBUG_*` | Отладочные макросы по компонентам (`DEBUGSYS`, `DEBUG_WIFI`, `DEBUGNTP`, `DEBUGOTA`, `DEBUGJSON`, `DEBUGLOGLED`, `DEBUGSTATE`, `DEBUGTASK`, `DEBUG_PROG`, `DEBUG_ISP`, `DEBUG_SWD`, `DEBUG_UDP`, `DEBUGEDITOR`, `DEBUGDS3231`, `DEBUGLCD`, `DEBUGMACROS`, `DEBUGOTACLIENT`, `DEBUG_RGB`, `DEBUGI2CMAPPER`, `DEBUGTEMPLATE`, `DEBUG_GPIO`, `DEBUG_CLOCKMECH`, `DEBUG_RINGMECH`, `DEBUG_E7RGB`) | ядро/`AGENTS.md` модулей |
+| `DEBUG_*` | Отладочные макросы по компонентам (`DEBUGSYS`, `DEBUG_CORE_WIFI`, `DEBUGNTP`, `DEBUGOTA`, `DEBUGJSON`, `DEBUGLOGLED`, `DEBUGSTATE`, `DEBUGTASK`, `DEBUG_PROG`, `DEBUG_ISP`, `DEBUG_SWD`, `DEBUG_UDP`, `DEBUGEDITOR`, `DEBUGDS3231`, `DEBUGLCD`, `DEBUGMACROS`, `DEBUGOTACLIENT`, `DEBUG_RGB`, `DEBUGI2CMAPPER`, `DEBUGTEMPLATE`, `DEBUG_GPIO`, `DEBUG_CLOCKMECH`, `DEBUG_RINGMECH`, `DEBUG_E7RGB`) | ядро/`AGENTS.md` модулей |
 
 ---
 
