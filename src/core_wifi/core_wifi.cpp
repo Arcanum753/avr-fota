@@ -21,6 +21,10 @@
 
 CLASS_CORE_WIFI 	core_wifi;
 
+// Имена ENUM-значений для каталога шины и CVT-вывода (числовые индексы — в core_wifi_types.h).
+static const char* const kWifiModeNames[]   = { "auto", "macro" };
+static const char* const kWifiTargetNames[] = { "auto", "ap", "sta" };
+
 #if defined(ESP32)
 void CLASS_CORE_WIFI::begin(fs::LittleFSFS* fs)
 #endif
@@ -84,11 +88,32 @@ void CLASS_CORE_WIFI::begin(fs::LittleFSFS* fs)
 	onStationModeGotIPHandler 			= WiFi.onStationModeGotIP([this](WiFiEventStationModeGotIP data) 				{	this->onWiFiConnectedGotIP(data);	});
 #endif
 
+// AP-события (вариант A / Q14): счётчик клиентов AP для wifi.ap_clients/ap_busy.
+#if defined(ESP32)
+	_onApStationConnectedHandler    = WiFi.onEvent([this](WiFiEvent_t event, WiFiEventInfo_t info) { this->onApStationConnected();    }, WiFiEvent_t::ARDUINO_EVENT_WIFI_AP_STACONNECTED);
+	_onApStationDisconnectedHandler = WiFi.onEvent([this](WiFiEvent_t event, WiFiEventInfo_t info) { this->onApStationDisconnected(); }, WiFiEvent_t::ARDUINO_EVENT_WIFI_AP_STADISCONNECTED);
+#endif
+#if defined(ESP8266)
+	_onApStationConnectedHandler    = WiFi.onSoftAPModeStationConnected([this](WiFiEventSoftAPModeStationConnected data)          { this->onApStationConnected();    });
+	_onApStationDisconnectedHandler = WiFi.onSoftAPModeStationDisconnected([this](WiFiEventSoftAPModeStationDisconnected data)    { this->onApStationDisconnected(); });
+#endif
+
 }
 
 void CLASS_CORE_WIFI::begin(ModContext& ctx) {
 	_fs = ctx.fs;
 	begin(ctx.fs);
+
+	// Сигналы конфига и runtime-дефолтов — каталог шины сразу показывает корректные значения.
+	core_state.signal("wifi.mode", BusValue::en((int32_t)_busMode));
+	core_state.signal("wifi.scan_retries", BusValue::i32((int32_t)_scanRetries));
+	core_state.signal("wifi.target", BusValue::en(WIFI_TARGET_AUTO));
+	core_state.signal("wifi.slot", BusValue::str(""));
+	core_state.signal("wifi.ap_hold_min", BusValue::i32(0));
+	core_state.signal("wifi.ap_mode", BusValue::bo(false));
+	core_state.signal("wifi.ap_clients", BusValue::i32(0));
+	core_state.signal("wifi.ap_busy", BusValue::bo(false));
+	core_state.signal("wifi.slot_name", BusValue::str(""));
 }
 
 // ============================================================
@@ -97,11 +122,122 @@ void CLASS_CORE_WIFI::begin(ModContext& ctx) {
 void CLASS_CORE_WIFI::register_resources() {
     DEBUG_CORE_WIFI("%s\r\n", __FUNCTION__);
 
-    core_state.regState("connected", BusValue::BOOL, "STA connected", false);
-    core_state.regState("rssi",      BusValue::I32,  "Wi-Fi RSSI (dBm)", false);
-    core_state.regState("ip",        BusValue::STR,  "STA IP address", false);
-    core_state.regEvent("just_connected", "Wi-Fi just connected");
-    core_state.regEvent("just_disconnected", "Wi-Fi just disconnected");
+    // Состояния
+    core_state.regState("connected",    BusValue::BOOL, "STA connected", false);
+    core_state.regState("rssi",         BusValue::I32,  "Wi-Fi RSSI (dBm)", false);
+    core_state.regState("ip",           BusValue::STR,  "STA IP address", false);
+    core_state.regState("slot_name",    BusValue::STR,  "SSID текущего подключения", false);
+    core_state.regState("ap_mode",      BusValue::BOOL, "AP поднят", false);
+    core_state.regState("ap_clients",   BusValue::I32,  "клиентов AP", false);
+    core_state.regState("ap_busy",      BusValue::BOOL, "AP занят (клиенты > 0)", false);
+
+    // Режим и цель — ENUM-состояния
+    core_state.regEnum("mode",   2, kWifiModeNames,   "режим модуля (auto/macro)");
+    core_state.regEnum("target", 3, kWifiTargetNames, "целевое состояние (auto/ap/sta)");
+    core_state.regState("slot",        BusValue::STR,  "целевой слот/SSID (\"\" = авто)", true);
+    core_state.regState("ap_hold_min", BusValue::I32,  "минуты удержания AP (0 = бесконечно)", true);
+    core_state.regState("scan_retries",BusValue::I32,  "сканов подряд без результата (5..50)", true);
+
+    // События
+    core_state.regEvent("just_connected",     "Wi-Fi just connected");
+    core_state.regEvent("just_disconnected",  "Wi-Fi just disconnected");
+    core_state.regEvent("ap_client_joined",   "клиент AP подключился");
+    core_state.regEvent("ap_client_left",     "клиент AP отключился");
+    core_state.regEvent("target_reached",     "автомат достиг цели");
+    core_state.regEvent("sta_pending",        "цель STA зафиксирована, ждём освобождения AP");
+    core_state.regEvent("sta_applied",        "цель STA применена (переход в STA выполнен)");
+
+    // Функции (sync). mode/save не гейтятся, остальные — через wifiBusAllowed().
+    core_state.regFunc("mode",              "->", "сменить режим (всегда доступно)",          CLASS_CORE_WIFI::s_cbMode, this);
+    core_state.regFunc("save",              "->", "сохранить /config_wifi.json",              CLASS_CORE_WIFI::s_cbSave, this);
+    core_state.regFunc("set_slot",          "s",  "задать слот/SSID (macro)",                 CLASS_CORE_WIFI::s_cbSetSlot, this);
+    core_state.regFunc("force_ap",          "->", "в AP безопасно (macro)",                   CLASS_CORE_WIFI::s_cbForceAp, this);
+    core_state.regFunc("force_ap_kick",     "->", "в AP, выгнав клиентов (macro)",            CLASS_CORE_WIFI::s_cbForceApKick, this);
+    core_state.regFunc("force_connect",     "->", "подключиться к wifi.slot (macro)",         CLASS_CORE_WIFI::s_cbForceConnect, this);
+    core_state.regFunc("force_connect_kick","->", "то же, выгнав клиентов AP (macro)",        CLASS_CORE_WIFI::s_cbForceConnectKick, this);
+    core_state.regFunc("force_scan",        "n",  "серия из n сканов, лучшая сеть (macro)",   CLASS_CORE_WIFI::s_cbForceScan, this);
+    core_state.regFunc("force_disconnect",  "->", "отключить STA (macro)",                    CLASS_CORE_WIFI::s_cbForceDisconnect, this);
+
+    // Коды возврата (обязательно, для UI каталога и диагностики).
+    core_state.regFuncCode("wifi.mode", BUS_ERR_BAD_VALUE, "значение вне диапазона (0/1)");
+    core_state.regFuncCode("wifi.set_slot", BUS_ERR_DENIED, "требуется режим macro");
+    core_state.regFuncCode("wifi.force_ap", BUS_ERR_BUSY, "AP занят клиентами (нужен *_kick)");
+    core_state.regFuncCode("wifi.force_ap", BUS_ERR_DENIED, "требуется режим macro");
+    core_state.regFuncCode("wifi.force_ap_kick", BUS_ERR_DENIED, "требуется режим macro");
+    core_state.regFuncCode("wifi.force_connect", BUS_ERR_BUSY, "AP занят клиентами (нужен *_kick)");
+    core_state.regFuncCode("wifi.force_connect", BUS_ERR_DENIED, "требуется режим macro");
+    core_state.regFuncCode("wifi.force_connect", BUS_ERR_NOT_FOUND, "SSID не найден в слотах");
+    core_state.regFuncCode("wifi.force_connect", BUS_ERR_NOT_READY, "слот найден, но не заполнен");
+    core_state.regFuncCode("wifi.force_connect_kick", BUS_ERR_DENIED, "требуется режим macro");
+    core_state.regFuncCode("wifi.force_connect_kick", BUS_ERR_NOT_FOUND, "SSID не найден в слотах");
+    core_state.regFuncCode("wifi.force_connect_kick", BUS_ERR_NOT_READY, "слот найден, но не заполнен");
+    core_state.regFuncCode("wifi.force_scan", BUS_ERR_DENIED, "требуется режим macro");
+    core_state.regFuncCode("wifi.force_scan", BUS_ERR_BAD_VALUE, "значение вне диапазона (5..50)");
+    core_state.regFuncCode("wifi.force_disconnect", BUS_ERR_DENIED, "требуется режим macro");
+}
+
+// ============================================================
+// Trampoline'ы BusCb (разрешено вызывать из контекста loop/core_state)
+// ============================================================
+
+int CLASS_CORE_WIFI::s_cbMode(void* user, int argc, const BusValue* argv, BusValue& result) {
+    CLASS_CORE_WIFI* self = (CLASS_CORE_WIFI*)user;
+    if (argc < 1) return BUS_ERR_BAD_VALUE;
+    int m = (int)argv[0].i;
+    if (m != WIFI_MODE_AUTO && m != WIFI_MODE_MACRO) return BUS_ERR_BAD_VALUE;
+    self->setWifiMode((uint8_t)m);
+    return BUS_OK;
+}
+
+int CLASS_CORE_WIFI::s_cbSave(void* user, int argc, const BusValue* argv, BusValue& result) {
+    CLASS_CORE_WIFI* self = (CLASS_CORE_WIFI*)user;
+    self->saveNow();
+    return BUS_OK;
+}
+
+int CLASS_CORE_WIFI::s_cbSetSlot(void* user, int argc, const BusValue* argv, BusValue& result) {
+    CLASS_CORE_WIFI* self = (CLASS_CORE_WIFI*)user;
+    if (!self->wifiBusAllowed()) return BUS_ERR_DENIED;
+    if (argc < 1) return BUS_ERR_BAD_ARGC;
+    self->setSlot(argv[0].s);
+    return BUS_OK;
+}
+
+int CLASS_CORE_WIFI::s_cbForceAp(void* user, int argc, const BusValue* argv, BusValue& result) {
+    CLASS_CORE_WIFI* self = (CLASS_CORE_WIFI*)user;
+    if (!self->wifiBusAllowed()) return BUS_ERR_DENIED;
+    return self->forceAp();
+}
+
+int CLASS_CORE_WIFI::s_cbForceApKick(void* user, int argc, const BusValue* argv, BusValue& result) {
+    CLASS_CORE_WIFI* self = (CLASS_CORE_WIFI*)user;
+    if (!self->wifiBusAllowed()) return BUS_ERR_DENIED;
+    return self->forceApKick();
+}
+
+int CLASS_CORE_WIFI::s_cbForceConnect(void* user, int argc, const BusValue* argv, BusValue& result) {
+    CLASS_CORE_WIFI* self = (CLASS_CORE_WIFI*)user;
+    if (!self->wifiBusAllowed()) return BUS_ERR_DENIED;
+    return self->forceConnect();
+}
+
+int CLASS_CORE_WIFI::s_cbForceConnectKick(void* user, int argc, const BusValue* argv, BusValue& result) {
+    CLASS_CORE_WIFI* self = (CLASS_CORE_WIFI*)user;
+    if (!self->wifiBusAllowed()) return BUS_ERR_DENIED;
+    return self->forceConnectKick();
+}
+
+int CLASS_CORE_WIFI::s_cbForceScan(void* user, int argc, const BusValue* argv, BusValue& result) {
+    CLASS_CORE_WIFI* self = (CLASS_CORE_WIFI*)user;
+    if (!self->wifiBusAllowed()) return BUS_ERR_DENIED;
+    if (argc < 1) return BUS_ERR_BAD_ARGC;
+    return self->forceScan((int)argv[0].i);
+}
+
+int CLASS_CORE_WIFI::s_cbForceDisconnect(void* user, int argc, const BusValue* argv, BusValue& result) {
+    CLASS_CORE_WIFI* self = (CLASS_CORE_WIFI*)user;
+    if (!self->wifiBusAllowed()) return BUS_ERR_DENIED;
+    return self->forceDisconnect();
 }
 
 // ============================================================
@@ -216,6 +352,16 @@ void CLASS_CORE_WIFI::send_info_values_html(AsyncWebServerRequest *request) {
 	values += "x_netmask|" 	+ (String)WiFi.subnetMask()[0] + "." + (String)WiFi.subnetMask()[1] + "." + (String)WiFi.subnetMask()[2] + "." + (String)WiFi.subnetMask()[3] + "|div\n";
 	values += "x_mac|" 		+ getMacAddress() + "|div\n";
 	values += "x_dns|" 		+ (String)WiFi.dnsIP()[0] + "." + (String)WiFi.dnsIP()[1] + "." + (String)WiFi.dnsIP()[2] + "." + (String)WiFi.dnsIP()[3] + "|div\n";
+
+	// Состояние ресурсной шины (ENUM-значения — строкой; число остаётся в каталоге core_state)
+	values += "mode|" 		+ String(kWifiModeNames[_busMode]) + "|div\n";
+	values += "target|" 	+ String(kWifiTargetNames[_target]) + "|div\n";
+	values += "ap_hold_min|" + String((uint32_t)_apHoldMin) + "|div\n";
+	values += "scan_retries|" + String((int)_scanRetries) + "|div\n";
+	values += "ap_mode|" 	+ String((WiFi.getMode() == WIFI_AP) ? 1 : 0) + "|div\n";
+	values += "ap_clients|" + String((int)_apClientCount) + "|div\n";
+	values += "ap_busy|" 	+ String((_apClientCount > 0) ? 1 : 0) + "|div\n";
+	values += "slot_name|" 	+ (String)WiFi.SSID() + "|div\n";
 
 	request->send(200, "text/plain", values);
 	state = "";
@@ -385,6 +531,8 @@ void CLASS_CORE_WIFI::send_wifi_sysconf_json(AsyncWebServerRequest *request) {
     values += "scantime_hours|" + String(_wifiScanTime / 60) + "|input\n";
     values += "scantime_mins|" + String(_wifiScanTime % 60) + "|input\n";
     values += "aptime|" + String(_wifiAPLifeTime) + "|input\n";
+    values += "busmode|" + String((int)_busMode) + "|input\n";
+    values += "scan_retries|" + String((int)_scanRetries) + "|input\n";
     request->send(200, "text/plain", values);
 }
 
@@ -415,10 +563,31 @@ void CLASS_CORE_WIFI::handle_wifi_sysconf_post(AsyncWebServerRequest *request) {
     if (aptimeVal > 60) aptimeVal = 60;
     _wifiAPLifeTime = (uint16_t)aptimeVal;
 
+    // busmode/scan_retries — опционально: применяем только если ключ реально присутствует,
+    // чтобы старые клиенты (без этих полей) не сбросили значения в дефолт.
+    {
+        JsonDocument doc;
+        DeserializationError err = deserializeJson(doc, body);
+        if (!err) {
+            if (doc["busmode"].is<int>()) {
+                int32_t busmodeVal = doc["busmode"].as<int32_t>();
+                if (busmodeVal != WIFI_MODE_AUTO && busmodeVal != WIFI_MODE_MACRO) busmodeVal = WIFI_MODE_AUTO;
+                setWifiMode((uint8_t)busmodeVal);
+            }
+            if (doc["scan_retries"].is<int>()) {
+                int32_t sr = doc["scan_retries"].as<int32_t>();
+                if (sr < WIFI_SCAN_RETRIES_MIN) sr = WIFI_SCAN_RETRIES_MIN;
+                if (sr > WIFI_SCAN_RETRIES_MAX) sr = WIFI_SCAN_RETRIES_MAX;
+                setScanRetries((uint8_t)sr);
+            }
+        }
+    }
+
     if (save_configWifiSys()) {
         scanTime = _wifiScanTime * MINUTES;
         request->send(200, "application/json", "{\"success\":true}");
-        DEBUG_CORE_WIFI("WiFi sys config saved: scantime=%d, aptime=%d\n", _wifiScanTime, _wifiAPLifeTime);
+        DEBUG_CORE_WIFI("WiFi sys config saved: scantime=%d, aptime=%d, busmode=%d, scan_retries=%d\n",
+                        _wifiScanTime, _wifiAPLifeTime, (int)_busMode, (int)_scanRetries);
     } else {
         request->send(500, "application/json", "{\"success\":false,\"error\":\"Save failed\"}");
     }
@@ -479,6 +648,11 @@ bool CLASS_CORE_WIFI::load_configWifiSys() {
     if (!core_json.jsonFileLoadDoc(WIFI_CONFIG_SYS, doc)) return false;
     _wifiScanTime = doc["scantime"].as<uint16_t>();
     _wifiAPLifeTime = doc["aptime"].as<uint16_t>();
+    _busMode = doc["busmode"].as<uint8_t>() & 1;
+    int32_t sr = doc["scan_retries"] | 10;
+    if (sr < WIFI_SCAN_RETRIES_MIN) sr = WIFI_SCAN_RETRIES_MIN;
+    if (sr > WIFI_SCAN_RETRIES_MAX) sr = WIFI_SCAN_RETRIES_MAX;
+    _scanRetries = (uint8_t)sr;
     return true;
 }
 
@@ -488,6 +662,8 @@ bool CLASS_CORE_WIFI::save_configWifiSys() {
     core_json.jsonFileLoadDoc(WIFI_CONFIG_SYS, doc);
     doc["scantime"] = _wifiScanTime;
     doc["aptime"] = _wifiAPLifeTime;
+    doc["busmode"] = _busMode;
+    doc["scan_retries"] = _scanRetries;
     return core_json.jsonFileSaveDoc(WIFI_CONFIG_SYS, doc);
 }
 
@@ -495,6 +671,26 @@ void CLASS_CORE_WIFI::defaultConfigWifiSys() {
     DEBUG_CORE_WIFI("defaultConfigWifiSys\n");
     _wifiScanTime = 1;
     _wifiAPLifeTime = 10;
+    _busMode = WIFI_MODE_AUTO;
+    _scanRetries = 10;
+}
+
+// ============================================================
+// Отложенное сохранение (bus-функция wifi.save)
+// ============================================================
+void CLASS_CORE_WIFI::saveNow() {
+    if (_pendingSave) return;   // guard от дублей: EERTOS SetTask не идемпотентна
+    _pendingSave = true;
+    SetTask(&CLASS_CORE_WIFI::s_deferredSave);
+}
+
+void CLASS_CORE_WIFI::s_deferredSave() {
+    core_wifi.deferredSave();
+}
+
+void CLASS_CORE_WIFI::deferredSave() {
+    _pendingSave = false;
+    save_configWifiSys();
 }
 
 // ============================================================

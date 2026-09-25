@@ -2,6 +2,7 @@
 #if defined(ESP32)
 #include <LittleFS.h>
 #include <esp32-hal-gpio.h>
+#include <esp_wifi.h>
 #endif
 #if defined(ESP8266)
 #include <LittleFS.h>
@@ -73,6 +74,12 @@ void CLASS_CORE_WIFI::secondTick() {
 		return;
 	}
 
+	// В macro-режиме целью управляет автомат согласно _target (см. applyMacroTarget).
+	if (_busMode == WIFI_MODE_MACRO) {
+		applyMacroTarget();
+		return;
+	}
+
 	if (wifiStatus == FS_STAT_APMODE) {
 		//DNS captive
 		dnsServer.processNextRequest();
@@ -100,6 +107,55 @@ void CLASS_CORE_WIFI::secondTick() {
 // AP «живёт» максимум _wifiAPLifeTime минут без активности:
 // клиент не подключился, либо висит без трафика. Затем — скан сети.
 void CLASS_CORE_WIFI::apTick() {
+	// --- macro-режим: целевой AP или ожидание освобождения AP (G3) ---
+	if (_busMode == WIFI_MODE_MACRO) {
+		// Ожидание перехода в STA (5j): клиенты ещё подключены, ждём освобождения.
+		if (_target == WIFI_TARGET_STA && _pendingStaSwitch) {
+			if (_apClientCount == 0) {
+				_pendingStaSwitch = false;
+				applyStaSwitch();
+				return;
+			}
+			uint32_t waitSec = (_apHoldMin > 0) ? (_apHoldMin * 60) : WIFI_AP_HOLD_DEFAULT_SEC;
+			if ((uint32_t)(_stateSeconds - _pendingStaSince) >= waitSec) {
+				DEBUG_CORE_WIFI("STA switch timeout, kicking AP clients\r\n");
+				kickApClients();
+				_apClientCount = 0;
+				core_state.signal("wifi.ap_clients", BusValue::i32(0));
+				core_state.signal("wifi.ap_busy", BusValue::bo(false));
+				_pendingStaSwitch = false;
+				applyStaSwitch();
+				return;
+			}
+			ledMacrosWifiAP();
+			return;
+		}
+		// Целевой AP (5e): время держания — только _apHoldMin (не _wifiAPLifeTime).
+		if (_target == WIFI_TARGET_AP) {
+			if (_apHoldMin == 0) {
+				ledMacrosWifiAP();
+				return;
+			}
+			if (_apClientActivity) {
+				_apClientActivity = false;
+				_apUptime = 0;
+				ledMacrosWifiAP();
+				return;
+			}
+			if ((uint32_t)++_apUptime >= _apHoldMin * 60) {
+				DEBUG_CORE_WIFI("AP hold expired. Restarting AP.\r\n");
+				_apUptime = 0;
+				_apClientActivity = false;
+				configureWifiAP();
+				return;
+			}
+			ledMacrosWifiAP();
+			return;
+		}
+		// macro, но не целевой AP и нет ожидания — не ожидается; проваливаемся в автономку.
+	}
+
+	// --- автономка (auto) — без изменений ---
 	if (_wifiAPLifeTime == 0) {
 		leaveApToScan();
 		return;
@@ -134,6 +190,10 @@ void CLASS_CORE_WIFI::leaveApToScan() {
 	connectionTimout = 0;
 	_apUptime = 0;
 	_apClientActivity = false;
+	_apClientCount = 0;
+	core_state.signal("wifi.ap_mode", BusValue::bo(false));
+	core_state.signal("wifi.ap_clients", BusValue::i32(0));
+	core_state.signal("wifi.ap_busy", BusValue::bo(false));
 	_scanActive = true;
 	_apScanPhaseUntil = _stateSeconds + WIFI_AP_RETRY_PHASE_SEC;
 	_nextStaScanAt = _stateSeconds;
@@ -179,7 +239,16 @@ void CLASS_CORE_WIFI::staTick() {
 	if (WifiScan == WF_SCAN_NO_NEED) {
 		uint32_t budget = (scanTime > 0) ? (uint32_t)scanTime : WIFI_CONNECT_BUDGET_SEC;
 		if ((uint32_t)++connectionTimout >= budget) {
-			DEBUG_CORE_WIFI("Connect budget expired. Back to AP wait.\r\n");
+			DEBUG_CORE_WIFI("Connect budget expired.\r\n");
+			if (_busMode == WIFI_MODE_MACRO && (_target == WIFI_TARGET_STA || _scanSeriesLimit > 0)) {
+				// В macro-цели STA (или активной серии force_scan) бюджет коннекта
+				// истёк — возвращаемся к скану, не в AP.
+				WifiScan = WF_STAT_SCANING;
+				connectionTimout = 0;
+				_scanActive = false;
+				_nextStaScanAt = _stateSeconds;
+				return;
+			}
 			enterApWait();
 		}
 		return;
@@ -258,6 +327,44 @@ void CLASS_CORE_WIFI::staTick() {
 	if (st > 0) { WiFi.scanDelete(); }
 	if (slot < 0) {
 		// Сети из конфигов нет (или все SSID заблокированы счётчиками неудач).
+		// В macro-цели STA действует правило скан-серии (Q18): терпение измеряется
+		// числом пустых сканов (scan_retries / лимит force_scan), а не минутами.
+		if (_busMode == WIFI_MODE_MACRO && (_target == WIFI_TARGET_STA || _scanSeriesLimit > 0)) {
+			_scanEmptyCount++;
+			uint32_t limit = (_scanSeriesLimit > 0) ? _scanSeriesLimit : _scanRetries;
+			if (_seriesHadIp) {
+				// Уже была связь — держим STA, рескан с паузой. Хозяин — макрос.
+				_nextStaScanAt = _stateSeconds + WIFI_RESCAN_PAUSE_SEC;
+				ledMacrosWifiScan();
+				return;
+			}
+			if (_scanEmptyCount >= limit) {
+				_scanEmptyCount = 0;
+				if (_scanSeriesLimit > 0) {
+					// Серия force_scan исчерпана — возврат к прежней цели (C1).
+					_scanSeriesLimit = 0;
+					uint8_t prev = _targetBeforeForceScan;
+					_targetBeforeForceScan = WIFI_TARGET_AUTO;
+					if (prev == WIFI_TARGET_AP) {
+						configureWifiAP();
+						return;
+					}
+					// prev == STA или AUTO — продолжаем штатный STA-цикл.
+					_nextStaScanAt = _stateSeconds + WIFI_RESCAN_PAUSE_SEC;
+					ledMacrosWifiScan();
+					return;
+				}
+				// Обычный порог Q18 (target=STA): сети реально нет — фолбэк в AP.
+				DEBUG_CORE_WIFI("No network after %lu scans. Fallback to AP.\r\n", (unsigned long)limit);
+				configureWifiAP();
+				return;
+			}
+			_nextStaScanAt = _stateSeconds + WIFI_RESCAN_PAUSE_SEC;
+			ledMacrosWifiScan();
+			return;
+		}
+
+		// --- автономка (auto) — без изменений ---
 		// Если после выхода из AP скан-фаза ещё не истекла — продолжаем сканировать,
 		// иначе возвращаемся в AP (или ждём следующего скана при выключенном AP).
 		if (_wifiAPLifeTime > 0 && _stateSeconds >= _apScanPhaseUntil) {
@@ -274,6 +381,7 @@ void CLASS_CORE_WIFI::staTick() {
 	load_configWifi(slot);
 	WifiScan = WF_SCAN_NO_NEED;
 	connectionTimout = 0;
+	_scanEmptyCount = 0;   // успешный скан сбрасывает счётчик пустых сканов
 	DEBUG_CORE_WIFI("Connecting to %s\r\n", _wifiConfig.ssid.c_str());
 	WiFi.begin(_wifiConfig.ssid.c_str(), _wifiConfig.password.c_str());
 	ledMacrosWifiConnecting();
@@ -314,6 +422,10 @@ void CLASS_CORE_WIFI::configureWifiAP() {
 	_apClientActivity = false;
 	_scanActive = false;
 	_apScanPhaseUntil = 0;
+	_apClientCount = 0;
+	core_state.signal("wifi.ap_mode", BusValue::bo(true));
+	core_state.signal("wifi.ap_clients", BusValue::i32(0));
+	core_state.signal("wifi.ap_busy", BusValue::bo(false));
 	ledSetSteady(false);
 	ledMacrosWifiAP();	// вход в AP-режим
 }
@@ -418,10 +530,21 @@ void CLASS_CORE_WIFI::onWiFiConnectedGotIP(WiFiEventStationModeGotIP data) {
 	_enterApPending = false;
 	_suppressDisc = 0;
 
+	// Успешное подключение завершает текущую серию скана (Q18).
+	_seriesHadIp = true;
+	_scanEmptyCount = 0;
+	_scanSeriesLimit = 0;
+	_targetBeforeForceScan = WIFI_TARGET_AUTO;
+
 	core_state.signal("wifi.connected", BusValue::bo(true));
 	core_state.signal("wifi.rssi", BusValue::i32((int32_t)WiFi.RSSI()));
 	core_state.signal("wifi.ip", BusValue::str(WiFi.localIP().toString()));
+	core_state.signal("wifi.slot_name", BusValue::str(WiFi.SSID()));
+	core_state.signal("wifi.ap_mode", BusValue::bo(false));
 	core_state.emit("wifi.just_connected");
+	if (_target == WIFI_TARGET_STA) {
+		core_state.emit("wifi.target_reached");
+	}
 
 #if defined(MODULE_UDP)
 //udp start to listen
@@ -482,6 +605,7 @@ void CLASS_CORE_WIFI::onWiFiDisconnected(WiFiEventStationModeDisconnected data) 
 	_apScanPhaseUntil = 0;
 
 	core_state.signal("wifi.connected", BusValue::bo(false));
+	core_state.signal("wifi.slot_name", BusValue::str(""));
 	core_state.emit("wifi.just_disconnected");
 
 	if (authFail) {
@@ -574,3 +698,303 @@ void ledMacrosWifiAP()				{	ledSetState(LED_PRIO_WIFI, patWifiAP, -1); }
 void ledMacrosWifiConnecting()		{	ledSetState(LED_PRIO_WIFI, patWifiConn, 2); }
 void ledMacrosWifiError()			{	ledSetState(LED_PRIO_WIFI, patWifiErr, 5); }
 void ledMacrosWifiConnected()		{	ledSetSteady(true); ledClearState(LED_PRIO_WIFI); }
+
+// ============================================================
+// РЕСУРСНАЯ ШИНА: режим/цель, applyMacroTarget и force-команды
+// ============================================================
+
+bool CLASS_CORE_WIFI::wifiBusAllowed() {
+	return _busMode == WIFI_MODE_MACRO;
+}
+
+void CLASS_CORE_WIFI::setWifiMode(uint8_t m) {
+	m &= 1;
+	if (m == _busMode) return;
+	_busMode = m;
+	if (m == WIFI_MODE_AUTO) {
+		_scanSeriesLimit = 0;
+		_scanEmptyCount = 0;
+		_apUptime = 0;
+		_apClientActivity = false;
+		_pendingStaSwitch = false;
+	}
+	core_state.signal("wifi.mode", BusValue::en((int32_t)_busMode));
+}
+
+void CLASS_CORE_WIFI::setTarget(uint8_t t) {
+	if (_busMode != WIFI_MODE_MACRO) return;   // target вне macro игнорируется
+	if (t > WIFI_TARGET_STA) return;
+	if (t == _target) return;                  // self-assign no-op — серию не трогаем
+	_target = t;
+	core_state.signal("wifi.target", BusValue::en((int32_t)_target));
+	if (t == WIFI_TARGET_AP) {
+		_pendingStaSwitch = false;
+		configureWifiAP();   // напрямую (не enterApWait): обрыв STA выполняется внутри
+	} else if (t == WIFI_TARGET_STA) {
+		// G3/G3a: при активных клиентах AP переход откладывается.
+		if (_apClientCount > 0) {
+			_pendingStaSwitch = true;
+			_pendingStaSince = _stateSeconds;
+			core_state.emit("wifi.sta_pending");
+			return;
+		}
+		applyStaSwitch();
+	} else {
+		// AUTO: сброс ожиданий и серии, отдать управление автомату.
+		_pendingStaSwitch = false;
+		_scanSeriesLimit = 0;
+		_scanEmptyCount = 0;
+	}
+}
+
+void CLASS_CORE_WIFI::setSlot(const String& s) {
+	_slot = s;
+	core_state.signal("wifi.slot", BusValue::str(s));
+}
+
+void CLASS_CORE_WIFI::setApHoldMin(uint32_t m) {
+	if (m > WIFI_AP_HOLD_MIN_MAX) m = WIFI_AP_HOLD_MIN_MAX;
+	if (m == _apHoldMin) return;
+	_apHoldMin = m;
+	core_state.signal("wifi.ap_hold_min", BusValue::i32((int32_t)_apHoldMin));
+}
+
+void CLASS_CORE_WIFI::setScanRetries(uint8_t n) {
+	if (n < WIFI_SCAN_RETRIES_MIN) n = WIFI_SCAN_RETRIES_MIN;
+	if (n > WIFI_SCAN_RETRIES_MAX) n = WIFI_SCAN_RETRIES_MAX;
+	if (n == _scanRetries) return;
+	_scanRetries = n;
+	core_state.signal("wifi.scan_retries", BusValue::i32((int32_t)_scanRetries));
+}
+
+void CLASS_CORE_WIFI::applyMacroTarget() {
+	// Синхронизируем цель из шины (макросы пишут set("wifi.target", ...)).
+	int32_t busTarget = core_state.getInt("wifi.target", (int32_t)_target);
+	if (busTarget >= WIFI_TARGET_AUTO && busTarget <= WIFI_TARGET_STA && busTarget != (int32_t)_target) {
+		setTarget((uint8_t)busTarget);
+		return;   // setTarget выполнил переход/серию; продолжаем в следующем тике
+	}
+
+	// Синхронизируем слот/удержание/число сканов (сеттеры клампят и сигналят).
+	String busSlot = core_state.getStr("wifi.slot", _slot);
+	if (busSlot != _slot) { setSlot(busSlot); }
+	int32_t busHold = core_state.getInt("wifi.ap_hold_min", (int32_t)_apHoldMin);
+	if (busHold != (int32_t)_apHoldMin) { setApHoldMin((uint32_t)busHold); }
+	int32_t busSr = core_state.getInt("wifi.scan_retries", (int32_t)_scanRetries);
+	if (busSr != (int32_t)_scanRetries) { setScanRetries((uint8_t)busSr); }
+
+	// Активная серия force_scan: временно сканируем в STA, игнорируя target (C1).
+	if (_scanSeriesLimit > 0) {
+		if (wifiStatus == FS_STAT_CONNECTED) {
+			_scanSeriesLimit = 0;
+			_scanEmptyCount = 0;
+			_targetBeforeForceScan = WIFI_TARGET_AUTO;
+			ledMacrosWifiConnected();
+			return;
+		}
+		if (wifiStatus == FS_STAT_APMODE) {
+			leaveApToScan();
+			return;
+		}
+		staTick();
+		return;
+	}
+
+	if (_target == WIFI_TARGET_AP) {
+		if (wifiStatus == FS_STAT_APMODE) {
+			dnsServer.processNextRequest();
+			apTick();
+		} else {
+			configureWifiAP();
+		}
+		return;
+	}
+
+	if (_target == WIFI_TARGET_STA) {
+		if (_pendingStaSwitch) {
+			dnsServer.processNextRequest();
+			apTick();
+			return;
+		}
+		if (wifiStatus == FS_STAT_APMODE) {
+			// Фолбэк-AP после исчерпания сканов: держим AP, пока макрос не сменит цель.
+			dnsServer.processNextRequest();
+			ledMacrosWifiAP();
+			return;
+		}
+		if (wifiStatus == FS_STAT_CONNECTED) {
+			ledMacrosWifiConnected();
+			return;
+		}
+		staTick();
+		return;
+	}
+
+	// _target == AUTO (в macro не применяется, но на всякий случай) — штатный автомат.
+	if (wifiStatus == FS_STAT_APMODE) {
+		dnsServer.processNextRequest();
+		apTick();
+		return;
+	}
+	if (_enterApPending) {
+		_enterApPending = false;
+		enterApWait();
+		return;
+	}
+	if (wifiStatus == FS_STAT_CONNECTED) {
+		ledMacrosWifiConnected();
+		return;
+	}
+	if (wifiStatus == FS_STAT_CONNECTING) {
+		staTick();
+		return;
+	}
+}
+
+void CLASS_CORE_WIFI::applyStaSwitch() {
+	// Реальный переход в STA: покидаем AP (если были) и запускаем скан.
+	leaveApToScan();
+	_seriesHadIp = false;
+	_scanEmptyCount = 0;
+	_scanSeriesLimit = 0;
+	_targetBeforeForceScan = WIFI_TARGET_AUTO;
+	core_state.emit("wifi.sta_applied");
+}
+
+int CLASS_CORE_WIFI::resolveTargetSlot() {
+	if (_slot.length() == 0) return -1;   // "" = авто
+	if (_slot.length() == 1 && _slot[0] >= '0' && _slot[0] <= '3') {
+		return (int)(_slot[0] - '0');     // явный номер слота
+	}
+	if (strcmp(_strWifi0, _slot.c_str()) == 0) return 0;
+	if (strcmp(_strWifi1, _slot.c_str()) == 0) return 1;
+	if (strcmp(_strWifi2, _slot.c_str()) == 0) return 2;
+	if (strcmp(_strWifi3, _slot.c_str()) == 0) return 3;
+	return -1;   // SSID не найден ни в одном слоте
+}
+
+void CLASS_CORE_WIFI::kickApClients() {
+#if defined(ESP32)
+	esp_wifi_deauth_sta(0);   // мягкий deauth всех клиентов AP
+#endif
+#if defined(ESP8266)
+	WiFi.softAPdisconnect(false);   // перезапуск softAP — клиенты отваливаются (1-3 с)
+#endif
+}
+
+void CLASS_CORE_WIFI::onApStationConnected() {
+	_apClientCount++;
+	core_state.signal("wifi.ap_clients", BusValue::i32((int32_t)_apClientCount));
+	core_state.signal("wifi.ap_busy", BusValue::bo(_apClientCount > 0));
+	core_state.emit("wifi.ap_client_joined");
+}
+
+void CLASS_CORE_WIFI::onApStationDisconnected() {
+	if (_apClientCount) { _apClientCount--; }
+	core_state.signal("wifi.ap_clients", BusValue::i32((int32_t)_apClientCount));
+	core_state.signal("wifi.ap_busy", BusValue::bo(_apClientCount > 0));
+	core_state.emit("wifi.ap_client_left");
+}
+
+int CLASS_CORE_WIFI::forceAp() {
+	if (_apClientCount > 0) return BUS_ERR_BUSY;   // безопасно: клиент подключён — no-op
+	_target = WIFI_TARGET_AP;
+	core_state.signal("wifi.target", BusValue::en((int32_t)_target));
+	_pendingStaSwitch = false;
+	configureWifiAP();
+	return BUS_OK;
+}
+
+int CLASS_CORE_WIFI::forceApKick() {
+	kickApClients();
+	_apClientCount = 0;
+	core_state.signal("wifi.ap_clients", BusValue::i32(0));
+	core_state.signal("wifi.ap_busy", BusValue::bo(false));
+	_target = WIFI_TARGET_AP;
+	core_state.signal("wifi.target", BusValue::en((int32_t)_target));
+	_pendingStaSwitch = false;
+	configureWifiAP();
+	return BUS_OK;
+}
+
+int CLASS_CORE_WIFI::forceConnect() {
+	if (_apClientCount > 0) return BUS_ERR_BUSY;
+	int slot = resolveTargetSlot();
+	if (slot < 0) return BUS_ERR_NOT_FOUND;
+	load_configWifi(slot);
+	if (_wifiConfig.ssid.length() == 0 || _wifiConfig.password.length() == 0) {
+		return BUS_ERR_NOT_READY;   // слот найден, но не заполнен
+	}
+	// Переход в STA и прямое подключение к выбранному слоту (без скана).
+	_suppressDisc = 3;
+	_ignoreDisconnect = true;
+	if (wifiStatus == FS_STAT_APMODE) {
+		dnsServer.stop();
+		WiFi.softAPdisconnect(false);
+	}
+	if (WiFi.isConnected()) { WiFi.disconnect(); }
+	WiFi.mode(WIFI_STA);
+	_ignoreDisconnect = false;
+	wifiStatus = FS_STAT_CONNECTING;
+	WifiScan = WF_SCAN_NO_NEED;
+	connectionTimout = 0;
+	_apUptime = 0;
+	_apClientActivity = false;
+	_apClientCount = 0;
+	_scanActive = false;
+	_apScanPhaseUntil = 0;
+	_seriesHadIp = false;
+	_scanEmptyCount = 0;
+	_scanSeriesLimit = 0;
+	_targetBeforeForceScan = WIFI_TARGET_AUTO;
+	_target = WIFI_TARGET_STA;   // force_connect подразумевает цель STA
+	core_state.signal("wifi.target", BusValue::en((int32_t)_target));
+	core_state.signal("wifi.ap_mode", BusValue::bo(false));
+	core_state.signal("wifi.ap_clients", BusValue::i32(0));
+	core_state.signal("wifi.ap_busy", BusValue::bo(false));
+	DEBUG_CORE_WIFI("force_connect: connecting to %s\r\n", _wifiConfig.ssid.c_str());
+	WiFi.begin(_wifiConfig.ssid.c_str(), _wifiConfig.password.c_str());
+	ledMacrosWifiConnecting();
+	return BUS_OK;
+}
+
+int CLASS_CORE_WIFI::forceConnectKick() {
+	if (_apClientCount > 0) {
+		kickApClients();
+		_apClientCount = 0;
+		core_state.signal("wifi.ap_clients", BusValue::i32(0));
+		core_state.signal("wifi.ap_busy", BusValue::bo(false));
+	}
+	return forceConnect();
+}
+
+int CLASS_CORE_WIFI::forceScan(int n) {
+	if (n < WIFI_SCAN_RETRIES_MIN) n = WIFI_SCAN_RETRIES_MIN;
+	if (n > WIFI_SCAN_RETRIES_MAX) n = WIFI_SCAN_RETRIES_MAX;
+	_scanSeriesLimit = (uint8_t)n;
+	_scanEmptyCount = 0;
+	_seriesHadIp = false;
+	_targetBeforeForceScan = _target;   // цель не меняем (C1)
+	// Переводим в STA-скан, если ещё не в STA.
+	if (wifiStatus == FS_STAT_APMODE) {
+		leaveApToScan();
+	} else {
+		rescanSoon();
+	}
+	return BUS_OK;
+}
+
+int CLASS_CORE_WIFI::forceDisconnect() {
+	_suppressDisc = 3;
+	_ignoreDisconnect = true;
+	WiFi.disconnect();
+	_ignoreDisconnect = false;
+	wifiStatus = FS_STAT_CONNECTING;
+	WifiScan = WF_STAT_SCANING;
+	connectionTimout = 0;
+	_scanActive = false;
+	core_state.signal("wifi.connected", BusValue::bo(false));
+	core_state.signal("wifi.slot_name", BusValue::str(""));
+	core_state.emit("wifi.just_disconnected");
+	return BUS_OK;
+}

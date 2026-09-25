@@ -71,7 +71,7 @@ public:
     bool isConnected() { return _status == WL_CONNECTED; }
     void mode(WiFiMode_t m) { _mode = m; _modeSetCount++; }
     WiFiMode_t getMode() { return _mode; }
-    void begin(const char* ssid = "", const char* pass = "") { (void)ssid; (void)pass; }
+    void begin(const char* ssid = "", const char* pass = "") { (void)pass; _currentSsid = ssid ? String(ssid) : String(""); }
     void disconnect() { _status = WL_DISCONNECTED; }
     bool softAP(const char* ssid) { _apSsid = ssid ? ssid : ""; return true; }
     bool softAP(const char* ssid, const char* pass) { (void)pass; return softAP(ssid); }
@@ -85,6 +85,7 @@ public:
     IPAddress dnsIP() { return IPAddress(); }
     int RSSI() { return -50; }
     int RSSI(int i) { return (i >= 0 && (size_t)i < _nets.size()) ? _nets[i].rssi : 0; }
+    String SSID() { return _currentSsid; }
     String SSID(int i) { return (i >= 0 && (size_t)i < _nets.size()) ? _nets[i].ssid : String(""); }
     String BSSIDstr(int i) { return (i >= 0 && (size_t)i < _nets.size()) ? _nets[i].bssid : String(""); }
     int channel(int i) { return (i >= 0 && (size_t)i < _nets.size()) ? _nets[i].channel : 0; }
@@ -103,6 +104,7 @@ private:
     int      _softAPDisconnectCount = 0;
     int      _modeSetCount = 0;
     String   _apSsid;
+    String   _currentSsid;
     IPAddress _localIP;
     IPAddress _softAPIP;
     std::vector<MockWifiAp> _nets;

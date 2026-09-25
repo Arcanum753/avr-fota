@@ -330,12 +330,10 @@ int CLASS_CORE_STATE::writeRes(int idx, const BusValue& v, bool checkAccess) {
     // Ресурс-состояние с функцией записи (kind != NONE, isFunc) допускает запись значения.
     if (r.kind == BusValue::NONE) { return BUS_ERR_BAD_TYPE; }
     if (checkAccess && !r.writable) { return BUS_ERR_READONLY; }
-    // Ресурсы ядровых namespace (system/wifi/time/ota) не пишутся извне:
-    // режим ядра меняется только через requestMode(), состояния обновляются signal().
-    if (checkAccess && r.ownerId != 255 && r.ownerId < _nsCount
-        && _ns[r.ownerId].privileged) {
-        return BUS_ERR_READONLY;
-    }
+    // Ресурсы ядровых namespace (system/wifi/time/ota) с writable=false защищены
+    // проверкой выше (режим ядра — через requestMode(), ro-состояния — через signal()).
+    // Явно rw-ресурсы (wifi.target, wifi.mode, wifi.ap_hold_min, ...) разрешено писать
+    // из макросов/веб через set() — этого требует интеграция core_wifi в шину.
 
     if (checkAccess && !_privileged && _currentNs >= 0
         && r.ownerId != 255 && r.ownerId != (uint8_t)_currentNs) {

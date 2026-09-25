@@ -10,6 +10,7 @@ void MockWiFi::reset() {
     _softAPDisconnectCount = 0;
     _modeSetCount = 0;
     _apSsid = "";
+    _currentSsid = "";
     _localIP = IPAddress();
     _softAPIP = IPAddress();
     _nets.clear();

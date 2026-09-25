@@ -17,6 +17,19 @@
         <span style="margin-left: 10px; color: #666; font-size: 12px;">(click on any slot to select it)</span>
     </div>
     
+    <div style="margin-bottom: 10px; text-align: center; padding: 10px; background: #f0f8ff; border-radius: 5px;">
+        <strong>Режим модуля:</strong>
+        <select id="busmode" onchange="updateBusModeWarning();">
+            <option value="0">auto</option>
+            <option value="1">macro</option>
+        </select>
+        <div id="busModeWarn" class="bus-warn" style="display:none; margin-top: 8px; color: #8a6d3b; background: #fcf8e3; border: 1px solid #faebcc; border-radius: 4px; padding: 8px;">
+            Модуль управляется сценариями. Цель, слот, удержание AP и force-команды — через Lua.
+            Из формы доступны только ручное редактирование слотов и системные параметры (scantime/aptime/scan_retries).
+            force_ap_kick / force_connect_kick на ESP8266 перезапускают AP.
+        </div>
+    </div>
+    
     <table border="1" cellspacing="1" cellpadding="1" align="center">
         <tr>
             <td class="config-slot" id="slot0" data-slot="0">
@@ -113,6 +126,8 @@
                     <input type="number" id="scantime_mins" min="0" max="59" value="0" style="width:70px;"> m (бюджет попытки подключения; 0 = короткий)</td></tr>
             <tr><td align="right">WiFi AP lifetime:</td>
                 <td><input type="number" id="aptime" name="aptime" min="0" max="60" value="10" style="width:70px;"> minute (AP ждёт клиента перед проверкой сети; 0 = не включать AP)</td></tr>
+            <tr><td align="right">Scan retries:</td>
+                <td><input type="number" id="scan_retries" min="5" max="50" value="10" style="width:70px;"> (сканов подряд без результата; 5..50)</td></tr>
             <tr><td colspan="2" align="center">
                 <input type="button" value="Save WiFi System" class="button-prog" onclick="saveWifiSysConf();">
                 <span id="sysconfStatus" style="margin-left:10px;font-size:12px;"></span>
@@ -366,7 +381,9 @@ async function saveSlotData(slotNumber) {
             
             const data = {
                 scantime: totalMins,
-                aptime: parseInt(document.getElementById('aptime').value) || 0
+                aptime: parseInt(document.getElementById('aptime').value) || 0,
+                busmode: parseInt(document.getElementById('busmode').value) || 0,
+                scan_retries: parseInt(document.getElementById('scan_retries').value) || 10
             };
             
             try {
@@ -452,6 +469,15 @@ async function saveSlotData(slotNumber) {
             document.getElementById('globalResetCheckbox').checked = false;
         }
 
+        // Показ баннера предупреждения при режиме macro
+        function updateBusModeWarning() {
+            const mode = parseInt(document.getElementById('busmode').value) || 0;
+            const warn = document.getElementById('busModeWarn');
+            if (warn) {
+                warn.style.display = (mode === 1) ? 'block' : 'none';
+            }
+        }
+
         // Загрузка страницы
         window.onload = function() {
             console.log('Page loaded, initializing...');
@@ -461,6 +487,7 @@ async function saveSlotData(slotNumber) {
                     .then(() => ApplyCVT("/system/infovalues"))
                     .then(() => ApplyCVT("/wifi/info"))
                     .then(() => ApplyCVT("/wifi/sysconf"))
+                    .then(() => { updateBusModeWarning(); })
                     .then(() => loadAllSlots())
                     .then(() => getNetwork());
             }, 500);

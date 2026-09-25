@@ -24,6 +24,11 @@ Please Wait....Configuring Wifi.
 #include "core_wifi_led.h"
 
 
+// Форвард-декларация типа значения ресурсной шины (полное определение — в
+// core_state/core_state_types.h). Нужна только для сигнатур trampoline'ов BusCb.
+struct BusValue;
+
+
 class  CLASS_CORE_WIFI    {
     public:
     #if ESP32
@@ -99,6 +104,26 @@ class  CLASS_CORE_WIFI    {
 	void onWiFiDisconnected     (WiFiEventStationModeDisconnected   data);
 	void onWiFiConnectedGotIP   (WiFiEventStationModeGotIP          data);
     #endif
+
+    // --- Управление через ресурсную шину (режимы auto/macro) ---
+    bool wifiBusAllowed();                 // true, если _busMode == WIFI_MODE_MACRO
+    void setWifiMode(uint8_t m);           // единственная точка смены режима (без persist)
+    void setTarget(uint8_t t);             // целевое состояние (без persist)
+    void setSlot(const String& s);         // целевой слот/SSID (без persist)
+    void setApHoldMin(uint32_t m);         // минуты удержания AP (без persist)
+    void setScanRetries(uint8_t n);        // сканов подряд без результата (без persist)
+    void saveNow();                        // отложенное сохранение /config_wifi.json
+    static void s_deferredSave();          // trampoline EERTOS отложенного сохранения
+    // Trampoline'ы BusCb (реализация в core_wifi.cpp, секция register_resources)
+    static int s_cbMode(void* user, int argc, const BusValue* argv, BusValue& result);
+    static int s_cbSave(void* user, int argc, const BusValue* argv, BusValue& result);
+    static int s_cbSetSlot(void* user, int argc, const BusValue* argv, BusValue& result);
+    static int s_cbForceAp(void* user, int argc, const BusValue* argv, BusValue& result);
+    static int s_cbForceApKick(void* user, int argc, const BusValue* argv, BusValue& result);
+    static int s_cbForceConnect(void* user, int argc, const BusValue* argv, BusValue& result);
+    static int s_cbForceConnectKick(void* user, int argc, const BusValue* argv, BusValue& result);
+    static int s_cbForceScan(void* user, int argc, const BusValue* argv, BusValue& result);
+    static int s_cbForceDisconnect(void* user, int argc, const BusValue* argv, BusValue& result);
 private:
     String getVersionStr();
     String getGeneratedTime();
@@ -110,6 +135,20 @@ private:
     void handle_slot_upload(AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total);
     void send_wifi_sysconf_json(AsyncWebServerRequest *request);
     void handle_wifi_sysconf_post(AsyncWebServerRequest *request);
+    // --- Ресурсная шина: логика macro/force (реализация в core_wifi_engine.cpp) ---
+    int  forceAp();
+    int  forceApKick();
+    int  forceConnect();
+    int  forceConnectKick();
+    int  forceScan(int n);
+    int  forceDisconnect();
+    void applyMacroTarget();    // применяет _target/_slot/_apHoldMin в тике (macro)
+    void applyStaSwitch();      // реальный переход в STA (старт серии)
+    int  resolveTargetSlot();   // _slot → индекс слота (или -1)
+    void kickApClients();       // выгнать клиентов AP (platform-specific)
+    void deferredSave();        // выполняет save_configWifiSys() при _pendingSave
+    void onApStationConnected();
+    void onApStationDisconnected();
     // --- Ежесекундный автомат состояния Wi-Fi (исполняется в контексте loop) ---
     void secondTick();          // шаг автомата (раз в секунду)
     void apTick();              // шаг в состоянии AP (ожидание/обслуживание клиента)
@@ -130,6 +169,26 @@ protected:
     uint8_t  _wifiInitFailCount = 0; // подряд идущие ошибки init/scan (для контролируемого рестарта)
     bool     _scanActive = false;    // асинхронный скан запущен (WiFi.scanNetworks) и результат ещё не обработан
     uint32_t _apScanPhaseUntil = 0;  // тик _stateSeconds, до которого после выхода из AP держимся в STA-скане (0 = фаза неактивна)
+    // --- Ресурсная шина: режим/цель и runtime-поля ---
+    uint8_t  _busMode = WIFI_MODE_AUTO;        // режим модуля (wifi.mode)
+    uint8_t  _target = WIFI_TARGET_AUTO;       // целевое состояние (wifi.target)
+    String   _slot = "";                       // целевой слот/SSID (wifi.slot)
+    uint32_t _apHoldMin = 0;                   // время удержания AP (wifi.ap_hold_min)
+    uint8_t  _scanRetries = 10;                // сканов подряд без результата (wifi.scan_retries)
+    volatile uint8_t _apClientCount = 0;       // клиентов AP (wifi.ap_clients)
+    uint8_t  _scanEmptyCount = 0;              // подряд пустых сканов в текущей серии
+    uint8_t  _scanSeriesLimit = 0;             // 0 = порог _scanRetries (Q18); иначе — лимит серии force_scan
+    bool     _seriesHadIp = false;             // был ли GotIP в текущей серии
+    bool     _pendingSave = false;             // отложенное сохранение конфига
+    bool     _pendingStaSwitch = false;        // ждём освобождения AP (G3)
+    uint32_t _pendingStaSince = 0;             // тик начала ожидания
+    uint8_t  _targetBeforeForceScan = WIFI_TARGET_AUTO; // восстановление target после force_scan (C1)
+#if defined(ESP32)
+    WiFiEventId_t _onApStationConnectedHandler, _onApStationDisconnectedHandler;
+#endif
+#if defined(ESP8266)
+    WiFiEventHandler _onApStationConnectedHandler, _onApStationDisconnectedHandler;
+#endif
 };
 
 

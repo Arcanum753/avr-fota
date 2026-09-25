@@ -218,22 +218,30 @@
 **Каталог:** `src/core_wifi/` · **Класс:** `CLASS_CORE_WIFI` · **Объект:** `core_wifi`
 **`[registry]`:** `object=core_wifi`, `define=CORE_WIFI`, `namespace=wifi`, `web=1`, `loop=0`, `res=1`, `prio=80`.
 
-**Назначение:** конечный автомат Wi-Fi STA/AP, 4 профиля SSID + системный конфиг, сканирование сетей, captive-portal DNS, счётчики неудач по SSID, индикация Wi-Fi.
+**Назначение:** конечный автомат Wi-Fi STA/AP, 4 профиля SSID + системный конфиг, сканирование сетей, captive-portal DNS, счётчики неудач по SSID, индикация Wi-Fi, управление целью Wi-Fi через ресурсную шину (режимы `auto`/`macro`).
 
 **Функциональные требования:**
 - FR-CORE-WIFI-1: Поддерживать 4 профиля подключения (`config_wifi0..3.json`) с DHCP или статическим IP.
-- FR-CORE-WIFI-2: Системный конфиг `config_wifi.json`: период сканирования (`scantime`, мин) и удержание AP (`aptime`, мин).
+- FR-CORE-WIFI-2: Системный конфиг `config_wifi.json`: период сканирования (`scantime`, мин), удержание AP (`aptime`, мин), режим модуля (`busmode`, 0=auto/1=macro) и число пустых сканов до фолбэка в AP (`scan_retries`, 5..50).
 - FR-CORE-WIFI-3: Сканировать сети (`scanWifi`), отдавать результаты по `/scan` и `/wifi/scan`.
 - FR-CORE-WIFI-4: Поднимать точку доступа, обслуживать captive portal (`/generate_204`, `/hotspot-detect.html`, `/ncsi.txt`) и DNS-сервер (`startDNSCaptive`).
 - FR-CORE-WIFI-5: Принудительно включать AP по кнопке `AP_ENABLE_BUTTON` с таймаутом `AP_ENABLE_TIMEOUT=60`.
 - FR-CORE-WIFI-6: Вести счётчики неудач по SSID (`MAX_WIFI_FAIL_COUNT=3`, `WIFI_RESCAN_PAUSE_SEC=20`, `WIFI_CONNECT_BUDGET_SEC=20`, `WIFI_SCAN_STUCK_SEC=60`).
 - FR-CORE-WIFI-7: Обрабатывать отказ драйвера: бэкофф `WIFI_INIT_FAIL_PAUSE_SEC=20` и контролируемый `ESP.restart()` после `WIFI_INIT_FAIL_MAX=5` (с отсрочкой в небезопасных режимах).
 - FR-CORE-WIFI-8: При подключении вызывать `module_udp.begin()` (если модуль включён) и инициировать синхронизацию NTP.
-- FR-CORE-WIFI-9: Публиковать ресурсы `wifi.connected` (BOOL), `wifi.rssi` (I32), `wifi.ip` (STR) и события `wifi.just_connected`, `wifi.just_disconnected`.
+- FR-CORE-WIFI-9: Публиковать состояния `wifi.connected` (BOOL), `wifi.rssi` (I32), `wifi.ip` (STR), `wifi.slot_name` (STR), `wifi.ap_mode` (BOOL), `wifi.ap_clients` (I32), `wifi.ap_busy` (BOOL) и события `wifi.just_connected`, `wifi.just_disconnected`, `wifi.ap_client_joined`, `wifi.ap_client_left`, `wifi.target_reached`, `wifi.sta_pending`, `wifi.sta_applied`.
+- FR-CORE-WIFI-10: Режимы `wifi.mode` (ENUM `auto`/`macro`): в `auto` работает штатный автомат без изменений; в `macro` автомат подчиняется цели `wifi.target` (ENUM `auto`/`ap`/`sta`). Гейт `wifiBusAllowed()`: все функции записи (кроме `wifi.mode` и `wifi.save`) при `mode != macro` возвращают `BUS_ERR_DENIED`; записи `set()` в runtime-состояния в `auto` принимаются, но игнорируются автоматом.
+- FR-CORE-WIFI-11: Force-команды `wifi.force_ap`, `wifi.force_ap_kick`, `wifi.force_connect`, `wifi.force_connect_kick`, `wifi.force_scan(n)`, `wifi.force_disconnect` — разовые действия, минуя приоритеты. При активном клиенте AP `force_ap`/`force_connect` — `BUS_ERR_BUSY`; SSID не найден — `BUS_ERR_NOT_FOUND`, слот не заполнен — `BUS_ERR_NOT_READY`. `setTarget(STA)` при клиентах AP откладывается до освобождения (события `sta_pending`/`sta_applied`).
+- FR-CORE-WIFI-12: Скан-серия для `target=sta`: порог пустых сканов — `scan_retries` (или лимит `force_scan`); если в серии был `GotIP` — держать STA (рескан с паузой `WIFI_RESCAN_PAUSE_SEC`), иначе после порога — фолбэк в AP. Счётчик клиентов AP (`_apClientCount`) — через `ARDUINO_EVENT_WIFI_AP_STA*` (ESP32) / `onSoftAPModeStation*` (ESP8266).
+
+**Ресурсы шины (namespace `wifi`):**
+- состояния: `wifi.mode` (ENUM `auto/macro`, rw, dual-функция), `wifi.target` (ENUM `auto/ap/sta`, rw, runtime), `wifi.slot` (STR, rw, runtime), `wifi.ap_hold_min` (I32, rw, runtime, 0 = бесконечно), `wifi.scan_retries` (I32, rw, 5..50, персист), `wifi.connected`/`rssi`/`ip`/`slot_name`/`ap_mode`/`ap_clients`/`ap_busy` (ro);
+- события: `wifi.just_connected`, `wifi.just_disconnected`, `wifi.ap_client_joined`, `wifi.ap_client_left`, `wifi.target_reached`, `wifi.sta_pending`, `wifi.sta_applied`;
+- функции: `wifi.mode` (смена режима), `wifi.set_slot(s)`, `wifi.force_ap`, `wifi.force_ap_kick`, `wifi.force_connect`, `wifi.force_connect_kick`, `wifi.force_scan(n)`, `wifi.force_disconnect`, `wifi.save` (персист `/config_wifi.json`).
 
 **Веб-маршруты:** `/wifi.html`; `/wifi/info`; `GET|POST /api/wifi/slot/0..3`; `GET /scan`; `GET /wifi/scan`; `GET /generate_204`; `GET /hotspot-detect.html`; `GET /ncsi.txt`; `/wifi/ver`; `GET|POST /wifi/sysconf`.
-**Веб-файлы:** `wifi.html`, `wifi-slot.js`, `config_wifi0.json` … `config_wifi3.json`.
-**Конфиги:** `/config_wifi0..3.json` (`ssid`, `pass`, `dhcp`, `ip[4]`, `netmask[4]`, `gateway[4]`, `dns[4]`), `/config_wifi.json`.
+**Веб-файлы:** `wifi.html` (селект «Режим модуля» + баннер `.bus-warn`), `wifi-slot.js`, `config_wifi0.json` … `config_wifi3.json`, примеры макросов `macros/wifi_*.lua`.
+**Конфиги:** `/config_wifi0..3.json` (`ssid`, `pass`, `dhcp`, `ip[4]`, `netmask[4]`, `gateway[4]`, `dns[4]`), `/config_wifi.json` (`scantime`, `aptime`, `busmode`, `scan_retries`).
 **Зависимости:** Arduino `WiFi`, `DNSServer`, LittleFS, `core_json`, `core_sys`, `core_led`, `core_state`, EERTOS.
 
 ---

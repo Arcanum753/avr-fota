@@ -40,6 +40,19 @@
 // в AP (если сеть так и не найдена). Даёт вернувшемуся роутеру окно для реконнекта.
 #define WIFI_AP_RETRY_PHASE_SEC     60
 
+// Режим работы Wi-Fi-модуля (ресурс wifi.mode)
+#define WIFI_MODE_AUTO              0
+#define WIFI_MODE_MACRO             1
+// Целевое состояние Wi-Fi под управлением макросов (ресурс wifi.target)
+#define WIFI_TARGET_AUTO            0
+#define WIFI_TARGET_AP              1
+#define WIFI_TARGET_STA             2
+// Диапазоны runtime/конфигурируемых полей
+#define WIFI_SCAN_RETRIES_MIN       5
+#define WIFI_SCAN_RETRIES_MAX       50
+#define WIFI_AP_HOLD_MIN_MAX        60   // 0..60, 0 = бесконечно
+#define WIFI_AP_HOLD_DEFAULT_SEC    300  // 5 мин — ожидание при _apHoldMin == 0
+
 typedef struct {
     String ssid;
     String password;
