@@ -488,6 +488,7 @@ void CLASS_CORE_WIFI::onWiFiDisconnected(WiFiEventStationModeDisconnected data) 
 		DEBUG_CORE_WIFI("Auth fail (wrong password?): %s\r\n", _wifiConfig.ssid.c_str());
 		wifiSsidSetPSWDwrong(_wifiConfig.ssid);
 		ledMacrosWifiDisconnect();
+		_enterApPending = false;   // отменяем отложенный вход в AP от предыдущего события разрыва
 		if (anySlotFree()) {
 			// Остались незаблокированные слоты — пересканируем и пробуем следующий
 			WifiScan = WF_STAT_SCANING;
