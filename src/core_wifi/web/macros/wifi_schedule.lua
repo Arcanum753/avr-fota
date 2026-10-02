@@ -4,7 +4,7 @@
 return {
     desc = "WiFi schedule: AP 10:00, STA 22:00",
     rules = {
-        { when = { cron = "0 0 10 * * *" }, set = "wifi.target", value = 1 },  -- 10:00 -> AP
-        { when = { cron = "0 0 22 * * *" }, set = "wifi.target", value = 2 },  -- 22:00 -> STA
+        { when = { cron = "0 0 10 * * *" }, set = "wifi.target", value = "ap"  },  -- 10:00 -> AP
+        { when = { cron = "0 0 22 * * *" }, set = "wifi.target", value = "sta" },  -- 22:00 -> STA
     },
 }
