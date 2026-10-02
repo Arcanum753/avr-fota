@@ -1,0 +1,65 @@
+{
+    "folders": [
+        {
+            "name": "core (avr-fota)",
+            "path": "."
+        },
+        {
+            "name": "module_program",
+            "path": "src/module_program"
+        },
+        {
+            "name": "module_udp",
+            "path": "src/module_udp"
+        },
+        {
+            "name": "module_editor",
+            "path": "src/module_editor"
+        },
+        {
+            "name": "module_ds3231",
+            "path": "src/module_ds3231"
+        },
+        {
+            "name": "module_gpio",
+            "path": "src/module_gpio"
+        },
+        {
+            "name": "module_lcd-i2c",
+            "path": "src/module_lcd-i2c"
+        },
+        {
+            "name": "module_macros",
+            "path": "src/module_macros"
+        },
+        {
+            "name": "module_otaclient",
+            "path": "src/module_otaclient"
+        },
+        {
+            "name": "module_rgb",
+            "path": "src/module_rgb"
+        },
+        {
+            "name": "module_i2c-mapper",
+            "path": "src/module_i2c-mapper"
+        },
+        {
+            "name": "device_clock-mech",
+            "path": "src/device_clock-mech"
+        },
+        {
+            "name": "device_mech-ring",
+            "path": "src/device_mech-ring"
+        },
+        {
+            "name": "device_electronica7_rgb",
+            "path": "src/device_electronica7_rgb"
+        }
+    ],
+    "settings": {
+        "git.autoRepositoryDetection": true,
+        "git.repositoryScanMaxDepth": -1,
+        "git.openRepositoryInParentFolders": "always"
+    }
+}

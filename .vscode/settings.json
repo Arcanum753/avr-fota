@@ -73,5 +73,55 @@
             "color": "#FF0000",
             "column": 120
         }
-    ]
+    ],
+    
+    // Увеличивает глубину сканирования. Ваша структура имеет вложенность 2 (src/папка).
+    // Значение -1 означает неограниченную глубину, но лучше указать конкретное число (например, 3).
+    "git.openRepositoryInParentFolders": "always",
+    "git.detectSubmodules": true,
+    "git.detectSubmodulesLimit": 50,
+    "git.autoRepositoryDetection": true,
+    "git.repositoryScanMaxDepth": 3,
+    "search.useIgnoreFiles": false,
+    "files.exclude": {
+        "**/.git": true,
+        "**/.pio": true,
+        "**/.pioenvs": true,
+        "**/.piolibdeps": true,
+        "**/.vscode": true,
+        "**/node_modules": true,
+        "**/__pycache__": true,
+        "**/.cache": true,
+        "**/.kilo": true
+    },
+    "search.exclude": {
+        "**/.git": true,
+        "**/.pio": true,
+        "**/.pioenvs": true,
+        "**/.piolibdeps": true,
+        "**/node_modules": true,
+        "**/__pycache__": true,
+        "**/.cache": true,
+
+        "**/proj_fwbins": true,
+        "**/web_debug": true,
+        "**/test_reports": true,
+        "**/hex_bin": true,
+
+        "**/build": true,
+        "**/dist": true,
+        "**/out": true,
+
+        "**/*.bin": true,
+        "**/*.hex": true,
+        "**/*.elf": true,
+        "**/*.map": true,
+        "**/*.o": true,
+        "**/*.a": true,
+        "**/*.d": true,
+        "**/*.pyc": true,
+        "**/*.log": true,
+        "**/*.min.js": true,
+        "**/*.min.css": true
+    }
 }

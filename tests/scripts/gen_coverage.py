@@ -18,6 +18,51 @@ import sys
 THRESHOLD_MODULES = {"common", "core_ota", "core_led"}
 THRESHOLD = 80.0
 
+# Пофайловые пороги для модулей, где общий процент утягивают web/engine-файлы.
+# module -> [(имя файла в каталоге модуля, порог %)].
+PERFILE_THRESHOLD = {
+    "core_sys": [("core_sys_time.cpp", 80.0), ("common_module.cpp", 80.0)],
+}
+
+
+def perfile_check(gcovr, root, module):
+    targets = PERFILE_THRESHOLD.get(module)
+    if not targets:
+        return 0
+    rc = 0
+    lines = []
+    for fname, thr in targets:
+        filt = os.path.join(root, "src", module, fname)
+        cmd = [gcovr, "--root", root, "--filter", filt,
+               "--txt-metric", "line", "--txt", "--gcov-ignore-parse-errors"]
+        try:
+            res = subprocess.run(cmd, cwd=os.path.join(root, "tests", "core", module),
+                                 capture_output=True, text=True, timeout=300)
+        except Exception:  # noqa: BLE001
+            lines.append("{}: ошибка gcovr".format(fname))
+            rc = 2
+            continue
+        pct = None
+        for line in res.stdout.splitlines():
+            m = re.search(r"TOTAL\s+.*?(\d+(?:\.\d+)?)%", line)
+            if m:
+                pct = float(m.group(1))
+        if res.returncode != 0 or pct is None:
+            lines.append("{}: нет данных покрытия".format(fname))
+            rc = 2
+            continue
+        ok = pct >= thr
+        lines.append("{}: {:.1f}% (порог {:.0f}%) {}".format(fname, pct, thr, "OK" if ok else "FAIL"))
+        if not ok:
+            rc = 2
+    print("[gen_coverage] per-file {}: {}".format(module, "; ".join(lines)))
+    with open(os.path.join(root, "test_reports", "core", module, "coverage.md"),
+              "a", encoding="utf-8") as f:
+        f.write("\n## Per-file thresholds\n\n")
+        for line in lines:
+            f.write("- {}\n".format(line))
+    return rc
+
 
 def main():
     ap = argparse.ArgumentParser()
@@ -84,7 +129,7 @@ def main():
         print("[gen_coverage] {} покрытие ниже {:.0f}%".format(args.module, THRESHOLD),
               file=sys.stderr)
         return 2
-    return 0
+    return perfile_check(gcovr, args.root, args.module)
 
 
 if __name__ == "__main__":
