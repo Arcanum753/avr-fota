@@ -30,6 +30,7 @@ void CLASS_CORE_SYS::begin(ModContext& ctx) {
 	defaultConfigSys();
 	bool fsSysCfg = load_config_Sys();
 	loadDeviceIdent(fsSysCfg);
+	load_config_Time();
 
 	// Заполняем поля глобального контекста после загрузки identity/auth,
 	// чтобы core_wifi и mDNS получили корректные hostname/password.
@@ -50,6 +51,9 @@ void CLASS_CORE_SYS::register_resources() {
 	core_state.regState("safe", BusValue::BOOL, "safe flag (parallel to any mode)", false);
 	core_state.regState("idle", BusValue::BOOL, "idle flag (parallel to any mode)", false);
 	core_state.regState("hostname", BusValue::STR, "device hostname", false);
+
+	// --- Подсистема виртуального времени (namespace time) ---
+	registerTimeResources();
 }
 
 // ============================================================
@@ -108,6 +112,36 @@ void CLASS_CORE_SYS::web_Init() {
 	ESPHTTPServer.on("/recover/reset", HTTP_POST, [this](AsyncWebServerRequest *request) {
 		core_wifi.notifyApClientActivity();
 		this->recover_reset(request);
+	});
+
+	// --- Виртуальное время системы ---
+	ESPHTTPServer.on("/time/info", HTTP_GET, [this](AsyncWebServerRequest *request) {
+		if (!this->checkAuth(request)) {	return request->requestAuthentication(); };
+		this->handleTimeInfo(request);
+	});
+
+	ESPHTTPServer.on("/time/sources", HTTP_GET, [this](AsyncWebServerRequest *request) {
+		if (!this->checkAuth(request)) {	return request->requestAuthentication(); };
+		this->handleTimeSources(request);
+	});
+
+	ESPHTTPServer.on("/time/save", HTTP_POST, [this](AsyncWebServerRequest *request) {
+		if (!this->checkAuth(request)) {	return request->requestAuthentication(); };
+		this->handleTimeSave(request);
+	});
+
+	ESPHTTPServer.on("/time/set", HTTP_POST, [this](AsyncWebServerRequest *request) {
+		if (!this->checkAuth(request)) {	return request->requestAuthentication(); };
+		this->handleTimeSet(request);
+	});
+
+	ESPHTTPServer.on("/time/sync", HTTP_POST, [this](AsyncWebServerRequest *request) {
+		if (!this->checkAuth(request)) {	return request->requestAuthentication(); };
+		this->handleTimeSync(request);
+	});
+
+	ESPHTTPServer.on("/time/ver", HTTP_GET, [this](AsyncWebServerRequest *request) {
+		this->handleTimeVer(request);
 	});
 }
 

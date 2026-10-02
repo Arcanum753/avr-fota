@@ -98,6 +98,12 @@ public:
     // Приведение значения к целевому типу ресурса (чистый stateless-хелпер).
     BusValue valueToKind(const BusValue& v, BusValue::Kind k);
 
+    // Индекс ENUM-значения по имени без учёта регистра; -1 — не найдено.
+    // canonical (если не nullptr) получает каноничное имя из enumVals.
+    int enumIndexByName(const char* res, const char* name, const char** canonical = nullptr);
+    // Каноничное имя по индексу; nullptr — ресурс не ENUM или индекс вне диапазона.
+    const char* enumNameByIndex(const char* res, int index);
+
 private:
     // Версия
     String getVersionStr();

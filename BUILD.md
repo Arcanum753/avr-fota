@@ -99,3 +99,14 @@ PlatformIO автоматически выполняет скрипты в за�
    loop = 0
    ```
 4. Перегенерировать список под нужный env и собрать. Готово.
+
+### 6.1. Как добавить новый источник времени
+
+Если модуль поставляет время в `core_sys` (NTP/DS3231/GPS/HTTP и т.п.):
+
+1. В `<module>.h` объявить `void registerTimeSource();`.
+2. В `<module>.cpp` — статические колбэки `get`/`set` (опц.)/`status` (опц.) и
+   `registerTimeSource()` через `core_sys.addTimeSource("<name>", <prio>, ...)`.
+3. В `<module>.ini` → `[registry]` добавить `time_source = 1`.
+4. Полный чеклист и контракт — `src/core_sys/AGENTS.md` (Time Source Provider API);
+   эталоны — `src/core_ntp/AGENTS.md` (read-only) и `src/module_ds3231/AGENTS.md` (с записью).

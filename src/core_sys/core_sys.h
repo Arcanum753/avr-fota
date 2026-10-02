@@ -8,6 +8,7 @@
 #include "mod_context.h"
 
 #include "core_web/FSWebServerLib.h"
+#include "core_state/core_state_types.h"
 
 #if defined(DEBUG_SYS)
 #define DEBUGSYS(...) DBG_MOD("[C_SYS] ", __VA_ARGS__)
@@ -62,7 +63,44 @@ public:
     bool httpAuthEnabled();
     String getHttpPassword();
 
+    // --- Виртуальное время системы ---
+    // Регистрация источника времени (Time Source Provider API).
+    bool    addTimeSource(const char* name, int prio,
+                          TimeGetFn get, TimeSetFn set = nullptr,
+                          TimeStatusFn status = nullptr);
+    time_t  timeNow() const;
+    bool    timeValid() const;
+    const char* timeSourceName() const;
+    int8_t  timeZoneHours() const;
+    int8_t  timeZoneMinutes() const;
+    bool    daylight() const;
+    void    startTimeService();   // планирует core_task.every("time.tick", 1000)
+    void    registerTimeResources();   // регистрация time.* (реализация — core_sys_time.cpp)
+
+protected:
+    // --- Виртуальное время системы (реализация — core_sys_time.cpp; protected
+    //     для host-тестов через TestSys-наследник) ---
+    void   timeTick();
+    void   timeEmitSources();
+    void   timeUpdateDerived();
+    void   applyTimeSet(time_t v);
+    bool   load_config_Time();
+    bool   save_config_Time();
+    int    findTimeSource(const char* name) const;
+    void   handleTimeInfo(AsyncWebServerRequest *request);
+    void   handleTimeSources(AsyncWebServerRequest *request);
+    void   handleTimeSave(AsyncWebServerRequest *request);
+    void   handleTimeSet(AsyncWebServerRequest *request);
+    void   handleTimeSync(AsyncWebServerRequest *request);
+    void   handleTimeVer(AsyncWebServerRequest *request);
+
 private:
+    static int cmdTimeSet     (void* user, int argc, const BusValue* argv, BusValue& result);
+    static int cmdTimeSyncFrom(void* user, int argc, const BusValue* argv, BusValue& result);
+    static int cmdTimeSave    (void* user, int argc, const BusValue* argv, BusValue& result);
+    static void cbTimeTick();
+    static void cbTimeSaveTask();
+
     // Конфиг системы и identity
     bool load_config_Sys();
     void loadDeviceIdent(bool fsOk);
@@ -102,6 +140,19 @@ protected:
     int32_t  _cachedFsMajor = 0;
     int32_t  _cachedFsMinor = 0;
     String   _cachedFsVersionStr = "";
+
+    // Подсистема виртуального времени
+    strTimeSource _timeSrc[CORE_SYS_TIME_MAX_SOURCES];
+    uint8_t       _timeSrcCount      = 0;
+    uint8_t       _timeActiveIdx     = 255;   // 255 = активного нет
+    time_t        _timeLastValid     = 0;     // 0 = валидного ещё не было
+    uint32_t      _timeLastValidMs   = 0;     // millis() последнего валидного такта
+    int32_t       _timeTzDec         = 0;     // часовой пояс, десятые доли часа
+    bool          _timeDst           = false;
+    uint32_t      _timeSyncIntervalS = 3600;  // обратная синхронизация RTC, сек (0 = off)
+    uint32_t      _timeLastRtcSync   = 0;     // millis()/1000 последней реверс-синхронизации
+    bool          _timePendingSave   = false;
+    bool          _timeTickArmed     = false;
 };
 
 extern CLASS_CORE_SYS core_sys;

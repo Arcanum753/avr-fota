@@ -30,8 +30,8 @@
 | Компонент | Что делает | Что в `.h`/`.cpp` сейчас | Что выделить |
 |---|---|---|---|
 | `core_wifi` | Wi-Fi STA/AP, 4 профиля, captive DNS, скан, автомат переподключения | `.h`: класс, `strWifiConfig`/`strApConfig`, `enWifiStatus`/`enWifiScan`, LED-макросы. `.cpp`: `begin`, веб-обработчики, конфиг, версия, автомат `secondTick`/`apTick`/`staTick`/`enterApWait`/`leaveApToScan`, WiFi-колбэки, LED-реализация, `buildNetworksJson` | types, engine, `_led.h` |
-| `core_sys` | Идентичность (NVRAM), `config_sys.json`, HTTP-auth/recovery, инфо о системе, чтение `_version_fs.json` | `.h`: класс, `strSysConfig`/`strHTTPAuth`. `.cpp`: web, конфиг/identity, «Информация о системе», «FS-версия» | types, engine (инфо, FS-версия) |
-| `core_ntp` | NTP-клиент (3 сервера) поверх форка `NtpClientLib` | `.h`: `strNtpConfig`, define'ы. `.cpp`: sync-логика, web, конфиг, версия | types, engine (sync) |
+| `core_sys` | Идентичность (NVRAM), `config_sys.json`, HTTP-auth/recovery, инфо о системе, чтение `_version_fs.json`, подсистема виртуального времени (`time.*`, TZ/DST, Time Source Provider API) | `.h`: класс, `strSysConfig`/`strHTTPAuth`. `.cpp`: web, конфиг/identity, «Информация о системе», «FS-версия»; `core_sys_time.cpp`: реестр источников, `timeTick`, конфиг, bus-функции, web-обработчики | types, engine (инфо, FS-версия), time |
+| `core_ntp` | NTP-клиент (3 сервера) поверх форка `NtpClientLib`; источник времени для `core_sys` (read-only, namespace `ntp`) | `.h`: `strNtpConfig`, define'ы. `.cpp`: sync-логика, web, конфиг, версия; `_engine.cpp`: колбэки `ntpGetTime/ntpStatus`, `registerTimeSource` | types, engine (sync + Time Source Provider API) |
 | `core_ota` | Самообновление FW/FS, сравнение версий | `.h`: `fileCompareResult`, `enum UpdateTypeFile`, `OTA_STR_*`, LED-макросы. `.cpp`: web-загрузка, сравнение версий, исполнение, LED | types, engine, `_led.h` |
 | `core_json` | Обёртка над ArduinoJson (`jsonFile*`, `jsonParse*`, `jsonBuild*`) | Класс-утилита, шаблонной части почти нет | engine (вся логика, низкая польза) |
 | `core_led` | Слоты приоритетов и паттерны LED | `enum LedPriority`, define'ы, почти весь `.cpp` — исполнительная логика | types, engine |

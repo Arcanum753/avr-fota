@@ -129,6 +129,13 @@ void CLASS_CORE_STATE::catalogToJson(JsonDocument& doc) {
             JsonArray en = o["enum"].to<JsonArray>();
             for (uint8_t k = 0; k < r.enumCount; k++) { en.add(r.enumVals[k]); }
         }
+        if (r.kind == BusValue::ENUM) {
+            // r.name — полное имя (wifi.mode), тот же источник, что и o["full"].
+            int32_t vi = r.value.i;
+            o["value"] = vi;
+            const char* vn = enumNameByIndex(r.name, vi);
+            if (vn != nullptr) { o["valueName"] = vn; }
+        }
         if (r.codeCount > 0) {
             JsonArray codes = o["codes"].to<JsonArray>();
             for (uint8_t k = 0; k < r.codeCount; k++) {

@@ -21,6 +21,9 @@
 #endif
 
 #include "debug.h"
+// Флаги-разрешения модулей (MODULE_*/PROGTYPE_*) генерируются из src_filter
+// скриптом python/module_registry_gen.py (см. AGENTS.md).
+#include "modules_defines.h"
 
 //#define RELEASE  // Comment to enable debug output
 

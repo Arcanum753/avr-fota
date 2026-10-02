@@ -315,13 +315,25 @@ static void test_catalog(void) {
     TestState st;
     st.setNamespace("cat");
     st.regState("v", BusValue::I32, "value", true);
+    static const char* modes[] = { "off", "auto", "macro" };
+    st.regEnum("mode", 3, modes, "mode");
     st.regFunc("f", "->", "func", echoCb, nullptr);
     st.regEvent("e", "evt");
+    TEST_ASSERT_EQUAL_INT(BUS_OK, st.setInt("cat.mode", 1));
+
     JsonDocument doc;
     st.catalogToJson(doc);
     JsonArray arr = doc["resources"].as<JsonArray>();
-    TEST_ASSERT_EQUAL_INT(3, (int)arr.size());
+    TEST_ASSERT_EQUAL_INT(4, (int)arr.size());
     TEST_ASSERT_TRUE(doc["features"].is<JsonObject>());
+
+    JsonVariant mode;
+    for (JsonVariant o : arr) {
+        if (o["full"] == "cat.mode") { mode = o; break; }
+    }
+    TEST_ASSERT_FALSE(mode.isNull());
+    TEST_ASSERT_EQUAL_INT(1, (int)mode["value"]);
+    TEST_ASSERT_EQUAL_STRING("auto", mode["valueName"].as<const char*>());
 }
 
 static void test_value_to_kind(void) {

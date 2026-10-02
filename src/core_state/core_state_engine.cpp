@@ -1,6 +1,7 @@
 #include "core_web/FSWebServerLib.h"
 
 #include <string.h>
+#include <ctype.h>
 
 #include "core_state.h"
 #include "common_module.h"
@@ -319,6 +320,40 @@ int CLASS_CORE_STATE::info(const char* name, BusResInfo& out) {
 
 BusValue CLASS_CORE_STATE::valueToKind(const BusValue& v, BusValue::Kind k) {
     return busCoerce(v, k);
+}
+
+// Сравнение строк без учёта регистра (по образцу compare_strings() из ccronexpr).
+static bool coreStateCompareCi(const char* a, const char* b) {
+    while (*a != 0 && *b != 0) {
+        if (toupper((unsigned char)*a) != toupper((unsigned char)*b)) { return false; }
+        ++a; ++b;
+    }
+    return *a == 0 && *b == 0;
+}
+
+int CLASS_CORE_STATE::enumIndexByName(const char* res, const char* name,
+                                      const char** canonical) {
+    if (res == nullptr || name == nullptr) { return -1; }
+    int idx = findRes(res);
+    if (idx < 0) { return -1; }
+    BusRes& r = _res[idx];
+    if (r.kind != BusValue::ENUM || r.enumCount == 0) { return -1; }
+    for (uint8_t i = 0; i < r.enumCount; i++) {
+        if (r.enumVals[i] != nullptr && coreStateCompareCi(r.enumVals[i], name)) {
+            if (canonical != nullptr) { *canonical = r.enumVals[i]; }
+            return (int)i;
+        }
+    }
+    return -1;
+}
+
+const char* CLASS_CORE_STATE::enumNameByIndex(const char* res, int index) {
+    if (res == nullptr) { return nullptr; }
+    int idx = findRes(res);
+    if (idx < 0) { return nullptr; }
+    BusRes& r = _res[idx];
+    if (r.kind != BusValue::ENUM || index < 0 || index >= (int)r.enumCount) { return nullptr; }
+    return r.enumVals[index];
 }
 
 // ============================================================

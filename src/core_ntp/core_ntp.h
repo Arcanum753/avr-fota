@@ -43,6 +43,8 @@ class  CLASS_CORE_NTP    {
     void ntpOnDisconected ();
     void register_resources();
     void web_Init();
+    void registerTimeSource();   // Time Source Provider API (core_sys)
+    void applyTimeZone();        // переустановить TZ/DST в NTPClientLib
     
     void ntpSwitchReserv ();
     void ntpOnSyncHandler(NTPSyncEvent_t event);

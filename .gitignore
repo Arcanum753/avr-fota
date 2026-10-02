@@ -30,6 +30,7 @@ task_progress.md
 # Генерируемые pre-скриптами артефакты (пересоздаются при каждой сборке)
 version_counter.txt
 src/modules_registry.*
+src/modules_defines.h
 
 # Внешние компоненты: отдельные git-репозитории, клонируются пользователем в src/
 /src/module_*/

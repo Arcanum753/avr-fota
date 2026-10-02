@@ -25,9 +25,6 @@ void CLASS_CORE_NTP::begin (){
 	_ntpServerNow = _ntpConfig.ntpServerName0;
 	// Enable NTP sync
 	if (_ntpConfig.updateNTPTimeEvery > 0) { updateTimeFromNTP = true;	}		
-
-	core_state.signal("time.valid", BusValue::bo(false));
-	core_state.signal("time.source", BusValue::str(_ntpServerNow));
 }
 
 // унифицированный конструктор контекста
@@ -41,11 +38,9 @@ void CLASS_CORE_NTP::begin (ModContext& ctx){
 // ============================================================
 void CLASS_CORE_NTP::register_resources() {
 	DEBUGNTP("%s\r\n", __FUNCTION__);
-
-	core_state.regState("now",    BusValue::TIME, "current local time (epoch)", false);
-	core_state.regState("valid",  BusValue::BOOL, "NTP synced", false);
-	core_state.regState("source", BusValue::STR,  "current NTP server", false);
-	core_state.regEvent("synced", "NTP time synced");
+	// core_ntp — источник времени для core_sys (namespace ntp). Ресурсы time.*
+	// принадлежат core_sys; здесь нет собственных ресурсов шины. Заглушка
+	// сохранена, т.к. вызов register_resources() генерируется из [registry].
 }
 
 // ============================================================
@@ -97,7 +92,6 @@ void CLASS_CORE_NTP::send_NTP_info_html(AsyncWebServerRequest *request) {
 void CLASS_CORE_NTP::html2ntp_configuration(AsyncWebServerRequest *request) {
 	DEBUGNTP(__PRETTY_FUNCTION__);	DEBUGNTP("\r\n");
 	if (request->args() > 0)  {// Save Settings
-		_ntpConfig.daylight = false;
 		for (uint8_t i = 0; i < request->args(); i++) {
 			if (request->argName(i) == "ntpserver0") {
 				_ntpConfig.ntpServerName0 = urldecode(request->arg(i));
@@ -116,19 +110,8 @@ void CLASS_CORE_NTP::html2ntp_configuration(AsyncWebServerRequest *request) {
 				NTP.setInterval(_ntpConfig.updateNTPTimeEvery * 60);
 				continue;
 			}
-			if (request->argName(i) == "tz") {
-				_ntpConfig.timezone = request->arg(i).toInt();
-				  NTP.setTimeZone(_ntpConfig.timezone / 10);
-				continue;
-			}
-			if (request->argName(i) == "dst") {
-				_ntpConfig.daylight = true;
-				continue;
-			}
 		}
 		save_configNTP();
-
-		setTime(NTP.getTime()); //set time
 	}
 	ESPHTTPServer.handleFileRead("/ntp.html", request);
 }
@@ -145,8 +128,6 @@ void CLASS_CORE_NTP::send_NTP_configuration_values_html(AsyncWebServerRequest *r
 	values += "ntpserver2_d|" 	+ (String)_ntpConfig.ntpServerName2 			+ "|div\n";
 
 	values += "update|" 	+ (String)_ntpConfig.updateNTPTimeEvery 			+ "|input\n";
-	values += "tz|" 		+ (String)_ntpConfig.timezone 						+ "|input\n";
-	values += "dst|" 		+ (String)(_ntpConfig.daylight ? "checked" : "") 	+ "|chk\n";
 	request->send(200, "text/plain", values);
 }
 
@@ -162,9 +143,6 @@ void CLASS_CORE_NTP::defaultConfigNTP() {
 	_ntpConfig.ntpServerName1 = NTPSERVER_DFLT1;
 	_ntpConfig.ntpServerName2 = NTPSERVER_DFLT2;
 	_ntpConfig.updateNTPTimeEvery = 15;
-	_ntpConfig.timezone = 10;  // Moscow
-	_ntpConfig.daylight = 0;
-	
 }
 
 bool CLASS_CORE_NTP::load_config_NTP() {
@@ -174,8 +152,6 @@ bool CLASS_CORE_NTP::load_config_NTP() {
 	_ntpConfig.ntpServerName1 = doc["ntp1"].as<String>();
 	_ntpConfig.ntpServerName2 = doc["ntp2"].as<String>();
 	_ntpConfig.updateNTPTimeEvery = doc["NTPperiod"].as<int32_t>();
-	_ntpConfig.timezone = doc["timeZone"].as<int32_t>();
-	_ntpConfig.daylight = doc["daylight"].as<int32_t>();
 
 	DEBUGNTP("NTP Server0: %s\r\n", _ntpConfig.ntpServerName0.c_str());
 	DEBUGNTP("NTP Server1: %s\r\n", _ntpConfig.ntpServerName1.c_str());
@@ -191,8 +167,6 @@ bool CLASS_CORE_NTP::save_configNTP() {
 	doc["ntp1"] = _ntpConfig.ntpServerName1;
 	doc["ntp2"] = _ntpConfig.ntpServerName2;
 	doc["NTPperiod"] = _ntpConfig.updateNTPTimeEvery;
-	doc["timeZone"] = _ntpConfig.timezone;
-	doc["daylight"] = _ntpConfig.daylight;
 	return core_json.jsonFileSaveDoc(CONFIG_FILE_NTP, doc);
 }
 

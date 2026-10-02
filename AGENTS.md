@@ -17,8 +17,8 @@
 Проект разделён на **две категории**:
 
 1. **Ядра (`core_*`)** — присутствуют всегда, обеспечивают базовую функциональность
-2. **Модули (`module_*`)** — опциональны, добавляются через `src_filter` и `build_flags` в конфиге таргета
-3. **Устройства (`device_*`)** — опциональны, добавляются через `src_filter` и `build_flags` в конфиге таргета. Используются для устройств со стабильным железом.
+2. **Модули (`module_*`)** — опциональны, добавляются через `src_filter` в конфиге таргета (define-флаг `MODULE_*` выводится из `src_filter` автоматически)
+3. **Устройства (`device_*`)** — опциональны, добавляются через `src_filter` в конфиге таргета. Используются для устройств со стабильным железом.
 
 Субмодули (`submodule_*`) наследуются от `Class_ProgBase` и реализуют конкретных программаторов. Базовая логика программатора находится в `module_prog/`.
 
@@ -67,9 +67,9 @@ glob-масками `src/*/*.ini` и `src/*/*/*.ini` в `[platformio] extra_conf
 
 | Модуль | Каталог | Назначение |
 |--------|-----------|---------|
-| `core_sys` | `src/core_sys/` | Ядро системы: идентичность (имя/серийник устройства, хранилище в NVRAM), `config_sys.json`, HTTP-аутентификация/восстановление (`secret.json`), информация о системе (причина сброса, chipinfo, about), централизованное чтение версии FS (`_version_fs.json`), EERTOS |
+| `core_sys` | `src/core_sys/` | Ядро системы: идентичность (имя/серийник устройства, хранилище в NVRAM), `config_sys.json`, HTTP-аутентификация/восстановление (`secret.json`), информация о системе (причина сброса, chipinfo, about), централизованное чтение версии FS (`_version_fs.json`), **подсистема виртуального времени** (реестр источников, `time.*`, TZ/DST, `config_time.json`), EERTOS |
 | `core_wifi` | `src/core_wifi/` | Wi-Fi клиент/AP, управление 4 профилями, сканирование |
-| `core_ntp` | `src/core_ntp/` | NTP-клиент с 3 серверами (основной + 2 запасных) |
+| `core_ntp` | `src/core_ntp/` | NTP-клиент с 3 серверами (основной + 2 запасных); **источник времени** для `core_sys` (namespace `ntp`, read-only) |
 | `core_ota` | `src/core_ota/` | Самообновление (FOTA) через web, проверка версии FS |
 | `core_json` | `src/core_json/` | Утилиты JSON (сохранение/загрузка/разбор) |
 | `core_led` | `src/core_led/` | Макросы индикации светодиодом (WiFi, ошибки, успех, ожидание) |
@@ -83,6 +83,11 @@ glob-масками `src/*/*.ini` и `src/*/*/*.ini` в `[platformio] extra_conf
 
 ### Опциональные модули
 
+Флаги `MODULE_*`/`PROGTYPE_*` ниже **не указываются в `build_flags` вручную**: они
+автоматически генерируются в `src/modules_defines.h` из модулей, перечисленных в `src_filter`
+(генератор `python/module_registry_gen.py`; см. «Механизм подключения»). В `build_flags`
+остаются только отладочные (`-D DEBUG_*`) и специфичные флаги (пины, `USE_LITTLEFS` и т.п.).
+
 | Модуль | Флаг | Назначение |
 |--------|------|---------|
 | `module_program` (репо) | `-D PROGTYPE_ISP` | AVR-ISP программатор (AtMega/AtTiny): `src/module_program/module_prog` + `.../submodule_isp` |
@@ -93,7 +98,7 @@ glob-масками `src/*/*.ini` и `src/*/*/*.ini` в `[platformio] extra_conf
 | `module_macros` | `-D MODULE_MACROS` | Макросы/сценарии |
 | `module_rgb` | `-D MODULE_RGB` | RGB-матрица (NeoPixelBus/WS2812) |
 | `module_udp` | `-D MODULE_UDP` | UDP broadcast для обнаружения устройств |
-| `module_otaclient` | `-D MODULE_OTACLIENT=1` | OTA-клиент (автообновление с удалённого сервера) |
+| `module_otaclient` | `-D MODULE_OTACLIENT` | OTA-клиент (автообновление с удалённого сервера) |
 | `module_template` | `-D MODULE_TEMPLATE` | Шаблон модуля — основа для создания новых модулей (в ядре) |
 | `module_i2c-mapper` | `-D MODULE_I2C_MAPPER` | Сканер шины I2C (веб-интерфейс, Wire0) |
 | `module_editor` | `-D MODULE_EDITOR` | Браузер FS, редактор файлов (html/txt/json/js), загрузка/удаление — форк Ace (опционально) |
@@ -286,7 +291,7 @@ CLASS_CORE_OTA (core_ota/core_ota.h)
 
 | Компонент | Namespace | Содержимое |
 |-----------|-----------|------------|
-| `core_sys` | `ns_core_sys` | `isAdminPassValid`, `identCrcSkip` |
+| `core_sys` | `ns_core_sys` | `isAdminPassValid`, `identCrcSkip`, `timeSelectActive`, `timeCsvNames`, `timeParseTz`, `timeFormatNowStr`, `timeSelectBackJump` |
 | `core_web` | `ns_core_web` | `getContentType` (перенесён из `FSWebServerLib.h`) |
 | `core_led` | `ns_core_led` | `ledPatLen`, `ledPatAt` |
 | `module_ds3231` | `ns_module_ds3231` | BCD/alarm-хелперы, `_formatAlarmTime/_formatAlarmStamp` (ESP32) |
@@ -329,12 +334,14 @@ web = 1        # есть web_Init() — вызывается в *_web_Init
 loop = 0       # есть loop() — вызывается в *_loop
 ```
 - `object` — имя глобального extern-объекта (например `module_ds3231`, `progIsp`, `module_otaclient`).
-- `define` — define-флаг env (справочно; сами `#if` в итоговый файл не пишутся).
+- `define` — имя define-флага (`MODULE_*`/`PROGTYPE_*`), который генератор выдаёт в
+  `src/modules_defines.h` как `#define <define> 1`; этот заголовок подключается из `main.h`.
+  Поэтому `-D MODULE_*`/`-D PROGTYPE_*` в `build_flags` указывать не нужно.
 - `web` — 1 если у модуля есть `web_Init()`.
 - `loop` — 1 если у модуля есть `loop()`. Для `device_*` вызывается в `dev_loop()`, для остальных — в `modules_loop()`.
 
 Особые случаи:
-- `module_otaclient` (`module_otaclient`) при активном `-D MODULE_OTACLIENT` включается в **core**-группах
+- `module_otaclient` (`module_otaclient`) при наличии в `src_filter` включается в **core**-группах
   (begin/web/loop) вместе с базовым OTA, а не в modules-группах.
 - `module_udp` (`module_udp`) — `begin()` вызывается из `core_wifi` при подключении, поэтому
   `begin` в registry не дублируется; регистрируется только `web_Init()`.
@@ -346,24 +353,24 @@ loop = 0       # есть loop() — вызывается в *_loop
   модулей применяются лениво при первом вызове `TerminalLoop()`).
 - `core_led` вне контракта — инициализируется вручную в `main.cpp` (`ledInit()`).
 
-**ВАЖНОЕ ОГРАНИЧЕНИЕ:** `src/modules_registry.cpp` сгенерирован под ОДИН env и не содержит
-`#if defined(...)`. Файл НЕ хранится в git (добавлен в `.gitignore`): pre-скрипт
-`1_registry_pre_build.py` перегенерирует его при каждой сборке под выбранный env, поэтому
-при смене env/набора модулей достаточно просто собрать заново. Ручной запуск
+**ВАЖНОЕ ОГРАНИЧЕНИЕ:** `src/modules_registry.cpp` и `src/modules_defines.h` сгенерированы под
+ОДИН env и не содержат `#if defined(...)`. Файлы НЕ хранятся в git (добавлены в `.gitignore`):
+pre-скрипт `1_registry_pre_build.py` перегенерирует их при каждой сборке под выбранный env,
+поэтому при смене env/набора модулей достаточно просто собрать заново. Ручной запуск
 `python/module_registry_gen.py --env <env>` нужен только вне сборки.
 
 Исходные файлы фильтруются через `src_filter` в `platformio.ini`:
 ```ini
 src_filter = +<*> -<.git/> -<.vscode/> -<module_*/> -<submodule_*/> -<device_*/>
 ```
-Модули добавляются по таргетам:
+Модули добавляются по таргетам (define-флаги `MODULE_*`/`PROGTYPE_*` выводятся из `src_filter`):
 ```ini
 [env:esp32-swd]
 extends = env:esp32
 src_filter = ${platformio.src_filter} +<module_program/module_prog/> +<module_program/submodule_swd/> +<module_udp/>
-build_flags = ${env.build_flags} -D MODULE_UDP=1 -D PROGTYPE_SWD=1 -D SWDPIN_CLK=21 -D SWDPIN_DATA=19
+build_flags = ${env.build_flags} -D SWDPIN_CLK=21 -D SWDPIN_DATA=19
 ```
-После изменения `src_filter`/`build_flags` в env — перезапустить `python/module_registry_gen.py --env <env>`.
+После изменения `src_filter` в env — перезапустить `python/module_registry_gen.py --env <env>`.
 `extra_configs` в `platformio.ini` использует glob-маски (`src/*/*.ini`, `src/*/*/*.ini`) — env
 подхватываются автоматически из склонированных в `src/` компонентов без ручной регистрации.
 
@@ -390,10 +397,14 @@ Namespace задаётся в `[registry]` ini компонента (`namespace 
 **Контракт модуля:** третий фронтенд наряду с `web_Init` и `TerminalInit` — метод
 `register_resources()`. Поля `[registry]`: `object`, `define`, `web`, `loop`, `namespace`,
 `res = 1` (есть `register_resources()`), `prio = 0..100` (больше = важнее, дефолт `50`),
-`priv = 1` (привилегированный namespace — ядро/macros). Генератор формирует
+`priv = 1` (привилегированный namespace — ядро/macros),
+`time_source = 1` (модуль — источник времени: генератор вызывает `<object>.registerTimeSource()`
+сразу после `*_register_resources()`, до `begin()` периферии; см. Time Source Provider API в
+`src/core_sys/AGENTS.md`). Генератор формирует
 `core_register_resources()`, `modules_register_resources()`, `dev_register_resources()`;
 регистрация выполняется до `begin()` соответствующей группы, порядок — по `prio` (при равенстве
-FCFS).
+FCFS). Для ядровых источников `core_begin` дополнительно вызывает
+`core_sys.startTimeService()` (после `core_register_resources()`).
 
 **Типы:** `BOOL / I32 / F32 / STR / TIME / ENUM`. F32 в UI/JSON — 3 знака после запятой.
 ENUM хранит индекс, значения задаются `regEnum`.
@@ -428,7 +439,9 @@ ENUM хранит индекс, значения задаются `regEnum`.
 
 **Веб:** `core_state.web_Init()` регистрирует `/state/catalog`, `/state/info`, `/state/set`,
 `/state/call`, `/state/ver` (+ страница `state.html`). Каталог отдаётся `catalogToJson()` и
-используется деревом ресурсов в `module_macros` (`/macros/resources`).
+используется деревом ресурсов в `module_macros` (`/macros/resources`). Для ENUM-ресурсов
+каталог дополнительно содержит `value` (индекс) и `valueName` (каноничное имя из `enumVals`),
+чтобы UI показывал буквенное имя.
 
 ### Применение vs сохранение конфига (правило для модулей и устройств)
 
@@ -479,7 +492,9 @@ return {
 - `on` — декларативная подписка (движок сам `core_state.on`); `call_async` из Lua запрещён.
 - Handler получает таблицу `event` (`type`, `spec`, `args`, `value`); глобалы между вызовами
   не живут (stateless).
-- `handleList`/`handleResources` защищены от OOM: heap-guard и кэш каталога ресурсов.
+- `handleList`/`handleResources` защищены от OOM: heap-guard; `/macros/resources` пересобирается
+  на каждый запрос (актуальные ENUM-значения), последняя удачная строка — fallback при нехватке
+  heap/overflow.
 
 ### Структура веб-страниц
 
@@ -755,7 +770,7 @@ avr-fota/
 - `AP_ENABLE_BUTTON` — GPIO для кнопки принудительного AP (по умолчанию -1 = отключено)
 - `USE_LITTLEFS` — включить файловую систему LittleFS
 - `HIDE_SECRET` — скрыть secret.json из браузера FS
-- `PROGTYPE_ISP` / `PROGTYPE_SWD` — включить субмодули программатора
+- `PROGTYPE_ISP` / `PROGTYPE_SWD` — включить субмодули программатора (выводятся из `submodule_isp`/`submodule_swd` в `src_filter`)
 - `SWDPIN_CLK`, `SWDPIN_DATA` — назначение выводов SWD
 - `PIN_MISO`, `PIN_MOSI`, `PIN_SCK`, `PIN_RST` — назначение выводов ISP
 
@@ -796,10 +811,10 @@ avr-fota/
    `.splitter`, независимость чекбоксов `SEL`/`CUR_EDIT`, `indeterminate` чекбокса
    «выделить всё», кнопки start/stop) собран, но вживую не тестировался. Нужно
    проверить в браузере и прогнать сценарии из `example/prompt4.txt`.
-6. **`desc` у остановленного файла остаётся в таблице до перезагрузки.** `desc`
-   разбирается только у `run`-файлов и не сбрасывается при остановке (в конфиг не
-   пишется, после ребута пусто). Косметика; при желании сбрасывать `desc` в
-   `setFileRun(off)`/`destroyScript`. Учтено в `macros_help.html`.
+6. **Исправлено:** `desc`/`meta_cron` теперь заполняются и у остановленных файлов.
+   `module_macros` читает эти поля из `.lua` без разбора правил
+   (`macroReadScenarioMeta`/`refreshFileMeta`) при старте и после сохранения, поэтому
+   колонки `cron`/`desc` в таблице не пусты без запуска сценария.
 7. **Исправлено:** `config_macros.json` больше не должен получать `created:1`.
    Причина была в том, что файлы, найденные `reconcileList()` до синхронизации NTP,
    получали `now()≈1`; условие «переставить дату» проверяло `created == 0` и не

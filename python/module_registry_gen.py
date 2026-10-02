@@ -142,19 +142,6 @@ def resolve_src_filter(cp: "configparser.ConfigParser", env_name: str) -> str:
     return ""
 
 
-def resolve_build_flags(cp: "configparser.ConfigParser", env_name: str) -> str:
-    section = f"env:{env_name}"
-    if cp.has_option(section, "build_flags"):
-        return (resolve_option(cp, section, "build_flags") or "").strip()
-    if cp.has_option(section, "extends"):
-        ext = (resolve_option(cp, section, "extends") or "").strip()
-        if ext.startswith("env:"):
-            ext = ext[4:]
-        if ext and ext != env_name:
-            return resolve_build_flags(cp, ext)
-    return ""
-
-
 def get_all_env_names(cp: "configparser.ConfigParser") -> List[str]:
     envs = []
     for sec in cp.sections():
@@ -347,6 +334,32 @@ def cpp_content(env_name: str,
     return "\n".join(L)
 
 
+def defines_h_content(env_name: str, defines: List[str]) -> str:
+    """Содержимое src/modules_defines.h: флаги-разрешения включённых модулей.
+
+    Имя каждого флага берётся из поля define секции [registry] компонента,
+    включённого в src_filter. Подключается из main.h, чтобы ядро и модули
+    видели MODULE_*/PROGTYPE_* без ручных -D в build_flags.
+    """
+    L: List[str] = []
+    L.append("#ifndef _MODULES_DEFINES_h")
+    L.append("#define _MODULES_DEFINES_h")
+    L.append("")
+    L.append("// Файл генерируется python/module_registry_gen.py под выбранный env.")
+    L.append(f"// Сгенерировано для env: {env_name}")
+    L.append("// Не редактировать вручную. При смене env — перезапустить генератор.")
+    L.append("")
+    L.append("// Флаги-разрешения модулей, включённых в src_filter (из [registry] define).")
+    if defines:
+        for d in defines:
+            L.append(f"#define {d} 1")
+    else:
+        L.append("// (нет включённых опциональных модулей)")
+    L.append("")
+    L.append("#endif // _MODULES_DEFINES_h")
+    return "\n".join(L)
+
+
 # ============================================================
 # Основная логика
 # ============================================================
@@ -393,9 +406,8 @@ def main():
     log_info(f"Selected env: {env_name}")
 
     src_filter = resolve_src_filter(cp, env_name)
-    build_flags = resolve_build_flags(cp, env_name)
     included = parse_src_filter(src_filter)
-    is_otaclient = "MODULE_OTACLIENT" in build_flags
+    is_otaclient = any(name == "module_otaclient" for name, _ in included)
 
     log_info(f"src_filter: {src_filter}")
     log_info(f"included modules: {included}")
@@ -460,25 +472,29 @@ def main():
     def core_registry(core_name: str, default_ns: str, default_res: int):
         reg = read_registry_ini(project_dir, core_name, core_name)
         if reg is None:
-            return default_ns, default_res, 0, -1
+            return default_ns, default_res, 0, -1, 0
         ns = reg.get("namespace", default_ns).strip() or default_ns
         res = 1 if reg.get("res", "").strip() == "1" else default_res
         priv = 1 if reg.get("priv", "").strip() == "1" else 0
+        ts = 1 if reg.get("time_source", "").strip() == "1" else 0
         try:
             prio = int(reg.get("prio", "-1").strip() or "-1")
         except ValueError:
             prio = -1
-        return ns, res, priv, prio
+        return ns, res, priv, prio, ts
 
     core_res: List[str] = []
+    core_time_src: List[str] = []
     for cname, dns, dres in [
         ("core_sys", "system", 1),
         ("core_state", "system", 1),
         ("core_wifi", "wifi", 1),
-        ("core_ntp", "time", 1),
+        ("core_ntp", "ntp", 1),
         ("core_ota", "ota", 1),
     ]:
-        ns, res, priv, prio = core_registry(cname, dns, dres)
+        ns, res, priv, prio, ts = core_registry(cname, dns, dres)
+        if ts:
+            core_time_src.append(f"{cname}.registerTimeSource();")
         if not res:
             continue
         core_res.append(f'core_state.setNamespace("{ns}");')
@@ -489,6 +505,11 @@ def main():
     if core_res:
         core_res.append("core_state.clearNamespace();")
 
+    # Запуск подсистемы времени и регистрация core-источников — сразу после
+    # core_register_resources(), до begin() периферии.
+    ts_insert = core_begin.index("core_register_resources();") + 1
+    core_begin[ts_insert:ts_insert] = ["core_sys.startTimeService();"] + core_time_src
+
     # ---- Модули / субмодули / устройства ----
     modules_begin: List[str] = []
     modules_web: List[str] = []
@@ -496,10 +517,13 @@ def main():
     dev_begin: List[str] = []
     dev_web: List[str] = []
     dev_loop: List[str] = []
+    modules_time_src: List[str] = []
+    dev_time_src: List[str] = []
     modules_res_entries: List[Tuple[int, int, str, str, int]] = []
     dev_res_entries: List[Tuple[int, int, str, str, int]] = []
     res_seq = 0
     seen_includes = set(includes)
+    defines: List[str] = []
 
     for mod, rel_dir in included:
         ini_path = project_dir / SRC_FOLDER / rel_dir / f"{mod}.ini"
@@ -515,6 +539,9 @@ def main():
         if not obj:
             log_warning(f"Module {mod}: registry.object empty — skipping")
             continue
+        define_flag = reg.get("define", "").strip()
+        if define_flag:
+            defines.append(define_flag)
         web_flag = reg.get("web", "0").strip() == "1"
         loop_flag = reg.get("loop", "0").strip() == "1"
         res_flag = reg.get("res", "0").strip() == "1"
@@ -531,6 +558,13 @@ def main():
             includes.append(hdr)
 
         is_device = mod.startswith(DEVICE_PREFIX)
+
+        # Источник времени (time_source = 1): регистрация в core_sys.
+        if reg.get("time_source", "").strip() == "1":
+            if is_device:
+                dev_time_src.append(f"{obj}.registerTimeSource();")
+            else:
+                modules_time_src.append(f"{obj}.registerTimeSource();")
 
         if res_flag:
             entry = (prio, res_seq, obj, ns, priv)
@@ -564,6 +598,12 @@ def main():
     # Регистрация ресурсов идёт до begin() периферии соответствующей группы.
     modules_begin.insert(0, "modules_register_resources();")
     dev_begin.insert(0, "dev_register_resources();")
+    # Регистрация источников времени — сразу после *_register_resources(),
+    # до begin() периферии (time.tick ещё не стартовал — см. core_sys).
+    if modules_time_src:
+        modules_begin[1:1] = modules_time_src
+    if dev_time_src:
+        dev_begin[1:1] = dev_time_src
 
     def build_res_calls(entries) -> List[str]:
         # prio: больше = важнее; при равенстве сохраняется исходный порядок (FCFS).
@@ -585,6 +625,7 @@ def main():
 
     h_out = project_dir / SRC_FOLDER / "modules_registry.h"
     cpp_out = project_dir / SRC_FOLDER / "modules_registry.cpp"
+    defines_out = project_dir / SRC_FOLDER / "modules_defines.h"
 
     write_file(h_out, h_content())
     write_file(cpp_out, cpp_content(
@@ -595,11 +636,13 @@ def main():
         core_web, modules_web, dev_web,
         core_loop, modules_loop, dev_loop,
     ))
+    write_file(defines_out, defines_h_content(env_name, defines))
 
     log_info("Done. Generated:")
     log_info(f"  {h_out}")
     log_info(f"  {cpp_out}")
-    log_info("ВАЖНО: файл привязан к выбранному env. При смене env перезапустите скрипт.")
+    log_info(f"  {defines_out}")
+    log_info("ВАЖНО: файлы привязаны к выбранному env. При смене env перезапустите скрипт.")
 
 
 def write_file(path: Path, content: str):

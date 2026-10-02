@@ -7,7 +7,7 @@
 |---|---|---|---|
 | `common` | `common/common.cpp` | `String`, `snprintf` (mock Arduino) | L1 |
 | `core_web` | `core_web/common_module.cpp`; `core_web/web/GetJson.js` | Arduino String / JS DOM | L1 (C++), L1 (Node.js), L4 |
-| `core_sys` | `core_sys/common_module.cpp` (L1); `eertos.cpp`, `ident_store.cpp` (L2) | Arduino; EEPROM/ESP-partition; `Arduino.h` (`noInterrupts`), `IRAM_ATTR` | L1 (`isAdminPassValid`, `identCrcSkip`), L2 (EERTOS, `ident_store`), L4 |
+| `core_sys` | `core_sys/common_module.cpp` (L1); `eertos.cpp`, `ident_store.cpp`, `core_sys_time.cpp` (L2) | Arduino; EEPROM/ESP-partition; `Arduino.h` (`noInterrupts`), `IRAM_ATTR`; `core_json`/`core_state`/`core_task`/`Time.cpp` (L2) | L1 (`isAdminPassValid`, `identCrcSkip`, time-хелперы), L2 (EERTOS, `ident_store`, виртуальное время), L4 (`/time/*`) |
 | `core_wifi` | `core_wifi_engine.cpp` | `WiFi`/`DNSServer`/`ESP` (mock), `core_sys`/`core_ntp` (stub), `core_led`, `core_state`, `core_web` | L2, L4 |
 | `core_ntp` | `core_ntp.cpp`, `core_ntp_engine.cpp` | форк `NtpClientLib`, `WiFi`, `core_state` | L4 |
 | `core_ota` | `core_ota_engine.cpp` | LittleFS (mock), `ArduinoOTA`/`Update` (mock), `version.h` (mock), `core_sys` (stub), `core_led` | L1, L2, L4 |

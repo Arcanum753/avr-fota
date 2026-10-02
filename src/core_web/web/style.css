@@ -44,6 +44,14 @@ h2.title {
     border-radius: 5px;
 }
 
+/* clearfix: контейнер охватывает плавающие колонки ссылок,
+   иначе высота фиксируется на min-height и меню перекрывает контент */
+.menu::after {
+    content: "";
+    display: table;
+    clear: both;
+}
+
 .menu div {
     width: 220px;
     float: left;

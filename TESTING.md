@@ -47,6 +47,7 @@
 - **`core_state` (resource bus)**: регистрация ресурсов, коды ошибок (`NOT_REGISTERED`, `DENIED`, `BAD_TYPE`), лимиты (`MAX_NS`, `MAX_RES`, `MAX_SUBS`) — переполнение должно давать предсказуемую деградацию, а не падение. Это ядро системы, ошибку здесь сложнее всего заметить руками.
 - **`module_macros` (Lua)**: единственный интерпретатор на модуль, heap-бюджет, `MACRO_LUA_MAX_OPS`, поведение при переполнении `_files` (тест именно на OPEN-4 — dangling upvalue-указатели после сдвига массива). Подробности — `src/module_macros/AGENTS.md`.
 - **EERTOS**: идемпотентность `SetTimerTask` по указателю, `EertosDroppedCount` при переполнении очереди (`TaskQueueSize=30`).
+- **`core_sys` — виртуальное время**: реестр источников, выбор активного/backward-jump, фронт `source_invalid`, потеря/возврат источника, fallback, `time.set`/`sync_from`, обратная синхронизация RTC, TZ/DST-реконсиляция. L2: `tests/core/core_sys/test/test_l2_core_sys.cpp` (реальные `core_state`/`core_task`/`core_json`/`Time.cpp`).
 - **`core_ota`/version-check**: проверка имени файла (`isValidFilename`), MD5-верификация — на фиктивных байтовых потоках, без реальной записи флеша.
 
 Здесь стоит закладывать mock `ModContext`/`core_state`, чтобы можно было тестировать `module_*` изолированно от реального ядра — это прямое следствие принципа «общение только через шину».
@@ -55,7 +56,7 @@
 
 Уже частично есть по AC-22 (`TestCore32`/`TestCore8266`), но стоит формализовать в CI:
 
-- Матрица: каждый `env` из `platformio.ini` (все `device_*`, обе версии `esp32_electronica7_rgb[_macros]`, `d1_mini`, `esp32cam`, `esp32-c3-devkitm-1`) — `pio run -e <env>` без ошибок и warnings-as-errors.
+- Матрица: каждый `env` из `platformio.ini` (все `device_*`, `esp32_clock-mech`, обе версии `esp32_electronica7_rgb[_macros]`, `d1_mini`, `esp32cam`, `esp32-c3-devkitm-1`) — `pio run -e <env>` без ошибок и warnings-as-errors.
 - Проверка, что `modules_registry.cpp` действительно перегенерируется и не оставляет вызовы компонентов не из текущего env (AC-19) — можно грепом по сгенерированному файлу против списка `build_flags`.
 - Проверка на «ядро без внешних компонентов собирается» и на «ни один модуль не собирается без ядра» (AC-22) — второе можно проверить негативным тестом: попытка собрать `module_*` env без ядровых include-путей должна упасть на этапе конфигурации, а не молча дать битый бинарник.
 - Проверка размера прошивки против партиции (актуально в свете риска с ESP8266 OTA-слотами) — `pio run` уже репортит размер, остаётся зафиксировать порог и падать в CI при превышении.
@@ -69,6 +70,7 @@
 Набор сценариев — фактически перевод AC-1…AC-15 в код:
 
 - `/state/catalog`, `/state/set`, `/state/call` — коды возврата на весь диапазон (`-1..-13`), включая попытку `call` на async-ресурсе и наоборот.
+- `/time/info`, `/time/sources`, `/time/save`, `/time/set`, `/time/sync` — ресурсы `time.*` в каталоге, персистенция TZ/DST, форсированный опрос (см. `tests/core/core_sys/http_api/test_time_api.py`).
 - `checkAuth` — 401 без авторизации, 403 на `/secret.json` при `HIDE_SECRET`, 403 на `/config_sys.json` при `HIDE_CONFIG`.
 - FOTA: аплоад корректного/некорректного имени файла, MD5-мисматч, поведение при даунгрейде версии.
 - `/editor/*`: CRUD-сценарий + upload > 1 МБ должен быть отклонён (см. `src/module_editor/AGENTS.md`).

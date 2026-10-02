@@ -25,9 +25,9 @@
 | Компонент | Тип | Папка | Состав | Документация | Флаг активации | Платформа | Зависит от модулей | Namespace |
 |---|---|---|---|---|---|---|---|---|
 | core_web | ядро | `src/core_web/` | — | TRS §3.1.1 | не требуется (вне registry) | обе | — | — |
-| core_sys | ядро | `src/core_sys/` | — | TRS §3.1.2 | CORE_SYS (всегда) | обе | — | system |
+| core_sys | ядро | `src/core_sys/` | — | TRS §3.1.2 | CORE_SYS (всегда) | обе | — | system, time |
 | core_wifi | ядро | `src/core_wifi/` | — | TRS §3.1.3 | CORE_WIFI | обе | вызывает `module_udp.begin()` | wifi |
-| core_ntp | ядро | `src/core_ntp/` | — | TRS §3.1.4 | CORE_NTP | обе | — | time |
+| core_ntp | ядро | `src/core_ntp/` | — | TRS §3.1.4 | CORE_NTP | обе | — | ntp (источник времени для `core_sys`) |
 | core_ota | ядро | `src/core_ota/` | — | TRS §3.1.5 | CORE_OTA | обе | — | ota |
 | core_json | ядро | `src/core_json/` | — | TRS §3.1.6 | всегда | обе | — | — |
 | core_led | ядро | `src/core_led/` | — | TRS §3.1.7 | всегда (`ledInit` вручную) | обе | — | — |

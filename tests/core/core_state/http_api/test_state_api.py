@@ -6,6 +6,10 @@ def test_state_catalog(http_get):
     assert status == 200
     data = json.loads(body)
     assert "resources" in data
+    mode = next((r for r in data["resources"] if r.get("full") == "system.mode"), None)
+    assert mode is not None
+    assert "value" in mode
+    assert "valueName" in mode
 
 
 def test_state_info_known(http_get):

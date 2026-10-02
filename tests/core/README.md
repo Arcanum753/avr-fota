@@ -53,6 +53,13 @@ bash tests/scripts/run_core.sh --no-l3
 L4 без `DEVICE_HOST` автоматически пропускается (exit 0). С флагом
 `--with-device` оркестратор требует `DEVICE_HOST`, иначе exit 2.
 
+**Подсистема виртуального времени `core_sys`.** L2-тесты тика/выбора источника/fallback
+живут в `tests/core/core_sys/test/test_l2_core_sys.cpp` (единый TU) и используют отдельную
+прелюдию `override_prelude_core_sys.h` (не подменяет `core_sys.h`), реальные `core_state`,
+`core_task`, `core_json`, `common/Time.cpp` и мок `millis()`. Покрытие `core_sys_time.cpp` и
+`core_sys/common_module.cpp` гейтится пофайлово на ≥80% (`tests/scripts/gen_coverage.py`,
+`PERFILE_THRESHOLD`).
+
 ## Добавление теста
 
 1. L1/L2: создайте `tests/core/<module>/test/test_l1_<тема>.cpp` (или `test_l2_*`).

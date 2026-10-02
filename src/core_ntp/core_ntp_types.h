@@ -22,8 +22,6 @@ typedef struct {
     String ntpServerName1;
     String ntpServerName2;
     long updateNTPTimeEvery;
-    long timezone;
-    bool daylight;
 } strNtpConfig;
 
 #endif // _CORE_NTP_TYPES_h

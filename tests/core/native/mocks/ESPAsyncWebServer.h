@@ -6,6 +6,7 @@
 #include <stdint.h>
 #include <stddef.h>
 #include <functional>
+#include <iterator>
 #include <map>
 #include "Arduino.h"
 
@@ -27,6 +28,22 @@ public:
     virtual ~AsyncWebServerResponse() {}
 };
 
+class AsyncResponseStream : public AsyncWebServerResponse {
+public:
+    void print(const char* s) { _buf += (s ? s : ""); }
+    void print(const String& s) { _buf += s; }
+    void print(char c) { _buf += c; }
+    void print(int v) { _buf += String(v); }
+    void print(unsigned int v) { _buf += String((unsigned)v); }
+    void print(long v) { _buf += String(v); }
+    void print(unsigned long v) { char b[24]; snprintf(b, sizeof(b), "%lu", v); _buf += b; }
+    void printf(const char* fmt, ...) { (void)fmt; }
+    const String& buffer() const { return _buf; }
+
+private:
+    String _buf;
+};
+
 class AsyncWebServerRequest {
 public:
     typedef std::function<void(void)> DisconnectHandler;
@@ -37,20 +54,38 @@ public:
         return it == _args.end() ? String() : String(it->second.c_str());
     }
     size_t args() const { return _args.size(); }
+    String argName(size_t i) const {
+        auto it = _args.begin();
+        std::advance(it, static_cast<long>(i));
+        return (it == _args.end()) ? String() : String(it->first.c_str());
+    }
+    String arg(size_t i) const {
+        auto it = _args.begin();
+        std::advance(it, static_cast<long>(i));
+        return (it == _args.end()) ? String() : String(it->second.c_str());
+    }
     void addArg(const String& name, const String& value) { _args[name.c_str()] = value.c_str(); }
 
     void send(int code) { _lastCode = code; }
     void send(int code, const char* type, const String& content) { (void)type; _lastCode = code; _lastBody = content; }
     void send(int code, const char* type, const char* content) { (void)type; _lastCode = code; _lastBody = content ? content : ""; }
     void send(int code, const char* type, uint8_t* data, size_t len) { (void)type; (void)data; (void)len; _lastCode = code; }
-    void send(AsyncWebServerResponse*) {}
+    void send(AsyncWebServerResponse* r) {
+        AsyncResponseStream* s = dynamic_cast<AsyncResponseStream*>(r);
+        if (s != nullptr) { _streamBody = s->buffer(); }
+        _lastCode = 200;
+        delete r;
+    }
     void send_P(int code, const char* type, const char* content) { send(code, type, content); }
+    AsyncResponseStream* beginResponseStream(const String& type) { (void)type; return new AsyncResponseStream(); }
+    AsyncResponseStream* beginResponseStream(const char* type) { (void)type; return new AsyncResponseStream(); }
     void requestAuthentication() {}
     void redirect(const String&) {}
     const String& url() const { return _url; }
     void setUrl(const String& u) { _url = u; }
     int lastCode() const { return _lastCode; }
     const String& lastBody() const { return _lastBody; }
+    const String& streamBody() const { return _streamBody; }
 
     void onDisconnect(DisconnectHandler) {}
 
@@ -58,6 +93,7 @@ private:
     std::map<std::string, std::string> _args;
     int    _lastCode = 0;
     String _lastBody;
+    String _streamBody;
     String _url;
 };
 

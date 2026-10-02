@@ -205,11 +205,13 @@
 - FR-CORE-SYS-6: Централизованно читать и кэшировать `/_version_fs.json` (`getFsVersionStr`, `getFsVersion`, `invalidateFsVersionCache`).
 - FR-CORE-SYS-7: Заполнять `ctx.hostname`/`ctx.password` до инициализации `core_wifi` и mDNS.
 - FR-CORE-SYS-8: Публиковать ресурсы `system.safe` (BOOL), `system.idle` (BOOL), `system.hostname` (STR) — только чтение.
+- FR-CORE-SYS-9: Владеть **подсистемой виртуального времени**: реестр источников (до 6, `strTimeSource`), выбор активного по `prio`/валидности (backward-jump), ресурсы `time.*`, TZ/DST в `/config_time.json`, обратная синхронизация подчинённых RTC, аварийный timestamp (FR-SYS-TIME-1..12).
+- FR-CORE-SYS-10: Предоставлять потребителям `core_sys.timeNow()` / `timeValid()` / `timeSourceName()` / `timeZoneHours()` / `timeZoneMinutes()` / `daylight()` и **Time Source Provider API** (`addTimeSource`). Полный контракт — `src/core_sys/AGENTS.md`.
 
-**Веб-маршруты:** `POST /system/restart`; `/system/wwwauth`; `/system/infovalues`; `/system/version`; `/system.html`; `/system/savewwwauth`; `GET /system/devconf`; публичные без авторизации: `GET /recover`, `GET /recover/status`, `POST /recover/reset`.
-**Веб-файлы:** `system.html`, `recover.html`, `404.html`, `config_sys.json`, `secret.json`.
-**Конфиги:** `/config_sys.json`, `/secret.json`; чтение `/_version_fs.json`.
-**Зависимости:** `core_json`, LittleFS, `esp_task_wdt`/`esp_ota_*` (ESP32), `ns_core_sys`.
+**Веб-маршруты:** `POST /system/restart`; `/system/wwwauth`; `/system/infovalues`; `/system/version`; `/system.html`; `/system/savewwwauth`; `GET /system/devconf`; `GET /time/info`; `GET /time/sources`; `POST /time/save`; `POST /time/set`; `POST /time/sync`; `GET /time/ver`; публичные без авторизации: `GET /recover`, `GET /recover/status`, `POST /recover/reset`.
+**Веб-файлы:** `system.html`, `recover.html`, `404.html`, `config_sys.json`, `secret.json`, `time.html`.
+**Конфиги:** `/config_sys.json`, `/secret.json`; `/config_time.json` (владелец core_sys: `timeZone`, `daylight`, `syncIntervalS`, `sources.<name>.{prio,enabled}`); чтение `/_version_fs.json`; однократная миграция TZ/DST из legacy `/config_ntp.json`.
+**Зависимости:** `core_json`, `core_state`, `core_task`, `common/TimeLib.h`, LittleFS, `esp_task_wdt`/`esp_ota_*` (ESP32), `ns_core_sys`.
 
 ---
 
@@ -249,20 +251,20 @@
 #### 3.1.4. `core_ntp` — клиент NTP
 
 **Каталог:** `src/core_ntp/` · **Класс:** `CLASS_CORE_NTP` · **Объект:** `core_ntp`
-**`[registry]`:** `object=core_ntp`, `define=CORE_NTP`, `namespace=time`, `web=1`, `loop=0`, `res=1`, `prio=70`.
+**`[registry]`:** `object=core_ntp`, `define=CORE_NTP`, `namespace=ntp`, `web=1`, `loop=0`, `res=1`, `prio=70`, `time_source=1`.
 
-**Назначение:** синхронизация времени по NTP с 3 серверами (основной + 2 запасных), периодическая синхронизация, часовой пояс/летнее время, публикация времени на шину.
+**Назначение:** синхронизация времени по NTP с 3 серверами (основной + 2 запасных), периодическая синхронизация; **источник времени для `core_sys`** (read-only). Не владеет `time.*` и TZ/DST.
 
 **Функциональные требования:**
 - FR-CORE-NTP-1: Хранить 3 сервера (`ntp0`, `ntp1`, `ntp2`) и переключаться на запасной (`ntpSwitchReserv`).
-- FR-CORE-NTP-2: Синхронизироваться с периодичностью `NTPperiod` (мин), учитывать `timeZone` (десятые доли часа) и `daylight`.
+- FR-CORE-NTP-2: Синхронизироваться с периодичностью `NTPperiod` (мин); TZ/DST берутся из `core_sys` (`core_sys.timeZoneHours/Minutes()`, `daylight()`) и переустанавливаются по событию `time.tz_changed`.
 - FR-CORE-NTP-3: Запускать синхронизацию по подключению Wi-Fi (`ntpOnConnected`), останавливать при потере соединения.
-- FR-CORE-NTP-4: Публиковать ресурсы `time.now` (TIME), `time.valid` (BOOL), `time.source` (STR) и событие `time.synced`.
+- FR-CORE-NTP-4: Регистрировать источник времени `ntp` (prio 100) через `core_sys.addTimeSource(...)`; валидность — `SyncStatus() && (now-lastSync) ≤ 1800 c && t ≥ 2020-01-01`; `NTP.getTime()` для чтения не используется (асинхронный). Эталон — `src/core_ntp/AGENTS.md`.
 
 **Веб-маршруты:** `GET /ntp/info`; `GET /ntp/conf`; `POST /ntp.html` (сохранение); `/ntp/ver`.
 **Веб-файлы:** `ntp.html`, `config_ntp.json`.
-**Конфиги:** `/config_ntp.json` (`ntp0`, `ntp1`, `ntp2`, `NTPperiod`, `timeZone`, `daylight`).
-**Зависимости:** форк `NtpClientLib`, `common/TimeLib.h`, `WiFiClient`, `core_state`, `core_json`.
+**Конфиги:** `/config_ntp.json` (`ntp0`, `ntp1`, `ntp2`, `NTPperiod`); `timeZone`/`daylight` **удалены** (перенесены в `/config_time.json`).
+**Зависимости:** форк `NtpClientLib`, `common/TimeLib.h`, `WiFiClient`, `core_sys`, `core_state`, `core_json`.
 
 ---
 
@@ -453,11 +455,11 @@
 | Компонент | Тип | Класс | Объект | Namespace | web | loop | res | prio | Документация |
 |-----------|-----|-------|--------|-----------|-----|------|-----|------|--------------|
 | core_json | ядро | `CLASS_CORE_JSON` | `core_json` | — | 1 | 0 | 0 | — | TRS §3.1.6 |
-| core_sys | ядро | `CLASS_CORE_SYS` | `core_sys` | `system` | 1 | 0 | 1 | 85 | TRS §3.1.2 |
+| core_sys | ядро | `CLASS_CORE_SYS` | `core_sys` | `system`, `time` | 1 | 0 | 1 | 85 | TRS §3.1.2 |
 | core_state | ядро | `CLASS_CORE_STATE` | `core_state` | `system` | 1 | 1 | 1 | 100 | TRS §3.1.9 |
 | core_task | ядро | `CLASS_CORE_TASK` | `core_task` | `task` | 0 | 1 | 0 | 90 | TRS §3.1.10 |
 | core_wifi | ядро | `CLASS_CORE_WIFI` | `core_wifi` | `wifi` | 1 | 0 | 1 | 80 | TRS §3.1.3 |
-| core_ntp | ядро | `CLASS_CORE_NTP` | `core_ntp` | `time` | 1 | 0 | 1 | 70 | TRS §3.1.4 |
+| core_ntp | ядро | `CLASS_CORE_NTP` | `core_ntp` | `ntp` | 1 | 0 | 1 | 70 | TRS §3.1.4 |
 | core_ota | ядро | `CLASS_CORE_OTA` | `core_ota` | `ota` | 1 | 1 | 1 | 75 | TRS §3.1.5 |
 | core_led | ядро | — | — | — | 0 | 0 | 0 | — | TRS §3.1.7 |
 | core_terminal | ядро | — | `term` | — | 0 | 0 | 0 | — | TRS §3.1.8 |
@@ -629,7 +631,8 @@
 | `_version_fs.json` | 4_fs_builder (генерация) | версия FW, список модулей, статистика ФС, git-инфо, build_info |
 | `config_wifi0..3.json` | core_wifi | `ssid`, `pass`, `dhcp`, `ip[4]`, `netmask[4]`, `gateway[4]`, `dns[4]` |
 | `config_wifi.json` | core_wifi | `scantime`, `aptime` |
-| `config_ntp.json` | core_ntp | `ntp0`, `ntp1`, `ntp2`, `NTPperiod`, `timeZone`, `daylight` |
+| `config_ntp.json` | core_ntp | `ntp0`, `ntp1`, `ntp2`, `NTPperiod` |
+| `config_time.json` | core_sys | `timeZone`, `daylight`, `syncIntervalS`, `sources.<name>.{prio,enabled}` |
 | `config_state.json` | core_state | `test_timeout_s`, `op_timeout_s` |
 
 Конфиги **опциональных** модулей и устройств (полное описание полей — в `AGENTS.md` владельца):
@@ -684,10 +687,28 @@
 - AC-1: Устройство поднимает AP при отсутствии сохранённой сети; captive portal открывается; после ввода данных подключается к сети.
 - AC-2: Веб-интерфейс открывается по hostname/mDNS и IP; меню содержит пункты всех включённых модулей; страницы отображаются без ошибок в консоли браузера.
 - AC-3: Авторизация обязательна для рабочих маршрутов; при `HIDE_SECRET` `/secret.json` возвращает 403.
-- AC-4: NTP-синхронизация выполняется после подключения; ресурсы `time.now/valid/source` корректны.
+- AC-4: NTP-синхронизация выполняется после подключения; ресурсы `time.now/valid/source` корректны (владелец — `core_sys`).
 - AC-5: Веб-обновление: файл с корректным именем принимается, MD5 подтверждается, устройство перезагружается с новой версией; при несоответствии версии — предупреждение; запись `littlefs.bin` монтирует новую ФС.
 - AC-6: `module_otaclient` при доступном сервере обнаруживает новую версию, скачивает и прошивает; при недоступном — сообщает об ошибке без блокировки.
 - AC-10: `/state/catalog` содержит ресурсы всех включённых компонентов; `/state/set` и `/state/call` работают; ошибки соответствуют кодам `-1..-13`.
+
+**AC-TIME (подсистема виртуального времени `core_sys`):**
+
+- AC-TIME-1: `/state/catalog` содержит все `time.*`, владелец — namespace `time`.
+- AC-TIME-2: только NTP: `time.sources == "ntp"`; после синка `time.valid == true`, `time.hour/minute/second` корректны.
+- AC-TIME-3: только DS3231: `time.sources == "ds3231"`; батарейка жива — `time.valid == true`.
+- AC-TIME-4: NTP синкнут → активен `ntp`; NTP устарел (sync старше `NTP_STALE_S`) → `ds3231`, `time.source_changed`; возврат NTP → `ntp`.
+- AC-TIME-5: DS3231 с OSF=1: `status() == "osf (battery low?)"`, невалиден.
+- AC-TIME-6: смена TZ/DST через `/time/save`: `time.tz`/`time.dst` меняются, `time.tz_changed`, NTP переустанавливает; `/config_time.json` персистится; `config_ntp.json` не хранит TZ.
+- AC-TIME-7: `/time/sources` возвращает все зарегистрированные источники (включая disabled).
+- AC-TIME-8: `time.set` пишет в TimeLib и в DS3231, не пишет в NTP.
+- AC-TIME-9: `time.sync_from("ds3231")` форсирует опрос, обновляет `time.now`/`time.source`.
+- AC-TIME-10: при отсутствии валидных источников `time.valid == false`, но `time.now`/`time.hour` идут (+1/сек от последнего валидного).
+- AC-TIME-11: `TestCore32`, `TestCore8266`, `esp32_clock-mech` собираются; сгенерированный `core_begin` содержит `core_sys.startTimeService()` и `core_ntp.registerTimeSource()`, `modules_begin` — `module_ds3231.registerTimeSource()`.
+- AC-TIME-12: потребители не включают `module_ds3231.h`/`core_ntp.h` и не имеют `_config.timeSource`.
+- AC-TIME-13: backward-jump — устаревший DS3231 не становится активным; `status == "time in past (use time.sync_from)"`; откат разрешён через `/time/sync` или `time.set`.
+- AC-TIME-14: `/time/sync?source=<name>` вызывает `get()` вне расписания; следующий tick — по обычному интервалу.
+- AC-TIME-15: `source_invalid` эмитится ровно один раз на переходе `validLast` true→false.
 
 > Критерии приёмки **опциональных** компонентов вынесены в `AGENTS.md` этих компонентов: AC-7/AC-8 — `src/module_program/AGENTS.md`; AC-9 — `src/module_editor/AGENTS.md`; AC-11 — `src/module_macros/AGENTS.md`; AC-12 — `src/device_electronica7_rgb/AGENTS.md`; AC-13 — `src/device_clock-mech/AGENTS.md`; AC-14 — `src/module_udp/AGENTS.md`; AC-15 — `src/module_template/AGENTS.md`.
 
