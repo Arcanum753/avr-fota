@@ -438,10 +438,12 @@ ENUM хранит индекс, значения задаются `regEnum`.
 режима через `getMode()`/`requestMode()` или событие `system.mode_changed`.
 
 **Веб:** `core_state.web_Init()` регистрирует `/state/catalog`, `/state/info`, `/state/set`,
-`/state/call`, `/state/ver` (+ страница `state.html`). Каталог отдаётся `catalogToJson()` и
-используется деревом ресурсов в `module_macros` (`/macros/resources`). Для ENUM-ресурсов
-каталог дополнительно содержит `value` (индекс) и `valueName` (каноничное имя из `enumVals`),
-чтобы UI показывал буквенное имя.
+`/state/call`. Каталог отдаётся `catalogToJson()` и используется деревом ресурсов в
+`module_macros` (`/macros/resources`). Для ENUM-ресурсов каталог дополнительно содержит
+`value` (индекс) и `valueName` (каноничное имя из `enumVals`), чтобы UI показывал буквенное
+имя. Страница управления модулями (`state.html`) и маршруты `/state/modules`,
+`/state/module_mode` перенесены в `module_macros`; шина отдаёт для них данные через
+`modulesInfo`/`moduleMode`.
 
 ### Применение vs сохранение конфига (правило для модулей и устройств)
 

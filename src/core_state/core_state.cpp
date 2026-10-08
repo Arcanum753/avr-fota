@@ -6,7 +6,6 @@
 
 #include "core_state.h"
 #include "common_module.h"
-#include "core_state_version.h"
 
 // ============================================================
 // Глобальные объекты
@@ -16,16 +15,6 @@ CLASS_CORE_STATE core_state;
 
 // Имена режимов ядра (определены в core_state_engine.cpp).
 extern const char* const coreModeNames[CORE_MODE_COUNT];
-
-// Собран ли Lua-модуль (для опции macro в UI и проверок).
-static bool modulesMacrosAvailable() {
-#if defined(MODULE_MACROS)
-    return true;
-#endif
-#if !defined(MODULE_MACROS)
-    return false;
-#endif
-}
 
 // ============================================================
 // begin()
@@ -82,22 +71,6 @@ void CLASS_CORE_STATE::web_Init() {
         if (!ESPHTTPServer.checkAuth(request)) { return request->requestAuthentication(); }
         this->handleCall(request);
     });
-
-    // Список модулей и их режимы (центральная страница управления модулями).
-    ESPHTTPServer.on("/state/modules", HTTP_GET, [this](AsyncWebServerRequest *request) {
-        if (!ESPHTTPServer.checkAuth(request)) { return request->requestAuthentication(); }
-        this->handleModules(request);
-    });
-
-    // Смена режима модуля: off/auto/macro.
-    ESPHTTPServer.on("/state/module_mode", HTTP_GET, [this](AsyncWebServerRequest *request) {
-        if (!ESPHTTPServer.checkAuth(request)) { return request->requestAuthentication(); }
-        this->handleModuleMode(request);
-    });
-
-    ESPHTTPServer.on("/state/ver", HTTP_GET, [this](AsyncWebServerRequest *request) {
-        this->html_ver_get(request);
-    });
 }
 
 // ============================================================
@@ -147,30 +120,26 @@ void CLASS_CORE_STATE::catalogToJson(JsonDocument& doc) {
     }
 }
 
-// Список модулей (namespace) с их режимами — для страницы управления модулями.
-void CLASS_CORE_STATE::catalogModulesToJson(JsonDocument& doc) {
-    doc["macros_available"] = (modulesMacrosAvailable() ? 1 : 0);
-
-    JsonArray mods = doc["modules"].to<JsonArray>();
-    for (uint8_t i = 0; i < _nsCount; i++) {
+// Данные страницы управления модулями: не-привилегированные namespace с режимом/описанием.
+uint8_t CLASS_CORE_STATE::modulesInfo(BusModuleInfo* out, uint8_t max) {
+    if (out == nullptr || max == 0) { return 0; }
+    uint8_t n = 0;
+    for (uint8_t i = 0; i < _nsCount && n < max; i++) {
         // Ядро — не модуль управления: у него нет режима off/auto/macro.
         // В список модулей для центральной страницы не попадает.
         if (_ns[i].privileged) { continue; }
 
-        JsonObject o = mods.add<JsonObject>();
-        o["ns"] = _ns[i].name;
-        o["privileged"] = 0;
-        o["prio"] = _ns[i].prio;
+        BusModuleInfo& info = out[n];
+        info.name = _ns[i].name;
+        info.privileged = false;
+        info.prio = _ns[i].prio;
+        info.mode = -1;
 
         char full[CORE_STATE_NAME_LEN];
         snprintf(full, sizeof(full), "%s.mode", _ns[i].name);
         int mi = findRes(full);
         if (mi >= 0 && _res[mi].kind == BusValue::ENUM) {
-            o["has_mode"] = 1;
-            o["mode"] = _res[mi].value.i;
-        } else {
-            o["has_mode"] = 0;
-            o["mode"] = -1;
+            info.mode = _res[mi].value.i;
         }
 
         // Описание: первый непустой desc ресурса этого namespace.
@@ -182,8 +151,26 @@ void CLASS_CORE_STATE::catalogModulesToJson(JsonDocument& doc) {
                 break;
             }
         }
-        o["desc"] = desc;
+        info.desc = desc;
+        n++;
     }
+    return n;
+}
+
+// Смена режима модуля off/auto/macro с валидацией (страница управления модулями).
+int CLASS_CORE_STATE::moduleMode(const char* module_namespace, int m) {
+    if (module_namespace == nullptr) { return BUS_ERR_BAD_TYPE; }
+    int id = findNs(module_namespace, false);
+    if (id < 0) { return BUS_ERR_NOT_FOUND; }
+    if (_ns[id].privileged) { return BUS_ERR_READONLY; }
+
+    char full[CORE_STATE_NAME_LEN];
+    snprintf(full, sizeof(full), "%s.mode", module_namespace);
+    int mi = findRes(full);
+    if (mi < 0 || _res[mi].kind != BusValue::ENUM) { return BUS_ERR_NOT_SUPPORTED; }
+    if (m < 0 || m > 2) { return BUS_ERR_BAD_VALUE; }
+
+    return mode(module_namespace, m);
 }
 
 // ============================================================
@@ -266,57 +253,6 @@ void CLASS_CORE_STATE::handleCall(AsyncWebServerRequest *request) {
     }
 }
 
-void CLASS_CORE_STATE::handleModules(AsyncWebServerRequest *request) {
-    JsonDocument doc;
-    catalogModulesToJson(doc);
-    String out;
-    serializeJson(doc, out);
-    request->send(200, "application/json", out);
-}
-
-void CLASS_CORE_STATE::handleModuleMode(AsyncWebServerRequest *request) {
-    if (!request->hasArg("ns") || !request->hasArg("mode")) {
-        request->send(200, "text/plain", "ERR: no ns/mode");
-        return;
-    }
-    const char* ns = request->arg("ns").c_str();
-    int id = findNs(ns, false);
-    if (id < 0) {
-        request->send(200, "text/plain", ns_core_state::busErrStr(BUS_ERR_NOT_FOUND));
-        return;
-    }
-    if (_ns[id].privileged) {
-        // Ядровые namespace переключать извне нельзя.
-        request->send(200, "text/plain", ns_core_state::busErrStr(BUS_ERR_READONLY));
-        return;
-    }
-
-    char full[CORE_STATE_NAME_LEN];
-    snprintf(full, sizeof(full), "%s.mode", ns);
-    int mi = findRes(full);
-    if (mi < 0 || _res[mi].kind != BusValue::ENUM) {
-        request->send(200, "text/plain", ns_core_state::busErrStr(BUS_ERR_NOT_SUPPORTED));
-        return;
-    }
-
-    int m = request->arg("mode").toInt();
-    if (m < 0 || m > 2) {
-        request->send(200, "text/plain", ns_core_state::busErrStr(BUS_ERR_BAD_VALUE));
-        return;
-    }
-    if (m == 2 && !modulesMacrosAvailable()) {
-        request->send(200, "text/plain", ns_core_state::busErrStr(BUS_ERR_NOT_SUPPORTED));
-        return;
-    }
-
-    int rc = mode(ns, m);
-    if (rc == BUS_OK) {
-        request->send(200, "text/plain", "OK");
-    } else {
-        request->send(200, "text/plain", ns_core_state::busErrStr(rc));
-    }
-}
-
 // ============================================================
 // Конфиг
 // ============================================================
@@ -344,25 +280,4 @@ bool CLASS_CORE_STATE::saveConfigState() {
     return core_json.jsonFileSaveDoc(CONFIG_FILE_STATE, doc);
 }
 
-// ============================================================
-// Версионные методы
-// ============================================================
-String CLASS_CORE_STATE::getVersionStr() {
-    return String(CORE_STATE_VERSION);
-}
-
-String CLASS_CORE_STATE::getGeneratedTime() {
-    return String(CORE_STATE_GENERATED_TIME);
-}
-
-String CLASS_CORE_STATE::getCommitDateStr() {
-    return String(CORE_STATE_COMMIT_DATE_STR);
-}
-
-void CLASS_CORE_STATE::html_ver_get(AsyncWebServerRequest *request) {
-    String values = "";
-    values += "stateversion|" + getVersionStr()    + "|div\n";
-    values += "stategentime|" + getGeneratedTime() + "|div\n";
-    values += "stategendate|" + getCommitDateStr() + "|div\n";
-    request->send(200, "text/plain", values);
-}
+// Версия страницы управления модулями отдаётся module_macros (/macros/ver).

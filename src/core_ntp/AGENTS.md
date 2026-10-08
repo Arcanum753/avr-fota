@@ -67,7 +67,7 @@ void CLASS_CORE_NTP::registerTimeSource() {
 ## Конфиг `/config_ntp.json`
 
 `ntp0`, `ntp1`, `ntp2`, `NTPperiod` (минуты). Поля `timeZone`/`daylight` **удалены** —
-TZ/DST в `config_time.json` (владелец `core_sys`, страница `time.html`).
+TZ/DST в `config_time.json` (владелец `core_sys`, секция «Time Sources» на `system.html`).
 
 ## Веб-интерфейс
 

@@ -209,7 +209,7 @@
 - FR-CORE-SYS-10: Предоставлять потребителям `core_sys.timeNow()` / `timeValid()` / `timeSourceName()` / `timeZoneHours()` / `timeZoneMinutes()` / `daylight()` и **Time Source Provider API** (`addTimeSource`). Полный контракт — `src/core_sys/AGENTS.md`.
 
 **Веб-маршруты:** `POST /system/restart`; `/system/wwwauth`; `/system/infovalues`; `/system/version`; `/system.html`; `/system/savewwwauth`; `GET /system/devconf`; `GET /time/info`; `GET /time/sources`; `POST /time/save`; `POST /time/set`; `POST /time/sync`; `GET /time/ver`; публичные без авторизации: `GET /recover`, `GET /recover/status`, `POST /recover/reset`.
-**Веб-файлы:** `system.html`, `recover.html`, `404.html`, `config_sys.json`, `secret.json`, `time.html`.
+**Веб-файлы:** `system.html`, `recover.html`, `404.html`, `config_sys.json`, `secret.json`.
 **Конфиги:** `/config_sys.json`, `/secret.json`; `/config_time.json` (владелец core_sys: `timeZone`, `daylight`, `syncIntervalS`, `sources.<name>.{prio,enabled}`); чтение `/_version_fs.json`; однократная миграция TZ/DST из legacy `/config_ntp.json`.
 **Зависимости:** `core_json`, `core_state`, `core_task`, `common/TimeLib.h`, LittleFS, `esp_task_wdt`/`esp_ota_*` (ESP32), `ns_core_sys`.
 
@@ -362,13 +362,14 @@
 - FR-CORE-STATE-6: Режимы ядра `system.mode` (ENUM `init/normal/ota/fs_update/prog/test`), событие `system.mode_changed`, API `getMode/setMode/requestMode`.
 - FR-CORE-STATE-7: Коды возврата: `0` — успех, `>0` — коды модуля, `<0` — ошибки ядра (`NOT_REGISTERED -1` … `DENIED -13`).
 - FR-CORE-STATE-8: Права: запись в чужой namespace логируется warning при `DEBUG_STATE`; привилегированные namespace защищены от внешней записи.
-- FR-CORE-STATE-9: Каталог ресурсов для UI/макросов (`catalogToJson`, `catalogModulesToJson`).
+- FR-CORE-STATE-9: Каталог ресурсов для UI (`catalogToJson`); данные страницы управления модулями (`modulesInfo`, `moduleMode`).
 - FR-CORE-STATE-10: Ограничения: `CORE_STATE_MAX_RES=64`, `MAX_NS=16`, `MAX_SUBS=16`, `MAX_ASYNC=6`, `MAX_CODES=8`, `MAX_ENUM=8`, `MAX_ARGS=4`; длины имён 24/32/56.
 - FR-CORE-STATE-11: Системный тик 1 с; раздача очереди событий — в `loop()`.
 
-**Веб-маршруты:** `GET /state/catalog`, `/state/info`, `/state/set`, `/state/call`, `/state/modules`, `/state/module_mode`, `/state/ver`.
-**Веб-файлы:** `state.html`, `_menu.html`, `config_state.json`.
+**Веб-маршруты:** `GET /state/catalog`, `/state/info`, `/state/set`, `/state/call`.
+**Веб-файлы:** `config_state.json`.
 **Конфиги:** `/config_state.json` (`test_timeout_s`, `op_timeout_s`, по умолчанию 1800 с).
+**Примечание:** страница управления модулями (`state.html`) и маршруты `/state/modules`, `/state/module_mode` перенесены в `module_macros`; данные для них шина отдаёт через `modulesInfo`/`moduleMode`.
 **Зависимости:** ArduinoJson 7, ESPAsyncWebServer, LittleFS, `ns_core_state`.
 
 ---
@@ -561,14 +562,14 @@
 - UI-3: `GetMarkup.js` вставляет фрагмент на месте тега `<markup>` (`replaceWith`), **не** перезаписывая `document.body.innerHTML`.
 - UI-4: Сохранение настроек — AJAX `fetch` без перезагрузки; ответ `text/plain "OK"`.
 - UI-5: Периодический опрос времени/состояния — только там, где нужен (пример — `module_template`, `state.html`).
-- UI-6: Страница ресурсов `state.html` (дерево ресурсов, вызовы функций) и `macros.html` (менеджер сценариев).
+- UI-6: Страница управления модулями `state.html` (список namespace и режимы off/auto/macro) и `macros.html` (менеджер сценариев) — обе в `module_macros`.
 - UI-7: `update.html` (MD5-верификация `spark-md5.js`, прогресс) и `otaclient.html`.
 - UI-8: Программатор: `project.html` (проект/чип), `prog.html` (загрузка/удаление/программирование), `avrcfg.html` (фьюзы AVR).
 
 ### 6.2. Программный интерфейс (HTTP API)
 
 - API-1: Текстовые ответы — `text/plain "OK"` либо CVT-строки (`ключ|тип|значение`).
-- API-2: JSON-ответы: `/state/catalog`, `/state/info`, `/state/modules`, `/state/module_mode`, `/i2cmapper/scan`, `/otaclient/teststatus`, `/editor/list`, `/macros/list`, `/macros/resources`, `/all`, `/_version_fs.json`.
+- API-2: JSON-ответы: `/state/catalog`, `/state/info`, `/state/modules` (в сборке с `module_macros`), `/i2cmapper/scan`, `/otaclient/teststatus`, `/editor/list`, `/macros/list`, `/macros/resources`, `/all`, `/_version_fs.json`.
 - API-3: Все рабочие маршруты компонентов защищены `checkAuth`; публичны только вход/восстановление и captive-portal-эндпоинты.
 - API-4: Ресурсная шина: `GET /state/set?name=<ns.field>&value=<v>`, `GET /state/call?name=<ns.func>&args=...`, `GET /state/info?name=...`. Типы: BOOL/I32/F32 (3 знака)/STR/TIME/ENUM.
 - API-5: Async-функции: `call` возвращает код запуска, результат — через callback/событие; таймаут по умолчанию 10 с.

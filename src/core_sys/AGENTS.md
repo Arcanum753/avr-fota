@@ -39,7 +39,7 @@
   `time.set` / `time.sync_from` / первого валидного после старта).
 - **FR-SYS-TIME-9.** Форсированный опрос `time.sync_from` / `/time/sync`.
 - **FR-SYS-TIME-10.** `time.save` / `/time/save` — явная персистенция конфига (правило apply/save).
-- **FR-SYS-TIME-11.** Веб-страница `time.html` и маршруты `/time/*` под `checkAuth`.
+- **FR-SYS-TIME-11.** Секция «Time Sources» на веб-странице `system.html` и маршруты `/time/*` под `checkAuth`.
 - **FR-SYS-TIME-12.** Runtime-детект дубликата имени источника (`addTimeSource` → `false`,
   `DEBUGSYS("duplicate time source '%s'")`).
 
@@ -146,7 +146,7 @@ core_sys.addTimeSource("ntp", 100, ntpGetTime, nullptr, ntpStatus);
 
 ## Веб-интерфейс
 
-`time.html` (пункт меню — `STATIC_MENU_LINKS` в `python/gen_page_head.py`).
+`system.html` — секция «Time Sources» (отдельной страницы `time.html` больше нет).
 
 | Метод | URL | Назначение |
 |---|---|---|

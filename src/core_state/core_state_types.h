@@ -84,6 +84,17 @@ struct BusResInfo {
     uint8_t          enumCount = 0;
 };
 
+// ============================================================
+// Модуль (namespace) для страницы управления модулями.
+// ============================================================
+struct BusModuleInfo {
+    const char* name      = nullptr;  // namespace
+    bool        privileged = false;   // ядровый namespace (в список не попадает)
+    int16_t     prio      = -1;       // приоритет модуля
+    int         mode      = -1;       // индекс ENUM-режима или -1
+    const char* desc      = nullptr;  // первое непустое описание ресурса namespace
+};
+
 // Сигнатура sync-функции/подписчика: user, argc, argv, результат.
 typedef int (*BusCb)(void* user, int argc, const BusValue* argv, BusValue& result);
 // Сигнатура async-функции: user, handle, argc, argv.

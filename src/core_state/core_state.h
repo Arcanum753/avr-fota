@@ -93,7 +93,12 @@ public:
 
     // --- Каталог для UI ---
     void catalogToJson(JsonDocument& doc);
-    void catalogModulesToJson(JsonDocument& doc);
+
+    // Данные страницы управления модулями (UI в module_macros).
+    // Заполняет до max записей не-привилегированных namespace; возвращает число записей.
+    uint8_t modulesInfo(BusModuleInfo* out, uint8_t max);
+    // Смена режима модуля off/auto/macro с валидацией; код BUS_*.
+    int moduleMode(const char* module_namespace, int m);
 
     // Приведение значения к целевому типу ресурса (чистый stateless-хелпер).
     BusValue valueToKind(const BusValue& v, BusValue::Kind k);
@@ -105,19 +110,11 @@ public:
     const char* enumNameByIndex(const char* res, int index);
 
 private:
-    // Версия
-    String getVersionStr();
-    String getGeneratedTime();
-    String getCommitDateStr();
-    void   html_ver_get(AsyncWebServerRequest *request);
-
     // Веб-обработчики
     void handleCatalog(AsyncWebServerRequest *request);
     void handleInfo(AsyncWebServerRequest *request);
     void handleSet(AsyncWebServerRequest *request);
     void handleCall(AsyncWebServerRequest *request);
-    void handleModules(AsyncWebServerRequest *request);
-    void handleModuleMode(AsyncWebServerRequest *request);
 
     // Конфиг
     void defaultConfigState();
