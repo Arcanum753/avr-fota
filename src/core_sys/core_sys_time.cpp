@@ -95,6 +95,9 @@ bool CLASS_CORE_SYS::addTimeSource(const char* name, int prio,
 
 void CLASS_CORE_SYS::registerTimeResources() {
 	core_state.setNamespace("time");
+	// namespace времени — внутренняя шина ядра, а не управляемый модуль:
+	// привилегированный статус исключает его из списка модулей (state.html).
+	core_state.setPrivileged(true);
 	core_state.regState("now",    BusValue::TIME, "system time (epoch) or fallback", false);
 	core_state.regState("now_str",BusValue::STR,  "system time YYYY-MM-DD HH:MM:SS", false);
 	core_state.regState("hour",   BusValue::I32,  "hour 0..23", false);

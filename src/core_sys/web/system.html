@@ -45,8 +45,7 @@
             <tr><td align="center" colspan="2">To reset a forgotten password open /recover.</td></tr>
             <tr><td align="center" colspan="2">Notice password is used for<br/>HTTP Auth, AP Mode and OTA</td></tr>
             <tr><td align="center" colspan="2">Password: 8-63 characters, only latin letters and digits.<br/>After saving changes the device will reboot.</td></tr>
-            <tr><td align="center"><input type="submit" value="Save" class="button-prog"></td></tr>
-            <tr><td id="submitResult" align="center"></td></tr>
+            <tr><td colspan="2" align="center"><input type="submit" value="Save" class="button-prog"></td></tr>
         </table>
     </form>
     </div>
@@ -55,7 +54,7 @@
     <div class="content" style="text-align: center;">
         <h2 class="title" style="background: #7D8EE2">Time Sources</h2>
         <form id="timeForm" onsubmit="return false;">
-            <table class="scan" style="width: auto; margin: 0 auto;">
+            <table class="scan">
                 <tr><th colspan="2">Time settings</th></tr>
                 <tr>
                     <td class="label">Timezone</td>
@@ -101,7 +100,7 @@
                 <tr><td class="label">Sync RTC every (s):</td> <td> <input type="number" id="time_sync_interval" name="syncIntervalS" min="0" max="86400"></td></tr>
             </table>
 
-            <table class="scan" style="width: auto; margin: 12px auto;">
+            <table class="scan">
                 <tr>
                     <th colspan="6">
                         Sources
@@ -113,7 +112,7 @@
                 <tbody id="srcBody"></tbody>
             </table>
 
-            <table class="scan" style="width: auto; margin: 0 auto;">
+            <table class="scan">
                 <tr><th colspan="2">Current time</th></tr>
                 <tr><td class="label">Now:</td> <td><span id="time_now_str">—</span> (<span id="time_now">0</span>)</td></tr>
                 <tr><td class="label">Valid:</td> <td><span id="time_valid_str">—</span></td></tr>
@@ -121,7 +120,7 @@
                 <tr><td class="label">Sources:</td> <td><span id="time_sources">—</span></td></tr>
             </table>
 
-            <table class="scan" style="width: auto; margin: 12px auto;">
+            <table class="scan">
                 <tr><th colspan="2">Set time</th></tr>
                 <tr><td class="label">Epoch:</td> <td><input type="text" id="setEpoch" name="value" style="width:200px;"></td></tr>
                 <tr><td colspan="2" style="text-align: center; padding: 8px;">
