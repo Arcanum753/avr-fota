@@ -1,6 +1,6 @@
 // Auto-generated version file for module: core_state
-// Generated: 2026-09-26 17:41
-// Environment: esp32_macrotest
+// Generated: 2026-10-02 23:29
+// Environment: esp32_macro
 
 #ifndef CORE_STATE_VERSION_H
 #define CORE_STATE_VERSION_H
@@ -10,36 +10,36 @@
 // ============================================================
 
 // Числовая версия (для сравнений)
-#define CORE_STATE_VERSION 6
+#define CORE_STATE_VERSION 7
 
 // Строковая версия
-#define CORE_STATE_VERSION_STR "6"
+#define CORE_STATE_VERSION_STR "7"
 
 // Хэш последнего обработанного коммита кода (без учёта *_version.h)
-#define CORE_STATE_COMMIT_HASH "131938f2fd0160d0c3960527b600da8fb05a6a9e"
+#define CORE_STATE_COMMIT_HASH "efe904cbc3701c6393170ea080bfd1efa6fc9db8"
 
 // ============================================================
 // ДАТА ПОСЛЕДНЕГО ИЗМЕНЕНИЯ
 // ============================================================
 
 // Дата в формате yyyy.mm.dd hh.mm (как строка)
-#define CORE_STATE_COMMIT_DATE_STR "2026.09.25 21:55"
+#define CORE_STATE_COMMIT_DATE_STR "2026.10.02 23:17"
 
 // Компоненты даты (для числовых операций)
 #define CORE_STATE_COMMIT_YEAR 2026
-#define CORE_STATE_COMMIT_MONTH 9
-#define CORE_STATE_COMMIT_DAY 25
-#define CORE_STATE_COMMIT_HOUR 21
-#define CORE_STATE_COMMIT_MINUTE 55
+#define CORE_STATE_COMMIT_MONTH 10
+#define CORE_STATE_COMMIT_DAY 2
+#define CORE_STATE_COMMIT_HOUR 23
+#define CORE_STATE_COMMIT_MINUTE 17
 
 // Полная дата в формате YYYY-MM-DD HH:MM (для отладки)
-#define CORE_STATE_COMMIT_DATE "2026-09-25 21:55"
+#define CORE_STATE_COMMIT_DATE "2026-10-02 23:17"
 
 // ============================================================
 // ИНФОРМАЦИЯ О ГЕНЕРАЦИИ
 // ============================================================
 
-#define CORE_STATE_GENERATED_TIME "2026-09-26 17:41"
-#define CORE_STATE_GENERATED_TIMESTAMP "20260926_174154"
+#define CORE_STATE_GENERATED_TIME "2026-10-02 23:29"
+#define CORE_STATE_GENERATED_TIMESTAMP "20261002_232955"
 
 #endif // CORE_STATE_VERSION_H

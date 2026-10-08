@@ -4,6 +4,7 @@
 <head>
     <title>Time Sources</title>
     <meta http-equiv="Content-type" content="text/html; charset=utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="style.css">
 </head>
 
@@ -83,8 +84,8 @@
                 <tr><th colspan="2">Set time</th></tr>
                 <tr><td class="label">Epoch:</td> <td><input type="text" id="setEpoch" name="value" style="width:200px;"></td></tr>
                 <tr><td colspan="2" style="text-align: center; padding: 8px;">
-                    <input type="button" value="Save" class="button-prog" onclick="saveSettings()">
-                    <input type="button" value="Set time" class="button-prog" onclick="setTime()">
+                    <button type="button" class="button-prog" onclick="saveSettings()">Save</button>
+                    <button type="button" class="button-prog" onclick="setTime()">Set time</button>
                 </td></tr>
             </table>
         </form>

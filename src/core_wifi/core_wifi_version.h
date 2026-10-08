@@ -1,6 +1,6 @@
 // Auto-generated version file for module: core_wifi
-// Generated: 2026-09-26 17:41
-// Environment: esp32_macrotest
+// Generated: 2026-10-02 23:29
+// Environment: esp32_macro
 
 #ifndef CORE_WIFI_VERSION_H
 #define CORE_WIFI_VERSION_H
@@ -10,36 +10,36 @@
 // ============================================================
 
 // Числовая версия (для сравнений)
-#define CORE_WIFI_VERSION 9
+#define CORE_WIFI_VERSION 10
 
 // Строковая версия
-#define CORE_WIFI_VERSION_STR "9"
+#define CORE_WIFI_VERSION_STR "10"
 
 // Хэш последнего обработанного коммита кода (без учёта *_version.h)
-#define CORE_WIFI_COMMIT_HASH "131938f2fd0160d0c3960527b600da8fb05a6a9e"
+#define CORE_WIFI_COMMIT_HASH "930f5ada875d63f2dbf5aaac2d02fd2e4124e010"
 
 // ============================================================
 // ДАТА ПОСЛЕДНЕГО ИЗМЕНЕНИЯ
 // ============================================================
 
 // Дата в формате yyyy.mm.dd hh.mm (как строка)
-#define CORE_WIFI_COMMIT_DATE_STR "2026.09.25 21:55"
+#define CORE_WIFI_COMMIT_DATE_STR "2026.10.02 23:17"
 
 // Компоненты даты (для числовых операций)
 #define CORE_WIFI_COMMIT_YEAR 2026
-#define CORE_WIFI_COMMIT_MONTH 9
-#define CORE_WIFI_COMMIT_DAY 25
-#define CORE_WIFI_COMMIT_HOUR 21
-#define CORE_WIFI_COMMIT_MINUTE 55
+#define CORE_WIFI_COMMIT_MONTH 10
+#define CORE_WIFI_COMMIT_DAY 2
+#define CORE_WIFI_COMMIT_HOUR 23
+#define CORE_WIFI_COMMIT_MINUTE 17
 
 // Полная дата в формате YYYY-MM-DD HH:MM (для отладки)
-#define CORE_WIFI_COMMIT_DATE "2026-09-25 21:55"
+#define CORE_WIFI_COMMIT_DATE "2026-10-02 23:17"
 
 // ============================================================
 // ИНФОРМАЦИЯ О ГЕНЕРАЦИИ
 // ============================================================
 
-#define CORE_WIFI_GENERATED_TIME "2026-09-26 17:41"
-#define CORE_WIFI_GENERATED_TIMESTAMP "20260926_174155"
+#define CORE_WIFI_GENERATED_TIME "2026-10-02 23:29"
+#define CORE_WIFI_GENERATED_TIMESTAMP "20261002_232955"
 
 #endif // CORE_WIFI_VERSION_H
