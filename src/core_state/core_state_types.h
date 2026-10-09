@@ -19,7 +19,7 @@
 #define CORE_STATE_MAX_CODES         8
 #define CORE_STATE_MAX_ENUM          8
 #define CORE_STATE_MAX_ARGS          4
-#define CORE_STATE_EV_QUEUE          16
+#define CORE_STATE_EV_QUEUE          64
 #define CORE_STATE_NAME_LEN          56
 #define CORE_STATE_NS_LEN            24
 #define CORE_STATE_FIELD_LEN         32

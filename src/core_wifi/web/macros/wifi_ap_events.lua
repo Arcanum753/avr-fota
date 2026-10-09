@@ -3,8 +3,8 @@
 return {
     desc = "WiFi AP events: on ap_client_joined/left",
     handlers = {
-        onjoin = function(ev) print("ap client joined: " .. tostring(ev.spec)) end,
-        onleft = function(ev) print("ap client left: " .. tostring(ev.spec)) end,
+        onjoin = function(ev) print("ap client joined:", ev.spec) end,
+        onleft = function(ev) print("ap client left:", ev.spec) end,
     },
     rules = {
         { when = { on = "wifi.ap_client_joined" }, run = "onjoin" },

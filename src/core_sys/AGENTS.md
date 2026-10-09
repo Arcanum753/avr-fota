@@ -33,8 +33,10 @@
   `time.tz_changed`.
 - **FR-SYS-TIME-5.** TZ/DST перенесены из `config_ntp.json` (однократная миграция legacy).
 - **FR-SYS-TIME-6.** Обратная синхронизация подчинённых RTC (`syncIntervalS`).
-- **FR-SYS-TIME-7.** Аварийный timestamp: при отсутствии валидных источников TimeLib продолжает
-  идти от последнего валидного (+1/сек); `time.valid=false`.
+- **FR-SYS-TIME-7.** Время показывается всегда: при включении внутренние часы стартуют с
+  `00:00` (`CORE_SYS_TIME_FALLBACK_BASE`, 2000-01-01 00:00:00) и продолжают идти от последнего
+  валидного (+1/сек) даже при отсутствии источников; `time.valid=false`, `time.fallback=true`.
+  Ресурс `time.fallback` (BOOL) — признак работы внутренних часов без активного источника.
 - **FR-SYS-TIME-8.** Backward-jump: источник с временем в прошлом не выбирается (кроме явного
   `time.set` / `time.sync_from` / первого валидного после старта).
 - **FR-SYS-TIME-9.** Форсированный опрос `time.sync_from` / `/time/sync`.
@@ -73,11 +75,13 @@ core_sys.addTimeSource("ntp", 100, ntpGetTime, nullptr, ntpStatus);
 придёт через остаток интервала 1000 мс от последнего планового срабатывания (EERTOS
 `SetTimerTask` идемпотентен по указателю, `time.tick` уже стоит в очереди).
 
-**Backward-jump.** При выборе нового активного: если время кандидата меньше системного более
+**Backward-jump.** Если время кандидата меньше системного более
 чем на `CORE_SYS_TIME_BACKJUMP_MAX_S` (2) и системное время было валидно последние
 `CORE_SYS_TIME_BACKJUMP_GRACE_S` (600) — кандидат отклоняется, `status()` показывает
-`"time in past (use time.sync_from)"`. Откат разрешён через `time.set` / `time.sync_from` или
-при первом валидном источнике после старта.
+`"time in past (use time.sync_from)"`. Проверка применяется в т.ч. к **текущему активному**
+источнику: плохой обратный ре-синк (NTP/DS3231) не уводит часы назад. Откат разрешён через
+`time.set` / `time.sync_from` или при первом валидном источнике после старта. Переходы активного
+источника (`first`/`switch`/`lost`) и причины невалидности логируются через `DEBUGSYS`.
 
 **Fallback.** При отсутствии валидных источников: `setTime(t)` в `timeTick` **не** вызывается,
 если `timeStatus() == timeSet` (не конфликтуем с sync-provider NTPClientLib) — TimeLib тикает
@@ -118,6 +122,7 @@ core_sys.addTimeSource("ntp", 100, ntpGetTime, nullptr, ntpStatus);
 | `time.now_str` | STR | ro | `"YYYY-MM-DD HH:MM:SS"` |
 | `time.hour` / `minute` / `second` | I32 | ro | компоненты (обновляются в `timeTick`) |
 | `time.valid` | BOOL | ro | есть валидный источник |
+| `time.fallback` | BOOL | ro | идут внутренние часы (активного источника нет) |
 | `time.source` | STR | ro | имя активного (`""` если нет) |
 | `time.source_count` | I32 | ro | число источников |
 | `time.sources` | STR | ro | CSV имён |
@@ -138,6 +143,9 @@ core_sys.addTimeSource("ntp", 100, ntpGetTime, nullptr, ntpStatus);
   "sources": { "ntp": { "prio": 100, "enabled": true } } }
 ```
 
+- Дефолт `timeZone=30` (UTC+3), редактируемый через `/time/save`. Файл по умолчанию поставляется
+  с образом FS (`web/config_time.json`).
+
 - Файл создаётся только явным `time.save` / `/time/save` (правило apply/save). Если файла нет:
   legacy `timeZone`/`daylight` из `/config_ntp.json` (однократная миграция), иначе дефолты в
   памяти (`timeZone=0`, `daylight=false`, `syncIntervalS=3600`).
@@ -150,7 +158,7 @@ core_sys.addTimeSource("ntp", 100, ntpGetTime, nullptr, ntpStatus);
 
 | Метод | URL | Назначение |
 |---|---|---|
-| GET | `/time/info` | CVT: `time_now`, `time_now_str`, `time_valid`, `time_source`, `time_sources`, `time_tz`, `time_dst`, `time_sync_interval` |
+| GET | `/time/info` | CVT: `time_now`, `time_now_str`, `time_valid`, `time_fallback`, `time_source`, `time_sources`, `time_tz`, `time_dst`, `time_sync_interval` |
 | GET | `/time/sources` | JSON-массив источников (`AsyncResponseStream`) |
 | POST | `/time/save` | `tz`, `dst`, `syncIntervalS`, `<name>_prio`, `<name>_enabled` |
 | POST | `/time/set` | `value=<epoch>` |

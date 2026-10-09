@@ -32,6 +32,12 @@ void CLASS_CORE_SYS::begin(ModContext& ctx) {
 	loadDeviceIdent(fsSysCfg);
 	load_config_Time();
 
+	// Внутренние часы стартуют с 00:00 и тикают всегда, даже без источников.
+	// time.valid остаётся false; time.fallback сигналит работу внутренних часов
+	// (ресурсы time.* публикуются позже в register_resources()).
+	setTime(CORE_SYS_TIME_FALLBACK_BASE);
+	_timeFallback = true;
+
 	// Заполняем поля глобального контекста после загрузки identity/auth,
 	// чтобы core_wifi и mDNS получили корректные hostname/password.
 	ctx.hostname = getHostName();

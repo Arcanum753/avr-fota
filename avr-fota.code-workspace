@@ -60,6 +60,7 @@
     "settings": {
         "git.autoRepositoryDetection": true,
         "git.repositoryScanMaxDepth": -1,
-        "git.openRepositoryInParentFolders": "always"
+        "git.openRepositoryInParentFolders": "always",
+        "liveServer.settings.multiRootWorkspaceName": "core (avr-fota)"
     }
 }

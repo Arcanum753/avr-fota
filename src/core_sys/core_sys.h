@@ -70,6 +70,7 @@ public:
                           TimeStatusFn status = nullptr);
     time_t  timeNow() const;
     bool    timeValid() const;
+    bool    timeFallback() const;   // идут внутренние часы (активного источника нет)
     const char* timeSourceName() const;
     int8_t  timeZoneHours() const;
     int8_t  timeZoneMinutes() const;
@@ -146,6 +147,7 @@ protected:
     uint8_t       _timeSrcCount      = 0;
     uint8_t       _timeActiveIdx     = 255;   // 255 = активного нет
     time_t        _timeLastValid     = 0;     // 0 = валидного ещё не было
+    bool          _timeFallback      = true;  // true = идут внутренние часы (нет источника)
     uint32_t      _timeLastValidMs   = 0;     // millis() последнего валидного такта
     int32_t       _timeTzDec         = 0;     // часовой пояс, десятые доли часа
     bool          _timeDst           = false;

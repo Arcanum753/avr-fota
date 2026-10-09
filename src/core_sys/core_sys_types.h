@@ -32,6 +32,9 @@
 #define CORE_SYS_TIME_MIN_VALID     1577836800L   // 2020-01-01
 #define CORE_SYS_TIME_BACKJUMP_GRACE_S  600UL
 #define CORE_SYS_TIME_BACKJUMP_MAX_S    2L
+// База внутренних часов при отсутствии источников: 2000-01-01 00:00:00 UTC.
+// Время показывается всегда — с момента включения счётчик стартует с 00:00.
+#define CORE_SYS_TIME_FALLBACK_BASE 946684800L
 
 // Прочитать время источника.
 //   true  — время достоверно, out заполнен;

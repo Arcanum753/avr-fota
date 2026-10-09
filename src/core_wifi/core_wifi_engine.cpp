@@ -426,6 +426,12 @@ void CLASS_CORE_WIFI::configureWifiAP() {
 	core_state.signal("wifi.ap_mode", BusValue::bo(true));
 	core_state.signal("wifi.ap_clients", BusValue::i32(0));
 	core_state.signal("wifi.ap_busy", BusValue::bo(false));
+	// AP-режим: STA-состояние шины больше не актуально — сбрасываем, иначе
+	// wifi.connected/ip/slot_name остаются «залипшими» от прошлого подключения.
+	core_state.signal("wifi.connected", BusValue::bo(false));
+	core_state.signal("wifi.rssi", BusValue::i32(0));
+	core_state.signal("wifi.ip", BusValue::str(""));
+	core_state.signal("wifi.slot_name", BusValue::str(""));
 	ledSetSteady(false);
 	ledMacrosWifiAP();	// вход в AP-режим
 }
@@ -918,12 +924,19 @@ int CLASS_CORE_WIFI::forceApKick() {
 }
 
 int CLASS_CORE_WIFI::forceConnect() {
-	if (_apClientCount > 0) return BUS_ERR_BUSY;
+	if (_apClientCount > 0) {
+		DEBUG_CORE_WIFI("force_connect: busy (apc=%u)\r\n", (unsigned)_apClientCount);
+		return BUS_ERR_BUSY;
+	}
 	int slot = resolveTargetSlot();
-	if (slot < 0) return BUS_ERR_NOT_FOUND;
+	if (slot < 0) {
+		DEBUG_CORE_WIFI("force_connect: slot not found (slot='%s')\r\n", _slot.c_str());
+		return BUS_ERR_NOT_FOUND;
+	}
 	load_configWifi(slot);
 	if (_wifiConfig.ssid.length() == 0 || _wifiConfig.password.length() == 0) {
-		return BUS_ERR_NOT_READY;   // слот найден, но не заполнен
+		DEBUG_CORE_WIFI("force_connect: slot %d incomplete\r\n", slot);
+		return BUS_ERR_NOT_READY;
 	}
 	// Переход в STA и прямое подключение к выбранному слоту (без скана).
 	_suppressDisc = 3;

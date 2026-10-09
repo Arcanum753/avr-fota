@@ -104,6 +104,7 @@ void CLASS_CORE_SYS::registerTimeResources() {
 	core_state.regState("minute", BusValue::I32,  "minute 0..59", false);
 	core_state.regState("second", BusValue::I32,  "second 0..59", false);
 	core_state.regState("valid",  BusValue::BOOL, "at least one valid time source", false);
+	core_state.regState("fallback", BusValue::BOOL, "internal clock running (no active source)", false);
 	core_state.regState("source", BusValue::STR,  "active source name ('' if none)", false);
 	core_state.regState("source_count", BusValue::I32, "registered time sources", false);
 	core_state.regState("sources",      BusValue::STR, "CSV of registered time sources", false);
@@ -123,6 +124,7 @@ void CLASS_CORE_SYS::registerTimeResources() {
 	core_state.signal("time.now", BusValue::tm((int64_t)now()));
 	timeUpdateDerived();
 	core_state.signal("time.valid",  BusValue::bo(false));
+	core_state.signal("time.fallback", BusValue::bo(true));
 	core_state.signal("time.source", BusValue::str(""));
 	core_state.signal("time.tz",  BusValue::i32(_timeTzDec));
 	core_state.signal("time.dst", BusValue::bo(_timeDst));
@@ -189,6 +191,7 @@ void CLASS_CORE_SYS::timeTick() {
 				src.lastReason = why;
 				if (src.validLast) {
 					src.validLast = false;
+					DEBUGSYS("time source %s invalid: %s\r\n", src.name, why);
 					core_state.emit("time.source_invalid",
 						BusValue::str(String(src.name) + ":" + why));
 				}
@@ -202,21 +205,23 @@ void CLASS_CORE_SYS::timeTick() {
 			src.lastReason = "unavailable";
 			if (src.validLast) {
 				src.validLast = false;
+				DEBUGSYS("time source %s invalid: unavailable\r\n", src.name);
 				core_state.emit("time.source_invalid",
 					BusValue::str(String(src.name) + ":unavailable"));
 			}
 			continue;
 		}
 
-		// 5. backward-jump (кроме первого валидного после старта и текущего активного:
-		//    активный уже доверен, повторная проверка дала бы флап на «замороженном» чтении).
-		if (_timeLastValid != 0 && (uint8_t)idx != _timeActiveIdx) {
+		// 5. backward-jump (кроме первого валидного после старта). Проверяем и активный
+		//    источник: плохой обратный ре-синк (NTP/DS3231) не должен уводить часы назад.
+		if (_timeLastValid != 0) {
 			bool wasRecentlyValid = (_timeLastValid != 0)
 				&& ((uint32_t)(millis() - _timeLastValidMs) < CORE_SYS_TIME_BACKJUMP_GRACE_S * 1000UL);
 			if (!ns_core_sys::timeSelectBackJump(t, (time_t)now(), wasRecentlyValid)) {
 				src.lastReason = "time in past (use time.sync_from)";
 				if (src.validLast) {
 					src.validLast = false;
+					DEBUGSYS("time source %s invalid: time in past\r\n", src.name);
 					core_state.emit("time.source_invalid",
 						BusValue::str(String(src.name) + ":time in past"));
 				}
@@ -240,6 +245,8 @@ void CLASS_CORE_SYS::timeTick() {
 
 		// 7a. setTime только на переходе (первый успех / смена активного).
 		if (first || switched) {
+			DEBUGSYS("time: %s source %s t=%lld\r\n",
+			         first ? "first" : "switch to", _timeSrc[activeIdx].name, (long long)activeT);
 			setTime(activeT);
 			_timeLastValid   = activeT;
 			_timeActiveIdx   = (uint8_t)activeIdx;
@@ -252,6 +259,10 @@ void CLASS_CORE_SYS::timeTick() {
 
 		// 7b. Каждый такт при валиде.
 		_timeLastValidMs = millis();
+		if (_timeFallback) {
+			_timeFallback = false;
+			core_state.signal("time.fallback", BusValue::bo(false));
+		}
 		core_state.signal("time.now", BusValue::tm((int64_t)now()));
 		timeUpdateDerived();
 	}
@@ -260,8 +271,13 @@ void CLASS_CORE_SYS::timeTick() {
 		if (_timeActiveIdx != 255) {
 			core_state.signal("time.valid", BusValue::bo(false));
 			core_state.signal("time.source", BusValue::str(""));
+			DEBUGSYS("time: source '%s' lost, internal clock\r\n", timeSourceName());
 			core_state.emit("time.lost");
 			_timeActiveIdx = 255;
+		}
+		if (_timeFallback == false) {
+			_timeFallback = true;
+			core_state.signal("time.fallback", BusValue::bo(true));
 		}
 		if (_timeLastValid != 0) {
 			// Fallback: TimeLib тикает сам; setTime не трогаем, если она уже настроена
@@ -321,6 +337,10 @@ time_t CLASS_CORE_SYS::timeNow() const {
 
 bool CLASS_CORE_SYS::timeValid() const {
 	return (_timeActiveIdx != 255);
+}
+
+bool CLASS_CORE_SYS::timeFallback() const {
+	return _timeFallback;
 }
 
 const char* CLASS_CORE_SYS::timeSourceName() const {
@@ -387,6 +407,8 @@ int CLASS_CORE_SYS::cmdTimeSyncFrom(void* user, int argc, const BusValue* argv, 
 	bool switched = (self->_timeActiveIdx != (uint8_t)idx);
 	self->_timeActiveIdx = (uint8_t)idx;
 	core_state.signal("time.valid", BusValue::bo(true));
+	core_state.signal("time.fallback", BusValue::bo(false));
+	self->_timeFallback = false;
 	core_state.signal("time.source", BusValue::str(src.name));
 	core_state.signal("time.now", BusValue::tm((int64_t)t));
 	self->timeUpdateDerived();
@@ -419,13 +441,13 @@ void CLASS_CORE_SYS::cbTimeSaveTask() {
 // ============================================================
 
 bool CLASS_CORE_SYS::load_config_Time() {
-	_timeTzDec         = 0;
+	_timeTzDec         = 30;    // дефолт UTC+3
 	_timeDst           = false;
 	_timeSyncIntervalS = 3600;   // дефолт (0 = off)
 
 	JsonDocument doc;
 	if (core_json.jsonFileLoadDoc(CONFIG_FILE_TIME, doc)) {
-		_timeTzDec = doc["timeZone"] | 0;
+		_timeTzDec = doc["timeZone"] | 30;
 		_timeDst   = doc["daylight"] | false;
 		uint32_t si = doc["syncIntervalS"] | 3600;
 		_timeSyncIntervalS = (si > 86400UL) ? 86400UL : si;
@@ -437,7 +459,7 @@ bool CLASS_CORE_SYS::load_config_Time() {
 	// Миграция legacy из config_ntp.json (однократно, без автосейва).
 	JsonDocument legacy;
 	if (core_json.jsonFileLoadDoc(TIME_LEGACY_NTP_CFG, legacy)) {
-		_timeTzDec = legacy["timeZone"] | 0;
+		_timeTzDec = legacy["timeZone"] | 30;
 		_timeDst   = legacy["daylight"] | false;
 		if (_timeTzDec < -120) { _timeTzDec = -120; }
 		if (_timeTzDec > 130)  { _timeTzDec = 130; }
@@ -479,6 +501,7 @@ void CLASS_CORE_SYS::handleTimeInfo(AsyncWebServerRequest *request) {
 	values += "time_now_str|"      + String(buf)         + "|div\n";
 	values += "time_valid|"        + String(timeValid() ? "1" : "0") + "|div\n";
 	values += "time_valid_str|"    + String(timeValid() ? "valid" : "invalid") + "|div\n";
+	values += "time_fallback|"     + String(timeFallback() ? "1" : "0") + "|div\n";
 	values += "time_source|"       + String(timeSourceName()) + "|div\n";
 	values += "time_source_count|" + String((int)_timeSrcCount) + "|div\n";
 	String csv;

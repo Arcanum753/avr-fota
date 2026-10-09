@@ -497,7 +497,7 @@ static void test_time_config_defaults(void) {
     timeReset();
     TEST_ASSERT_FALSE(TS().load_config_Time());       // файла нет -> дефолты в памяти
     TEST_ASSERT_EQUAL_UINT32(3600, TS()._timeSyncIntervalS);
-    TEST_ASSERT_EQUAL_INT32(0, TS()._timeTzDec);
+    TEST_ASSERT_EQUAL_INT32(30, TS()._timeTzDec);     // дефолт UTC+3
     TEST_ASSERT_FALSE(TS()._timeDst);
 }
 
