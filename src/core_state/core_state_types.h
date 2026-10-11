@@ -12,7 +12,14 @@
 
 #define CONFIG_FILE_STATE            "/config_state.json"
 
+// Реестр ресурсов. 64 мало для сборок с device/module (sys+wifi+ntp+ota+state+
+// task+macros+veml7700+e7 = уже 64, регистрации сверх лимита молча отбрасываются).
+// На ESP32 увеличиваем запас; на ESP8266 (мало RAM) оставляем 64.
 #define CORE_STATE_MAX_RES           64
+#if defined(ESP32)
+#undef  CORE_STATE_MAX_RES
+#define CORE_STATE_MAX_RES           96
+#endif
 #define CORE_STATE_MAX_NS            16
 #define CORE_STATE_MAX_SUBS          16
 #define CORE_STATE_MAX_ASYNC         6

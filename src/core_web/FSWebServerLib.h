@@ -25,10 +25,10 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
 
-// Глобальный рекурсивный мьютекс «системных» операций. Сериализует веб-обработчики
-// (задача AsyncTCP) и задачи главного цикла (тик макросов/Lua, терминал, …).
-// Устраняет гонки за heap/Lua/ресурсную шину, из-за которых ESP32 падал при
-// одновременной работе страницы и тика сценариев.
+// Глобальный рекурсивный мьютекс «системных» операций: сериализует критические
+// секции веб-обработчиков (задача AsyncTCP) и задач главного цикла (шина/Lua/FS),
+// чтобы исключить гонки за heap/String/LittleFS. Захват короткий: блокирующие
+// сетевые циклы (core_loop_net) вызываются ВНЕ лока.
 SemaphoreHandle_t systemLock();
 
 struct SysLockGuard {
@@ -36,14 +36,14 @@ struct SysLockGuard {
     SysLockGuard() : m(systemLock()) { if (m != nullptr) { xSemaphoreTakeRecursive(m, portMAX_DELAY); } }
     ~SysLockGuard() { if (m != nullptr) { xSemaphoreGiveRecursive(m); } }
 };
-#else
+#endif
+#if defined(ESP8266)
 // На ESP8266 веб-задача совмещена с главным циклом — сериализация не нужна.
 struct SysLockGuard {
     SysLockGuard() {}
     ~SysLockGuard() {}
 };
 #endif
-
 
 #define HTML_INDEX  "index.html"
 
@@ -66,8 +66,8 @@ public:
     bool handleFileRead(String path, AsyncWebServerRequest *request);
     void restart_esp();
 
-    // Обёртки маршрутов: каждый веб-обработчик берёт systemLock и потому не
-    // выполняется одновременно с задачами главного цикла.
+    // Обёртки маршрутов: критическая секция веб-обработчика берёт systemLock,
+    // поэтому не выполняется одновременно с задачами главного цикла.
     AsyncCallbackWebHandler& on(const char* uri, ArRequestHandlerFunction onRequest);
     AsyncCallbackWebHandler& on(const char* uri, WebRequestMethodComposite method, ArRequestHandlerFunction onRequest);
     AsyncCallbackWebHandler& on(const char* uri, WebRequestMethodComposite method, ArRequestHandlerFunction onRequest, ArUploadHandlerFunction onUpload);

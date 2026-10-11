@@ -46,6 +46,7 @@
 | module_otaclient | модуль | `src/module_otaclient/` | — | `src/module_otaclient/AGENTS.md` | MODULE_OTACLIENT | обе | `core_ota` | (ota) |
 | module_rgb | модуль | `src/module_rgb/` | — | `src/module_rgb/AGENTS.md` | MODULE_RGB | обе | — | — |
 | module_i2c-mapper | модуль | `src/module_i2c-mapper/` | — | `src/module_i2c-mapper/AGENTS.md` | MODULE_I2C_MAPPER | обе (env — esp32) | — | — |
+| module_veml7700 | модуль | `src/module_veml7700/` | — | `src/module_veml7700/AGENTS.md` | MODULE_VEML7700 | обе | — | veml7700 |
 | module_template | модуль | `src/module_template/` | — | `src/module_template/AGENTS.md` | MODULE_TEMPLATE | обе | — | — |
 | device_clock-mech | устройство | `src/device_clock-mech/` | — | `src/device_clock-mech/AGENTS.md` | DEVICE_CLOCKMECH | ESP32 | `module_udp`, `module_otaclient`, `module_ds3231` | — |
 | device_mech-ring | устройство | `src/device_mech-ring/` | — | `src/device_mech-ring/AGENTS.md` | DEVICE_RINGMECH | ESP32 | + `device_clock-mech` | — |

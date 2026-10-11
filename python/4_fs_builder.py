@@ -104,6 +104,18 @@ except Exception as e:
     _HAS_PAGE_HEAD_GEN = False
     log_warning(f"Failed to load gen_page_head module: {e}")
 
+# Генератор статического каталога ресурсов для страницы макросов (module_macros).
+try:
+    from gen_resources_catalog import generate_resources_catalog
+    _HAS_RES_CATALOG = True
+    log_info("gen_resources_catalog module loaded successfully")
+except ImportError:
+    _HAS_RES_CATALOG = False
+    log_warning("gen_resources_catalog module not found — /macros/resources.json will not be generated")
+except Exception as e:
+    _HAS_RES_CATALOG = False
+    log_warning(f"Failed to load gen_resources_catalog module: {e}")
+
 def is_fs_build() -> bool:
     global _FS_BUILD_IN_PROGRESS
     
@@ -817,6 +829,23 @@ def prepare_fs_image() -> Optional[Path]:
     unique_files = common_files + web_files - overwritten_files
     log_info(f"Copied {web_files} web files from modules ({overwritten_files} overwrites)")
     log_info(f"Total unique files: {unique_files}")
+
+    # 7b. Статический каталог ресурсов для страницы макросов (module_macros).
+    # Собирается из исходников включённых компонентов и кладётся в /macros/resources.json,
+    # чтобы страница не дёргала тяжёлый рантайм-эндпоинт /macros/resources.
+    if "module_macros" in included_modules:
+        if _HAS_RES_CATALOG:
+            try:
+                generate_resources_catalog(
+                    src_dir,
+                    target_web_dir,
+                    env.subst("${SRC_FILTER}"),
+                    included_modules=list(included_modules.keys()),
+                )
+            except Exception as e:
+                log_warning(f"Failed to generate resources catalog: {e}")
+        else:
+            log_warning("resources catalog generator unavailable — /macros/resources.json skipped")
     
     # 8. Генерируем динамический page_head.html на основе включённых модулей
     if _HAS_PAGE_HEAD_GEN:

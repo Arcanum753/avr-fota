@@ -48,6 +48,7 @@ SemaphoreHandle_t systemLock() {
 }
 #endif
 
+#if defined(ESP32)
 namespace {
 ArRequestHandlerFunction sysWrapReq(ArRequestHandlerFunction fn) {
     return [fn](AsyncWebServerRequest* r) { SysLockGuard g; if (fn) { fn(r); } };
@@ -79,8 +80,7 @@ AsyncCallbackWebHandler& AsyncFSWebServer::on(const char* uri, WebRequestMethodC
 void AsyncFSWebServer::onNotFound(ArRequestHandlerFunction fn) {
     AsyncWebServer::onNotFound(sysWrapReq(fn));
 }
-
-
+#endif
 
 AsyncFSWebServer::AsyncFSWebServer(uint16_t port) : AsyncWebServer(port) {}
 // esp8266/esp32 flash file system
@@ -239,11 +239,10 @@ bool AsyncFSWebServer:: handleFileRead(String path, AsyncWebServerRequest *reque
 }
 
 void AsyncFSWebServer::serverInit() {
-	// Keep-Alive включён: браузер переиспользует ~6 соединений вместо нового
-	// TCP-соединения на каждый ресурс. Ранее keep-alive отключали из-за падения
-	// на крупных ответах (AsyncResponseStream/AsyncBasicResponse), но теперь
-	// большие ответы отдаются chunked, поэтому churn соединений не нужен.
-	DefaultHeaders::Instance().addHeader("Connection", "keep-alive");
+	// Keep-Alive запрещён: браузер не должен держать открытые TCP-соединения —
+	// они вызывали сброс ESP и зависание веб-сервера при длительном простое.
+	// (Ре-включение keep-alive в af92ccc дало нестабильность — вернули close.)
+	DefaultHeaders::Instance().addHeader("Connection", "close");
 
 	//called when the url is not defined here
 	//use it to load content from LittleFS

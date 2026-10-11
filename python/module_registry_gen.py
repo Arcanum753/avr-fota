@@ -282,6 +282,10 @@ def h_content() -> str:
         "void modules_loop();\n"
         "void dev_loop();\n"
         "\n"
+        "// Блокирующие сетевые задачи (OTA-клиент/core_ota): вызывается ВНЕ systemLock,\n"
+        "// чтобы блокировки сокетов не стопорили веб-задачу AsyncTCP.\n"
+        "void core_loop_net();\n"
+        "\n"
         "#endif // _MODULES_REGISTRY_h\n"
     )
 
@@ -291,7 +295,8 @@ def cpp_content(env_name: str,
                 core_begin: List[str], modules_begin: List[str], dev_begin: List[str],
                 core_res: List[str], modules_res: List[str], dev_res: List[str],
                 core_web: List[str], modules_web: List[str], dev_web: List[str],
-                core_loop: List[str], modules_loop: List[str], dev_loop: List[str]) -> str:
+                core_loop: List[str], modules_loop: List[str], dev_loop: List[str],
+                core_loop_net: List[str] = None) -> str:
     L: List[str] = []
     L.append('#include "modules_registry.h"')
     L.append('// core_web/FSWebServerLib.h включается первым: предоставляет AsyncWebServerRequest,')
@@ -330,6 +335,7 @@ def cpp_content(env_name: str,
     func("core_loop", core_loop)
     func("modules_loop", modules_loop)
     func("dev_loop", dev_loop)
+    func("core_loop_net", core_loop_net or [])
 
     return "\n".join(L)
 
@@ -457,16 +463,18 @@ def main():
         # слоты модулей (TerminalRegisterModule).
         "TerminalLoop();",
     ]
+    # Блокирующие сетевые задачи выполняются вне systemLock (см. main.cpp loop()).
+    core_loop_net: List[str] = []
 
     if is_otaclient:
         # module_otaclient — OTA-клиент; заголовок подключается через регистрируемые модули.
         core_begin.append("module_otaclient.begin(ctx);")
         core_web.append("module_otaclient.web_Init();")
-        core_loop.append("module_otaclient.loop();")
+        core_loop_net.append("module_otaclient.loop();")
     else:
         core_begin.append("core_ota.begin(ctx);")
         core_web.append("core_ota.web_Init();")
-        core_loop.append("core_ota.loop();")
+        core_loop_net.append("core_ota.loop();")
 
     # ---- Ресурсы ядровых ----
     def core_registry(core_name: str, default_ns: str, default_res: int):
@@ -635,6 +643,7 @@ def main():
         core_res, modules_res, dev_res,
         core_web, modules_web, dev_web,
         core_loop, modules_loop, dev_loop,
+        core_loop_net,
     ))
     write_file(defines_out, defines_h_content(env_name, defines))
 

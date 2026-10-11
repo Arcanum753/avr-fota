@@ -49,32 +49,39 @@ void setup() {
 }
 
 void loop() {
-    // Сериализация с веб-обработчиками (задача AsyncTCP).
-    SysLockGuard _sysLock;
+    // Критическая секция: сериализация с веб-обработчиками (задача AsyncTCP).
+    // Блокирующие сетевые циклы (core_loop_net) вынесены НИЖЕ, вне лока.
+    {
+        SysLockGuard _sysLock;
 #if defined(ESP32)
-    esp_task_wdt_reset();
+        esp_task_wdt_reset();
 #endif
 #if defined(ESP8266)
-    // yield() обрабатывает AsyncTCP колбэки и сбрасывает watchdog
-    // БЕЗ yield() ESPAsyncWebServer не может корректно обрабатывать
-    // входящие HTTP-соединения, что приводит к Panic __yield
-    // при рекурсивном вызове yield() внутри beginResponse()
-    yield();
+        // yield() обрабатывает AsyncTCP колбэки и сбрасывает watchdog
+        // БЕЗ yield() ESPAsyncWebServer не может корректно обрабатывать
+        // входящие HTTP-соединения, что приводит к Panic __yield
+        // при рекурсивном вызове yield() внутри beginResponse()
+        yield();
 #endif
-    // Сбрасываем watchdog перед выполнением задач EERTOS
-    // TaskManager может выполнять длительные операции (LittleFS, WiFi)
-    TaskManager();
-    
-    // Сбрасываем watchdog после TaskManager
+        // Сбрасываем watchdog перед выполнением задач EERTOS
+        // TaskManager может выполнять длительные операции (LittleFS, WiFi)
+        TaskManager();
+
+        // Сбрасываем watchdog после TaskManager
 #if defined(ESP32)
-    esp_task_wdt_reset();
+        esp_task_wdt_reset();
 #endif
 #if defined(ESP8266)
-    ESP.wdtFeed();
+        ESP.wdtFeed();
 #endif
-    core_loop();
-    modules_loop();
-    dev_loop();
+        core_loop();
+        modules_loop();
+        dev_loop();
+    }
+
+    // Блокирующие сетевые задачи (OTA-клиент/core_ota) — вне лока, чтобы их
+    // сокетные таймауты не блокировали веб-задачу AsyncTCP.
+    core_loop_net();
 }
 
 void printGitInfo() {
