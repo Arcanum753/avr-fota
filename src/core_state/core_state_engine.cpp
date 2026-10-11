@@ -266,6 +266,11 @@ bool CLASS_CORE_STATE::has(const char* name) {
     return findRes(name) >= 0;
 }
 
+bool CLASS_CORE_STATE::hasNamespace(const char* ns) {
+    if (ns == nullptr || ns[0] == 0) { return false; }
+    return findNs(ns, false) >= 0;
+}
+
 bool CLASS_CORE_STATE::getBool(const char* name, bool def) {
     int idx = findRes(name);
     if (idx < 0 || _res[idx].kind == BusValue::NONE) { return def; }
@@ -359,6 +364,26 @@ const char* CLASS_CORE_STATE::enumNameByIndex(const char* res, int index) {
 // ============================================================
 // Запись значений
 // ============================================================
+
+// Сравнение значений одного (целевого) типа ресурса — для дедупликации записи.
+static bool busValueEqual(const BusValue& a, const BusValue& b, BusValue::Kind k) {
+    switch (k) {
+        case BusValue::BOOL: return a.b == b.b;
+        case BusValue::I32:
+        case BusValue::ENUM: return a.i == b.i;
+        case BusValue::F32:  return a.f == b.f;
+        case BusValue::TIME: return a.t == b.t;
+        case BusValue::STR:  return a.s == b.s;
+        default:             return false;
+    }
+}
+
+// Проверяет допустимость значения для ENUM-ресурса (индекс в диапазоне).
+static bool busEnumRangeOk(BusValue::Kind kind, uint8_t enumCount, const BusValue& coerced) {
+    if (kind != BusValue::ENUM || enumCount == 0) { return true; }
+    return coerced.i >= 0 && coerced.i < (int32_t)enumCount;
+}
+
 int CLASS_CORE_STATE::writeRes(int idx, const BusValue& v, bool checkAccess) {
     BusRes& r = _res[idx];
     // Чистые функции/события (kind == NONE) не являются значениями.
@@ -379,17 +404,59 @@ int CLASS_CORE_STATE::writeRes(int idx, const BusValue& v, bool checkAccess) {
     }
 
     BusValue coerced = busCoerce(v, r.kind);
-    if (r.kind == BusValue::ENUM && r.enumCount > 0) {
-        if (coerced.i < 0 || coerced.i >= (int32_t)r.enumCount) {
-            return BUS_ERR_BAD_VALUE;
-        }
+    if (!busEnumRangeOk(r.kind, r.enumCount, coerced)) {
+        return BUS_ERR_BAD_VALUE;
     }
+
+    // Дедупликация записи: если значение не изменилось — не обновляем реестр и
+    // не эмитим "state.<name>". Сохраняет edge-семантику (запись из сценария
+    // повторно не «дёргает» подписчиков). Колбэки вызова (call) не дедуплицируются.
+    BusValue prev = busCoerce(r.value, r.kind);
+    if (busValueEqual(prev, coerced, r.kind)) {
+        return BUS_OK;
+    }
+
     r.value = coerced;
 
     char evt[CORE_STATE_NAME_LEN];
     snprintf(evt, sizeof(evt), "state.%s", r.name);
     queueEvent(evt, r.value);
     return BUS_OK;
+}
+
+// Единая запись «значения ресурса»: dual → write-функция, чистое состояние → set.
+// Дедупликация — как в writeRes: при неизменном значении write-функция не вызывается.
+int CLASS_CORE_STATE::applyValue(const char* name, const BusValue& v) {
+    int idx = findRes(name);
+    if (idx < 0) { return BUS_ERR_NOT_FOUND; }
+    BusRes& r = _res[idx];
+
+    // Чистая функция/событие без состояния: применяем через функцию.
+    if (r.kind == BusValue::NONE) {
+        if (r.isFunc && !r.async) {
+            BusValue res;
+            return r.fn(r.user, 1, &v, res);
+        }
+        return BUS_ERR_BAD_TYPE;
+    }
+
+    BusValue coerced = busCoerce(v, r.kind);
+    if (!busEnumRangeOk(r.kind, r.enumCount, coerced)) {
+        return BUS_ERR_BAD_VALUE;
+    }
+
+    BusValue prev = busCoerce(r.value, r.kind);
+    bool same = busValueEqual(prev, coerced, r.kind);
+
+    // dual state+func: запись значения применяется write-функцией.
+    if (r.isFunc && !r.async) {
+        if (same) { return BUS_OK; }    // уже такое значение — функция не нужна
+        BusValue res;
+        return r.fn(r.user, 1, &coerced, res);
+    }
+
+    if (same) { return BUS_OK; }
+    return writeRes(idx, coerced, true);
 }
 
 int CLASS_CORE_STATE::setBool(const char* name, bool value) {

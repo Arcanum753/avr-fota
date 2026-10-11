@@ -36,6 +36,50 @@
 
 AsyncFSWebServer ESPHTTPServer(80);
 
+// ============================================================
+// Глобальный рекурсивный мьютекс «системных» операций
+// ============================================================
+
+#if defined(ESP32)
+SemaphoreHandle_t systemLock() {
+    static SemaphoreHandle_t s_lock = nullptr;
+    if (s_lock == nullptr) { s_lock = xSemaphoreCreateRecursiveMutex(); }
+    return s_lock;
+}
+#endif
+
+namespace {
+ArRequestHandlerFunction sysWrapReq(ArRequestHandlerFunction fn) {
+    return [fn](AsyncWebServerRequest* r) { SysLockGuard g; if (fn) { fn(r); } };
+}
+ArUploadHandlerFunction sysWrapUp(ArUploadHandlerFunction fn) {
+    return [fn](AsyncWebServerRequest* r, const String& n, size_t i, uint8_t* d, size_t l, bool f) {
+        SysLockGuard g; if (fn) { fn(r, n, i, d, l, f); }
+    };
+}
+ArBodyHandlerFunction sysWrapBody(ArBodyHandlerFunction fn) {
+    return [fn](AsyncWebServerRequest* r, uint8_t* d, size_t l, size_t i, size_t t) {
+        SysLockGuard g; if (fn) { fn(r, d, l, i, t); }
+    };
+}
+} // namespace
+
+AsyncCallbackWebHandler& AsyncFSWebServer::on(const char* uri, ArRequestHandlerFunction fn) {
+    return AsyncWebServer::on(uri, sysWrapReq(fn));
+}
+AsyncCallbackWebHandler& AsyncFSWebServer::on(const char* uri, WebRequestMethodComposite method, ArRequestHandlerFunction fn) {
+    return AsyncWebServer::on(uri, method, sysWrapReq(fn));
+}
+AsyncCallbackWebHandler& AsyncFSWebServer::on(const char* uri, WebRequestMethodComposite method, ArRequestHandlerFunction fn, ArUploadHandlerFunction up) {
+    return AsyncWebServer::on(uri, method, sysWrapReq(fn), sysWrapUp(up));
+}
+AsyncCallbackWebHandler& AsyncFSWebServer::on(const char* uri, WebRequestMethodComposite method, ArRequestHandlerFunction fn, ArUploadHandlerFunction up, ArBodyHandlerFunction body) {
+    return AsyncWebServer::on(uri, method, sysWrapReq(fn), sysWrapUp(up), sysWrapBody(body));
+}
+void AsyncFSWebServer::onNotFound(ArRequestHandlerFunction fn) {
+    AsyncWebServer::onNotFound(sysWrapReq(fn));
+}
+
 
 
 AsyncFSWebServer::AsyncFSWebServer(uint16_t port) : AsyncWebServer(port) {}
@@ -48,6 +92,9 @@ AsyncFSWebServer::AsyncFSWebServer(uint16_t port) : AsyncWebServer(port) {}
 #endif
 {
 	_fs = fs;
+#if defined(ESP32)
+	systemLock();   // создать мьютекс заранее (в задаче setup/loop)
+#endif
 	DBG_OUTPUT_PORT.begin(115200);
 	DBG_OUTPUT_PORT.print("\n\n");
 #ifndef RELEASE
@@ -147,6 +194,21 @@ bool AsyncFSWebServer:: handleFileRead(String path, AsyncWebServerRequest *reque
     	ESP.wdtFeed();
 #endif
 		AsyncWebServerResponse *response = request->beginResponse(*_fs, path, contentType);
+		// Кэширование статики: браузер не перезапрашивает css/js/картинки/фрагменты
+		// при навигации — меньше параллельных соединений к ESP32.
+		{
+			String low = path;
+			low.toLowerCase();
+			const char* cc = nullptr;
+			if (low.endsWith(".css") || low.endsWith(".js") || low.endsWith(".gif") ||
+			    low.endsWith(".png") || low.endsWith(".ico") || low.endsWith(".svg") ||
+			    low.endsWith(".woff") || low.endsWith(".woff2") || low.endsWith(".jpg")) {
+				cc = "public, max-age=86400";
+			} else if (low.endsWith(".html") || low.endsWith(".htm")) {
+				cc = "public, max-age=3600";
+			}
+			if (cc != nullptr) { response->addHeader("Cache-Control", cc); }
+		}
 #if GZIP_ENABLED
 		if (path.endsWith(".gz")) {response->addHeader("Content-Encoding", "gzip");}
 #endif
@@ -177,9 +239,11 @@ bool AsyncFSWebServer:: handleFileRead(String path, AsyncWebServerRequest *reque
 }
 
 void AsyncFSWebServer::serverInit() {
-	// Запрещаем Keep-Alive, чтобы браузер не держал открытые
-	// TCP-соединения - они вызывали сброс ESP при длительном простое
-	DefaultHeaders::Instance().addHeader("Connection", "close");
+	// Keep-Alive включён: браузер переиспользует ~6 соединений вместо нового
+	// TCP-соединения на каждый ресурс. Ранее keep-alive отключали из-за падения
+	// на крупных ответах (AsyncResponseStream/AsyncBasicResponse), но теперь
+	// большие ответы отдаются chunked, поэтому churn соединений не нужен.
+	DefaultHeaders::Instance().addHeader("Connection", "keep-alive");
 
 	//called when the url is not defined here
 	//use it to load content from LittleFS

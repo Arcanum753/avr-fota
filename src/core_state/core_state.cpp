@@ -224,14 +224,7 @@ void CLASS_CORE_STATE::handleSet(AsyncWebServerRequest *request) {
         default:             arg = BusValue::i32(val.toInt()); break;
     }
 
-    int rc;
-    if (r.isFunc && !r.async) {
-        // Ресурс-состояние с функцией записи: применяем через функцию.
-        BusValue res;
-        rc = r.fn(r.user, 1, &arg, res);
-    } else {
-        rc = writeRes(idx, arg, true);
-    }
+    int rc = applyValue(r.name, arg);
     if (rc == BUS_OK) {
         request->send(200, "text/plain", "OK");
     } else {

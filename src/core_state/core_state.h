@@ -61,6 +61,9 @@ public:
     String getStr  (const char* name, const String& def = "");
     int64_t getTime(const char* name, int64_t def = 0);
     bool   has     (const char* name);
+    // Существует ли namespace (включая привилегированные ядровые). Для прокси
+    // сценариев macros: превращение ns.field в таблицу ресурса.
+    bool   hasNamespace(const char* ns);
     int    info    (const char* name, BusResInfo& out);
     int    mode    (const char* module_namespace, int new_mode);
 
@@ -70,6 +73,11 @@ public:
     int setF32  (const char* name, float value);
     int setStr  (const char* name, const String& value);
     int setTime (const char* name, int64_t value);
+
+    // Единая запись «значения ресурса»: для dual state+func вызывает write-функцию,
+    // для чистого состояния пишет значение. Оба пути дедуплицированы (если значение
+    // не изменилось — ничего не делает). Не дедуплицирует вызовы call().
+    int applyValue(const char* name, const BusValue& v);
 
     // --- События ---
     uint32_t on  (const char* evt, BusCb cb, void* user);

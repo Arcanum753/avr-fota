@@ -49,6 +49,8 @@ void setup() {
 }
 
 void loop() {
+    // Сериализация с веб-обработчиками (задача AsyncTCP).
+    SysLockGuard _sysLock;
 #if defined(ESP32)
     esp_task_wdt_reset();
 #endif
