@@ -4,6 +4,13 @@
 
 Универсальная прошивка для **ESP8266** и **ESP32** с веб-интерфейсом для программирования AVR (AtMega/AtTiny) и STM32 микроконтроллеров по локальной сети, а также для удалённого управления устройствами. Форк [FSBrowserNG](https://github.com/gmag11/FSBrowserNG) с логикой ISP-программирования из [Standalone-Arduino-AVR-ISP-programmer](https://github.com/adafruit/Standalone-Arduino-AVR-ISP-programmer/) и логикой SWD из [ESP32_nRF52_SWD](https://github.com/atc1441/ESP32_nRF52_SWD) / [blackmagic](https://codeberg.org/blackmagic-debug/blackmagic).
 
+## Правило для ИИ-агента: otasyncer-server
+
+- Главный и **единственный** репозиторий сервера — `D:\github\avr-fota\otasyncer-server`.
+- Все изменения сервера (`app.py`, `templates/`, `static/`, `config.json`, `requirements.txt`, `AGENTS.md`) вносить только в него.
+- Отдельные клоны `otasyncer-server` вне `avr-fota` не использовать, не синхронизировать и считать устаревшими.
+- Git-операции выполнять в `D:\github\avr-fota\otasyncer-server` (это отдельный git-репозиторий внутри проекта).
+
 ## Соглашения о стиле кода
 
 - **Сохранять существующий стиль кода.** Не менять форматирование, отступы, расположение скобок или пробелы без необходимости.
@@ -732,6 +739,7 @@ avr-fota/
 ├── web_debug/               # Подготовленный каталог сборки FS (генерируется)
 ├── proj_fwbins/             # Собранные бинарники прошивки + FS (генерируется)
 ├── .pio/                    # Артефакты сборки PlatformIO
+├── otasyncer-server/        # Главный и единственный репозиторий сервера (отдельный git)
 ├── partitions_esp32.csv     # Таблица разделов ESP32
 ├── platformio.ini           # Конфиг проекта PlatformIO
 ├── library.json             # Метаданные библиотеки
