@@ -44,6 +44,7 @@ pio run --environment esp32_clock-mech
 PlatformIO автоматически выполняет скрипты в заданном порядке.
 
 **Пре-скрипты (до компиляции, порядок = номер файла):**
+- `0_esp32_common.py` — для всех ESP32: общие флаги размера (`-fno-exceptions`/unwind) и единая таблица `partitions_esp32.csv`.
 - `1_registry_pre_build.py` — генерирует список модулей `modules_registry.cpp/.h` под текущий env.
 - `2_version_builder.py` — пишет версию прошивки в `src/version.h`.
 - `3_module_version_gen.py` — версии модулей (меняются при изменении кода модуля).

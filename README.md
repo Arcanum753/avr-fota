@@ -27,6 +27,7 @@
   - [Именование файлов прошивки и ФС](#именование-файлов-прошивки-и-фс)
   - [Файл _version_fs.json](#файл-_version_fsjson)
 - [Python-скрипты сборки](#python-скрипты-сборки)
+  - [0_esp32_common.py](#0_esp32_commonpy)
   - [1_registry_pre_build.py](#1_registry_pre_buildpy)
   - [2_version_builder.py](#2_version_builderpy)
   - [3_module_version_gen.py](#3_module_version_genpy)
@@ -409,7 +410,24 @@ MAJOR.MINOR.DATE.BUILD
 
 ## Python-скрипты сборки
 
-Все скрипты находятся в директории `python/` и подключаются к процессу сборки PlatformIO через параметр `extra_scripts` в `platformio.ini`. Скрипты разделены на **pre-scripts** (выполняются до компиляции) и **post-scripts** (выполняются после компиляции). Число в имени файла (`1_`, `2_`, …) — порядок выполнения. Утилиты `module_registry_gen.py`, `gen_page_head.py`, `build_all.py` запускаются другими скриптами или вручную, поэтому номера не имеют.
+Все скрипты находятся в директории `python/` и подключаются к процессу сборки PlatformIO через параметр `extra_scripts` в `platformio.ini`. Скрипты разделены на **pre-scripts** (выполняются до компиляции) и **post-scripts** (выполняются после компиляции). Число в имени файла (`0_`, `1_`, …) — порядок выполнения. Утилиты `module_registry_gen.py`, `gen_page_head.py`, `build_all.py` запускаются другими скриптами или вручную, поэтому номера не имеют.
+
+### 0_esp32_common.py
+
+**Назначение:** Единые флаги размера и единая таблица разделов для всех ESP32-сборок.
+
+**Тип:** Pre-script (только для `espressif32`)
+
+**Алгоритм:**
+
+1. Для `PIOPLATFORM=espressif32` добавляет `-fno-exceptions`, `-fno-unwind-tables`,
+   `-fno-asynchronous-unwind-tables`.
+2. Удаляет framework-флаг `-fexceptions` через `BUILD_UNFLAGS` (иначе framework снова
+   включит исключения).
+3. Принудительно ставит `board_build.partitions = partitions_esp32.csv`, перекрывая
+   env-настройки (включая macro/nonmacro и `esp32-c3-devkitm-1`).
+
+ESP8266 скрипт не затрагивает.
 
 ### 1_registry_pre_build.py
 
@@ -615,6 +633,7 @@ MAJOR.MINOR.DATE.BUILD
 **Pre-scripts (до компиляции):**
 
 ```
+0. 0_esp32_common.py       → флаги размера и единая таблица разделов для всех ESP32
 1. 1_registry_pre_build.py → генерирует modules_registry.cpp/.h под текущий env
 2. 2_version_builder.py    → генерирует src/version.h (MAJOR.MINOR.DATE.BUILD)
 3. 3_module_version_gen.py → генерирует *_version.h для каждого модуля

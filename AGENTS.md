@@ -561,6 +561,7 @@ on("wifi.just_connected", function(ev) e7.speed(40) end)
 Порядок запуска и назначение:
 
 **Pre-скрипты** (перед компиляцией, порядок = номер файла):
+0. `0_esp32_common.py` — для всех ESP32: общие флаги размера (`-fno-exceptions`/unwind) и единая таблица `partitions_esp32.csv`
 1. `1_registry_pre_build.py` — запускает `module_registry_gen.py` под текущий env (см. «Механизм подключения: единый контракт модулей + автогенерация registry»)
 2. `2_version_builder.py` — генерирует `src/version.h` с `MAJOR.MINOR.DATE.BUILD`, git-информацией, автоинкрементом MINOR при смене коммита, автоинкрементом BUILD при каждой сборке. Защищён от двойного запуска через переменную окружения.
 3. `3_module_version_gen.py` — генерирует `*_version.h` для каждого ядра/модуля (определение изменений по git-хешу)
@@ -670,6 +671,7 @@ AC-22 (негативная сборка без ядра) проверяются
 avr-fota/
 ├── data/                    # Пустая (заглушка для сборщика FS; веб-файлы в src/core_* /web)
 ├── python/                  # Скрипты сборки
+│   ├── 0_esp32_common.py     # Общие флаги размера и таблица разделов для всех ESP32
 │   ├── 1_registry_pre_build.py # Хук регенерации registry (запускает module_registry_gen.py)
 │   ├── 2_version_builder.py  # Генерация заголовка версии
 │   ├── 3_module_version_gen.py # Генерация версий по модулям

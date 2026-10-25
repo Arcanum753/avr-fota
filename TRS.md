@@ -531,7 +531,7 @@
 ### 5.1. Аппаратные и платформенные
 
 - CON-1: Платформы — `espressif8266` (D1 mini; 4 МБ flash, 2 МБ FS, ldscript `eagle.flash.4m2m.ld`) и `espressif32` (WROOM/CAM/C3); framework — Arduino.
-- CON-2: ФС — **LittleFS**. ESP32: `partitions_esp32.csv` (nvs/otadata/app0 0x130000/app1 0x130000/spiffs 0x18E000/sysid/nvs_key); macros-сборки: `partitions_esp32_macro.csv` (app0/app1 0x150000, spiffs 0x14E000).
+- CON-2: ФС — **LittleFS**. ESP32 (все env, включая macros): единая `partitions_esp32.csv` (app0/app1 0x170000, spiffs 0x10E000, sysid/nvs_key); путь форсируется `python/0_esp32_common.py`. `partitions_esp32_macro.csv` удалён.
 - CON-3: Два OTA-слота — обязательное условие FOTA.
 - CON-4: `module_macros` — только ESP32.
 - CON-5: Платформенные различия — в `#if ESP32`/`#if ESP8266`; новые блоки — только `#if`/`#endif`.
@@ -539,7 +539,7 @@
 ### 5.2. Сборочные
 
 - CON-6: `src/modules_registry.cpp/.h` — генерируемые, не в git; пересоздаются pre-скриптом `1_registry_pre_build.py` под текущий env.
-- CON-7: Порядок скриптов: `1_registry_pre_build` → `2_version_builder` → `3_module_version_gen` → `4_fs_builder` → `5_set_fs_data_dir` (pre); `6_copy_fw` → `7_copy_fs` (post).
+- CON-7: Порядок скриптов: `0_esp32_common` → `1_registry_pre_build` → `2_version_builder` → `3_module_version_gen` → `4_fs_builder` → `5_set_fs_data_dir` (pre); `6_copy_fw` → `7_copy_fs` (post).
 - CON-8: Компоненты — отдельные репозитории; для сборки устройства должны быть склонированы оно само и все модули из его `.ini`.
 - CON-9: env-конфиги компонентов перечисляются в `extra_configs` явными путями (glob-маски `src/*/*.ini` и `src/*/*/*.ini` закомментированы); при смене `src_filter`/`build_flags` нужна перегенерация registry.
 - CON-10: Инструменты — PlatformIO (VSCode); монитор 115200, скорость загрузки 921600.
