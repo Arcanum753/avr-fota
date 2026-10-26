@@ -58,9 +58,42 @@ static int asyncDoneCb(void* user, int argc, const BusValue* argv, BusValue&) {
     return 0;
 }
 
+// ============================================================
+// Шпионы сохранения режима
+// ============================================================
+static TestState* g_modeSt = nullptr;
+static int g_modeWriteCalls = 0;
+static int g_modeSaveCalls = 0;
+static int g_paramSaveCalls = 0;
+
+static int modeWriteCb(void* user, int argc, const BusValue* argv, BusValue&) {
+    g_modeWriteCalls++;
+    const char* ns = (const char*)user;
+    if (g_modeSt != nullptr && ns != nullptr && argc > 0) {
+        char full[CORE_STATE_NAME_LEN];
+        snprintf(full, sizeof(full), "%s.mode", ns);
+        g_modeSt->signal(full, BusValue::en(argv[0].i));
+    }
+    return BUS_OK;
+}
+
+static int modeSaveCb(void*, int, const BusValue*, BusValue&) {
+    g_modeSaveCalls++;
+    return BUS_OK;
+}
+
+static int paramSaveCb(void*, int, const BusValue*, BusValue&) {
+    g_paramSaveCalls++;
+    return BUS_OK;
+}
+
 void setUp(void) {
     mockMillisSet(0);
     g_asyncHandle = 0;
+    g_modeSt = nullptr;
+    g_modeWriteCalls = 0;
+    g_modeSaveCalls = 0;
+    g_paramSaveCalls = 0;
 }
 void tearDown(void) {}
 
@@ -308,6 +341,73 @@ static void test_mode_timeout(void) {
     TEST_ASSERT_EQUAL_INT(CORE_MODE_NORMAL, st.getMode());
 }
 
+static void setupModeNamespace(TestState& st, const char* ns, bool withSaveMode) {
+    static const char* vals[] = { "off", "auto", "macro" };
+    st.setNamespace(ns);
+    st.regEnum("mode", 3, vals, "mode");
+    st.regFunc("mode", "i->", "mode", modeWriteCb, (void*)ns);
+    st.regFunc("save", "->", "save", paramSaveCb, nullptr);
+    if (withSaveMode) {
+        st.regFunc("save_mode", "->", "save mode", modeSaveCb, nullptr);
+    }
+    st.clearNamespace();
+}
+
+static void test_module_mode_saves_only_mode(void) {
+    TestState st;
+    g_modeSt = &st;
+    setupModeNamespace(st, "dev", true);
+
+    TEST_ASSERT_EQUAL_INT(BUS_OK, st.moduleMode("dev", 2));
+    TEST_ASSERT_EQUAL_INT(1, g_modeWriteCalls);
+    TEST_ASSERT_EQUAL_INT(1, g_modeSaveCalls);
+    TEST_ASSERT_EQUAL_INT(0, g_paramSaveCalls);
+    TEST_ASSERT_EQUAL_INT(2, st.getInt("dev.mode"));
+
+    // Повторная установка того же режима не должна трогать flash.
+    TEST_ASSERT_EQUAL_INT(BUS_OK, st.mode("dev", 2));
+    TEST_ASSERT_EQUAL_INT(1, g_modeWriteCalls);
+    TEST_ASSERT_EQUAL_INT(1, g_modeSaveCalls);
+
+    TEST_ASSERT_EQUAL_INT(BUS_ERR_BAD_VALUE, st.mode("dev", 3));
+    TEST_ASSERT_EQUAL_INT(1, g_modeWriteCalls);
+    TEST_ASSERT_EQUAL_INT(1, g_modeSaveCalls);
+}
+
+static void test_apply_value_mode_saves_only_mode(void) {
+    TestState st;
+    g_modeSt = &st;
+    setupModeNamespace(st, "dev", true);
+
+    TEST_ASSERT_EQUAL_INT(BUS_OK, st.applyValue("dev.mode", BusValue::en(1)));
+    TEST_ASSERT_EQUAL_INT(1, g_modeSaveCalls);
+    TEST_ASSERT_EQUAL_INT(0, g_paramSaveCalls);
+
+    TEST_ASSERT_EQUAL_INT(BUS_OK, st.applyValue("dev.mode", BusValue::en(1)));
+    TEST_ASSERT_EQUAL_INT(1, g_modeSaveCalls);
+}
+
+static void test_module_mode_without_save_mode(void) {
+    TestState st;
+    g_modeSt = &st;
+    setupModeNamespace(st, "dev", false);
+
+    TEST_ASSERT_EQUAL_INT(BUS_OK, st.mode("dev", 1));
+    TEST_ASSERT_EQUAL_INT(1, g_modeWriteCalls);
+    TEST_ASSERT_EQUAL_INT(0, g_modeSaveCalls);
+    TEST_ASSERT_EQUAL_INT(1, st.getInt("dev.mode"));
+}
+
+static void test_system_mode_not_persisted(void) {
+    TestState st;
+    g_modeSt = &st;
+    setupModeNamespace(st, "system", true);
+
+    TEST_ASSERT_EQUAL_INT(BUS_OK, st.mode("system", 1));
+    TEST_ASSERT_EQUAL_INT(1, g_modeWriteCalls);
+    TEST_ASSERT_EQUAL_INT(0, g_modeSaveCalls);
+}
+
 // ============================================================
 // Каталог
 // ============================================================
@@ -371,6 +471,10 @@ int main(int, char**) {
     RUN_TEST(test_mode_busy_conflicts);
     RUN_TEST(test_mode_prio);
     RUN_TEST(test_mode_timeout);
+    RUN_TEST(test_module_mode_saves_only_mode);
+    RUN_TEST(test_apply_value_mode_saves_only_mode);
+    RUN_TEST(test_module_mode_without_save_mode);
+    RUN_TEST(test_system_mode_not_persisted);
 
     RUN_TEST(test_catalog);
     RUN_TEST(test_value_to_kind);

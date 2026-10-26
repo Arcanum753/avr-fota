@@ -135,6 +135,8 @@ private:
     int  findNs(const char* ns, bool create);
     void makeFullName(char* out, const char* name);
     int  writeRes(int idx, const BusValue& v, bool checkAccess);
+    // Сохраняет только режим модуля через <ns>.save_mode (bus-контракт).
+    int  persistModuleMode(const char* module_namespace);
     void queueEvent(const char* evt, const BusValue& v);
     void dispatchEvents();
     void processAsyncTimeouts();

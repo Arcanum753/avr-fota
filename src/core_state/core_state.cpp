@@ -168,7 +168,7 @@ int CLASS_CORE_STATE::moduleMode(const char* module_namespace, int m) {
     snprintf(full, sizeof(full), "%s.mode", module_namespace);
     int mi = findRes(full);
     if (mi < 0 || _res[mi].kind != BusValue::ENUM) { return BUS_ERR_NOT_SUPPORTED; }
-    if (m < 0 || m > 2) { return BUS_ERR_BAD_VALUE; }
+    if (m < 0) { return BUS_ERR_BAD_VALUE; }
 
     return mode(module_namespace, m);
 }

@@ -147,9 +147,10 @@ void CLASS_CORE_WIFI::register_resources() {
     core_state.regEvent("sta_pending",        "цель STA зафиксирована, ждём освобождения AP");
     core_state.regEvent("sta_applied",        "цель STA применена (переход в STA выполнен)");
 
-    // Функции (sync). mode/save не гейтятся, остальные — через wifiBusAllowed().
+    // Функции (sync). mode/save/save_mode не гейтятся, остальные — через wifiBusAllowed().
     core_state.regFunc("mode",              "->", "сменить режим (всегда доступно)",          CLASS_CORE_WIFI::s_cbMode, this);
     core_state.regFunc("save",              "->", "сохранить /config_wifi.json",              CLASS_CORE_WIFI::s_cbSave, this);
+    core_state.regFunc("save_mode",         "->", "сохранить только режим модуля",            CLASS_CORE_WIFI::s_cbSaveMode, this);
     core_state.regFunc("set_slot",          "s",  "задать слот/SSID (macro)",                 CLASS_CORE_WIFI::s_cbSetSlot, this);
     core_state.regFunc("force_ap",          "->", "в AP безопасно (macro)",                   CLASS_CORE_WIFI::s_cbForceAp, this);
     core_state.regFunc("force_ap_kick",     "->", "в AP, выгнав клиентов (macro)",            CLASS_CORE_WIFI::s_cbForceApKick, this);
@@ -193,6 +194,12 @@ int CLASS_CORE_WIFI::s_cbSave(void* user, int argc, const BusValue* argv, BusVal
     CLASS_CORE_WIFI* self = (CLASS_CORE_WIFI*)user;
     self->saveNow();
     return BUS_OK;
+}
+
+int CLASS_CORE_WIFI::s_cbSaveMode(void* user, int argc, const BusValue* argv, BusValue& result) {
+    CLASS_CORE_WIFI* self = (CLASS_CORE_WIFI*)user;
+    (void)argc; (void)argv; (void)result;
+    return self->saveModeConfig() ? BUS_OK : BUS_ERR_INTERNAL;
 }
 
 int CLASS_CORE_WIFI::s_cbSetSlot(void* user, int argc, const BusValue* argv, BusValue& result) {
@@ -664,6 +671,19 @@ bool CLASS_CORE_WIFI::save_configWifiSys() {
     doc["aptime"] = _wifiAPLifeTime;
     doc["busmode"] = _busMode;
     doc["scan_retries"] = _scanRetries;
+    return core_json.jsonFileSaveDoc(WIFI_CONFIG_SYS, doc);
+}
+
+// Отдельная команда сохранения режима: при существующем конфиге меняет только
+// busmode, не трогая остальные sys-параметры.
+bool CLASS_CORE_WIFI::saveModeConfig() {
+    DEBUG_CORE_WIFI("Saving WiFi mode\n");
+    JsonDocument doc;
+    if (core_json.jsonFileLoadDoc(WIFI_CONFIG_SYS, doc) == false) {
+        // Файла нет: создаём штатный полный sys-конфиг с текущими значениями.
+        return save_configWifiSys();
+    }
+    doc["busmode"] = _busMode;
     return core_json.jsonFileSaveDoc(WIFI_CONFIG_SYS, doc);
 }
 

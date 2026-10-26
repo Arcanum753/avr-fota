@@ -82,6 +82,7 @@ class  CLASS_CORE_WIFI    {
     void defaultConfigWifi(int _in);
     bool load_configWifiSys();
     bool save_configWifiSys();
+    bool saveModeConfig();                 // сохранить только busmode
     void defaultConfigWifiSys();
     void startDNSCaptive();
     void configureWifiAP();
@@ -107,7 +108,7 @@ class  CLASS_CORE_WIFI    {
 
     // --- Управление через ресурсную шину (режимы auto/macro) ---
     bool wifiBusAllowed();                 // true, если _busMode == WIFI_MODE_MACRO
-    void setWifiMode(uint8_t m);           // единственная точка смены режима (без persist)
+    void setWifiMode(uint8_t m);           // единственная точка смены режима (без persist; сохраняет wifi.save_mode)
     void setTarget(uint8_t t);             // целевое состояние (без persist)
     void setSlot(const String& s);         // целевой слот/SSID (без persist)
     void setApHoldMin(uint32_t m);         // минуты удержания AP (без persist)
@@ -117,6 +118,7 @@ class  CLASS_CORE_WIFI    {
     // Trampoline'ы BusCb (реализация в core_wifi.cpp, секция register_resources)
     static int s_cbMode(void* user, int argc, const BusValue* argv, BusValue& result);
     static int s_cbSave(void* user, int argc, const BusValue* argv, BusValue& result);
+    static int s_cbSaveMode(void* user, int argc, const BusValue* argv, BusValue& result);
     static int s_cbSetSlot(void* user, int argc, const BusValue* argv, BusValue& result);
     static int s_cbForceAp(void* user, int argc, const BusValue* argv, BusValue& result);
     static int s_cbForceApKick(void* user, int argc, const BusValue* argv, BusValue& result);

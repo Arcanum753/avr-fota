@@ -447,16 +447,23 @@ int CLASS_CORE_STATE::applyValue(const char* name, const BusValue& v) {
 
     BusValue prev = busCoerce(r.value, r.kind);
     bool same = busValueEqual(prev, coerced, r.kind);
+    if (same) { return BUS_OK; }
 
+    int rc;
     // dual state+func: запись значения применяется write-функцией.
     if (r.isFunc && !r.async) {
-        if (same) { return BUS_OK; }    // уже такое значение — функция не нужна
         BusValue res;
-        return r.fn(r.user, 1, &coerced, res);
+        rc = r.fn(r.user, 1, &coerced, res);
+    } else {
+        rc = writeRes(idx, coerced, true);
     }
+    if (rc != BUS_OK) { return rc; }
 
-    if (same) { return BUS_OK; }
-    return writeRes(idx, coerced, true);
+    // Смена режима модуля сохраняется отдельно от остальных параметров.
+    if (strcmp(r.field, "mode") == 0) {
+        rc = persistModuleMode(r.ns);
+    }
+    return rc;
 }
 
 int CLASS_CORE_STATE::setBool(const char* name, bool value) {
@@ -489,21 +496,54 @@ int CLASS_CORE_STATE::setTime(const char* name, int64_t value) {
     return writeRes(idx, BusValue::tm(value), true);
 }
 
+// Сохранение только режима модуля: <ns>.save_mode. Вызывается после успешной
+// смены режима через шину. Для system.mode не применяется (runtime-режим ядра).
+int CLASS_CORE_STATE::persistModuleMode(const char* module_namespace) {
+    if (module_namespace == nullptr || strcmp(module_namespace, "system") == 0) {
+        return BUS_OK;
+    }
+
+    char full[CORE_STATE_NAME_LEN];
+    snprintf(full, sizeof(full), "%s.save_mode", module_namespace);
+    int f = findFunc(full);
+    if (f < 0 || _res[f].async) {
+        DEBUGSTATE("mode: %s has no sync save_mode\r\n", module_namespace);
+        return BUS_OK;
+    }
+
+    BusValue result;
+    int rc = _res[f].fn(_res[f].user, 0, nullptr, result);
+    if (rc != BUS_OK) {
+        DEBUGSTATE("mode save failed: %s rc=%d\r\n", module_namespace, rc);
+    }
+    return rc;
+}
+
 int CLASS_CORE_STATE::mode(const char* module_namespace, int new_mode) {
     if (module_namespace == nullptr) { return BUS_ERR_BAD_TYPE; }
     char full[CORE_STATE_NAME_LEN];
     snprintf(full, sizeof(full), "%s.mode", module_namespace);
     int idx = findRes(full);
     if (idx < 0) { return BUS_ERR_NOT_FOUND; }
+    if (_res[idx].kind != BusValue::ENUM) { return BUS_ERR_BAD_TYPE; }
     if (new_mode < 0) { return _res[idx].value.i; }
+    if (_res[idx].enumCount > 0 && new_mode >= (int)_res[idx].enumCount) {
+        return BUS_ERR_BAD_VALUE;
+    }
+    if (_res[idx].value.i == new_mode) { return BUS_OK; }
 
     int f = findFunc(full);
+    int rc;
     if (f >= 0 && !_res[f].async) {
         BusValue a = BusValue::i32(new_mode);
         BusValue res;
-        return _res[f].fn(_res[f].user, 1, &a, res);
+        rc = _res[f].fn(_res[f].user, 1, &a, res);
+    } else {
+        rc = writeRes(idx, BusValue::en(new_mode), true);
     }
-    return writeRes(idx, BusValue::en(new_mode), true);
+    if (rc != BUS_OK) { return rc; }
+
+    return persistModuleMode(module_namespace);
 }
 
 int CLASS_CORE_STATE::signal(const char* sig, const BusValue& v) {
