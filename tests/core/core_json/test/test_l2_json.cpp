@@ -3,6 +3,7 @@
 
 #include "../../../../src/core_json/core_json.cpp"
 #include "../../../../src/core_json/core_json_engine.cpp"
+#include "../../../../src/core_json/common_module.cpp"
 
 #include <unity.h>
 
@@ -106,6 +107,43 @@ static void test_builders(void) {
 }
 
 // ============================================================
+// Цвета: #RRGGBB
+// ============================================================
+static void test_color_parse_and_format(void) {
+    uint32_t c = 0;
+
+    TEST_ASSERT_TRUE(ns_core_json::colorParseHex("#FF0000", c));
+    TEST_ASSERT_EQUAL_UINT32(0xFF0000, c);
+    TEST_ASSERT_TRUE(ns_core_json::colorParseHex("#00ff80", c));
+    TEST_ASSERT_EQUAL_UINT32(0x00FF80, c);
+
+    TEST_ASSERT_FALSE(ns_core_json::colorParseHex("", c));
+    TEST_ASSERT_FALSE(ns_core_json::colorParseHex("#FFF", c));
+    TEST_ASSERT_FALSE(ns_core_json::colorParseHex("#GGGGGG", c));
+    TEST_ASSERT_FALSE(ns_core_json::colorParseHex("#FF00000", c));
+    TEST_ASSERT_FALSE(ns_core_json::colorParseHex("0xFF0000", c));
+    TEST_ASSERT_FALSE(ns_core_json::colorParseHex("FF0000", c));
+
+    TEST_ASSERT_EQUAL_UINT32(0xFFFFFF, ns_core_json::colorParseOrWhite("#GGGGGG"));
+    TEST_ASSERT_EQUAL_UINT32(0xFFFFFF, ns_core_json::colorParseOrWhite(""));
+    TEST_ASSERT_EQUAL_UINT32(0x00FF80, ns_core_json::colorParseOrWhite("#00ff80"));
+
+    TEST_ASSERT_EQUAL_STRING("#FF0000", ns_core_json::colorToHex(0xFF0000).c_str());
+    TEST_ASSERT_EQUAL_STRING("#00FF80", ns_core_json::colorToHex(0x00FF80).c_str());
+    TEST_ASSERT_EQUAL_STRING("#000000", ns_core_json::colorToHex(0).c_str());
+}
+
+static void test_color_from_json(void) {
+    JsonDocument doc;
+    deserializeJson(doc, "{\"c\":\"#00ff00\",\"n\":123,\"bad\":\"#GGGGGG\"}");
+
+    TEST_ASSERT_EQUAL_UINT32(0x00FF00, ns_core_json::colorFromJson(doc["c"], 0));
+    TEST_ASSERT_EQUAL_UINT32(0x123456, ns_core_json::colorFromJson(doc["missing"], 0x123456));
+    TEST_ASSERT_EQUAL_UINT32(0xFFFFFF, ns_core_json::colorFromJson(doc["n"], 0));
+    TEST_ASSERT_EQUAL_UINT32(0xFFFFFF, ns_core_json::colorFromJson(doc["bad"], 0));
+}
+
+// ============================================================
 // Слот-конфиг (round-trip)
 // ============================================================
 static void test_slot_config_roundtrip(void) {
@@ -137,6 +175,8 @@ int main(int, char**) {
     RUN_TEST(test_parse_nested);
     RUN_TEST(test_array_helpers);
     RUN_TEST(test_builders);
+    RUN_TEST(test_color_parse_and_format);
+    RUN_TEST(test_color_from_json);
     RUN_TEST(test_slot_config_roundtrip);
     return UNITY_END();
 }
