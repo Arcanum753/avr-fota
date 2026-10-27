@@ -123,5 +123,6 @@
         "**/*.log": true,
         "**/*.min.js": true,
         "**/*.min.css": true
-    }
+    },
+    "cmake.sourceDirectory": "D:/github/avr-fota/example/supertinycron-master"
 }
