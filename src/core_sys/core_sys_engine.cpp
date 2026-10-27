@@ -49,9 +49,8 @@ void CLASS_CORE_SYS::serialShowAbout() {
 	DBG_MOD("[C_SYS] ", "\n\r\t\t**About** \n\r ");
 	DBG_MOD("[C_SYS] ", "Project env: %s\n\r ", BUILD_ENV);
 	DBG_MOD("[C_SYS] ", "git branch: %s\n\r ", GIT_BRANCH);
-	DBG_MOD("[C_SYS] ", "ver date: %s\n\r ", BUILD_TIME);
-	DBG_MOD("[C_SYS] ", "Fiemware ver: %s\n\r ", String(VERSION_BUILD).c_str());
-	DBG_MOD("[C_SYS] ", "File system ver: %s\n\r ", getFsVersionStr().c_str());
+	DBG_MOD("[C_SYS] ", "FW ver: %s\n\r ", FIRMWARE_VERSION);
+	DBG_MOD("[C_SYS] ", "FS ver: %s\n\r ", getFsVersionStr().c_str());
 
 	DBG_MOD("[C_SYS] ", "Device serial number: %s\n\r ", _sysConfig.deviceSerial.c_str());
 	#if defined(ESP32)
