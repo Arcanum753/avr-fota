@@ -450,8 +450,10 @@ ENUM хранит индекс, значения задаются `regEnum`.
 режима через `getMode()`/`requestMode()` или событие `system.mode_changed`.
 
 **Веб:** `core_state.web_Init()` регистрирует `/state/catalog`, `/state/info`, `/state/set`,
-`/state/call`. Каталог отдаётся `catalogToJson()` и используется деревом ресурсов в
-`module_macros` (`/macros/resources`). Для ENUM-ресурсов каталог дополнительно содержит
+`/state/call`. Каталог отдаётся `catalogToJson()` (используется `/state/catalog` и отладкой).
+Дерево ресурсов `module_macros` работает со статическим `/macros/resources.json`, который
+`python/gen_resources_catalog.py` собирает при сборке ФС; рантайм-эндпоинта
+`/macros/resources` нет. Для ENUM-ресурсов каталог дополнительно содержит
 `value` (индекс) и `valueName` (каноничное имя из `enumVals`), чтобы UI показывал буквенное
 имя. Страница управления модулями (`state.html`) и маршруты `/state/modules`,
 `/state/module_mode` перенесены в `module_macros`; шина отдаёт для них данные через
@@ -513,8 +515,9 @@ on("wifi.just_connected", function(ev) e7.speed(40) end)
   `on`/`term`/`button` — планировщик/события; `print`/`now`/`clock`/`has`/`info`/`mode`/`meta`.
 - Запись значений дедуплицируется в `core_state` (`writeRes`/`applyValue`): равное значение не
   эмитит `state.*` и не вызывает write-функцию; `call()` не дедуплицируется.
-- `handleList`/`handleResources` защищены от OOM: heap-guard; `/macros/resources` пересобирается
-  на каждый запрос, последняя удачная строка — fallback.
+- `handleList` защищён от OOM: heap-guard, ответ через `sendStringChunked` (chunked).
+  Страница макросов каталог в рантайме не собирает: читает `/macros/resources.json`,
+  сгенерированный при сборке ФС; `/state/catalog` остаётся отдельным эндпоинтом.
 
 ### Структура веб-страниц
 
@@ -589,11 +592,12 @@ on("wifi.just_connected", function(ev) e7.speed(40) end)
 1. `1_registry_pre_build.py` — запускает `module_registry_gen.py` под текущий env (см. «Механизм подключения: единый контракт модулей + автогенерация registry»)
 2. `2_version_builder.py` — генерирует `src/version.h` с `MAJOR.MINOR.DATE.BUILD`, git-информацией, автоинкрементом MINOR при смене коммита, автоинкрементом BUILD при каждой сборке. Защищён от двойного запуска через переменную окружения.
 3. `3_module_version_gen.py` — генерирует `*_version.h` для каждого ядра/модуля (определение изменений по git-хешу)
-4. `4_fs_builder.py` — готовит каталог сборки FS в `web_debug/web_<env>/`, копирует файлы из `data/` и каталогов `web/` модулей, генерирует `_version_fs.json`, вызывает `gen_page_head.py`, перенаправляет `PLATFORMIO_FS_DATA_DIR`
+4. `4_fs_builder.py` — готовит каталог сборки FS в `web_debug/web_<env>/`, копирует файлы из `data/` и каталогов `web/` модулей, генерирует `_version_fs.json`, вызывает `gen_page_head.py`, для сборок с `module_macros` вызывает `gen_resources_catalog.py` (каталог `/macros/resources.json`), перенаправляет `PLATFORMIO_FS_DATA_DIR`
 5. `5_set_fs_data_dir.py` — устанавливает `PROJECT_DATA_DIR` PlatformIO на подготовленный каталог
 
 **Ручной запуск (перед компиляцией, при смене env/набора модулей):**
 - `module_registry_gen.py` — генерирует `src/modules_registry.cpp/.h` под выбранный env (обязательно, см. «Механизм подключения: единый контракт модулей + автогенерация registry»; также автоматически запускается `1_registry_pre_build.py` при каждой сборке)
+- `gen_resources_catalog.py` — собирает `/macros/resources.json` из регистраций resource-bus (автоматически запускается шагом 7b в `4_fs_builder.py`; при ручном запуске без `--src-filter` сканирует только `core_*`)
 
 **Пост-скрипты** (после компиляции):
 6. `6_copy_fw.py` — копирует `firmware.bin` → `proj_fwbins/{ENV}-FIRMWARE-{VERSION}.bin`
@@ -705,6 +709,7 @@ avr-fota/
 │   ├── 7_copy_fs.py          # Копирование бинарника FS
 │   ├── module_registry_gen.py # Автогенерация registry под выбранный env (помощник для 1/build_all)
 │   ├── gen_page_head.py      # Динамическая генерация заголовка страницы (помощник для 4)
+│   ├── gen_resources_catalog.py # Статический каталог ресурсов для module_macros (помощник для 4)
 │   └── build_all.py          # Сборка всех env (ручной оркестратор)
 ├── src/                     # Исходный код
 │   ├── common/              # Низкоуровневые утилиты (время + строки + общее)
@@ -897,8 +902,9 @@ avr-fota/
   `/macros/heap`). При достижении лимита `reconcileList()` пишет предупреждение в лог.
 - Исправлен `created:1` у файлов, найденных до NTP: проверка `created <
   MACRO_CREATED_MIN` (вместо `== 0`) и простановка реальной даты после NTP.
-- Устранён `abort()` при открытии `macros.html`: `handleResources`/`handleList`
-  отдаются через `AsyncResponseStream` (без промежуточной `String` и второй копии
+- Устранён `abort()` при открытии `macros.html`: `handleResources` (позже удалён вместе с
+  рантайм-каталогом) и `handleList`
+  отдавались через `AsyncResponseStream` (без промежуточной `String` и второй копии
   в `send()`); добавлен guard `doc.overflowed()`. `MACRO_MAX_ENTS` снижен 24 → 8
   (освободило ~45 КБ heap; heap на старте ~183 КБ против ~137 КБ).
 - JSON-дамп конфига (`[C_JSON]`) в `core_json_engine.cpp` отключён (флаг

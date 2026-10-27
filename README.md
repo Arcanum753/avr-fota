@@ -33,6 +33,7 @@
   - [3_module_version_gen.py](#3_module_version_genpy)
   - [4_fs_builder.py](#4_fs_builderpy)
   - [gen_page_head.py](#gen_page_headpy)
+  - [gen_resources_catalog.py](#gen_resources_catalogpy)
   - [5_set_fs_data_dir.py](#5_set_fs_data_dirpy)
   - [6_copy_fw.py](#6_copy_fwpy)
   - [7_copy_fs.py](#7_copy_fspy)
@@ -410,7 +411,7 @@ MAJOR.MINOR.DATE.BUILD
 
 ## Python-скрипты сборки
 
-Все скрипты находятся в директории `python/` и подключаются к процессу сборки PlatformIO через параметр `extra_scripts` в `platformio.ini`. Скрипты разделены на **pre-scripts** (выполняются до компиляции) и **post-scripts** (выполняются после компиляции). Число в имени файла (`0_`, `1_`, …) — порядок выполнения. Утилиты `module_registry_gen.py`, `gen_page_head.py`, `build_all.py` запускаются другими скриптами или вручную, поэтому номера не имеют.
+Все скрипты находятся в директории `python/` и подключаются к процессу сборки PlatformIO через параметр `extra_scripts` в `platformio.ini`. Скрипты разделены на **pre-scripts** (выполняются до компиляции) и **post-scripts** (выполняются после компиляции). Число в имени файла (`0_`, `1_`, …) — порядок выполнения. Утилиты `module_registry_gen.py`, `gen_page_head.py`, `gen_resources_catalog.py`, `build_all.py` запускаются другими скриптами или вручную, поэтому номера не имеют.
 
 ### 0_esp32_common.py
 
@@ -550,19 +551,24 @@ ESP8266 скрипт не затрагивает.
    - Подсчитывает статистику по файлам (количество, размеры)
    - Записывает JSON-файл в подготовленную директорию
 
-5. **Генерация `page_head.html`:**
+5. **Каталог ресурсов для `module_macros` (шаг 7b в `4_fs_builder.py`):**
+   - Если в сборке есть `module_macros`, вызывает `gen_resources_catalog.py`
+   - Парсит регистрации `setNamespace`/`regState`/`regStateAs`/`regEnum`/`regFunc`/`regEvent` компонентов сборки
+   - Кладёт результат в образ ФС как `/macros/resources.json` (дерево Resources страницы макросов)
+
+6. **Генерация `page_head.html`:**
    - Вызывает `gen_page_head.py` для генерации динамического заголовка страниц
    - Заменяет маркер `<!-- MODULES_RIGHT_COLUMN -->` на ссылки модулей
 
-6. **Перенаправление PROJECT_DATA_DIR:**
+7. **Перенаправление PROJECT_DATA_DIR:**
    - Устанавливает переменную окружения `PLATFORMIO_FS_DATA_DIR` на подготовленную директорию
    - Это заставляет PlatformIO собирать образ ФС из нестандартной директории
 
-7. **Запуск сборки ФС:**
+8. **Запуск сборки ФС:**
    - Вызывает PlatformIO для сборки образа ФС: `pio run --target buildfs --environment <env>`
    - Реализована логика повторных попыток при сбоях (retry)
 
-8. **Создание симлинка web_current:**
+9. **Создание симлинка web_current:**
    - Создаёт символическую ссылку `web_current`, указывающую на последнюю собранную директорию
 
 ### gen_page_head.py
@@ -587,6 +593,22 @@ ESP8266 скрипт не затрагивает.
    - Находит маркер `<!-- MODULES_RIGHT_COLUMN -->`
    - Вставляет сгенерированные ссылки модулей вместо маркера
    - Записывает результат в подготовленную директорию ФС
+
+### gen_resources_catalog.py
+
+**Назначение:** Статический каталог ресурсов ресурсной шины (`core_state`) для страницы макросов: `/macros/resources.json`.
+
+**Тип:** Вызывается из `4_fs_builder.py` (шаг 7b, только при наличии `module_macros`); может запускаться вручную.
+
+**Подробный алгоритм:**
+
+1. **Сбор компонентов:** все `src/core_*` + компоненты из `src_filter` выбранного env (+ переданный список `included_modules`).
+2. **Парсинг регистраций:** находит в `.cpp` вызовы `setNamespace`, `regState`, `regStateAs`, `regEnum`, `regFunc`, `regEvent`; namespace — из `[registry]` в `<module>.ini` (или имени каталога) с переопределением через `setNamespace(...)`.
+3. **Значения ENUM:** ищет массивы строк по имени переменной во всех `.cpp` компонента.
+4. **Слияние:** объединяет состояние/функцию/событие с одним `full`-именем в одну запись (`ns`, `name`, `full`, `kind`, `desc`, `rw`, `e`, `f`, `a`, `enum`), сортирует по namespace и имени.
+5. **Запись:** `{"features":{"editor":0|1},"resources":[…]}` → `<каталог ФС>/macros/resources.json`.
+
+**Ограничения:** регистрации с вычисляемыми именами не попадают; `regFuncAsync` не парсится (асинхронные функции в каталог не попадают, флаг `a` всегда `false`); при ручном запуске без `--src-filter` сканируются только `core_*`.
 
 ### 5_set_fs_data_dir.py
 

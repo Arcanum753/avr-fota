@@ -119,6 +119,13 @@ void CLASS_CORE_WIFI::begin(ModContext& ctx) {
 // ============================================================
 // register_resources()
 // ============================================================
+// Ресурсы шины (namespace wifi): состояния connected, rssi, ip, slot_name, ap_mode,
+// ap_clients, ap_busy, slot, ap_hold_min, scan_retries; ENUM mode (auto/macro) и
+// target (auto/ap/sta); события just_connected, just_disconnected, ap_client_joined,
+// ap_client_left, target_reached, sta_pending, sta_applied; функции mode, save,
+// save_mode, set_slot, force_ap, force_ap_kick, force_connect, force_connect_kick,
+// force_scan, force_disconnect. Каталог /macros/resources.json собирается при сборке
+// ФС (python/gen_resources_catalog.py) — вручную не правим.
 void CLASS_CORE_WIFI::register_resources() {
     DEBUG_CORE_WIFI("%s\r\n", __FUNCTION__);
 

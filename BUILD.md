@@ -49,7 +49,8 @@ PlatformIO автоматически выполняет скрипты в за�
 - `2_version_builder.py` — пишет версию прошивки в `src/version.h`.
 - `3_module_version_gen.py` — версии модулей (меняются при изменении кода модуля).
 - `4_fs_builder.py` — собирает «веб-образ» файловой системы в `web_debug/<env>/`,
-  и вызывает `gen_page_head.py` (меню сайта).
+  вызывает `gen_page_head.py` (меню сайта), а при наличии `module_macros` —
+  `gen_resources_catalog.py` (`/macros/resources.json`).
 - `5_set_fs_data_dir.py` — подставляет эту папку PlatformIO для сборки файловой системы.
 
 **Параллельно:**

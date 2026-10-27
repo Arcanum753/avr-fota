@@ -52,6 +52,9 @@ void CLASS_CORE_OTA::begin(ModContext& ctx){
 // ============================================================
 // register_resources()
 // ============================================================
+	// Ресурсы шины (namespace ota): состояние state (ENUM idle/upload/verify/done/error)
+	// и server_reachable (BOOL). Каталог /macros/resources.json собирается при сборке ФС
+	// (python/gen_resources_catalog.py) — вручную не правим.
 void CLASS_CORE_OTA::register_resources() {
 	DEBUGOTA("%s\r\n", __FUNCTION__);
 

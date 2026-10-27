@@ -39,7 +39,8 @@ void CLASS_CORE_NTP::begin (ModContext& ctx){
 void CLASS_CORE_NTP::register_resources() {
 	DEBUGNTP("%s\r\n", __FUNCTION__);
 	// core_ntp — источник времени для core_sys (namespace ntp). Ресурсы time.*
-	// принадлежат core_sys; здесь нет собственных ресурсов шины. Заглушка
+	// принадлежат core_sys; здесь нет собственных ресурсов шины, поэтому namespace
+	// ntp в каталог /macros/resources.json не попадает. Заглушка
 	// сохранена, т.к. вызов register_resources() генерируется из [registry].
 }
 

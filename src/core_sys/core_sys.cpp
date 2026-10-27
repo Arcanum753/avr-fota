@@ -51,6 +51,9 @@ void CLASS_CORE_SYS::begin(ModContext& ctx) {
 // ============================================================
 // register_resources()
 // ============================================================
+	// Ресурсы шины (namespace system): состояния safe, idle, hostname; time.*
+	// регистрируются ниже в registerTimeResources(). Каталог /macros/resources.json
+	// собирается при сборке ФС (python/gen_resources_catalog.py) — вручную не правим.
 void CLASS_CORE_SYS::register_resources() {
 	DEBUGSYS("%s\r\n", __FUNCTION__);
 

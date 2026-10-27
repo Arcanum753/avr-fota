@@ -34,6 +34,9 @@ void CLASS_CORE_STATE::begin(ModContext& ctx) {
 // ============================================================
 // register_resources()
 // ============================================================
+// Ресурсы шины (namespace system): состояние mode (ENUM init/normal/ota/fs_update/prog/test),
+// событие mode_changed. Каталог /macros/resources.json собирается при сборке ФС
+// (python/gen_resources_catalog.py) из этих вызовов — вручную его не правим.
 void CLASS_CORE_STATE::register_resources() {
     DEBUGSTATE("%s\r\n", __FUNCTION__);
 

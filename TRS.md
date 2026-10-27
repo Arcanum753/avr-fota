@@ -569,7 +569,7 @@
 ### 6.2. Программный интерфейс (HTTP API)
 
 - API-1: Текстовые ответы — `text/plain "OK"` либо CVT-строки (`ключ|тип|значение`).
-- API-2: JSON-ответы: `/state/catalog`, `/state/info`, `/state/modules` (в сборке с `module_macros`), `/i2cmapper/scan`, `/otaclient/teststatus`, `/editor/list`, `/macros/list`, `/macros/resources`, `/all`, `/_version_fs.json`.
+- API-2: JSON-ответы: `/state/catalog`, `/state/info`, `/state/modules` (в сборке с `module_macros`), `/i2cmapper/scan`, `/otaclient/teststatus`, `/editor/list`, `/macros/list`, `/all`, `/_version_fs.json`.
 - API-3: Все рабочие маршруты компонентов защищены `checkAuth`; публичны только вход/восстановление и captive-portal-эндпоинты.
 - API-4: Ресурсная шина: `GET /state/set?name=<ns.field>&value=<v>`, `GET /state/call?name=<ns.func>&args=...`, `GET /state/info?name=...`. Типы: BOOL/I32/F32 (3 знака)/STR/TIME/ENUM.
 - API-5: Async-функции: `call` возвращает код запуска, результат — через callback/событие; таймаут по умолчанию 10 с.

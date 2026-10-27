@@ -93,6 +93,10 @@ bool CLASS_CORE_SYS::addTimeSource(const char* name, int prio,
 	return true;
 }
 
+	// Ресурсы шины (namespace time): состояния now, now_str, hour, minute, second, valid,
+	// fallback, source, source_count, sources, tz, dst; события synced, lost, source_changed,
+	// tz_changed, source_invalid; функции set, sync_from, save. Каталог /macros/resources.json
+	// собирается при сборке ФС (python/gen_resources_catalog.py) — вручную не правим.
 void CLASS_CORE_SYS::registerTimeResources() {
 	core_state.setNamespace("time");
 	// namespace времени — внутренняя шина ядра, а не управляемый модуль:
