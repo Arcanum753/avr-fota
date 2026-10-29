@@ -602,8 +602,14 @@ void NTPClient::onNTPSyncEvent (onSyncEvent_t handler) {
 }
 
 time_t NTPClient::getUptime () {
-    _uptime = _uptime + (millis () - _uptime);
-    return _uptime / 1000;
+    // Накапливаем миллисекунды между вызовами: разность uint32_t корректна и при
+    // переполнении millis() (раз в 49.7 суток). Раньше здесь было
+    // `_uptime + (millis() - _uptime)`, т.е. всегда millis().
+    uint32_t nowMs = millis ();
+    _uptimeTotalMs += (uint32_t)(nowMs - _uptimeLastMs);
+    _uptimeLastMs = nowMs;
+    _uptime = (unsigned long)(_uptimeTotalMs / 1000ULL);
+    return (time_t)_uptime;
 }
 
 String NTPClient::getUptimeString () {

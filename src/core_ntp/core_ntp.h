@@ -41,10 +41,16 @@ class  CLASS_CORE_NTP    {
     void begin(ModContext& ctx);
     void ntpOnConnected ();
     void ntpOnDisconected ();
-    void register_resources();
     void web_Init();
+    // Отложенные действия (применение конфига, failover) — выполняются в главном цикле.
+    void loop();
     void registerTimeSource();   // Time Source Provider API (core_sys)
     void applyTimeZone();        // переустановить TZ/DST в NTPClientLib
+
+    // Состояние последнего синка (для /ntp/info и диагностики).
+    uint32_t    ntpLastSyncEpoch() const;
+    const char* ntpStatusText() const;
+    bool        ntpTimeFresh() const;
     
     void ntpSwitchReserv ();
     void ntpOnSyncHandler(NTPSyncEvent_t event);
@@ -58,9 +64,17 @@ class  CLASS_CORE_NTP    {
     void send_NTP_info_html(AsyncWebServerRequest *request) ;
     void send_NTP_configuration_values_html(AsyncWebServerRequest *request);
     void html2ntp_configuration(AsyncWebServerRequest *request);
-    void sendTimeData();
     
 private:
+    // Адаптивный stale по текущему периоду (реализация — core_ntp_engine.cpp).
+    void ntpUpdateStaleSec();
+    // Проверка конфига перед применением: nullptr при успехе, иначе текст ошибки.
+    const char* ntpValidateConfig(const String& s0, const String& s1, const String& s2, long period);
+    // Единая точка применения конфига в рантайме (после присвоения _ntpConfig).
+    void applyNtpRuntime();
+    // Применить сервер по индексу (только из loop()).
+    void ntpSetServer(int idx);
+
     String getVersionStr();
     String getGeneratedTime();
     String getCommitDateStr();
@@ -71,6 +85,12 @@ private:
     bool updateTimeFromNTP  = false;
     int _ntpServerCount         = 0;
     String _ntpServerNow = "";
+    // Конфиг применён не полностью: применить в loop() (веб-задача не трогает NTPClient).
+    volatile bool _pendingApply = false;
+    // Остановить провайдер в loop() (событие Wi-Fi приходит из системной задачи).
+    volatile bool _pendingStop = false;
+    // Провайдер TimeLib запущен (NTP.begin() выполнен).
+    bool _ntpStarted = false;
 };
 
 extern CLASS_CORE_NTP core_ntp;

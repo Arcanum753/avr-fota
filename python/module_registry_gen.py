@@ -459,6 +459,8 @@ def main():
         # Шина раздаёт события и таймауты до обработки остальных задач.
         "core_state.loop();",
         "core_task.loop();",
+        # Отложенные действия core_ntp (применение конфига, failover серверов).
+        "core_ntp.loop();",
         # Терминал читает сериал первым в цикле; первый вызов также применяет
         # слоты модулей (TerminalRegisterModule).
         "TerminalLoop();",
@@ -482,7 +484,15 @@ def main():
         if reg is None:
             return default_ns, default_res, 0, -1, 0
         ns = reg.get("namespace", default_ns).strip() or default_ns
-        res = 1 if reg.get("res", "").strip() == "1" else default_res
+        # Для ядер res по умолчанию 1, но явный `res = 0` должен выключать
+        # регистрацию ресурсов (например, core_ntp: своих ресурсов шины нет).
+        res_raw = reg.get("res", "").strip()
+        if res_raw == "0":
+            res = 0
+        elif res_raw == "1":
+            res = 1
+        else:
+            res = default_res
         priv = 1 if reg.get("priv", "").strip() == "1" else 0
         ts = 1 if reg.get("time_source", "").strip() == "1" else 0
         try:

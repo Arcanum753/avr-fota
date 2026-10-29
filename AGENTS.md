@@ -300,6 +300,7 @@ CLASS_CORE_OTA (core_ota/core_ota.h)
 |-----------|-----------|------------|
 | `core_sys` | `ns_core_sys` | `isAdminPassValid`, `identCrcSkip`, `timeSelectActive`, `timeCsvNames`, `timeParseTz`, `timeFormatNowStr`, `timeSelectBackJump` |
 | `core_web` | `ns_core_web` | `getContentType` (перенесён из `FSWebServerLib.h`) |
+| `core_ntp` | `ns_core_ntp` | `ntpStaleSec`, `ntpElapsedSec`, `ntpServerNameValid`, `ntpNextServerIndex` |
 | `core_led` | `ns_core_led` | `ledPatLen`, `ledPatAt` |
 | `module_ds3231` | `ns_module_ds3231` | BCD/alarm-хелперы, `_formatAlarmTime/_formatAlarmStamp` (ESP32) |
 | `module_macros` | `ns_module_macros` | `macroFileBaseName` |
