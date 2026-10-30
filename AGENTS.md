@@ -76,6 +76,7 @@ glob-масками `src/*/*.ini` и `src/*/*/*.ini` в `[platformio] extra_conf
 | Модуль | Каталог | Назначение |
 |--------|-----------|---------|
 | `core_sys` | `src/core_sys/` | Ядро системы: идентичность (имя/серийник устройства, хранилище в NVRAM), `config_sys.json`, HTTP-аутентификация/восстановление (`secret.json`), информация о системе (причина сброса, chipinfo, about), централизованное чтение версии FS (`_version_fs.json`), **подсистема виртуального времени** (реестр источников, `time.*`, TZ/DST, `config_time.json`), EERTOS |
+| `core_fs` | `src/core_fs/` | Файловая система: страница **Filesystem**, HTTP API `/fs/*` (info/list/download/create/mkdir/rename/delete/upload), без редактора; используется `otasyncer-server` для снимков настроек. Не публикуется в resource-bus/макросах |
 | `core_wifi` | `src/core_wifi/` | Wi-Fi клиент/AP, управление 4 профилями, сканирование |
 | `core_ntp` | `src/core_ntp/` | NTP-клиент с 3 серверами (основной + 2 запасных); **источник времени** для `core_sys` (namespace `ntp`, read-only) |
 | `core_ota` | `src/core_ota/` | Самообновление (FOTA) через web, проверка версии FS |
@@ -728,6 +729,10 @@ avr-fota/
 │   │   ├── eertos.h/cpp      # Кооперативный планировщик задач
 │   │   └── web/              # Системные страницы: system.html, recover.html, 404.html,
 │   │                         #   config_sys.json, secret.json
+│   ├── core_fs/             # ФС: страница Filesystem + API /fs/* (без редактора, без macros/ресурсов)
+│   │   ├── core_fs.h/cpp    # CLASS_CORE_FS: маршруты, upload/download, версия
+│   │   ├── core_fs_engine.* # обход LittleFS, CRUD, info
+│   │   └── web/filesystem.html
 │   ├── core_web/            # Ядро веб-сервера
 │   │   ├── FSWebServerLib.h/cpp # Асинхронный веб-сервер + маршрутизация (AsyncFSWebServer)
 │   │   ├── common_module.h/cpp # ns_core_web: getContentType

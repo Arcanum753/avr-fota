@@ -1,5 +1,5 @@
 // Auto-generated version file for module: core_ntp
-// Generated: 2026-10-27 08:17
+// Generated: 2026-10-29 22:05
 // Environment: esp32_clock-mech
 
 #ifndef CORE_NTP_VERSION_H
@@ -10,36 +10,36 @@
 // ============================================================
 
 // Числовая версия (для сравнений)
-#define CORE_NTP_VERSION 9
+#define CORE_NTP_VERSION 10
 
 // Строковая версия
-#define CORE_NTP_VERSION_STR "9"
+#define CORE_NTP_VERSION_STR "10"
 
 // Хэш последнего обработанного коммита кода (без учёта *_version.h)
-#define CORE_NTP_COMMIT_HASH "a3e368dc7c54bdfcfc024e443365cb1d4f67cefc"
+#define CORE_NTP_COMMIT_HASH "46b1eaa4fba8282c5d5776884e41ace09de52739"
 
 // ============================================================
 // ДАТА ПОСЛЕДНЕГО ИЗМЕНЕНИЯ
 // ============================================================
 
 // Дата в формате yyyy.mm.dd hh.mm (как строка)
-#define CORE_NTP_COMMIT_DATE_STR "2026.10.27 08:04"
+#define CORE_NTP_COMMIT_DATE_STR "2026.10.29 22:05"
 
 // Компоненты даты (для числовых операций)
 #define CORE_NTP_COMMIT_YEAR 2026
 #define CORE_NTP_COMMIT_MONTH 10
-#define CORE_NTP_COMMIT_DAY 27
-#define CORE_NTP_COMMIT_HOUR 8
-#define CORE_NTP_COMMIT_MINUTE 4
+#define CORE_NTP_COMMIT_DAY 29
+#define CORE_NTP_COMMIT_HOUR 22
+#define CORE_NTP_COMMIT_MINUTE 5
 
 // Полная дата в формате YYYY-MM-DD HH:MM (для отладки)
-#define CORE_NTP_COMMIT_DATE "2026-10-27 08:04"
+#define CORE_NTP_COMMIT_DATE "2026-10-29 22:05"
 
 // ============================================================
 // ИНФОРМАЦИЯ О ГЕНЕРАЦИИ
 // ============================================================
 
-#define CORE_NTP_GENERATED_TIME "2026-10-27 08:17"
-#define CORE_NTP_GENERATED_TIMESTAMP "20261027_081755"
+#define CORE_NTP_GENERATED_TIME "2026-10-29 22:05"
+#define CORE_NTP_GENERATED_TIMESTAMP "20261029_220541"
 
 #endif // CORE_NTP_VERSION_H

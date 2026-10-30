@@ -38,6 +38,7 @@ public:
     double toDouble() const { return atof(c_str()); }
 
     bool equals(const String& s) const { return *this == s; }
+    int compareTo(const String& s) const { return compare(s); }
     bool equalsIgnoreCase(const String& s) const {
         if (length() != s.length()) return false;
         for (unsigned int i = 0; i < length(); i++) {

@@ -1,0 +1,21 @@
+// Auto-generated version file for module: core_fs
+// Generated: 2026-10-30 14:25
+// Environment: (core)
+
+#ifndef CORE_FS_VERSION_H
+#define CORE_FS_VERSION_H
+
+#define CORE_FS_VERSION 1
+#define CORE_FS_VERSION_STR "1"
+#define CORE_FS_COMMIT_HASH ""
+#define CORE_FS_COMMIT_DATE_STR "2026.10.30 14:25"
+#define CORE_FS_COMMIT_YEAR 2026
+#define CORE_FS_COMMIT_MONTH 10
+#define CORE_FS_COMMIT_DAY 30
+#define CORE_FS_COMMIT_HOUR 14
+#define CORE_FS_COMMIT_MINUTE 25
+#define CORE_FS_COMMIT_DATE "2026-10-30 14:25"
+#define CORE_FS_GENERATED_TIME "2026-10-30 14:25"
+#define CORE_FS_GENERATED_TIMESTAMP "20261030_142500"
+
+#endif // CORE_FS_VERSION_H

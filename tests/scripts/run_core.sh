@@ -37,6 +37,7 @@ MODULES=(
   common
   core_web
   core_sys
+  core_fs
   core_wifi
   core_ntp
   core_ota

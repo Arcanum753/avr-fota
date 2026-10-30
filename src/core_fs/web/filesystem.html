@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Filesystem</title>
+    <meta http-equiv="Content-type" content="text/html; charset=utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="style.css">
+    <style>
+        .fs-cards { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin: 10px; }
+        .fs-card { border: 1px solid #bbb; border-radius: 6px; padding: 8px 14px; min-width: 120px; text-align: center; }
+        .fs-card .v { font-size: 18px; font-weight: bold; }
+        .fs-card .l { font-size: 12px; color: #666; }
+        .fs-bar { height: 14px; background: #e5e5e5; border-radius: 7px; overflow: hidden; width: 60%; margin: 6px auto; }
+        .fs-bar > div { height: 100%; background: #7D8EE2; width: 0; }
+        .fs-toolbar { text-align: center; margin: 10px; }
+        .fs-toolbar button, .fs-toolbar input { margin: 0 3px; }
+        .fs-path { text-align: center; font-family: monospace; margin: 8px; }
+        .fs-table { width: 96%; margin: 0 auto; border-collapse: collapse; }
+        .fs-table th, .fs-table td { border-bottom: 1px solid #ddd; padding: 5px 6px; text-align: left; font-size: 13px; }
+        .fs-table td.num { text-align: right; white-space: nowrap; }
+        .fs-table tr.dir td.name { font-weight: bold; cursor: pointer; }
+        .fs-actions button { margin: 0 2px; }
+        .fs-status { text-align: center; color: #666; min-height: 20px; margin: 8px; font-size: 13px; }
+        .fs-warn { color: #b36b00; }
+        .fs-controls { text-align: center; margin: 8px; }
+        .fs-controls input { min-width: 220px; }
+    </style>
+</head>
+
+<body>
+    <markup>./page_head.html</markup>
+    <h2 class="title" style="background: #7D8EE2"><span id="devicename"></span>Filesystem</h2>
+
+    <div class="fs-cards">
+        <div class="fs-card"><div class="v" id="fs-used">-</div><div class="l">Used</div></div>
+        <div class="fs-card"><div class="v" id="fs-free">-</div><div class="l">Free</div></div>
+        <div class="fs-card"><div class="v" id="fs-total">-</div><div class="l">Total</div></div>
+        <div class="fs-card"><div class="v" id="fs-files">-</div><div class="l">Files</div></div>
+        <div class="fs-card"><div class="v" id="fs-dirs">-</div><div class="l">Folders</div></div>
+        <div class="fs-card"><div class="v" id="fs-version">-</div><div class="l">FS version</div></div>
+        <div class="fs-card"><div class="v" id="fs-build">-</div><div class="l">Build</div></div>
+    </div>
+    <div class="fs-bar"><div id="fs-bar"></div></div>
+
+    <div class="fs-toolbar">
+        <button onclick="createFile()" class="button">New file</button>
+        <button onclick="createFolder()" class="button">New folder</button>
+        <button onclick="document.getElementById('fs-upload-input').click()" class="button">Upload</button>
+        <input type="file" id="fs-upload-input" multiple style="display:none" onchange="uploadFiles(this.files)">
+        <button onclick="loadAll()" class="button">Refresh</button>
+    </div>
+
+    <div class="fs-path" id="fs-path">/</div>
+    <div class="fs-controls">
+        <input type="text" id="fs-filter" placeholder="Filter by path..." oninput="render()">
+    </div>
+    <div class="fs-status" id="fs-status"></div>
+
+    <table class="fs-table">
+        <thead>
+            <tr><th>Name</th><th>Type</th><th>Size</th><th>Modified</th><th>Actions</th></tr>
+        </thead>
+        <tbody id="fs-tbody"></tbody>
+    </table>
+
+    <markup>./page_bottom.html</markup>
+    <script src="GetJson.js" defer></script>
+    <script src="GetMarkup.js" defer></script>
+    <script>
+    const FS_STATE = { entries: [], dir: '/', info: null };
+
+    function setStatus(text, warn) {
+        const el = document.getElementById('fs-status');
+        el.textContent = text || '';
+        el.className = 'fs-status' + (warn ? ' fs-warn' : '');
+    }
+
+    function fmtSize(n) {
+        n = Number(n) || 0;
+        if (n < 1024) return n + ' B';
+        if (n < 1024 * 1024) return (n / 1024).toFixed(1) + ' KB';
+        return (n / (1024 * 1024)).toFixed(2) + ' MB';
+    }
+
+    function fmtTime(t) {
+        t = Number(t) || 0;
+        if (!t) return '-';
+        const d = new Date(t * 1000);
+        if (isNaN(d.getTime())) return '-';
+        return d.toLocaleString();
+    }
+
+    function normPath(p) {
+        if (!p) return '/';
+        p = String(p).replace(/\\/g, '/');
+        if (p.charAt(0) !== '/') p = '/' + p;
+        p = p.replace(/\/+/g, '/');
+        if (p.length > 1 && p.endsWith('/')) p = p.slice(0, -1);
+        return p;
+    }
+
+    function parentPath(p) {
+        p = normPath(p);
+        if (p === '/') return '/';
+        const i = p.lastIndexOf('/');
+        return i <= 0 ? '/' : p.slice(0, i);
+    }
+
+    function joinPath(dir, name) {
+        return dir === '/' ? '/' + name : dir + '/' + name;
+    }
+
+    function baseName(p) {
+        p = normPath(p);
+        if (p === '/') return '/';
+        return p.slice(p.lastIndexOf('/') + 1);
+    }
+
+    function isSecret(p) {
+        return normPath(p).toLowerCase() === '/secret.json';
+    }
+
+    async function fsRequest(url, opts) {
+        const r = await fetch(url, opts || { cache: 'no-store' });
+        const text = await r.text();
+        if (!r.ok) throw new Error(text || ('HTTP ' + r.status));
+        return text;
+    }
+
+    async function loadInfo() {
+        const r = await fetch('/fs/info', { cache: 'no-store' });
+        if (!r.ok) throw new Error('info: HTTP ' + r.status);
+        const info = await r.json();
+        FS_STATE.info = info;
+        document.getElementById('fs-used').textContent = fmtSize(info.used);
+        document.getElementById('fs-free').textContent = fmtSize(info.free);
+        document.getElementById('fs-total').textContent = fmtSize(info.total);
+        document.getElementById('fs-version').textContent = info.fsVersion || '-';
+        document.getElementById('fs-build').textContent = info.buildEnv || '-';
+        const pct = Math.max(0, Math.min(100, Number(info.usedPct) || 0));
+        document.getElementById('fs-bar').style.width = pct + '%';
+    }
+
+    async function loadList() {
+        const r = await fetch('/fs/list', { cache: 'no-store' });
+        if (!r.ok) throw new Error('list: HTTP ' + r.status);
+        const data = await r.json();
+        FS_STATE.entries = Array.isArray(data.entries) ? data.entries : [];
+        FS_STATE.truncated = !!data.truncated;
+        render();
+    }
+
+    async function loadAll() {
+        try {
+            setStatus('Loading...');
+            await loadInfo();
+            await loadList();
+            let files = 0, dirs = 0;
+            for (const e of FS_STATE.entries) { if (e.type === 'dir') dirs++; else files++; }
+            document.getElementById('fs-files').textContent = files;
+            document.getElementById('fs-dirs').textContent = dirs;
+            setStatus(FS_STATE.truncated ? 'Warning: file list is truncated.' : '', FS_STATE.truncated);
+        } catch (e) {
+            setStatus('Error: ' + e.message, true);
+        }
+    }
+
+    function render() {
+        const tbody = document.getElementById('fs-tbody');
+        tbody.innerHTML = '';
+        const filter = (document.getElementById('fs-filter').value || '').toLowerCase();
+        const dir = FS_STATE.dir;
+        document.getElementById('fs-path').textContent = dir;
+
+        if (dir !== '/') {
+            const tr = document.createElement('tr');
+            tr.innerHTML = '<td class="name" data-act="up">..</td><td>dir</td><td class="num"></td><td></td><td class="fs-actions"></td>';
+            tbody.appendChild(tr);
+        }
+
+        const seen = new Set();
+        for (const e of FS_STATE.entries) {
+            const p = normPath(e.path);
+            if (p === dir) continue;
+            if (parentPath(p) !== dir) continue;
+            if (seen.has(p)) continue;
+            seen.add(p);
+            if (filter && p.toLowerCase().indexOf(filter) < 0) continue;
+
+            const tr = document.createElement('tr');
+            const name = baseName(p);
+            const secret = isSecret(p);
+            const isDir = e.type === 'dir';
+            if (isDir) tr.className = 'dir';
+
+            const tdName = document.createElement('td');
+            tdName.className = 'name';
+            tdName.textContent = name;
+            if (isDir) tdName.onclick = function () { FS_STATE.dir = p; render(); };
+            tr.appendChild(tdName);
+
+            const tdType = document.createElement('td');
+            tdType.textContent = isDir ? 'dir' : 'file';
+            tr.appendChild(tdType);
+
+            const tdSize = document.createElement('td');
+            tdSize.className = 'num';
+            tdSize.textContent = isDir ? '' : fmtSize(e.size);
+            tr.appendChild(tdSize);
+
+            const tdTime = document.createElement('td');
+            tdTime.textContent = isDir ? '' : fmtTime(e.mtime);
+            tr.appendChild(tdTime);
+
+            const tdAct = document.createElement('td');
+            tdAct.className = 'fs-actions';
+
+            if (isDir) {
+                const open = document.createElement('button');
+                open.textContent = 'Open';
+                open.onclick = function () { FS_STATE.dir = p; render(); };
+                tdAct.appendChild(open);
+            } else if (!secret) {
+                const dl = document.createElement('button');
+                dl.textContent = 'Download';
+                dl.onclick = function () { window.location = '/fs/download?path=' + encodeURIComponent(p); };
+                tdAct.appendChild(dl);
+            }
+
+            if (!secret) {
+                const rn = document.createElement('button');
+                rn.textContent = 'Rename';
+                rn.onclick = function () { renamePath(p); };
+                tdAct.appendChild(rn);
+
+                const del = document.createElement('button');
+                del.textContent = 'Delete';
+                del.onclick = function () { deletePath(p, isDir); };
+                tdAct.appendChild(del);
+            } else {
+                const note = document.createElement('span');
+                note.textContent = 'protected';
+                note.style.color = '#b36b00';
+                tdAct.appendChild(note);
+            }
+            tr.appendChild(tdAct);
+            tbody.appendChild(tr);
+        }
+
+        if (tbody.children.length === 0) {
+            const tr = document.createElement('tr');
+            tr.innerHTML = '<td colspan="5" style="text-align:center;color:#888">Empty directory</td>';
+            tbody.appendChild(tr);
+        }
+    }
+
+    document.addEventListener('click', function (ev) {
+        const td = ev.target.closest('td[data-act="up"]');
+        if (td) { FS_STATE.dir = parentPath(FS_STATE.dir); render(); }
+    });
+
+    async function createFile() {
+        const name = prompt('File name (in ' + FS_STATE.dir + '):');
+        if (!name) return;
+        const path = joinPath(FS_STATE.dir, name);
+        try {
+            await fsRequest('/fs/create?path=' + encodeURIComponent(path), { method: 'POST' });
+            setStatus('Created ' + path);
+            await loadAll();
+        } catch (e) { setStatus('Create failed: ' + e.message, true); }
+    }
+
+    async function createFolder() {
+        const name = prompt('Folder name (in ' + FS_STATE.dir + '):');
+        if (!name) return;
+        const path = joinPath(FS_STATE.dir, name);
+        try {
+            await fsRequest('/fs/mkdir?path=' + encodeURIComponent(path), { method: 'POST' });
+            setStatus('Created folder ' + path);
+            await loadAll();
+        } catch (e) { setStatus('Create folder failed: ' + e.message, true); }
+    }
+
+    async function renamePath(path) {
+        const name = prompt('New name for ' + path + ':', baseName(path));
+        if (!name) return;
+        const target = joinPath(parentPath(path), name);
+        try {
+            await fsRequest('/fs/rename?from=' + encodeURIComponent(path) + '&to=' + encodeURIComponent(target),
+                { method: 'POST' });
+            setStatus('Renamed to ' + target);
+            await loadAll();
+        } catch (e) { setStatus('Rename failed: ' + e.message, true); }
+    }
+
+    async function deletePath(path, isDir) {
+        if (!confirm('Delete ' + path + '?')) return;
+        let url = '/fs/delete?path=' + encodeURIComponent(path);
+        if (isDir) {
+            if (!confirm('Delete folder and ALL its contents?')) return;
+            url += '&recursive=1';
+        }
+        try {
+            await fsRequest(url, { method: 'POST' });
+            setStatus('Deleted ' + path);
+            if (FS_STATE.dir === path) FS_STATE.dir = parentPath(path);
+            await loadAll();
+        } catch (e) { setStatus('Delete failed: ' + e.message, true); }
+    }
+
+    async function uploadFiles(files) {
+        if (!files || !files.length) return;
+        for (const file of files) {
+            const path = joinPath(FS_STATE.dir, file.name);
+            setStatus('Uploading ' + file.name + '...');
+            try {
+                const r = await fetch('/fs/upload?path=' + encodeURIComponent(path), {
+                    method: 'POST',
+                    body: file,
+                    headers: { 'Content-Type': 'application/octet-stream' }
+                });
+                const text = await r.text();
+                if (!r.ok) throw new Error(text || ('HTTP ' + r.status));
+            } catch (e) {
+                setStatus('Upload failed (' + file.name + '): ' + e.message, true);
+                document.getElementById('fs-upload-input').value = '';
+                await loadAll();
+                return;
+            }
+        }
+        document.getElementById('fs-upload-input').value = '';
+        setStatus('Upload complete');
+        await loadAll();
+    }
+
+    window.addEventListener('load', function () {
+        setTimeout(function () {
+            ApplyCVT('/system/version');
+            loadAll();
+        }, 150);
+    });
+    </script>
+</body>
+
+</html>

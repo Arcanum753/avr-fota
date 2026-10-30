@@ -82,6 +82,25 @@ void AsyncFSWebServer::onNotFound(ArRequestHandlerFunction fn) {
 }
 #endif
 
+#if defined(ESP8266)
+// ESP8266: системного мьютекса нет, пробрасываем обработчики напрямую.
+AsyncCallbackWebHandler& AsyncFSWebServer::on(const char* uri, ArRequestHandlerFunction fn) {
+    return AsyncWebServer::on(uri, fn);
+}
+AsyncCallbackWebHandler& AsyncFSWebServer::on(const char* uri, WebRequestMethodComposite method, ArRequestHandlerFunction fn) {
+    return AsyncWebServer::on(uri, method, fn);
+}
+AsyncCallbackWebHandler& AsyncFSWebServer::on(const char* uri, WebRequestMethodComposite method, ArRequestHandlerFunction fn, ArUploadHandlerFunction up) {
+    return AsyncWebServer::on(uri, method, fn, up);
+}
+AsyncCallbackWebHandler& AsyncFSWebServer::on(const char* uri, WebRequestMethodComposite method, ArRequestHandlerFunction fn, ArUploadHandlerFunction up, ArBodyHandlerFunction body) {
+    return AsyncWebServer::on(uri, method, fn, up, body);
+}
+void AsyncFSWebServer::onNotFound(ArRequestHandlerFunction fn) {
+    AsyncWebServer::onNotFound(fn);
+}
+#endif
+
 AsyncFSWebServer::AsyncFSWebServer(uint16_t port) : AsyncWebServer(port) {}
 // esp8266/esp32 flash file system
 #if defined(ESP32)

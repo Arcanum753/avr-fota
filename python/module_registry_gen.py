@@ -422,6 +422,7 @@ def main():
     # ---- Ядра ----
     includes: List[str] = [
         '"core_sys/core_sys.h"',
+        '"core_fs/core_fs.h"',
         '"core_wifi/core_wifi.h"',
         '"core_ntp/core_ntp.h"',
         '"core_json/core_json.h"',
@@ -437,6 +438,7 @@ def main():
         # core_sys идёт сразу после core_json: загружает identity/auth и заполняет
         # ctx.hostname / ctx.password до core_wifi и mDNS.
         "core_sys.begin(ctx);",
+        "core_fs.begin(ctx);",
         # Шина и задачи инициализируются до регистрации ресурсов.
         "core_state.begin(ctx);",
         "core_task.begin(ctx);",
@@ -450,6 +452,7 @@ def main():
     ]
     core_web = [
         "core_sys.web_Init();",
+        "core_fs.web_Init();",
         "core_wifi.web_Init();",
         "core_ntp.web_Init();",
         "core_json.web_Init();",

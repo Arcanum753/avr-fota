@@ -44,6 +44,7 @@ STATIC_MENU_LINKS = """    <div>
         <a href="index.html">Main</a>
         <a href="ntp.html">NTP configuration</a>
         <a href="system.html">System configuration</a>
+        <a href="filesystem.html">Filesystem</a>
         <a href="wifi.html">WiFi Configuration</a>
         <a href="update.html">Esp Firmware & FS OTA update</a>
     </div>
