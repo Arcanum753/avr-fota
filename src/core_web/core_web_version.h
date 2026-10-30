@@ -1,5 +1,5 @@
 // Auto-generated version file for module: core_web
-// Generated: 2026-10-15 15:07
+// Generated: 2026-10-30 21:41
 // Environment: esp32_electronica7_rgb_macros
 
 #ifndef CORE_WEB_VERSION_H
@@ -10,36 +10,36 @@
 // ============================================================
 
 // Числовая версия (для сравнений)
-#define CORE_WEB_VERSION 8
+#define CORE_WEB_VERSION 9
 
 // Строковая версия
-#define CORE_WEB_VERSION_STR "8"
+#define CORE_WEB_VERSION_STR "9"
 
 // Хэш последнего обработанного коммита кода (без учёта *_version.h)
-#define CORE_WEB_COMMIT_HASH "d5e34557c11c59ce1acc063fb3ab1c334216ba62"
+#define CORE_WEB_COMMIT_HASH "b1689021d4244f4d6e3b9c50319e1dd3b9dd0216"
 
 // ============================================================
 // ДАТА ПОСЛЕДНЕГО ИЗМЕНЕНИЯ
 // ============================================================
 
 // Дата в формате yyyy.mm.dd hh.mm (как строка)
-#define CORE_WEB_COMMIT_DATE_STR "2026.10.11 23:59"
+#define CORE_WEB_COMMIT_DATE_STR "2026.10.30 20:09"
 
 // Компоненты даты (для числовых операций)
 #define CORE_WEB_COMMIT_YEAR 2026
 #define CORE_WEB_COMMIT_MONTH 10
-#define CORE_WEB_COMMIT_DAY 11
-#define CORE_WEB_COMMIT_HOUR 23
-#define CORE_WEB_COMMIT_MINUTE 59
+#define CORE_WEB_COMMIT_DAY 30
+#define CORE_WEB_COMMIT_HOUR 20
+#define CORE_WEB_COMMIT_MINUTE 9
 
 // Полная дата в формате YYYY-MM-DD HH:MM (для отладки)
-#define CORE_WEB_COMMIT_DATE "2026-10-11 23:59"
+#define CORE_WEB_COMMIT_DATE "2026-10-30 20:09"
 
 // ============================================================
 // ИНФОРМАЦИЯ О ГЕНЕРАЦИИ
 // ============================================================
 
-#define CORE_WEB_GENERATED_TIME "2026-10-15 15:07"
-#define CORE_WEB_GENERATED_TIMESTAMP "20261015_150719"
+#define CORE_WEB_GENERATED_TIME "2026-10-30 21:41"
+#define CORE_WEB_GENERATED_TIMESTAMP "20261030_214143"
 
 #endif // CORE_WEB_VERSION_H

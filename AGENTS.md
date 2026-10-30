@@ -530,6 +530,24 @@ on("wifi.just_connected", function(ev) e7.speed(40) end)
 
 Веб-файлы модулей (например `module_program/module_prog/web/prog.html`, `module_program/submodule_isp/web/avrcfg.html`) копируются в каталог сборки FS скриптом `4_fs_builder.py`.
 
+### Единый стиль таблиц
+
+Все таблицы данных и списков в `core_*`, `module_*`, `device_*` и `submodule_*` обязаны
+использовать `class="global_table_style"`; стиль определён в
+`src/core_web/web/style.css`.
+
+- Таблица оборачивается в `.content` и `overflow-x: auto` (эталон —
+  `module_program/module_prog/web/prog.html`).
+- Числовые колонки помечаются `class="align-right"`; пустая/статусная строка использует
+  `colspan`, равный числу колонок.
+- Запрещены локальные стили таблиц в `<style>` страницы, `id`-селекторы таблиц, атрибуты
+  `border`/`cellspacing`/`cellpadding` и классы-конкуренты (`scan`, `mdbtab`, `fs-table`).
+  Обратной совместимости со старыми классами нет.
+- Интерактивные списки: одиночный клик выбирает строку (`.selected-row`), действия
+  размещаются под таблицей. Эталоны — `prog.html` и `core_fs/web/filesystem.html`.
+- Правило обязательно для всех новых и изменяемых страниц. Оставшиеся legacy-таблицы при
+  правке страницы переводятся на `global_table_style`.
+
 ### Файлы конфигурации файловой системы (в `core_sys/web/`, `core_web/web/` и каталогах `web/` модулей)
 
 | Файл | Расположение | Назначение |

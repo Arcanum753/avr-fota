@@ -16,15 +16,12 @@
         .fs-toolbar { text-align: center; margin: 10px; }
         .fs-toolbar button, .fs-toolbar input { margin: 0 3px; }
         .fs-path { text-align: center; font-family: monospace; margin: 8px; }
-        .fs-table { width: 96%; margin: 0 auto; border-collapse: collapse; }
-        .fs-table th, .fs-table td { border-bottom: 1px solid #ddd; padding: 5px 6px; text-align: left; font-size: 13px; }
-        .fs-table td.num { text-align: right; white-space: nowrap; }
-        .fs-table tr.dir td.name { font-weight: bold; cursor: pointer; }
-        .fs-actions button { margin: 0 2px; }
         .fs-status { text-align: center; color: #666; min-height: 20px; margin: 8px; font-size: 13px; }
         .fs-warn { color: #b36b00; }
         .fs-controls { text-align: center; margin: 8px; }
         .fs-controls input { min-width: 220px; }
+        .fs-actions-panel { margin: 10px auto; text-align: center; }
+        .fs-actions-panel button { margin: 0 3px; }
     </style>
 </head>
 
@@ -57,18 +54,29 @@
     </div>
     <div class="fs-status" id="fs-status"></div>
 
-    <table class="fs-table">
-        <thead>
-            <tr><th>Name</th><th>Type</th><th>Size</th><th>Modified</th><th>Actions</th></tr>
-        </thead>
-        <tbody id="fs-tbody"></tbody>
-    </table>
+    <div class="content" style="text-align: center;">
+        <div style="overflow-x: auto;">
+            <table class="global_table_style">
+                <thead>
+                    <tr><th>Name</th><th>Type</th><th class="align-right">Size</th><th>Modified</th></tr>
+                </thead>
+                <tbody id="fs-tbody"></tbody>
+            </table>
+        </div>
+        <div class="fs-actions-panel">
+            <button id="fs-btn-open" class="button" onclick="openSelected()" disabled>Open</button>
+            <button id="fs-btn-download" class="button" onclick="downloadSelected()" disabled>Download</button>
+            <button id="fs-btn-rename" class="button" onclick="renameSelected()" disabled>Rename</button>
+            <button id="fs-btn-delete" class="button-del" onclick="deleteSelected()" disabled>Delete</button>
+            <span id="fs-protected" class="fs-warn" style="display:none; margin-left:8px;">protected</span>
+        </div>
+    </div>
 
     <markup>./page_bottom.html</markup>
     <script src="GetJson.js" defer></script>
     <script src="GetMarkup.js" defer></script>
     <script>
-    const FS_STATE = { entries: [], dir: '/', info: null };
+    const FS_STATE = { entries: [], dir: '/', info: null, truncated: false, selected: '', selectedDir: false };
 
     function setStatus(text, warn) {
         const el = document.getElementById('fs-status');
@@ -148,6 +156,12 @@
         const data = await r.json();
         FS_STATE.entries = Array.isArray(data.entries) ? data.entries : [];
         FS_STATE.truncated = !!data.truncated;
+        if (FS_STATE.selected && !FS_STATE.entries.some(function (e) {
+            return normPath(e.path) === FS_STATE.selected;
+        })) {
+            FS_STATE.selected = '';
+            FS_STATE.selectedDir = false;
+        }
         render();
     }
 
@@ -166,6 +180,41 @@
         }
     }
 
+    function clearSelection() {
+        FS_STATE.selected = '';
+        FS_STATE.selectedDir = false;
+        document.querySelectorAll('#fs-tbody tr.selected-row').forEach(function (r) {
+            r.classList.remove('selected-row');
+        });
+        updateActionButtons();
+    }
+
+    function selectEntry(path, isDir, row) {
+        FS_STATE.selected = path;
+        FS_STATE.selectedDir = isDir;
+        document.querySelectorAll('#fs-tbody tr.selected-row').forEach(function (r) {
+            r.classList.remove('selected-row');
+        });
+        if (row) row.classList.add('selected-row');
+        updateActionButtons();
+    }
+
+    function updateActionButtons() {
+        const has = !!FS_STATE.selected;
+        const secret = has && isSecret(FS_STATE.selected);
+        document.getElementById('fs-btn-open').disabled = !(has && FS_STATE.selectedDir);
+        document.getElementById('fs-btn-download').disabled = !(has && !FS_STATE.selectedDir && !secret);
+        document.getElementById('fs-btn-rename').disabled = !has || secret;
+        document.getElementById('fs-btn-delete').disabled = !has || secret;
+        document.getElementById('fs-protected').style.display = secret ? 'inline' : 'none';
+    }
+
+    function navigate(path) {
+        FS_STATE.dir = normPath(path);
+        clearSelection();
+        render();
+    }
+
     function render() {
         const tbody = document.getElementById('fs-tbody');
         tbody.innerHTML = '';
@@ -174,12 +223,33 @@
         document.getElementById('fs-path').textContent = dir;
 
         if (dir !== '/') {
+            const parent = parentPath(dir);
             const tr = document.createElement('tr');
-            tr.innerHTML = '<td class="name" data-act="up">..</td><td>dir</td><td class="num"></td><td></td><td class="fs-actions"></td>';
+            tr.className = 'dir';
+            tr.onclick = function () { navigate(parent); };
+
+            const tdName = document.createElement('td');
+            tdName.className = 'name';
+            tdName.textContent = '..';
+            tr.appendChild(tdName);
+
+            const tdType = document.createElement('td');
+            tdType.textContent = 'dir';
+            tr.appendChild(tdType);
+
+            const tdSize = document.createElement('td');
+            tdSize.className = 'align-right';
+            tr.appendChild(tdSize);
+
+            const tdTime = document.createElement('td');
+            tr.appendChild(tdTime);
+
             tbody.appendChild(tr);
         }
 
         const seen = new Set();
+        let selectedVisible = false;
+        let visibleCount = 0;
         for (const e of FS_STATE.entries) {
             const p = normPath(e.path);
             if (p === dir) continue;
@@ -193,11 +263,17 @@
             const secret = isSecret(p);
             const isDir = e.type === 'dir';
             if (isDir) tr.className = 'dir';
+            tr.onclick = function () { selectEntry(p, isDir, tr); };
+            if (isDir) tr.ondblclick = function () { navigate(p); };
+            if (FS_STATE.selected === p) {
+                tr.classList.add('selected-row');
+                selectedVisible = true;
+            }
 
             const tdName = document.createElement('td');
             tdName.className = 'name';
             tdName.textContent = name;
-            if (isDir) tdName.onclick = function () { FS_STATE.dir = p; render(); };
+            if (isDir) tdName.title = 'Double-click to open';
             tr.appendChild(tdName);
 
             const tdType = document.createElement('td');
@@ -205,7 +281,7 @@
             tr.appendChild(tdType);
 
             const tdSize = document.createElement('td');
-            tdSize.className = 'num';
+            tdSize.className = 'align-right';
             tdSize.textContent = isDir ? '' : fmtSize(e.size);
             tr.appendChild(tdSize);
 
@@ -213,52 +289,24 @@
             tdTime.textContent = isDir ? '' : fmtTime(e.mtime);
             tr.appendChild(tdTime);
 
-            const tdAct = document.createElement('td');
-            tdAct.className = 'fs-actions';
-
-            if (isDir) {
-                const open = document.createElement('button');
-                open.textContent = 'Open';
-                open.onclick = function () { FS_STATE.dir = p; render(); };
-                tdAct.appendChild(open);
-            } else if (!secret) {
-                const dl = document.createElement('button');
-                dl.textContent = 'Download';
-                dl.onclick = function () { window.location = '/fs/download?path=' + encodeURIComponent(p); };
-                tdAct.appendChild(dl);
-            }
-
-            if (!secret) {
-                const rn = document.createElement('button');
-                rn.textContent = 'Rename';
-                rn.onclick = function () { renamePath(p); };
-                tdAct.appendChild(rn);
-
-                const del = document.createElement('button');
-                del.textContent = 'Delete';
-                del.onclick = function () { deletePath(p, isDir); };
-                tdAct.appendChild(del);
-            } else {
-                const note = document.createElement('span');
-                note.textContent = 'protected';
-                note.style.color = '#b36b00';
-                tdAct.appendChild(note);
-            }
-            tr.appendChild(tdAct);
+            if (secret) tr.title = 'Protected: /secret.json';
             tbody.appendChild(tr);
+            visibleCount++;
         }
 
-        if (tbody.children.length === 0) {
+        if (FS_STATE.selected && !selectedVisible) {
+            FS_STATE.selected = '';
+            FS_STATE.selectedDir = false;
+        }
+
+        if (visibleCount === 0) {
             const tr = document.createElement('tr');
-            tr.innerHTML = '<td colspan="5" style="text-align:center;color:#888">Empty directory</td>';
+            tr.innerHTML = '<td colspan="4" style="text-align:center;color:#888">Empty directory</td>';
             tbody.appendChild(tr);
         }
-    }
 
-    document.addEventListener('click', function (ev) {
-        const td = ev.target.closest('td[data-act="up"]');
-        if (td) { FS_STATE.dir = parentPath(FS_STATE.dir); render(); }
-    });
+        updateActionButtons();
+    }
 
     async function createFile() {
         const name = prompt('File name (in ' + FS_STATE.dir + '):');
@@ -289,6 +337,7 @@
         try {
             await fsRequest('/fs/rename?from=' + encodeURIComponent(path) + '&to=' + encodeURIComponent(target),
                 { method: 'POST' });
+            clearSelection();
             setStatus('Renamed to ' + target);
             await loadAll();
         } catch (e) { setStatus('Rename failed: ' + e.message, true); }
@@ -303,10 +352,29 @@
         }
         try {
             await fsRequest(url, { method: 'POST' });
+            clearSelection();
             setStatus('Deleted ' + path);
             if (FS_STATE.dir === path) FS_STATE.dir = parentPath(path);
             await loadAll();
         } catch (e) { setStatus('Delete failed: ' + e.message, true); }
+    }
+
+    function openSelected() {
+        if (FS_STATE.selected && FS_STATE.selectedDir) navigate(FS_STATE.selected);
+    }
+
+    function downloadSelected() {
+        if (FS_STATE.selected && !FS_STATE.selectedDir && !isSecret(FS_STATE.selected)) {
+            window.location = '/fs/download?path=' + encodeURIComponent(FS_STATE.selected);
+        }
+    }
+
+    function renameSelected() {
+        if (FS_STATE.selected && !isSecret(FS_STATE.selected)) renamePath(FS_STATE.selected);
+    }
+
+    function deleteSelected() {
+        if (FS_STATE.selected && !isSecret(FS_STATE.selected)) deletePath(FS_STATE.selected, FS_STATE.selectedDir);
     }
 
     async function uploadFiles(files) {

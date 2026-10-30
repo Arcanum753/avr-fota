@@ -12,7 +12,8 @@
 
     <!-- Описание -->
     <div class="content" style="text-align: center;">
-        <table class="scan">
+        <div style="overflow-x: auto;">
+            <table class="global_table_style">
             <tr><th>Описание / Description</th></tr>
             <tr><td style="text-align: left; padding: 8px;">
                 <b>RU:</b> Демо-страница — пример работы с формой и сохранением в JSON.
@@ -23,12 +24,14 @@
                 Save without page reload.<br>
                 <small><i>(AI generated)</i></small>
             </td></tr>
-        </table>
+            </table>
+        </div>
     </div>
 
     <!-- Демо-форма -->
     <div class="content" style="text-align: center;">
-        <table class="scan">
+        <div style="overflow-x: auto;">
+            <table class="global_table_style">
             <tr><th colspan="2">Demo config (example only)</th></tr>
             <tr>
                 <td class="label">Sample text</td>
@@ -47,15 +50,18 @@
                 <td><input type="text" id="demoArray2" value=""></td>
             </tr>
             <tr><td colspan="2" style="text-align: center; padding: 8px;"> <input type="button" value="Применить" class="button-prog" onclick="saveDemoConfig()"> <span id="demoStatus" style="margin-left:8px;font-size:12px;"></span></td></tr>
-        </table>
+            </table>
+        </div>
     </div>
 
     <!-- Время и дата -->
     <div class="content" style="text-align: center;">
-        <table class="scan">
+        <div style="overflow-x: auto;">
+            <table class="global_table_style">
             <tr><th>Текущее время / Current time</th></tr>
             <tr><td style="padding: 12px; font-size: 1.3em;"><span id="templateTime">--</span></td></tr>
-        </table>
+            </table>
+        </div>
     </div>
 
     <div class="footer">

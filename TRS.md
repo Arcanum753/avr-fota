@@ -180,6 +180,7 @@
 - FR-CORE-WEB-8: `restart_esp()` корректно завершает ФС и перезагружает устройство.
 - FR-CORE-WEB-9: `getResetReason()`, `serialShowAbout()`, `getFsVersionStr()` делегируют в `core_sys`.
 - FR-CORE-WEB-10: `checkAuth()` применяется ко всем защищённым маршрутам модулей.
+- FR-CORE-WEB-11: Таблицы данных и списков на веб-страницах компонентов используют единый класс `global_table_style` из `style.css`; новые и изменяемые страницы обязаны ему соответствовать, существующие legacy-таблицы переводятся при правке страницы. Локальные стили таблиц, `id`-селекторы и конкурирующие классы для новых таблиц запрещены.
 
 **Веб-файлы:** `index.html`, `page_head.html` (статическое меню + маркер `<!-- MODULES_RIGHT_COLUMN -->`), `page_bottom.html`, `GetJson.js` (`GetJson`, `GetText`, `ApplyJson`, `ParseCVT`, `ApplyCVT`), `GetMarkup.js`, `style.css`, `esp.gif`, `logo.gif`, `favicon.ico`.
 

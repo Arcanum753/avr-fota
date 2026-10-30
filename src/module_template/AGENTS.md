@@ -43,6 +43,11 @@ AJAX-страница с `GetJson.js`/`GetMarkup.js`.
 `/template/time`, `/template/ver`.
 Страницы `template.html`, `template2.html`, `_menu.html`; конфиг `web/config_template.json`.
 
+Таблицы шаблона используют `class="global_table_style"`. Новые страницы обязаны следовать
+правилу единого стиля таблиц из корневого `AGENTS.md`: без локальных стилей таблиц, с
+обёрткой `.content` + `overflow-x: auto`, числовыми колонками `align-right` и действиями под
+таблицей для интерактивных списков.
+
 ## Конфигурация
 
 `/config_template.json` — `gpio1State`, `gpio2State`, `blinkInterval`, `demoSampleText`,

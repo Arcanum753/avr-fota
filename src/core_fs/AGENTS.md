@@ -16,7 +16,11 @@
   `FREE_RESERVE=4 KiB`, `MAX_ENTRIES=256`, `MAX_NAME=32`, `MAX_PATH=255`,
   `MAX_DEPTH=8`, `BLOCK_SIZE=4096`).
 - `web/filesystem.html` — страница; пункт меню добавляется в
-  `python/gen_page_head.py` (`STATIC_MENU_LINKS`).
+  `python/gen_page_head.py` (`STATIC_MENU_LINKS`). Таблица файлов использует
+  `global_table_style`: одиночный клик выбирает строку, действия `Open`/`Download`/
+  `Rename`/`Delete` находятся под таблицей, двойной клик по каталогу открывает его.
+  `/secret.json` виден, но его действия защищены. Вместе с `prog.html` страница служит
+  эталоном единого стиля таблиц.
 
 Модуль **не** регистрирует ресурсы в `core_state` (`res = 0`) и **не** доступен
 из макросов/Lua/`resources.json`: это только HTTP-интерфейс.

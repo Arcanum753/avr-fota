@@ -13,7 +13,7 @@
     <h2 class="title" style="background: #7D8EE2">System configuration</h2>
     <div class="content">
     <form action="" method="get">
-        <table class="scan">
+        <table class="global_table_style">
             <thead><tr><th colspan="2">Device Settings</th></tr></thead>
             <tr><td class="label">Name of device</td>       <td><input type="text" id="name"   name="name" value=""></td></tr>
             <tr><td class="label">Device serial number</td> <td><input type="text" id="serial" name="serial" value=""></td></tr>
@@ -24,7 +24,7 @@
 <hr>
     <div class="content">
     <form>
-        <table class="scan">
+        <table class="global_table_style">
             <thead><tr><th colspan="2">Device Control</th></tr></thead>
             <tr><td colspan="2" align="center"><input type="button" value="Reset chip" class="button-del" onclick='javascript:restartESP()'></td></tr>
         </table>
@@ -34,7 +34,7 @@
     <div class="content">
     <form id="wwwAuthForm" onsubmit=" return checkAuth( this ) " method="get">
         <input type="hidden" id="authconf" name="authconf" value="">
-        <table class="scan">
+        <table class="global_table_style">
             <thead><tr><th colspan="2">Web Authentication</th></tr></thead>
             <tr><td class="label"><label for="wwwauth">Use auth:</label></td><td><input type="checkbox" id="wwwauth" name="wwwauth" onclick='javascript:enableAuthFields(this);'></td></tr>
             <tr id="username" style="display: none;"><td class="label"><label for="wwwuser">Web User:</label></td><td><input type="text" id="wwwuser" name="wwwuser" value=""></td></tr>
@@ -54,7 +54,7 @@
     <div class="content" style="text-align: center;">
         <h2 class="title" style="background: #7D8EE2">Time Sources</h2>
         <form id="timeForm" onsubmit="return false;">
-            <table class="scan">
+            <table class="global_table_style">
                 <tr><th colspan="2">Time settings</th></tr>
                 <tr>
                     <td class="label">Timezone</td>
@@ -100,7 +100,7 @@
                 <tr><td class="label">Sync RTC every (s):</td> <td> <input type="number" id="time_sync_interval" name="syncIntervalS" min="0" max="86400"></td></tr>
             </table>
 
-            <table class="scan">
+            <table class="global_table_style">
                 <tr>
                     <th colspan="6">
                         Sources
@@ -112,7 +112,7 @@
                 <tbody id="srcBody"></tbody>
             </table>
 
-            <table class="scan">
+            <table class="global_table_style">
                 <tr><th colspan="2">Current time</th></tr>
                 <tr><td class="label">Now:</td> <td><span id="time_now_str">—</span> (<span id="time_now">0</span>)</td></tr>
                 <tr><td class="label">Valid:</td> <td><span id="time_valid_str">—</span></td></tr>
@@ -121,7 +121,7 @@
                 <tr><td class="label">Sources:</td> <td><span id="time_sources">—</span></td></tr>
             </table>
 
-            <table class="scan">
+            <table class="global_table_style">
                 <tr><th colspan="2">Set time</th></tr>
                 <tr><td class="label">Epoch:</td> <td><input type="text" id="setEpoch" name="value" style="width:200px;"></td></tr>
                 <tr><td colspan="2" style="text-align: center; padding: 8px;">
