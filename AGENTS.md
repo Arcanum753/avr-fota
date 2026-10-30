@@ -61,11 +61,12 @@ glob-масками `src/*/*.ini` и `src/*/*/*.ini` в `[platformio] extra_conf
 | `module_otaclient` | `src/module_otaclient/` | OTA-клиент |
 | `module_rgb` | `src/module_rgb/` | RGB-матрица (WS2812) |
 | `module_i2c-mapper` | `src/module_i2c-mapper/` | I2C-сканер |
+| `module_RDA5807m` | `src/module_RDA5807m/` | FM/RDS-приёмник RDA5807M, источник времени |
 | `device_clock-mech` | `src/device_clock-mech/` | часы механические |
 | `device_mech-ring` | `src/device_mech-ring/` | часы механические с боем |
 | `device_electronica7_rgb` | `src/device_electronica7_rgb/` | часы Электроника-7 RGB |
 
-**Локальная разработка:** в рабочей копии ядра все 13 компонентов клонированы в `src/` (у каждого
+**Локальная разработка:** в рабочей копии ядра все компоненты клонированы в `src/` (у каждого
 своя `.git`, ветка `main`). Ядро их игнорирует. Коммиты/пуши выполняются отдельно в каждой папке;
 правки «всё сразу» — как обычные изменения файлов в одном окне VS Code. `module_template` — часть
 ядра (не клон).
@@ -745,7 +746,7 @@ avr-fota/
 │   ├── core_led/            # Ядро индикации светодиодом (common_module.h/cpp: ledPatLen, ledPatAt)
 │   ├── core_terminal/       # Ядро последовательного терминала
 │   ├── module_template/     # Шаблон модуля (эталон для создания новых; остаётся в ядре, не клон)
-│   └── module_*/device_*/   # Клоны внешних репозиториев (в dev-копии лежат все 13), каждый со
+│   └── module_*/device_*/   # Клоны внешних репозиториев (в dev-копии лежат все компоненты), каждый со
 │                           # своей .git; вне учёта ядра (см. .gitignore). Программатор:
 │                           # src/module_program/{module_prog,submodule_isp,submodule_swd};
 │                           # редактор FS: src/module_editor/.

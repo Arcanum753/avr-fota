@@ -45,6 +45,14 @@
             "path": "src/module_i2c-mapper"
         },
         {
+            "name": "module_RDA5807m",
+            "path": "src/module_RDA5807m"
+        },
+        {
+            "name": "module_veml7700",
+            "path": "src/module_veml7700"
+        },
+        {
             "name": "device_clock-mech",
             "path": "src/device_clock-mech"
         },
