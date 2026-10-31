@@ -22,6 +22,9 @@
         .fs-controls input { min-width: 220px; }
         .fs-actions-panel { margin: 10px auto; text-align: center; }
         .fs-actions-panel button { margin: 0 3px; }
+        th.sortable { cursor: pointer; user-select: none; white-space: nowrap; }
+        th.sortable:hover { background: #ffd; }
+        .sort-ind { font-size: 11px; color: #7D8EE2; margin-left: 2px; }
     </style>
 </head>
 
@@ -56,9 +59,14 @@
 
     <div class="content" style="text-align: center;">
         <div style="overflow-x: auto;">
-            <table class="global_table_style">
+            <table class="global_table_style striped">
                 <thead>
-                    <tr><th>Name</th><th>Type</th><th class="align-right">Size</th><th>Modified</th></tr>
+                    <tr>
+                        <th class="sortable" data-sort="name" onclick="sortBy('name')">Name<span class="sort-ind"></span></th>
+                        <th class="sortable" data-sort="type" onclick="sortBy('type')">Type<span class="sort-ind"></span></th>
+                        <th class="sortable align-right" data-sort="size" onclick="sortBy('size')">Size<span class="sort-ind"></span></th>
+                        <th class="sortable" data-sort="time" onclick="sortBy('time')">Modified<span class="sort-ind"></span></th>
+                    </tr>
                 </thead>
                 <tbody id="fs-tbody"></tbody>
             </table>
@@ -76,7 +84,11 @@
     <script src="GetJson.js" defer></script>
     <script src="GetMarkup.js" defer></script>
     <script>
-    const FS_STATE = { entries: [], dir: '/', info: null, truncated: false, selected: '', selectedDir: false };
+    const FS_STATE = {
+        entries: [], dir: '/', info: null, truncated: false,
+        selected: '', selectedDir: false,
+        sort: { key: 'name', dir: 1 }
+    };
 
     function setStatus(text, warn) {
         const el = document.getElementById('fs-status');
@@ -199,6 +211,39 @@
         updateActionButtons();
     }
 
+    function sortBy(key) {
+        if (FS_STATE.sort.key === key) {
+            FS_STATE.sort.dir = -FS_STATE.sort.dir;
+        } else {
+            FS_STATE.sort = { key: key, dir: (key === 'size' || key === 'time') ? -1 : 1 };
+        }
+        render();
+    }
+
+    function compareName(a, b) {
+        return a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' });
+    }
+
+    function cmpRows(a, b) {
+        if (a.isDir !== b.isDir) return a.isDir ? -1 : 1;
+        let r = 0;
+        if (FS_STATE.sort.key === 'name') r = compareName(a.name, b.name);
+        if (FS_STATE.sort.key === 'type') r = compareName(a.type, b.type);
+        if (FS_STATE.sort.key === 'size') r = a.size - b.size;
+        if (FS_STATE.sort.key === 'time') r = a.mtime - b.mtime;
+        if (r === 0) r = compareName(a.name, b.name);
+        return r * FS_STATE.sort.dir;
+    }
+
+    function updateSortIndicators() {
+        document.querySelectorAll('th[data-sort]').forEach(function (th) {
+            const on = th.getAttribute('data-sort') === FS_STATE.sort.key;
+            const ind = th.querySelector('.sort-ind');
+            if (ind) ind.textContent = on ? (FS_STATE.sort.dir > 0 ? ' \u25B2' : ' \u25BC') : '';
+            th.setAttribute('aria-sort', on ? (FS_STATE.sort.dir > 0 ? 'ascending' : 'descending') : 'none');
+        });
+    }
+
     function updateActionButtons() {
         const has = !!FS_STATE.selected;
         const secret = has && isSecret(FS_STATE.selected);
@@ -247,9 +292,8 @@
             tbody.appendChild(tr);
         }
 
+        const rows = [];
         const seen = new Set();
-        let selectedVisible = false;
-        let visibleCount = 0;
         for (const e of FS_STATE.entries) {
             const p = normPath(e.path);
             if (p === dir) continue;
@@ -257,54 +301,65 @@
             if (seen.has(p)) continue;
             seen.add(p);
             if (filter && p.toLowerCase().indexOf(filter) < 0) continue;
+            rows.push({
+                path: p,
+                name: baseName(p),
+                type: e.type === 'dir' ? 'dir' : 'file',
+                isDir: e.type === 'dir',
+                size: Number(e.size) || 0,
+                mtime: Number(e.mtime) || 0,
+                secret: isSecret(p)
+            });
+        }
+        rows.sort(cmpRows);
 
+        let selectedVisible = false;
+        rows.forEach(function (r, i) {
             const tr = document.createElement('tr');
-            const name = baseName(p);
-            const secret = isSecret(p);
-            const isDir = e.type === 'dir';
-            if (isDir) tr.className = 'dir';
-            tr.onclick = function () { selectEntry(p, isDir, tr); };
-            if (isDir) tr.ondblclick = function () { navigate(p); };
-            if (FS_STATE.selected === p) {
+            if (r.isDir) tr.className = 'dir';
+            if (i % 2 === 1) tr.classList.add('row-alt');
+            tr.onclick = function () { selectEntry(r.path, r.isDir, tr); };
+            if (r.isDir) tr.ondblclick = function () { navigate(r.path); };
+            if (FS_STATE.selected === r.path) {
                 tr.classList.add('selected-row');
                 selectedVisible = true;
             }
 
             const tdName = document.createElement('td');
             tdName.className = 'name';
-            tdName.textContent = name;
-            if (isDir) tdName.title = 'Double-click to open';
+            tdName.textContent = r.name;
+            if (r.isDir) tdName.title = 'Double-click to open';
             tr.appendChild(tdName);
 
             const tdType = document.createElement('td');
-            tdType.textContent = isDir ? 'dir' : 'file';
+            tdType.textContent = r.type;
             tr.appendChild(tdType);
 
             const tdSize = document.createElement('td');
             tdSize.className = 'align-right';
-            tdSize.textContent = isDir ? '' : fmtSize(e.size);
+            tdSize.textContent = r.isDir ? '' : fmtSize(r.size);
             tr.appendChild(tdSize);
 
             const tdTime = document.createElement('td');
-            tdTime.textContent = isDir ? '' : fmtTime(e.mtime);
+            tdTime.textContent = r.isDir ? '' : fmtTime(r.mtime);
             tr.appendChild(tdTime);
 
-            if (secret) tr.title = 'Protected: /secret.json';
+            if (r.secret) tr.title = 'Protected: /secret.json';
             tbody.appendChild(tr);
-            visibleCount++;
-        }
+        });
 
         if (FS_STATE.selected && !selectedVisible) {
             FS_STATE.selected = '';
             FS_STATE.selectedDir = false;
         }
 
-        if (visibleCount === 0) {
+        if (rows.length === 0) {
             const tr = document.createElement('tr');
             tr.innerHTML = '<td colspan="4" style="text-align:center;color:#888">Empty directory</td>';
             tbody.appendChild(tr);
         }
 
+        updateSortIndicators();
         updateActionButtons();
     }
 

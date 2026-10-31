@@ -145,6 +145,11 @@ table.global_table_style td {
     padding: 2px 2px;
 }
 
+/* Опциональная полосатость строк таблиц (класс striped на table). */
+table.global_table_style.striped tbody tr.row-alt {
+    background-color: #f2f3f5;
+}
+
 table.global_table_style td.s:hover {
     background: #eef;
 }
