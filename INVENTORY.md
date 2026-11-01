@@ -52,6 +52,7 @@
 | device_clock-mech | устройство | `src/device_clock-mech/` | — | `src/device_clock-mech/AGENTS.md` | DEVICE_CLOCKMECH | ESP32 | `module_udp`, `module_otaclient`, `module_ds3231` | — |
 | device_mech-ring | устройство | `src/device_mech-ring/` | — | `src/device_mech-ring/AGENTS.md` | DEVICE_RINGMECH | ESP32 | + `device_clock-mech` | — |
 | device_electronica7_rgb | устройство | `src/device_electronica7_rgb/` | — | `src/device_electronica7_rgb/AGENTS.md` | DEVICE_E7RGB | ESP32 | `module_udp`, `module_otaclient`, (`module_macros`) | e7 |
+| device_projection_clock | устройство | `src/device_projection_clock/` | — | `src/device_projection_clock/AGENTS.md` | DEVICE_PROJ_CLOCK | ESP32 | `module_udp`, `module_otaclient` | proj_clock |
 
 ## Репозитории
 

@@ -65,6 +65,7 @@ glob-масками `src/*/*.ini` и `src/*/*/*.ini` в `[platformio] extra_conf
 | `device_clock-mech` | `src/device_clock-mech/` | часы механические |
 | `device_mech-ring` | `src/device_mech-ring/` | часы механические с боем |
 | `device_electronica7_rgb` | `src/device_electronica7_rgb/` | часы Электроника-7 RGB |
+| `device_projection_clock` | `src/device_projection_clock/` | проекционные часы ЧЧ:ММ:СС (60 LED) |
 
 **Локальная разработка:** в рабочей копии ядра все компоненты клонированы в `src/` (у каждого
 своя `.git`, ветка `main`). Ядро их игнорирует. Коммиты/пуши выполняются отдельно в каждой папке;
@@ -119,6 +120,7 @@ glob-масками `src/*/*.ini` и `src/*/*/*.ini` в `[platformio] extra_conf
 | `device_clock-mech` | `esp32_clock-mech` | Механические часы |
 | `device_mech-ring` | `esp32_clock-mech_ring` | Механические часы с боем |
 | `device_electronica7_rgb` | `esp32_electronica7_rgb` | Часы «Электроника-7» RGB (матрица) |
+| `device_projection_clock` | `esp32_projection_clock` | Проекционные часы ЧЧ:ММ:СС (6×10 адресных LED) |
 
 Устройства описывают «рецепт» сборки: их `.ini` в `src_filter` перечисляют нужные модули
 (например `device_mech-ring.ini` подтягивает `module_udp`, `module_ds3231`, `module_otaclient`).
@@ -308,6 +310,7 @@ CLASS_CORE_OTA (core_ota/core_ota.h)
 | `module_macros` | `ns_module_macros` | `macroFileBaseName` |
 | `module_rgb` | `ns_module_rgb` | `hexStringToUint32` |
 | `device_electronica7_rgb` | `ns_device_electronica7_rgb` | `e7*` (HSV/Lerp/ГПСЧ/эффекты/сэмплер) |
+| `device_projection_clock` | `ns_device_projection_clock` | карта цифр/LED, время, HSV/Lerp/цвета |
 
 ### Механизм подключения: единый контракт модулей + автогенерация registry
 
