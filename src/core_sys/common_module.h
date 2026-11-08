@@ -14,6 +14,12 @@ namespace ns_core_sys {
 // Валидация пароля администратора: 8-63 символа, только латинские буквы и цифры
 bool isAdminPassValid(const String& pass);
 
+// Имя устройства/серийник: 1..63, только A-Za-z0-9-_ (hostname-safe).
+bool terminalValidateIdent(const String& value);
+
+// Web-auth user: 1..32, только A-Za-z0-9._-
+bool terminalValidateAuthUser(const String& value);
+
 // Расчёт CRC по всей записи, но с пропуском поля crc (байты skipOff..skipOff+skipLen)
 uint32_t identCrcSkip(uint8_t *data, size_t len, size_t skipOff, size_t skipLen);
 

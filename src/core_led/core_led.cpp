@@ -18,4 +18,5 @@ void ledInit()    {
 	if (CONNECTION_LED >= 0) {	espLedOff();	}	// Turn LED off
 	ledMacroRst();
 	ledMacroTimerTask();
+	ledTerminalRegister();
 }

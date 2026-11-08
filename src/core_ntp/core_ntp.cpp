@@ -28,6 +28,8 @@ void CLASS_CORE_NTP::begin (){
 	ntpUpdateStaleSec();
 	updateTimeFromNTP = _ntpConfig.updateNTPTimeEvery > 0;
 	_ntpServerNow = _ntpConfig.ntpServerName0;
+
+	terminalRegister();
 }
 
 // унифицированный конструктор контекста

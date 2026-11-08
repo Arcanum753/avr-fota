@@ -114,6 +114,11 @@ void CLASS_CORE_WIFI::begin(ModContext& ctx) {
 	core_state.signal("wifi.ap_clients", BusValue::i32(0));
 	core_state.signal("wifi.ap_busy", BusValue::bo(false));
 	core_state.signal("wifi.slot_name", BusValue::str(""));
+	core_state.signal("wifi.dhcp", BusValue::bo(true));
+	core_state.signal("wifi.ap_ssid", BusValue::str(""));
+	core_state.signal("wifi.ap_ip", BusValue::str(""));
+
+	terminalRegister();
 }
 
 // ============================================================
@@ -137,6 +142,9 @@ void CLASS_CORE_WIFI::register_resources() {
     core_state.regState("ap_mode",      BusValue::BOOL, "AP поднят", false);
     core_state.regState("ap_clients",   BusValue::I32,  "клиентов AP", false);
     core_state.regState("ap_busy",      BusValue::BOOL, "AP занят (клиенты > 0)", false);
+    core_state.regState("dhcp",         BusValue::BOOL, "DHCP активного слота", false);
+    core_state.regState("ap_ssid",      BusValue::STR,  "SSID точки доступа", false);
+    core_state.regState("ap_ip",        BusValue::STR,  "IP точки доступа", false);
 
     // Режим и цель — ENUM-состояния
     core_state.regEnum("mode",   2, kWifiModeNames,   "режим модуля (auto/macro)");
@@ -165,6 +173,7 @@ void CLASS_CORE_WIFI::register_resources() {
     core_state.regFunc("force_connect_kick","->", "то же, выгнав клиентов AP (macro)",        CLASS_CORE_WIFI::s_cbForceConnectKick, this);
     core_state.regFunc("force_scan",        "n",  "серия из n сканов, лучшая сеть (macro)",   CLASS_CORE_WIFI::s_cbForceScan, this);
     core_state.regFunc("force_disconnect",  "->", "отключить STA (macro)",                    CLASS_CORE_WIFI::s_cbForceDisconnect, this);
+    core_state.regFunc("ap_clients_list",   "->s", "MAC/IP клиентов AP (best-effort)",        CLASS_CORE_WIFI::s_cbApClientsList, this);
 
     // Коды возврата (обязательно, для UI каталога и диагностики).
     core_state.regFuncCode("wifi.mode", BUS_ERR_BAD_VALUE, "значение вне диапазона (0/1)");
@@ -252,6 +261,13 @@ int CLASS_CORE_WIFI::s_cbForceDisconnect(void* user, int argc, const BusValue* a
     CLASS_CORE_WIFI* self = (CLASS_CORE_WIFI*)user;
     if (!self->wifiBusAllowed()) return BUS_ERR_DENIED;
     return self->forceDisconnect();
+}
+
+int CLASS_CORE_WIFI::s_cbApClientsList(void* user, int argc, const BusValue* argv, BusValue& result) {
+    CLASS_CORE_WIFI* self = (CLASS_CORE_WIFI*)user;
+    (void)argc; (void)argv;
+    result = BusValue::str(self->apClientsText());
+    return BUS_OK;
 }
 
 // ============================================================

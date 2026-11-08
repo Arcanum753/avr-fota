@@ -7,6 +7,7 @@
 #if defined(ESP8266)
 #include <LittleFS.h>
 #include <avr/pgmspace.h>
+#include <user_interface.h>
 #endif
 
 #include <DNSServer.h>
@@ -194,6 +195,8 @@ void CLASS_CORE_WIFI::leaveApToScan() {
 	core_state.signal("wifi.ap_mode", BusValue::bo(false));
 	core_state.signal("wifi.ap_clients", BusValue::i32(0));
 	core_state.signal("wifi.ap_busy", BusValue::bo(false));
+	core_state.signal("wifi.ap_ssid", BusValue::str(""));
+	core_state.signal("wifi.ap_ip", BusValue::str(""));
 	_scanActive = true;
 	_apScanPhaseUntil = _stateSeconds + WIFI_AP_RETRY_PHASE_SEC;
 	_nextStaScanAt = _stateSeconds;
@@ -379,6 +382,9 @@ void CLASS_CORE_WIFI::staTick() {
 
 	// Найдена сеть из конфигов — подключаемся
 	load_configWifi(slot);
+	_activeSlot = (int8_t)slot;
+	_activeDhcp = _wifiConfig.dhcp;
+	core_state.signal("wifi.dhcp", BusValue::bo(_activeDhcp));
 	WifiScan = WF_SCAN_NO_NEED;
 	connectionTimout = 0;
 	_scanEmptyCount = 0;   // успешный скан сбрасывает счётчик пустых сканов
@@ -426,6 +432,9 @@ void CLASS_CORE_WIFI::configureWifiAP() {
 	core_state.signal("wifi.ap_mode", BusValue::bo(true));
 	core_state.signal("wifi.ap_clients", BusValue::i32(0));
 	core_state.signal("wifi.ap_busy", BusValue::bo(false));
+	core_state.signal("wifi.ap_ssid", BusValue::str(WiFi.softAPSSID()));
+	core_state.signal("wifi.ap_ip", BusValue::str(WiFi.softAPIP().toString()));
+	core_state.signal("wifi.dhcp", BusValue::bo(false));
 	// AP-режим: STA-состояние шины больше не актуально — сбрасываем, иначе
 	// wifi.connected/ip/slot_name остаются «залипшими» от прошлого подключения.
 	core_state.signal("wifi.connected", BusValue::bo(false));
@@ -444,6 +453,20 @@ int CLASS_CORE_WIFI::scanWifi() {
 	int nets = WiFi.scanComplete();
 	if (nets <= 0) { return -1; }
 
+	// Приоритетный слот после `wifi connect <n>`: пробуем его первым.
+	int forced = _forcedSlot;
+	_forcedSlot = -1;
+	if (forced >= 0 && forced < 4) {
+		const char* want = (forced == 0) ? _strWifi0
+                         : (forced == 1) ? _strWifi1
+                         : (forced == 2) ? _strWifi2 : _strWifi3;
+		for (int i = 0; i < nets && _scanNum < 0; ++i) {
+			if (strcmp(want, WiFi.SSID(i).c_str()) == 0 &&
+			    _wifiFailCount[forced] < MAX_WIFI_FAIL_COUNT) {
+				_scanNum = forced;
+			}
+		}
+	}
 	for (int i = 0; i < nets && _scanNum < 0; ++i) {
 		if (strcmp( _strWifi3,  WiFi.SSID(i).c_str()) == 0 && _wifiFailCount[3] < MAX_WIFI_FAIL_COUNT){ _scanNum = 3; }
 	}
@@ -465,6 +488,43 @@ int CLASS_CORE_WIFI::scanWifi() {
 	return _scanNum;
 }
 
+String CLASS_CORE_WIFI::apClientsText() {
+    String out;
+    if (wifiStatus != FS_STAT_APMODE) { return out; }
+
+#if defined(ESP32)
+    wifi_sta_list_t list;
+    if (esp_wifi_ap_get_sta_list(&list) == ESP_OK) {
+        for (int i = 0; i < list.num; i++) {
+            const uint8_t* m = list.sta[i].mac;
+            char mac[20];
+            snprintf(mac, sizeof(mac), "%02X:%02X:%02X:%02X:%02X:%02X",
+                     m[0], m[1], m[2], m[3], m[4], m[5]);
+            out += mac;
+            out += " ?\r\n";   // IP клиента ESP32 без DHCP-leases недоступен
+        }
+    }
+#endif
+#if defined(ESP8266)
+    struct station_info* info = wifi_softap_get_station_info();
+    struct station_info* cur = info;
+    while (cur != nullptr) {
+        const uint8_t* m = cur->bssid;
+        char mac[20];
+        snprintf(mac, sizeof(mac), "%02X:%02X:%02X:%02X:%02X:%02X",
+                 m[0], m[1], m[2], m[3], m[4], m[5]);
+        IPAddress ip(cur->ip.addr);
+        out += mac;
+        out += " ";
+        out += ip.toString();
+        out += "\r\n";
+        cur = STAILQ_NEXT(cur, next);
+    }
+    if (info != nullptr) { wifi_softap_free_station_info(); }
+#endif
+    return out;
+}
+
 void CLASS_CORE_WIFI::configureWifi() { // вход в STA-режим: скан сети / подключение
 	if (wifiStatus == FS_STAT_APMODE) {return;}
 	DEBUG_CORE_WIFI(__PRETTY_FUNCTION__);	DEBUG_CORE_WIFI("\r\n");
@@ -478,6 +538,9 @@ void CLASS_CORE_WIFI::configureWifi() { // вход в STA-режим: скан 
 	_ignoreDisconnect = false;
 	wifiStatus = FS_STAT_CONNECTING;
 	WifiScan = WF_STAT_SCANING;
+	core_state.signal("wifi.ap_mode", BusValue::bo(false));
+	core_state.signal("wifi.ap_ssid", BusValue::str(""));
+	core_state.signal("wifi.ap_ip", BusValue::str(""));
 	connectionTimout = 0;
 	ledSetSteady(false);	// выход из steady-on при подключении
 	_apUptime = 0;
@@ -965,6 +1028,11 @@ int CLASS_CORE_WIFI::forceConnect() {
 	core_state.signal("wifi.ap_mode", BusValue::bo(false));
 	core_state.signal("wifi.ap_clients", BusValue::i32(0));
 	core_state.signal("wifi.ap_busy", BusValue::bo(false));
+	core_state.signal("wifi.ap_ssid", BusValue::str(""));
+	core_state.signal("wifi.ap_ip", BusValue::str(""));
+	_activeSlot = (int8_t)slot;
+	_activeDhcp = _wifiConfig.dhcp;
+	core_state.signal("wifi.dhcp", BusValue::bo(_activeDhcp));
 	DEBUG_CORE_WIFI("force_connect: connecting to %s\r\n", _wifiConfig.ssid.c_str());
 	WiFi.begin(_wifiConfig.ssid.c_str(), _wifiConfig.password.c_str());
 	ledMacrosWifiConnecting();

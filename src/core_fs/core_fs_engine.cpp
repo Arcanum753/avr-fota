@@ -28,7 +28,7 @@ static String entryPath(File& file, const String& parent) {
 }
 
 static void collectDir(CoreFs& fs, const String& dir, FsEntry* out, size_t cap,
-                       size_t& count, bool& truncated, int depth) {
+                       size_t& count, bool& truncated, int depth, bool recursive) {
     if (truncated) { return; }
     File root = fs.open(dir, "r");
     if (!root || !root.isDirectory()) { return; }
@@ -49,8 +49,8 @@ static void collectDir(CoreFs& fs, const String& dir, FsEntry* out, size_t cap,
             item.size = isDir ? 0 : (uint32_t)entry.size();
             item.mtime = isDir ? 0 : entryMtime(entry);
 
-            if (isDir && depth < CORE_FS_MAX_DEPTH) {
-                collectDir(fs, path, out, cap, count, truncated, depth + 1);
+            if (recursive && isDir && depth < CORE_FS_MAX_DEPTH) {
+                collectDir(fs, path, out, cap, count, truncated, depth + 1, recursive);
             }
         }
         entry.close();
@@ -59,13 +59,7 @@ static void collectDir(CoreFs& fs, const String& dir, FsEntry* out, size_t cap,
     root.close();
 }
 
-bool fsCollectEntries(CoreFs& fs, FsEntry* out, size_t cap,
-                      size_t& count, bool& truncated) {
-    count = 0;
-    truncated = false;
-    if (out == nullptr || cap == 0) { return true; }
-    collectDir(fs, "/", out, cap, count, truncated, 1);
-
+static void sortEntries(FsEntry* out, size_t count) {
     // Лексикографическая сортировка (вставками: список небольшой).
     for (size_t i = 1; i < count; i++) {
         FsEntry key = out[i];
@@ -76,6 +70,33 @@ bool fsCollectEntries(CoreFs& fs, FsEntry* out, size_t cap,
         }
         out[j] = key;
     }
+}
+
+bool fsCollectEntries(CoreFs& fs, FsEntry* out, size_t cap,
+                      size_t& count, bool& truncated) {
+    count = 0;
+    truncated = false;
+    if (out == nullptr || cap == 0) { return true; }
+    collectDir(fs, "/", out, cap, count, truncated, 1, true);
+    sortEntries(out, count);
+    return true;
+}
+
+bool fsListDir(CoreFs& fs, const String& path, bool recursive, FsEntry* out,
+               size_t cap, size_t& count, bool& truncated) {
+    count = 0;
+    truncated = false;
+    if (out == nullptr || cap == 0) { return true; }
+
+    File root = fs.open(path, "r");
+    if (!root || !root.isDirectory()) {
+        if (root) { root.close(); }
+        return false;
+    }
+    root.close();
+
+    collectDir(fs, path, out, cap, count, truncated, 1, recursive);
+    sortEntries(out, count);
     return true;
 }
 

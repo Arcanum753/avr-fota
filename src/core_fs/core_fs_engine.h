@@ -18,6 +18,11 @@ namespace ns_core_fs {
 bool fsCollectEntries(CoreFs& fs, FsEntry* out, size_t cap,
                       size_t& count, bool& truncated);
 
+// Список записей каталога: recursive=false — только непосредственные дети,
+// true — всё поддерево. path должен быть нормализованным.
+bool fsListDir(CoreFs& fs, const String& path, bool recursive, FsEntry* out,
+               size_t cap, size_t& count, bool& truncated);
+
 // Ёмкость/занятость LittleFS.
 bool fsBuildInfo(CoreFs& fs, uint32_t& total, uint32_t& used);
 

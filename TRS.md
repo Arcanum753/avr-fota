@@ -336,16 +336,16 @@
 
 **Каталог:** `src/core_terminal/` · **Класс:** отсутствует (`SerialTerminal term`) · **.ini:** отсутствует; `TerminalInit()`/`TerminalLoop()` в `core_begin`/`core_loop`.
 
-**Назначение:** последовательный терминал (форк ErriezSerialTerminal) с базовыми командами и ленивыми слотами команд модулей; установка/показ идентичности.
+**Назначение:** последовательный терминал (форк ErriezSerialTerminal): ввод/вывод, справка, подтверждения. Команды регистрируют и обрабатывают сами модули (статический обработчик в `<module>_terminal.cpp`), `core_terminal` не содержит команд модулей.
 
 **Функциональные требования:**
-- FR-CORE-TERM-1: `TerminalInit()` регистрирует базовые команды, `TerminalLoop()` обслуживает ввод в главном цикле.
-- FR-CORE-TERM-2: Зарегистрированные команды: `help`, `reset`, `echo`, `?`, `id`, `1`, `udpp`, `udpc`, `udps`, `led`.
-- FR-CORE-TERM-3: `udpp/udpc/udps` доступны только при включённом `MODULE_UDP`.
-- FR-CORE-TERM-4: Механизм слотов `TerminalRegisterModule(initFn)` (до `TERMINAL_MODULE_SLOTS=8`), применяемых лениво при первом `TerminalLoop()`.
-- FR-CORE-TERM-5: Команды `flash/flash2/stm32/swdf/avr` в текущей версии закомментированы и не активны.
+- FR-CORE-TERM-1: `TerminalInit()` регистрирует только встроенные `help`/`echo` и скрытые `y`/`n`; `TerminalLoop()` обслуживает ввод и таймаут подтверждений.
+- FR-CORE-TERM-2: `TerminalRegisterModule(component, name, desc, handler, commands, helpText, editable)` сразу вызывает `term.addCommand()` и запоминает дескриптор; `TerminalRegisterAlias()` — скрытый алиас.
+- FR-CORE-TERM-3: `help` печатает модули и имена команд, `Editable:`/`Read-only:`, встроенные команды; `<module> help` и `help <module>` — справка модуля.
+- FR-CORE-TERM-4: `TerminalConfirm()` — подтверждение `y/n` с таймаутом 30 с; любая другая команда отменяет ожидание.
+- FR-CORE-TERM-5: Буфер строки 320 байт; дескрипторы модулей в heap (лимит `TERMINAL_MAX_MODULES=24`).
 
-**Зависимости:** форк `ErriezSerialTerminal`, `core_ntp`, `core_led`, `core_sys`, `ident_store`, опционально `module_udp`/`submodule_swd`.
+**Зависимости:** форк `ErriezSerialTerminal`, `core_sys`/`core_fs`/`core_ntp`/`core_wifi`/`core_led` регистрируют свои команды в `begin()`.
 
 ---
 
@@ -614,18 +614,26 @@
 
 | Команда | Назначение | Доступность |
 |---------|-----------|-------------|
-| `help` | список команд | всегда |
+| `help [module]` | список модулей/команд или справка модуля | всегда |
 | `?` | информация о системе (about) | всегда |
 | `reset` | перезагрузка | всегда |
 | `echo` | эхо-тест | всегда |
-| `id` | показать/установить имя и серийник | всегда |
-| `1` | диагностика | всегда |
-| `led` | тест светодиода | всегда |
-| `udpp` / `udpc` / `udps` | отладка UDP | только `MODULE_UDP` |
-| `macro <sub>` | управление макросами | только `MODULE_MACROS` |
-| `ds-alarm` / `ds-sqw` / `ds-sqr` | отладка DS3231 | только `MODULE_DS3231` |
-| `i2c-scan` | сканер I2C | только `MODULE_I2C_MAPPER` |
-| `lux` | показать освещённость/доступность VEML7700 | только `MODULE_VEML7700` |
+| `?` / `sys` | состояние системы (CPU/RAM/FS/WiFi) | всегда |
+| `info` | серийник и chip info | всегда |
+| `ver` | прошивка/FS/git + версии всех компонентов | всегда |
+| `stat` | режимы/приоритеты/флаги компонентов | всегда |
+| `name` / `serial` | показать/установить имя/серийник | всегда |
+| `auth` | показать/изменить/сбросить web-auth (пароль открыто) | всегда |
+| `reset` | перезагрузка (y/n) | всегда |
+| `id` | показать имя/серийник (алиас) | всегда |
+| `fs ls [-r] [path]` | список файлов | всегда |
+| `ntp show/period/server/sync` | NTP | всегда |
+| `wifi show/slot/set/sys/apply/connect/clients` | Wi-Fi | всегда |
+| `led <times> <mask>` | тест светодиода | всегда |
+
+`macro/ds-*/i2c-scan/lux/udp*` в `core_terminal` больше не регистрируются; их должны
+регистрировать соответствующие `module_*` через `TerminalRegisterModule()` в своём `begin()`
+(внешние репозитории — отдельные задачи).
 | `c-*` / `r-*` | отладка механических часов | только соответствующие `device_*` |
 | `flash`/`flash2`/`stm32`/`swdf`/`avr` | отладка программатора | закомментированы, неактивны |
 

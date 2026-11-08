@@ -84,7 +84,7 @@ glob-масками `src/*/*.ini` и `src/*/*/*.ini` в `[platformio] extra_conf
 | `core_ota` | `src/core_ota/` | Самообновление (FOTA) через web, проверка версии FS |
 | `core_json` | `src/core_json/` | Утилиты JSON (сохранение/загрузка/разбор) |
 | `core_led` | `src/core_led/` | Макросы индикации светодиодом (WiFi, ошибки, успех, ожидание) |
-| `core_terminal` | `src/core_terminal/` | Последовательный терминал с отладочными/управляющими командами |
+| `core_terminal` | `src/core_terminal/` | Последовательный терминал: ввод/вывод, справка, подтверждения; команды регистрируют модули |
 | `core_state` | `src/core_state/` | Ресурсная шина: реестр ресурсов, события, async-вызовы, режимы ядра (`system.mode`) |
 | `core_task` | `src/core_task/` | Именованные задачи поверх EERTOS (`every`/`after`/`cancel`) + диагностика переполнения |
 
@@ -365,8 +365,9 @@ loop = 0       # есть loop() — вызывается в *_loop
   (загружает identity/auth и заполняет `ctx.hostname`/`ctx.password` до `core_wifi` и mDNS);
   `web_Init()` регистрирует `/system/*` и `/recover*`.
 - `core_terminal` — без класса; `TerminalInit()` вызывается в `core_begin`,
-  `TerminalLoop()` — в `core_loop` (базовые команды регистрируются в begin, слоты
-  модулей применяются лениво при первом вызове `TerminalLoop()`).
+  `TerminalLoop()` — в `core_loop`. Модули регистрируют свои команды в своём `begin()`;
+  `TerminalRegisterModule()` сразу вызывает `term.addCommand()` и запоминает дескриптор
+  для `help` (ленивых слотов больше нет).
 - `core_led` вне контракта — инициализируется вручную в `main.cpp` (`ledInit()`).
 
 **ВАЖНОЕ ОГРАНИЧЕНИЕ:** `src/modules_registry.cpp` и `src/modules_defines.h` сгенерированы под
@@ -571,17 +572,17 @@ on("wifi.just_connected", function(ev) e7.speed(40) end)
 
 ### Последовательный терминал
 
-`core_terminal` оборачивает библиотеку [ErriezSerialTerminal](https://github.com/Erriez/ErriezSerialTerminal). Зарегистрированные команды (через `TerminalInit()`):
-- `help` — список всех команд
-- `reset` — перезагрузка ESP
-- `echo` — вкл/выкл эхо терминала
-- `?` — информация о системе и текущем состоянии Wi-Fi
-- `id` — показать/установить имя и серийник устройства
-- `1` — тест терминала
-- `udpp` / `udpc` / `udps` — отладка UDP-модуля (только при `MODULE_UDP`)
-- `led` — тест светодиода
+`core_terminal` оборачивает библиотеку [ErriezSerialTerminal](https://github.com/Erriez/ErriezSerialTerminal). Модуль отвечает только за ввод/вывод, справку и подтверждения; **команды регистрируют и обрабатывают сами модули** через `TerminalRegisterModule(...)` в своём `begin()` (обработчик — статический метод в `<module>_terminal.cpp`). Справка: `help` — список модулей и команд, `Editable:` — модули с правкой; `<module> help` — синтаксис; `help <module>` — алиас.
 
-Команды отладки программатора (`flash`, `flash2`, `stm32`, `swdf`, `avr`) в `TerminalInit()` закомментированы и не регистрируются. Команды `ds-*` (DS3231), `i2c-scan` (I2C-сканер), `macro` (макросы) и `c-*`/`r-*` (механические часы) регистрируются соответствующими модулями и устройствами.
+Ядровые команды:
+- `help [module]`, `echo` — встроенные команды `core_terminal`;
+- `?`, `sys`, `info`, `ver`, `stat`, `name`, `serial`, `auth`, `reset`, `id` — `core_sys` (`sys help` — справка);
+- `fs ls [-r] [path]` — `core_fs` (только чтение);
+- `ntp show|period|server|sync` — `core_ntp`;
+- `wifi show|slot|set|sys|apply|connect|clients` — `core_wifi`;
+- `led <times> <mask>` — `core_led`.
+
+`reset` и `auth off|reset` требуют подтверждения `y/n` (таймаут 30 с). Строки терминала: буфер 320 байт. `udp*`, `1` и команды отладки программатора удалены; `udp*` должны быть реализованы в `module_udp` отдельной задачей.
 
 ### Обработчики форматов (`module_program/module_prog/`)
 
@@ -613,6 +614,11 @@ on("wifi.just_connected", function(ev) e7.speed(40) end)
 ### Скрипты сборки (`python/`)
 
 Порядок запуска и назначение:
+
+**ВАЖНО:** не запускать сборки разных env параллельно. `src/version.h`,
+`src/modules_registry.cpp` и `src/modules_defines.h` общие для проекта и перезаписываются
+pre-скриптами под текущий env; параллельная сборка esp32+esp8266 даёт прошивку с чужим
+`BUILD_ENV`. Собирать env последовательно.
 
 **Pre-скрипты** (перед компиляцией, порядок = номер файла):
 0. `0_esp32_common.py` — для всех ESP32: общие флаги размера (`-fno-exceptions`/unwind) и единая таблица `partitions_esp32.csv`

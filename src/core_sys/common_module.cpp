@@ -21,6 +21,28 @@ bool isAdminPassValid(const String& pass) {
 	return true;
 }
 
+bool terminalValidateIdent(const String& value) {
+	if (value.length() == 0 || value.length() > 63) { return false; }
+	for (unsigned int i = 0; i < value.length(); i++) {
+		char c = value.charAt(i);
+		bool ok = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+		          (c >= '0' && c <= '9') || c == '-' || c == '_';
+		if (!ok) { return false; }
+	}
+	return true;
+}
+
+bool terminalValidateAuthUser(const String& value) {
+	if (value.length() == 0 || value.length() > 32) { return false; }
+	for (unsigned int i = 0; i < value.length(); i++) {
+		char c = value.charAt(i);
+		bool ok = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+		          (c >= '0' && c <= '9') || c == '-' || c == '_' || c == '.';
+		if (!ok) { return false; }
+	}
+	return true;
+}
+
 // Расчёт CRC по всей записи, но с пропуском поля crc (байты skipOff..skipOff+skipLen).
 uint32_t identCrcSkip(uint8_t *data, size_t len, size_t skipOff, size_t skipLen) {
 	uint32_t crc = 0xFFFFFFFF;

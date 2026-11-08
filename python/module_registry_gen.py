@@ -196,6 +196,53 @@ def read_registry_ini(project_dir: Path, module_name: str,
     return d
 
 
+def discover_core_components(project_dir: Path) -> List[str]:
+    """Ядровые каталоги core_* с собственным *_version.h (фиксированный набор сборки)."""
+    src = project_dir / SRC_FOLDER
+    names: List[str] = []
+    if not src.exists():
+        return names
+    for p in sorted(src.glob(f"{CORE_PREFIX}*")):
+        if p.is_dir() and (p / f"{p.name}_version.h").exists():
+            names.append(p.name)
+    return names
+
+
+def read_version_info(project_dir: Path, rel_dir: str, name: str) -> Optional[Dict[str, str]]:
+    """Читает макросы версии компонента из src/<rel_dir>/<name>_version.h."""
+    header = project_dir / SRC_FOLDER / rel_dir / f"{name}_version.h"
+    if not header.exists():
+        return None
+    prefix = name.upper().replace("-", "_").replace(".", "_")
+    try:
+        text = header.read_text(encoding="utf-8")
+    except OSError:
+        return None
+
+    def macro(suffix: str) -> Optional[str]:
+        m = re.search(rf'#define\s+{prefix}_{suffix}\s+"([^"]*)"', text)
+        return m.group(1) if m else None
+
+    if macro("VERSION_STR") is None or macro("COMMIT_DATE_STR") is None:
+        return None
+    return {
+        "include": f'"{rel_dir}/{name}_version.h"',
+        "version": f"{prefix}_VERSION_STR",
+        "date": f"{prefix}_COMMIT_DATE_STR",
+        "hash": f"{prefix}_COMMIT_HASH" if macro("COMMIT_HASH") is not None else '"-"',
+    }
+
+
+def kind_of(name: str) -> str:
+    if name.startswith(CORE_PREFIX):
+        return "core"
+    if name.startswith(DEVICE_PREFIX):
+        return "device"
+    if name.startswith(SUBMODULE_PREFIX):
+        return "submodule"
+    return "module"
+
+
 def detect_current_env(project_dir: Path, env_names: List[str]) -> Optional[str]:
     """
     Определяет "текущий" env:
@@ -296,7 +343,8 @@ def cpp_content(env_name: str,
                 core_res: List[str], modules_res: List[str], dev_res: List[str],
                 core_web: List[str], modules_web: List[str], dev_web: List[str],
                 core_loop: List[str], modules_loop: List[str], dev_loop: List[str],
-                core_loop_net: List[str] = None) -> str:
+                core_loop_net: List[str] = None,
+                module_entries: List[Dict[str, object]] = None) -> str:
     L: List[str] = []
     L.append('#include "modules_registry.h"')
     L.append('// core_web/FSWebServerLib.h включается первым: предоставляет AsyncWebServerRequest,')
@@ -309,7 +357,17 @@ def cpp_content(env_name: str,
     L.append("")
     for inc in includes:
         L.append(f"#include {inc}")
-    if includes:
+
+    L.append("")
+    L.append('#include "components_info.h"')
+    version_includes: List[str] = []
+    for entry in (module_entries or []):
+        inc = entry.get("include")
+        if inc and inc not in version_includes:
+            version_includes.append(inc)
+    for inc in version_includes:
+        L.append(f"#include {inc}")
+    if includes or version_includes:
         L.append("")
 
     L.append("// Определение глобального контекста приложения (extern из mod_context.h).")
@@ -336,6 +394,41 @@ def cpp_content(env_name: str,
     func("modules_loop", modules_loop)
     func("dev_loop", dev_loop)
     func("core_loop_net", core_loop_net or [])
+
+    # Метаданные для терминальных команд ver/stat. Значения версий/дат/hash —
+    # макросы из *_version.h (разрешаются на этапе компиляции), поэтому таблица
+    # не устаревает между запусками 1_registry_pre_build и 3_module_version_gen.
+    entries = module_entries or []
+    L.append("// ---- Метаданные скомпилированных компонентов (ver/stat) ----")
+    L.append("static const CompiledModuleInfo _compiledModules[] = {")
+    if entries:
+        for e in entries:
+            L.append(
+                '    {{ "{name}", "{kind}", {version}, {date}, {hash}, "{ns}", '
+                '{web}, {loop}, {res}, {ts}, {prio} }},'.format(
+                    name=e.get("name", ""),
+                    kind=e.get("kind", "module"),
+                    version=e.get("version", '"-"'),
+                    date=e.get("date", '"-"'),
+                    hash=e.get("hash", '"-"'),
+                    ns=e.get("ns", ""),
+                    web="true" if e.get("web") else "false",
+                    loop="true" if e.get("loop") else "false",
+                    res="true" if e.get("res") else "false",
+                    ts="true" if e.get("time_source") else "false",
+                    prio=int(e.get("prio", -1)),
+                )
+            )
+    else:
+        L.append('    { "none", "core", "-", "-", "-", "", false, false, false, false, -1 },')
+    L.append("};")
+    L.append("")
+    L.append("const CompiledModuleInfo* modulesCompiledInfo(uint8_t& count) {")
+    L.append(f"    count = {len(entries)};")
+    L.append("    if (count == 0) { return nullptr; }")
+    L.append("    return _compiledModules;")
+    L.append("}")
+    L.append("")
 
     return "\n".join(L)
 
@@ -446,8 +539,8 @@ def main():
         "core_register_resources();",
         "core_wifi.begin(ctx);",
         "core_ntp.begin(ctx);",
-        # Терминал без класса: базовые команды регистрируются здесь,
-        # слоты модулей применяются лениво в первом вызове TerminalLoop().
+        # Терминал без класса: builtins help/echo и скрытые y/n.
+        # Команды модулей регистрируются в их begin() через TerminalRegisterModule().
         "TerminalInit();",
     ]
     core_web = [
@@ -464,8 +557,7 @@ def main():
         "core_task.loop();",
         # Отложенные действия core_ntp (применение конфига, failover серверов).
         "core_ntp.loop();",
-        # Терминал читает сериал первым в цикле; первый вызов также применяет
-        # слоты модулей (TerminalRegisterModule).
+        # Терминал читает serial и обслуживает таймаут подтверждений.
         "TerminalLoop();",
     ]
     # Блокирующие сетевые задачи выполняются вне systemLock (см. main.cpp loop()).
@@ -545,6 +637,7 @@ def main():
     res_seq = 0
     seen_includes = set(includes)
     defines: List[str] = []
+    registry_cache: Dict[str, Dict[str, str]] = {}
 
     for mod, rel_dir in included:
         ini_path = project_dir / SRC_FOLDER / rel_dir / f"{mod}.ini"
@@ -556,6 +649,7 @@ def main():
         if reg is None:
             log_warning(f"Module {mod}: [registry] section not found — skipping")
             continue
+        registry_cache[mod] = reg
         obj = reg.get("object", "").strip()
         if not obj:
             log_warning(f"Module {mod}: registry.object empty — skipping")
@@ -616,6 +710,60 @@ def main():
             if loop_flag:
                 modules_loop.append(f"{obj}.loop();")
 
+    # ---- Метаданные компонентов для ver/stat ----
+    def registry_flags(reg: Optional[Dict[str, str]]) -> Dict[str, object]:
+        if reg is None:
+            return {"ns": "", "web": False, "loop": False, "res": False,
+                    "time_source": False, "prio": -1}
+        try:
+            prio = int(reg.get("prio", "-1").strip() or "-1")
+        except ValueError:
+            prio = -1
+        return {
+            "ns": reg.get("namespace", "").strip(),
+            "web": reg.get("web", "0").strip() == "1",
+            "loop": reg.get("loop", "0").strip() == "1",
+            "res": reg.get("res", "0").strip() == "1",
+            "time_source": reg.get("time_source", "").strip() == "1",
+            "prio": prio,
+        }
+
+    module_entries: List[Dict[str, object]] = []
+    components: List[Tuple[str, str]] = []
+    core_names = discover_core_components(project_dir)
+    if is_otaclient and "core_ota" in core_names:
+        # В env с module_otaclient базовый core_ota не компилируется.
+        core_names.remove("core_ota")
+    for cname in core_names:
+        components.append((cname, cname))
+    components.extend(included)
+
+    for cname, rel_dir in components:
+        reg = registry_cache.get(cname)
+        if reg is None:
+            reg = read_registry_ini(project_dir, cname, rel_dir)
+        flags = registry_flags(reg)
+        ver = read_version_info(project_dir, rel_dir, cname)
+        entry: Dict[str, object] = {
+            "name": cname,
+            "kind": kind_of(cname),
+            "ns": flags["ns"],
+            "web": flags["web"],
+            "loop": flags["loop"],
+            "res": flags["res"],
+            "time_source": flags["time_source"],
+            "prio": flags["prio"],
+        }
+        if ver:
+            entry.update(ver)
+        else:
+            entry.update({"version": '"-"', "date": '"-"', "hash": '"-"'})
+        module_entries.append(entry)
+
+    kind_order = {"core": 0, "module": 1, "submodule": 2, "device": 3}
+    module_entries.sort(key=lambda e: (kind_order.get(str(e.get("kind")), 9),
+                                       str(e.get("name"))))
+
     # Регистрация ресурсов идёт до begin() периферии соответствующей группы.
     modules_begin.insert(0, "modules_register_resources();")
     dev_begin.insert(0, "dev_register_resources();")
@@ -657,6 +805,7 @@ def main():
         core_web, modules_web, dev_web,
         core_loop, modules_loop, dev_loop,
         core_loop_net,
+        module_entries,
     ))
     write_file(defines_out, defines_h_content(env_name, defines))
 

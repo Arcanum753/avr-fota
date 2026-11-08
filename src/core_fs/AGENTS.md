@@ -58,3 +58,12 @@
 - Тесты: `tests/core/core_fs/` (L1/L2 native, L4 `http_api/`).
   L4 — только устройство `http://192.168.88.134`, имя `Electronica`, серийник `D003`;
   destructive — только временные файлы.
+
+## Терминал
+
+- `core_fs_terminal.cpp`: `terminalRegister()` регистрирует команду `fs` в
+  `TerminalRegisterModule()`; `s_terminalCmd()` обрабатывает `fs ls [-r] [path]`.
+- `core_fs_engine`: `fsListDir()` — нерекурсивный/рекурсивный список для терминала.
+- Размер — `formatBytes()` + точные байты; дата — UTC (`gmtime`) или `-` при `mtime=0`;
+  `secret.json` показывается в списке. Лимит вывода — 128 записей, `yield()` каждые 16.
+- Терминал только читает; `fs` не регистрирует write-команды.

@@ -2,6 +2,7 @@
 
 #include "../../../../src/core_sys/eertos.cpp"
 #include "../../../../src/core_sys/common_module.cpp"
+#include "../../../../src/core_terminal/common_module.cpp"
 #include "../../../../src/core_sys/ident_store.cpp"
 
 #include "../../../../src/core_json/core_json.cpp"
@@ -47,6 +48,54 @@ static void test_admin_pass_charset(void) {
     TEST_ASSERT_FALSE(ns_core_sys::isAdminPassValid("abcd efg"));
     TEST_ASSERT_FALSE(ns_core_sys::isAdminPassValid("абвгдежз"));
     TEST_ASSERT_FALSE(ns_core_sys::isAdminPassValid("abcd!@#$"));
+}
+
+// ============================================================
+// L1: терминальные валидаторы и хелперы
+// ============================================================
+static void test_terminal_validate_ident(void) {
+    TEST_ASSERT_TRUE(ns_core_sys::terminalValidateIdent("esp32_F948C"));
+    TEST_ASSERT_TRUE(ns_core_sys::terminalValidateIdent("A-b_1"));
+    TEST_ASSERT_FALSE(ns_core_sys::terminalValidateIdent(""));
+    TEST_ASSERT_FALSE(ns_core_sys::terminalValidateIdent("bad name"));
+    TEST_ASSERT_FALSE(ns_core_sys::terminalValidateIdent("bad.name"));
+    String s64;
+    for (int i = 0; i < 64; i++) s64 += 'a';
+    TEST_ASSERT_FALSE(ns_core_sys::terminalValidateIdent(s64));
+}
+
+static void test_terminal_validate_auth_user(void) {
+    TEST_ASSERT_TRUE(ns_core_sys::terminalValidateAuthUser("admin"));
+    TEST_ASSERT_TRUE(ns_core_sys::terminalValidateAuthUser("a.b-c_1"));
+    TEST_ASSERT_FALSE(ns_core_sys::terminalValidateAuthUser(""));
+    TEST_ASSERT_FALSE(ns_core_sys::terminalValidateAuthUser("bad user"));
+    TEST_ASSERT_FALSE(ns_core_sys::terminalValidateAuthUser("bad/user"));
+    String s33;
+    for (int i = 0; i < 33; i++) s33 += 'a';
+    TEST_ASSERT_FALSE(ns_core_sys::terminalValidateAuthUser(s33));
+}
+
+static void test_terminal_common_helpers(void) {
+    TEST_ASSERT_EQUAL_STRING("abc", ns_core_terminal::trimCopy("  abc  ").c_str());
+    TEST_ASSERT_EQUAL_STRING("a b", ns_core_terminal::unquote("\"a b\"").c_str());
+    TEST_ASSERT_EQUAL_STRING("a b", ns_core_terminal::unquote("'a b'").c_str());
+    TEST_ASSERT_EQUAL_STRING("a b", ns_core_terminal::unquote("a b").c_str());
+
+    bool on = false;
+    TEST_ASSERT_TRUE(ns_core_terminal::parseOnOff("On", on));
+    TEST_ASSERT_TRUE(on);
+    TEST_ASSERT_TRUE(ns_core_terminal::parseOnOff("0", on));
+    TEST_ASSERT_FALSE(on);
+    TEST_ASSERT_FALSE(ns_core_terminal::parseOnOff("maybe", on));
+
+    long v = 0;
+    TEST_ASSERT_TRUE(ns_core_terminal::parseIntStrict("42", v, 0, 100));
+    TEST_ASSERT_EQUAL_INT(42, (int)v);
+    TEST_ASSERT_FALSE(ns_core_terminal::parseIntStrict("42x", v, 0, 100));
+    TEST_ASSERT_FALSE(ns_core_terminal::parseIntStrict("101", v, 0, 100));
+
+    TEST_ASSERT_EQUAL_STRING("00:00:05", ns_core_terminal::formatUptime(5).c_str());
+    TEST_ASSERT_EQUAL_STRING("1d 00:00:00", ns_core_terminal::formatUptime(86400).c_str());
 }
 
 // ============================================================
@@ -602,6 +651,9 @@ int main(int, char**) {
     RUN_TEST(test_admin_pass_valid);
     RUN_TEST(test_admin_pass_length_bounds);
     RUN_TEST(test_admin_pass_charset);
+    RUN_TEST(test_terminal_validate_ident);
+    RUN_TEST(test_terminal_validate_auth_user);
+    RUN_TEST(test_terminal_common_helpers);
     RUN_TEST(test_crc_skip_ignores_field);
     RUN_TEST(test_crc_skip_stable);
     RUN_TEST(test_eertos_task_queue_one_per_manager);

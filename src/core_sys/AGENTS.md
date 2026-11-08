@@ -184,3 +184,19 @@ core_sys.addTimeSource("ntp", 100, ntpGetTime, nullptr, ntpStatus);
   `override_prelude_core_sys.h`, реальные `core_state`/`core_task`/`core_json`/`common/Time.cpp`.
 - L4 — `tests/core/core_sys/http_api/test_time_api.py`.
 - Гейт покрытия: `core_sys_time.cpp` и `core_sys/common_module.cpp` ≥80% (пофайлово).
+- L1 терминала: `ns_core_sys::terminalValidateIdent`, `terminalValidateAuthUser`,
+  `ns_core_terminal` helpers (в том же `test_l2_core_sys.cpp`).
+
+## Терминал
+
+- `core_sys_terminal.cpp`: `terminalRegister()` регистрирует `sys` и скрытые алиасы
+  `?`, `info`, `ver`, `stat`, `name`, `serial`, `auth`, `reset`, `id`.
+- `?`/`sys` — CPU/RAM/FS/режим/время/Wi-Fi (STA или AP + клиенты MAC/IP через
+  `wifi.ap_clients_list`); `info` — серийник/chip; `ver` — FW/FS/git + таблица
+  `modulesCompiledInfo()`; `stat` — kind/mode/prio/флаги компонентов.
+- `name`/`serial`: 1..63, `A-Za-z0-9-_`; `auth user`: 1..32, `A-Za-z0-9._-`;
+  `auth pass`: 8..63, `A-Za-z0-9`. `auth` показывает user/pass/secq/seca открыто.
+- `reset`, `auth off`, `auth reset` — через `TerminalConfirm()` (`y/n`, 30 с).
+- Редактирование TZ/DST из терминала отсутствует (только веб).
+- `components_info.h/.cpp` + weak-заглушка; сильная таблица генерируется в
+  `modules_registry.cpp` (`python/module_registry_gen.py`).

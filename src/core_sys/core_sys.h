@@ -40,6 +40,7 @@ public:
     void begin(ModContext& ctx);
     void register_resources();
     void web_Init();
+    void terminalRegister();
 
     // --- Идентичность и системный конфиг ---
     const String getHostName();
@@ -96,6 +97,20 @@ protected:
     void   handleTimeVer(AsyncWebServerRequest *request);
 
 private:
+    // --- Терминальные команды (core_sys_terminal.cpp) ---
+    static void s_cmdSys();
+    static void s_cmdInfo();
+    static void s_cmdVer();
+    static void s_cmdStat();
+    static void s_cmdName();
+    static void s_cmdSerial();
+    static void s_cmdAuth();
+    static void s_cmdReset();
+    static void s_cmdId();
+    static void s_authOffYes();
+    static void s_authResetYes();
+    static void s_doReset();
+
     static int cmdTimeSet     (void* user, int argc, const BusValue* argv, BusValue& result);
     static int cmdTimeSyncFrom(void* user, int argc, const BusValue* argv, BusValue& result);
     static int cmdTimeSave    (void* user, int argc, const BusValue* argv, BusValue& result);

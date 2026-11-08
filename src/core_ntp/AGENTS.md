@@ -130,3 +130,12 @@ L1 (native): `tests/core/core_ntp/test/test_l1_ntp.cpp` — `ns_core_ntp::ntpSta
 `ntpNextServerIndex` (в т.ч. пустые слоты).
 
 L4: `tests/core/core_ntp/http_api/test_ntp_api.py` (при наличии `DEVICE_HOST`).
+
+## Терминал
+
+- `core_ntp_terminal.cpp`: `terminalRegister()` регистрирует `ntp` (editable).
+- `ntp show` — период, 3 сервера, активный, последний синк/status/started.
+- `ntp period <0..720>` — минуты, 0 выключает; `_pendingApply=true` + `save_configNTP()`.
+- `ntp server <0|1|2> <host>` — `ns_core_ntp::ntpServerNameValid`, длина ≤39;
+  `_pendingApply=true` + `save_configNTP()`.
+- `ntp sync` → `forceSync()`: fire-and-forget `NTP.getTime()` (результат не читаем).

@@ -24,6 +24,7 @@ void CLASS_CORE_FS::setFs(CoreFs* fs) {
 
 void CLASS_CORE_FS::begin() {
     DEBUGFS(__FUNCTION__); DEBUGFS("\r\n");
+    terminalRegister();
 }
 
 void CLASS_CORE_FS::begin(ModContext& ctx) {

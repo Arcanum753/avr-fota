@@ -42,10 +42,12 @@ class  CLASS_CORE_NTP    {
     void ntpOnConnected ();
     void ntpOnDisconected ();
     void web_Init();
+    void terminalRegister();
     // Отложенные действия (применение конфига, failover) — выполняются в главном цикле.
     void loop();
     void registerTimeSource();   // Time Source Provider API (core_sys)
     void applyTimeZone();        // переустановить TZ/DST в NTPClientLib
+    bool forceSync();            // отправить внеочередной NTP-запрос
 
     // Состояние последнего синка (для /ntp/info и диагностики).
     uint32_t    ntpLastSyncEpoch() const;
@@ -66,6 +68,7 @@ class  CLASS_CORE_NTP    {
     void html2ntp_configuration(AsyncWebServerRequest *request);
     
 private:
+    static void s_terminalCmd();
     // Адаптивный stale по текущему периоду (реализация — core_ntp_engine.cpp).
     void ntpUpdateStaleSec();
     // Проверка конфига перед применением: nullptr при успехе, иначе текст ошибки.

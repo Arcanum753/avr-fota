@@ -39,7 +39,7 @@
 /*!
  * \brief Size of the serial receive buffer in bytes (Maximum length of one command plus arguments)
  */
-#define ST_RX_BUFFER_SIZE       64
+#define ST_RX_BUFFER_SIZE       320
 
 /*!
  * \brief Number of command characters
@@ -59,6 +59,8 @@ class SerialTerminal
 
         void setSerialEcho(bool doEcho);
         void setPostCommandHandler(void (*function)(void));
+        // Вызывается до поиска команды; используется для отмены подтверждений.
+        void setPreCommandHandler(void (*function)(const char *));
 
         void readSerial();
         void clearBuffer();
@@ -85,6 +87,7 @@ class SerialTerminal
         bool doCharEcho;
 
         void (*_postCommandHandler)(void);
+        void (*_preCommandHandler)(const char *);
 
         void (*_defaultHandler)(const char *);
 };

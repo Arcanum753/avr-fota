@@ -75,7 +75,9 @@ class  CLASS_CORE_WIFI    {
     static void s_secondTick();
     void register_resources();
     void web_Init();
+    void terminalRegister();
     String getMacAddress();
+    String apClientsText();   // MAC/IP клиентов AP (best-effort)
     int scanWifi();
     bool load_configWifi(int _in);
     bool save_configWifi(int _in);
@@ -126,7 +128,9 @@ class  CLASS_CORE_WIFI    {
     static int s_cbForceConnectKick(void* user, int argc, const BusValue* argv, BusValue& result);
     static int s_cbForceScan(void* user, int argc, const BusValue* argv, BusValue& result);
     static int s_cbForceDisconnect(void* user, int argc, const BusValue* argv, BusValue& result);
+    static int s_cbApClientsList(void* user, int argc, const BusValue* argv, BusValue& result);
 private:
+    static void s_terminalCmd();
     String getVersionStr();
     String getGeneratedTime();
     String getCommitDateStr();
@@ -185,6 +189,11 @@ protected:
     bool     _pendingStaSwitch = false;        // ждём освобождения AP (G3)
     uint32_t _pendingStaSince = 0;             // тик начала ожидания
     uint8_t  _targetBeforeForceScan = WIFI_TARGET_AUTO; // восстановление target после force_scan (C1)
+    // --- Терминал: последний изменённый/активный слот и приоритет подключения ---
+    int8_t   _lastTouchedSlot = -1;            // последний wifi set/connect
+    int8_t   _activeSlot      = -1;            // слот, к которому идёт/было подключение
+    bool     _activeDhcp      = true;          // DHCP активного слота
+    int8_t   _forcedSlot      = -1;            // приоритетный слот для ближайшего скана
 #if defined(ESP32)
     WiFiEventId_t _onApStationConnectedHandler, _onApStationDisconnectedHandler;
 #endif

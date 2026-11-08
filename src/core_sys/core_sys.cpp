@@ -46,6 +46,8 @@ void CLASS_CORE_SYS::begin(ModContext& ctx) {
 	core_state.signal("system.hostname", BusValue::str(ctx.hostname));
 	core_state.signal("system.safe", BusValue::bo(false));
 	core_state.signal("system.idle", BusValue::bo(false));
+
+	terminalRegister();
 }
 
 // ============================================================

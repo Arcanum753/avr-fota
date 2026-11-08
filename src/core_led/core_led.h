@@ -11,6 +11,7 @@
 #include "core_led_types.h"
 
 void ledInit();
+void ledTerminalRegister();
 void ledSetState(LedPriority prio, const char* pattern, int16_t times); // times: -1 бесконечно, 0 = снять слот
 void ledClearState(LedPriority prio);
 void ledSetSteady(bool on); // базовое состояние «горит постоянно» (подключено к Wi-Fi)

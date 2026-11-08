@@ -21,8 +21,10 @@ public:
     void begin();
     void begin(ModContext& ctx);
     void web_Init();
+    void terminalRegister();
 
 private:
+    static void s_terminalCmd();
     String getVersionStr();
     String getGeneratedTime();
     String getCommitDateStr();
