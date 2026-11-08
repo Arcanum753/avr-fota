@@ -127,7 +127,7 @@
                                      │ modules_registry.cpp (генерируется)
         ┌────────────────────────────┼────────────────────────────────┐
         │                            │                                │
- core_sys  core_json  core_state  core_task  core_wifi  core_ntp  core_ota  core_led  core_terminal
+ core_sys  core_json  core_state  core_task  core_wifi  core_ntp  core_ota  core_led  core_terminal  core_fs
         │
         │  ресурсная шина (namespace.field, события, call/async)
         │
@@ -148,10 +148,12 @@
 `module_lcd-i2c` → `src/module_lcd-i2c/AGENTS.md`; `module_macros` →
 `src/module_macros/AGENTS.md`; `module_otaclient` → `src/module_otaclient/AGENTS.md`;
 `module_rgb` → `src/module_rgb/AGENTS.md`; `module_i2c-mapper` →
-`src/module_i2c-mapper/AGENTS.md`; `module_template` → `src/module_template/AGENTS.md`;
+`src/module_i2c-mapper/AGENTS.md`; `module_veml7700` → `src/module_veml7700/AGENTS.md`;
+`module_RDA5807m` → `src/module_RDA5807m/AGENTS.md`; `module_template` → `src/module_template/AGENTS.md`;
 `device_clock-mech` → `src/device_clock-mech/AGENTS.md`; `device_mech-ring` →
 `src/device_mech-ring/AGENTS.md`; `device_electronica7_rgb` →
-`src/device_electronica7_rgb/AGENTS.md`. Полный реестр — `INVENTORY.md`.
+`src/device_electronica7_rgb/AGENTS.md`; `device_projection_clock` →
+`src/device_projection_clock/AGENTS.md`. Полный реестр — `INVENTORY.md`.
 
 ---
 
@@ -418,6 +420,29 @@
 
 ---
 
+#### 3.1.13. `core_fs` — файловая система
+
+**Каталог:** `src/core_fs/` · **Класс:** `CLASS_CORE_FS` · **Объект:** `core_fs`
+**`[registry]`:** `object=core_fs`, `define=CORE_FS`, `web=1`, `loop=0`, `res=0`.
+
+**Назначение:** ядерный always-on модуль: страница **Filesystem** и HTTP API `/fs/*` для
+просмотра LittleFS и файловых операций без редактора содержимого; источник данных для
+версионных снимков `otasyncer-server`.
+
+**Функциональные требования:**
+- FR-CORE-FS-1: `GET /fs/info` — JSON `{api,total,used,free,usedPct,blockSize,maxUpload,fsVersion,buildEnv,fsType}` (`api=1`).
+- FR-CORE-FS-2: `GET /fs/list` (рекурсивный список), `GET /fs/download`, `POST /fs/create|mkdir|rename|delete|upload`, `GET /fs/ver`.
+- FR-CORE-FS-3: лимиты: имя сегмента ≤ 32, upload ≤ 1 MiB и не больше свободного места минус 4 KiB, одновременно один upload.
+- FR-CORE-FS-4: запись запрещена в режимах `ota`, `fs_update`, `prog` (`core_state.getMode()`); чтение — всегда.
+- FR-CORE-FS-5: `/secret.json` виден в списке, но `delete`/`rename` для него запрещены; `download`/`upload` разрешены для восстановления.
+- FR-CORE-FS-6: модуль не публикует ресурсы в `core_state` (`res=0`) и недоступен из макросов/Lua.
+
+**Веб-маршруты:** `/fs/info`, `/fs/list`, `/fs/download`, `/fs/create`, `/fs/mkdir`, `/fs/rename`, `/fs/delete`, `/fs/upload`, `/fs/ver`.
+**Веб-файлы:** `web/filesystem.html` (пункт меню добавляется `gen_page_head.py`).
+**Зависимости:** LittleFS, `core_web`, `core_sys`, `core_state`, `core_json`, `ns_core_fs`.
+
+---
+
 ### 3.2. Опциональные модули (`module_*`, `submodule_*`)
 
 > Общее требование для всех подразделов 3.2: модуль **не работоспособен без ядра**, подключается через `src_filter` + `build_flags`, а его `[registry]`-секция генерирует вызовы в `modules_registry.cpp`. Полные требования (`FR-*`), интерфейсы, конфиги и руководства пользователя вынесены в `AGENTS.md` соответствующего модуля (документация живёт в том же репозитории, что и код).
@@ -430,7 +455,9 @@
 | `module_udp` | `src/module_udp/AGENTS.md` | FR-UDP-1…5, AC-14 |
 | `module_editor` | `src/module_editor/AGENTS.md` | FR-EDITOR-1…4, AC-9, OPEN-7 |
 | `module_ds3231` | `src/module_ds3231/AGENTS.md` | FR-DS3231-1…5 |
-| `module_gpio` | `src/module_gpio/AGENTS.md` | FR-GPIO-1…2, AC-15, OPEN-7 |
+| `module_veml7700` | `src/module_veml7700/AGENTS.md` | FR-VEML-1…6, AC-VEML |
+| `module_RDA5807m` (WIP) | `src/module_RDA5807m/AGENTS.md` | FR-RDA-1…7, AC-RDA-1…4 |
+| `module_gpio` (заглушка) | `src/module_gpio/AGENTS.md` | FR-GPIO-1…2, AC-15, OPEN-7 |
 | `module_lcd-i2c` | `src/module_lcd-i2c/AGENTS.md` | FR-LCD-1…4 |
 | `module_macros` | `src/module_macros/AGENTS.md` | FR-MACROS-1…14, AC-11, OPEN-4/5/6 |
 | `module_otaclient` | `src/module_otaclient/AGENTS.md` | FR-OTACLIENT-1…6 |
@@ -449,6 +476,7 @@
 | `device_clock-mech` | `src/device_clock-mech/AGENTS.md` | FR-CLOCKMECH-1…8, AC-13 |
 | `device_mech-ring` | `src/device_mech-ring/AGENTS.md` | FR-RINGMECH-1…7 |
 | `device_electronica7_rgb` | `src/device_electronica7_rgb/AGENTS.md` | FR-E7RGB-1…9, AC-12 |
+| `device_projection_clock` | `src/device_projection_clock/AGENTS.md` | FR-PCLK-1…9, AC-PCLK-1…8 |
 
 ---
 
@@ -466,12 +494,15 @@
 | core_led | ядро | — | — | — | 0 | 0 | 0 | — | TRS §3.1.7 |
 | core_terminal | ядро | — | `term` | — | 0 | 0 | 0 | — | TRS §3.1.8 |
 | core_web | ядро | `AsyncFSWebServer` | `ESPHTTPServer` | — | — | — | — | — | TRS §3.1.1 |
+| core_fs | ядро | `CLASS_CORE_FS` | `core_fs` | — | 1 | 0 | 0 | — | TRS §3.1.13 |
 | module_prog | модуль | `Class_ProgBase` | — | — | 0 | 0 | 0 | — | `src/module_program/AGENTS.md` |
 | submodule_isp | субмодуль | `Class_SubIsp` | `progIsp` | — | 1 | 0 | 0 | — | `src/module_program/AGENTS.md` |
 | submodule_swd | субмодуль | `Class_SubSwd` | `progSwd` | — | 1 | 0 | 0 | — | `src/module_program/AGENTS.md` |
 | module_udp | модуль | `CLASS_MODULE_UDPBROADCAST` | `module_udp` | — | 1 | 0 | 0 | — | `src/module_udp/AGENTS.md` |
 | module_editor | модуль | `CLASS_MODULE_EDITOR` | `module_editor` | — | 1 | 0 | 0 | — | `src/module_editor/AGENTS.md` |
 | module_ds3231 | модуль | `CLASS_MODULE_DS3231` | `module_ds3231` | — | 1 | 0 | 0 | — | `src/module_ds3231/AGENTS.md` |
+| module_veml7700 | модуль | `CLASS_MODULE_VEML7700` | `module_veml7700` | `veml7700` | 1 | 0 | 1 | — | `src/module_veml7700/AGENTS.md` |
+| module_RDA5807m | модуль | `CLASS_MODULE_RDA5807M` | `module_rda5807m` | `rda5807m` | 1 | 1 | 1 | — | `src/module_RDA5807m/AGENTS.md` |
 | module_gpio | модуль | `CLASS_MODULE_GPIO` | `module_gpio` | — | 1 | 0 | 0 | — | `src/module_gpio/AGENTS.md` |
 | module_lcd-i2c | модуль | `CLASS_MODULE_I2C_LCD` | `module_lcd_i2c` | — | 1 | 0 | 0 | — | `src/module_lcd-i2c/AGENTS.md` |
 | module_macros | модуль | `CLASS_MODULE_MACROS` | `module_macros` | `macros` | 1 | 0 | 1 | 60 | `src/module_macros/AGENTS.md` |
@@ -482,6 +513,7 @@
 | device_clock-mech | устройство | `CLASS_DEVICE_CLOCKMECH` | `device_clock_mech` | — | 1 | 0 | 0 | — | `src/device_clock-mech/AGENTS.md` |
 | device_mech-ring | устройство | `CLASS_DEVICE_RINGMECH` | `device_mech_ring` | — | 1 | 0 | 0 | — | `src/device_mech-ring/AGENTS.md` |
 | device_electronica7_rgb | устройство | `CLASS_DEVICE_E7RGB` | `device_electronica7_rgb` | `e7` | 1 | 0 | 1 | 70 | `src/device_electronica7_rgb/AGENTS.md` |
+| device_projection_clock | устройство | `CLASS_DEVICE_PROJ_CLOCK` | `proj_clock` | `proj_clock` | 1 | 0 | 1 | 70 | `src/device_projection_clock/AGENTS.md` |
 
 ---
 
@@ -570,7 +602,7 @@
 ### 6.2. Программный интерфейс (HTTP API)
 
 - API-1: Текстовые ответы — `text/plain "OK"` либо CVT-строки (`ключ|тип|значение`).
-- API-2: JSON-ответы: `/state/catalog`, `/state/info`, `/state/modules` (в сборке с `module_macros`), `/i2cmapper/scan`, `/otaclient/teststatus`, `/editor/list`, `/macros/list`, `/all`, `/_version_fs.json`.
+- API-2: JSON-ответы: `/state/catalog`, `/state/info`, `/state/modules` (в сборке с `module_macros`), `/fs/info`, `/fs/list`, `/i2cmapper/scan`, `/otaclient/teststatus`, `/editor/list`, `/macros/list`, `/all`, `/_version_fs.json`.
 - API-3: Все рабочие маршруты компонентов защищены `checkAuth`; публичны только вход/восстановление и captive-portal-эндпоинты.
 - API-4: Ресурсная шина: `GET /state/set?name=<ns.field>&value=<v>`, `GET /state/call?name=<ns.func>&args=...`, `GET /state/info?name=...`. Типы: BOOL/I32/F32 (3 знака)/STR/TIME/ENUM.
 - API-5: Async-функции: `call` возвращает код запуска, результат — через callback/событие; таймаут по умолчанию 10 с.
@@ -593,6 +625,7 @@
 | `macro <sub>` | управление макросами | только `MODULE_MACROS` |
 | `ds-alarm` / `ds-sqw` / `ds-sqr` | отладка DS3231 | только `MODULE_DS3231` |
 | `i2c-scan` | сканер I2C | только `MODULE_I2C_MAPPER` |
+| `lux` | показать освещённость/доступность VEML7700 | только `MODULE_VEML7700` |
 | `c-*` / `r-*` | отладка механических часов | только соответствующие `device_*` |
 | `flash`/`flash2`/`stm32`/`swdf`/`avr` | отладка программатора | закомментированы, неактивны |
 
@@ -607,8 +640,11 @@
 | I2C (DS3231) | SDA/SCL | ESP32 21/22, ESP8266 4/5 | `module_ds3231` | `src/module_ds3231/AGENTS.md` |
 | I2C (LCD) | SDA/SCL | ESP32 21/22, ESP8266 4/5 | `module_lcd-i2c` | `src/module_lcd-i2c/AGENTS.md` |
 | I2C (сканер) | SDA/SCL | ESP32 21/22, ESP8266 4/5 | `module_i2c-mapper` | `src/module_i2c-mapper/AGENTS.md` |
+| I2C (VEML7700) | SDA/SCL | ESP32 21/22, ESP8266 4/5 | `module_veml7700` | `src/module_veml7700/AGENTS.md` |
+| I2C (RDA5807M) | SDA/SCL | ESP32 21/22, ESP8266 4/5 | `module_RDA5807m` | `src/module_RDA5807m/AGENTS.md` |
 | WS2812 (лента) | DATA | из `config_rgb.json` | `module_rgb` | `src/module_rgb/AGENTS.md` |
 | WS2812 (матрица) | DATA | 16 | `device_electronica7_rgb` | `src/device_electronica7_rgb/AGENTS.md` |
+| WS2812 (проекционные часы) | DATA | 16 | `device_projection_clock` | `src/device_projection_clock/AGENTS.md` |
 | DS3231 SQW/INT# | прерывание | 13 | `module_ds3231` (канонично), `device_clock-mech`, `device_mech-ring` | `src/module_ds3231/AGENTS.md` |
 | Шаговый драйвер | STEP/DIR/EN | 12 / 33 / 14 | `device_clock-mech` | `src/device_clock-mech/AGENTS.md` |
 | Датчики часов | SENS_MIN/SENS_HOUR | 26 / 25 | `device_clock-mech` | `src/device_clock-mech/AGENTS.md` |
@@ -632,7 +668,7 @@
 | `secret.json` | core_sys | `auth`, `user`, `pass`, `secq`, `seca` |
 | `_version_fs.json` | 4_fs_builder (генерация) | версия FW, список модулей, статистика ФС, git-инфо, build_info |
 | `config_wifi0..3.json` | core_wifi | `ssid`, `pass`, `dhcp`, `ip[4]`, `netmask[4]`, `gateway[4]`, `dns[4]` |
-| `config_wifi.json` | core_wifi | `scantime`, `aptime` |
+| `config_wifi.json` | core_wifi | `scantime`, `aptime`, `busmode`, `scan_retries` |
 | `config_ntp.json` | core_ntp | `ntp0`, `ntp1`, `ntp2`, `NTPperiod` |
 | `config_time.json` | core_sys | `timeZone`, `daylight`, `syncIntervalS`, `sources.<name>.{prio,enabled}` |
 | `config_state.json` | core_state | `test_timeout_s`, `op_timeout_s` |
@@ -646,6 +682,8 @@
 | `swd_cfg.json` | submodule_swd | `src/module_program/AGENTS.md` |
 | `config_udp.json` | module_udp | `src/module_udp/AGENTS.md` |
 | `config_ds3231.json` | module_ds3231 | `src/module_ds3231/AGENTS.md` |
+| `config_veml7700.json` | module_veml7700 | `src/module_veml7700/AGENTS.md` |
+| `config_rda5807m.json` | module_RDA5807m | `src/module_RDA5807m/AGENTS.md` |
 | `config_lcd-i2c.json` | module_lcd-i2c | `src/module_lcd-i2c/AGENTS.md` |
 | `config_macros.json` | module_macros | `src/module_macros/AGENTS.md` |
 | `config_otaclient.json` | module_otaclient | `src/module_otaclient/AGENTS.md` |
@@ -654,6 +692,7 @@
 | `config_clock-mech.json` | device_clock-mech | `src/device_clock-mech/AGENTS.md` |
 | `config_ring-mech.json` | device_mech-ring | `src/device_mech-ring/AGENTS.md` |
 | `config_e7rgb.json` | device_electronica7_rgb | `src/device_electronica7_rgb/AGENTS.md` |
+| `config_proj_clock.json` | device_projection_clock | `src/device_projection_clock/AGENTS.md` |
 
 ### 7.2. Данные пользователя на FS
 
@@ -712,7 +751,7 @@
 - AC-TIME-14: `/time/sync?source=<name>` вызывает `get()` вне расписания; следующий tick — по обычному интервалу.
 - AC-TIME-15: `source_invalid` эмитится ровно один раз на переходе `validLast` true→false.
 
-> Критерии приёмки **опциональных** компонентов вынесены в `AGENTS.md` этих компонентов: AC-7/AC-8 — `src/module_program/AGENTS.md`; AC-9 — `src/module_editor/AGENTS.md`; AC-11 — `src/module_macros/AGENTS.md`; AC-12 — `src/device_electronica7_rgb/AGENTS.md`; AC-13 — `src/device_clock-mech/AGENTS.md`; AC-14 — `src/module_udp/AGENTS.md`; AC-15 — `src/module_template/AGENTS.md`.
+> Критерии приёмки **опциональных** компонентов вынесены в `AGENTS.md` этих компонентов: AC-7/AC-8 — `src/module_program/AGENTS.md`; AC-9 — `src/module_editor/AGENTS.md`; AC-11 — `src/module_macros/AGENTS.md`; AC-12 — `src/device_electronica7_rgb/AGENTS.md`; AC-13 — `src/device_clock-mech/AGENTS.md`; AC-14 — `src/module_udp/AGENTS.md`; AC-15 — `src/module_template/AGENTS.md`; AC-VEML — `src/module_veml7700/AGENTS.md`; AC-RDA — `src/module_RDA5807m/AGENTS.md`; AC-PCLK — `src/device_projection_clock/AGENTS.md`.
 
 ### 8.2. Нефункциональные
 
@@ -754,16 +793,20 @@
 | `MODULE_GPIO` | Модуль GPIO | `src/module_gpio/AGENTS.md` |
 | `MODULE_LCD_I2C` | Модуль LCD I2C | `src/module_lcd-i2c/AGENTS.md` |
 | `MODULE_DS3231` | Модуль DS3231 | `src/module_ds3231/AGENTS.md` |
+| `MODULE_VEML7700` | Модуль люксметра VEML7700 | `src/module_veml7700/AGENTS.md` |
+| `MODULE_RDA5807M` | Модуль FM/RDS-приёмника RDA5807M (WIP) | `src/module_RDA5807m/AGENTS.md` |
 | `MODULE_MACROS` | Модуль макросов (ESP32) | `src/module_macros/AGENTS.md` |
 | `MODULE_OTACLIENT` | OTA-клиент (внедряется в core-группы) | `src/module_otaclient/AGENTS.md` |
 | `MODULE_RGB` | Модуль RGB | `src/module_rgb/AGENTS.md` |
 | `MODULE_I2C_MAPPER` | Модуль сканера I2C | `src/module_i2c-mapper/AGENTS.md` |
 | `MODULE_TEMPLATE` | Шаблон модуля | `src/module_template/AGENTS.md` |
 | `DEVICE_CLOCKMECH` / `DEVICE_RINGMECH` / `DEVICE_E7RGB` | Устройства | `src/device_clock-mech/AGENTS.md`, `src/device_mech-ring/AGENTS.md`, `src/device_electronica7_rgb/AGENTS.md` |
+| `DEVICE_PROJ_CLOCK` | Проекционные часы ЧЧ:ММ:СС | `src/device_projection_clock/AGENTS.md` |
 | `DS3231_SQW_PIN` | Пин SQW/INT# DS3231 (по умолчанию 13) | `src/module_ds3231/AGENTS.md` |
 | `E7_USE_RMT` | Использовать RMT-метод NeoPixelBus в `device_electronica7_rgb` | `src/device_electronica7_rgb/AGENTS.md` |
+| `PROJ_CLOCK_USE_RMT` | Использовать RMT-метод NeoPixelBus в `device_projection_clock` | `src/device_projection_clock/AGENTS.md` |
 | `JSON_DUMP_LOG` | Включить дамп JSON в лог (по умолчанию выключен) | TRS §3.1.6 |
-| `DEBUG_*` | Отладочные макросы по компонентам (`DEBUGSYS`, `DEBUG_CORE_WIFI`, `DEBUGNTP`, `DEBUGOTA`, `DEBUGJSON`, `DEBUGLOGLED`, `DEBUGSTATE`, `DEBUGTASK`, `DEBUG_PROG`, `DEBUG_ISP`, `DEBUG_SWD`, `DEBUG_UDP`, `DEBUGEDITOR`, `DEBUGDS3231`, `DEBUGLCD`, `DEBUGMACROS`, `DEBUGOTACLIENT`, `DEBUG_RGB`, `DEBUGI2CMAPPER`, `DEBUGTEMPLATE`, `DEBUG_GPIO`, `DEBUG_CLOCKMECH`, `DEBUG_RINGMECH`, `DEBUG_E7RGB`) | ядро/`AGENTS.md` модулей |
+| `DEBUG_*` | Отладочные макросы по компонентам (`DEBUGSYS`, `DEBUG_CORE_WIFI`, `DEBUGNTP`, `DEBUGOTA`, `DEBUGJSON`, `DEBUGLOGLED`, `DEBUGSTATE`, `DEBUGTASK`, `DEBUG_PROG`, `DEBUG_ISP`, `DEBUG_SWD`, `DEBUG_UDP`, `DEBUGEDITOR`, `DEBUGDS3231`, `DEBUGLCD`, `DEBUGMACROS`, `DEBUGOTACLIENT`, `DEBUG_RGB`, `DEBUGI2CMAPPER`, `DEBUGTEMPLATE`, `DEBUG_GPIO`, `DEBUG_CLOCKMECH`, `DEBUG_RINGMECH`, `DEBUG_E7RGB`, `DEBUG_VEML7700`, `DEBUG_RDA5807M`, `DEBUG_PROJ_CLOCK`) | ядро/`AGENTS.md` модулей |
 
 ---
 

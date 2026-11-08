@@ -62,6 +62,7 @@ glob-масками `src/*/*.ini` и `src/*/*/*.ini` в `[platformio] extra_conf
 | `module_rgb` | `src/module_rgb/` | RGB-матрица (WS2812) |
 | `module_i2c-mapper` | `src/module_i2c-mapper/` | I2C-сканер |
 | `module_RDA5807m` | `src/module_RDA5807m/` | FM/RDS-приёмник RDA5807M, источник времени |
+| `module_veml7700` | `src/module_veml7700/` | люксметр VEML7700 (I2C) |
 | `device_clock-mech` | `src/device_clock-mech/` | часы механические |
 | `device_mech-ring` | `src/device_mech-ring/` | часы механические с боем |
 | `device_electronica7_rgb` | `src/device_electronica7_rgb/` | часы Электроника-7 RGB |
@@ -111,6 +112,8 @@ glob-масками `src/*/*.ini` и `src/*/*/*.ini` в `[platformio] extra_conf
 | `module_otaclient` | `-D MODULE_OTACLIENT` | OTA-клиент (автообновление с удалённого сервера) |
 | `module_template` | `-D MODULE_TEMPLATE` | Шаблон модуля — основа для создания новых модулей (в ядре) |
 | `module_i2c-mapper` | `-D MODULE_I2C_MAPPER` | Сканер шины I2C (веб-интерфейс, Wire0) |
+| `module_veml7700` | `-D MODULE_VEML7700` | Люксметр VEML7700 (I2C), ресурсы `veml7700.lux/available` |
+| `module_RDA5807m` | `-D MODULE_RDA5807M` | FM/RDS-приёмник RDA5807M, источник времени (WIP) |
 | `module_editor` | `-D MODULE_EDITOR` | Браузер FS, редактор файлов (html/txt/json/js), загрузка/удаление — форк Ace (опционально) |
 
 ### Устройства (device_*) — отдельные репозитории, клонируются в `src/device_*`
@@ -812,6 +815,7 @@ avr-fota/
 - `DEBUG_UDP` → `DEBUGUDP(...)`
 - `DEBUG_OTACLIENT` → `DEBUGOTACLIENT(...)`
 - `DEBUG_I2C_MAPPER` → `DEBUGI2CMAPPER(...)`
+- Полный актуальный список (включая `DEBUG_VEML7700`, `DEBUG_RDA5807M`, `DEBUG_PROJ_CLOCK`) — `TRS.md`, Приложение A.
 - `RELEASE` определён → все отладочные макросы становятся пустышками
 
 Все модульные макросы печатают префикс модуля `[C_]/[M_]/[D_]` (например `[C_WIFI]`,
@@ -838,8 +842,9 @@ avr-fota/
 
 1. **`core_*.save` — «функция сохранения» не реализована для ядер.** По правилу
    «Применение vs сохранение конфига» компонент с resource-bus обязан иметь bus-функцию
-   `save`. Сделано только для `device_electronica7_rgb` (`e7.save`). Остальные
-   компоненты без resource-bus (`module_rgb`, `module_lcd-i2c`, `module_ds3231`,
+   `save`. Сделано для `device_electronica7_rgb` (`e7.save`), `module_veml7700`
+   (`veml7700.save`) и `device_projection_clock` (`proj_clock.save`). Компоненты без
+   resource-bus (`module_rgb`, `module_lcd-i2c`, `module_ds3231`,
    `device_clock-mech`, `device_mech-ring`) **не имеют** ни `regFunc`, ни функции
    сохранения — их веб-обработчики сохраняют напрямую, из макросов они недоступны.
    Нужно: при добавлении resource-bus любому компоненту сразу реализовывать

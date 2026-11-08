@@ -25,6 +25,7 @@
 | Компонент | Тип | Папка | Состав | Документация | Флаг активации | Платформа | Зависит от модулей | Namespace |
 |---|---|---|---|---|---|---|---|---|
 | core_web | ядро | `src/core_web/` | — | TRS §3.1.1 | не требуется (вне registry) | обе | — | — |
+| core_fs | ядро | `src/core_fs/` | — | TRS §3.1.13 | CORE_FS (всегда) | обе | — | — |
 | core_sys | ядро | `src/core_sys/` | — | TRS §3.1.2 | CORE_SYS (всегда) | обе | — | system, time |
 | core_wifi | ядро | `src/core_wifi/` | — | TRS §3.1.3 | CORE_WIFI | обе | вызывает `module_udp.begin()` | wifi |
 | core_ntp | ядро | `src/core_ntp/` | — | TRS §3.1.4 | CORE_NTP | обе | — | ntp (источник времени для `core_sys`) |

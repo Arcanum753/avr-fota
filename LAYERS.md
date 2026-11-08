@@ -34,6 +34,7 @@
 | `core_ntp` | NTP-клиент (3 сервера) поверх форка `NtpClientLib`; источник времени для `core_sys` (read-only, namespace `ntp`) | `.h`: `strNtpConfig`, define'ы. `.cpp`: sync-логика, web, конфиг, версия; `_engine.cpp`: колбэки `ntpGetTime/ntpStatus`, `registerTimeSource` | types, engine (sync + Time Source Provider API) |
 | `core_ota` | Самообновление FW/FS, сравнение версий | `.h`: `fileCompareResult`, `enum UpdateTypeFile`, `OTA_STR_*`, LED-макросы. `.cpp`: web-загрузка, сравнение версий, исполнение, LED | types, engine, `_led.h` |
 | `core_json` | Обёртка над ArduinoJson (`jsonFile*`, `jsonParse*`, `jsonBuild*`) | Класс-утилита, шаблонной части почти нет | engine (вся логика, низкая польза) |
+| `core_fs` | ФС: страница Filesystem, HTTP API `/fs/*`, обход LittleFS, CRUD, info | `core_fs.cpp`: маршруты, upload/download, версия; `core_fs_engine.cpp`: обход/CRUD; `common_module`: `ns_core_fs` | types, engine (обход/CRUD), common_module |
 | `core_led` | Слоты приоритетов и паттерны LED | `enum LedPriority`, define'ы, почти весь `.cpp` — исполнительная логика | types, engine |
 | `core_terminal` | Обёртка над `ErriezSerialTerminal` (форк) + команды | Тип регистрации модулей + реализации команд | types, engine (команды) |
 | `core_state` | Ресурсная шина: реестр, события, async, режимы | `BusValue`/`BusResInfo`/`BusCb`, `enum CoreMode`, лимиты; крупная логика | types (публичные), engine |
@@ -56,11 +57,14 @@
 | `module_otaclient` | модуль | `src/module_otaclient/AGENTS.md` |
 | `module_lcd-i2c` | модуль | `src/module_lcd-i2c/AGENTS.md` |
 | `module_i2c-mapper` | модуль | `src/module_i2c-mapper/AGENTS.md` |
+| `module_veml7700` | модуль | `src/module_veml7700/AGENTS.md` |
+| `module_RDA5807m` | модуль (WIP) | `src/module_RDA5807m/AGENTS.md` |
 | `module_template` | модуль (в ядре) | `src/module_template/AGENTS.md` |
 | `module_program` | контейнер программатора | `src/module_program/AGENTS.md` |
 | `device_clock-mech` | устройство | `src/device_clock-mech/AGENTS.md` |
 | `device_mech-ring` | устройство | `src/device_mech-ring/AGENTS.md` |
 | `device_electronica7_rgb` | устройство | `src/device_electronica7_rgb/AGENTS.md` |
+| `device_projection_clock` | устройство | `src/device_projection_clock/AGENTS.md` |
 
 ## Сводная таблица
 
@@ -76,6 +80,7 @@
 | `core_json` | нет | да (низкая польза) | нет | нет | низкий | — (TRS §3.1.6) |
 | `core_terminal` | да | да | нет | нет | низкий | — (TRS §3.1.8) |
 | `core_web` | частично | минимально (риск) | нет | нет | низкий | — (TRS §3.1.1) |
+| `core_fs` | да | да (`core_fs_engine`) | нет | да | высокий | — (TRS §3.1.13) |
 | `module_macros` | уже сделано | уже сделано | нет | уже есть | — | `src/module_macros/AGENTS.md` |
 | `module_editor` | нет | нет | нет | нет | низкий | `src/module_editor/AGENTS.md` |
 | `module_gpio` | нет | нет | нет | нет | низкий | `src/module_gpio/AGENTS.md` |
@@ -85,10 +90,13 @@
 | `module_otaclient` | да | да | нет | нет | средний | `src/module_otaclient/AGENTS.md` |
 | `module_lcd-i2c` | да | да | нет | нет | средний | `src/module_lcd-i2c/AGENTS.md` |
 | `module_i2c-mapper` | да | да | нет | нет | низкий | `src/module_i2c-mapper/AGENTS.md` |
+| `module_veml7700` | да | да | нет | нет | средний | `src/module_veml7700/AGENTS.md` |
+| `module_RDA5807m` | да | да | нет | нет | средний | `src/module_RDA5807m/AGENTS.md` |
 | `module_template` | да | да | нет | нет | средний | `src/module_template/AGENTS.md` |
 | `device_clock-mech` | да | да | нет | нет | средний | `src/device_clock-mech/AGENTS.md` |
 | `device_mech-ring` | да | да | нет | нет | средний | `src/device_mech-ring/AGENTS.md` |
 | `device_electronica7_rgb` | да | да | нет | нет | средний | `src/device_electronica7_rgb/AGENTS.md` |
+| `device_projection_clock` | да | да | нет | нет | средний | `src/device_projection_clock/AGENTS.md` |
 | `module_prog` | да | да | нет | нет | низкий | `src/module_program/AGENTS.md` |
 | `submodule_isp` | да | частично | нет | нет | низкий | `src/module_program/AGENTS.md` |
 | `submodule_swd` | да | частично | нет | нет | низкий | `src/module_program/AGENTS.md` |
@@ -100,7 +108,7 @@
 - LED-функции, объявленные как статические методы класса (`device_*::ledMacrosXxxError`,
   `module_template::ledMacrosTemplateDemo`), отдельный `_led.h` не требуют.
 - `_engine.h` создаётся только при необходимости (интерфейс наружу или структуры вне
-  `_types.h`). Сейчас реально нужен только `module_udp`.
+  `_types.h`). Сейчас реально нужны `module_udp` и `core_fs`.
 - Файлы `.ini` и генератор registry не меняются: `src_filter` включает каталог целиком.
 - `module_macros` — эталон; при сверке границ перенести только EERTOS-обёртку тика в engine.
 - Форк-библиотеки (`NtpClientLib.*`, `ErriezSerialTerminal.*`, `ESPAsyncWebServer.h`,
