@@ -1,6 +1,6 @@
 // Auto-generated version file for module: core_terminal
-// Generated: 2026-09-12 20:24
-// Environment: esp32_electronica7_rgb_macros
+// Generated: 2026-11-09 07:35
+// Environment: esp32-rgb
 
 #ifndef CORE_TERMINAL_VERSION_H
 #define CORE_TERMINAL_VERSION_H
@@ -10,36 +10,36 @@
 // ============================================================
 
 // Числовая версия (для сравнений)
-#define CORE_TERMINAL_VERSION 2
+#define CORE_TERMINAL_VERSION 3
 
 // Строковая версия
-#define CORE_TERMINAL_VERSION_STR "2"
+#define CORE_TERMINAL_VERSION_STR "3"
 
 // Хэш последнего обработанного коммита кода (без учёта *_version.h)
-#define CORE_TERMINAL_COMMIT_HASH "441752744c507a48da5d3bd2c6f3365c9b78735e"
+#define CORE_TERMINAL_COMMIT_HASH "ef8d4da0975bc38dacafb22721ce99469d67062d"
 
 // ============================================================
 // ДАТА ПОСЛЕДНЕГО ИЗМЕНЕНИЯ
 // ============================================================
 
 // Дата в формате yyyy.mm.dd hh.mm (как строка)
-#define CORE_TERMINAL_COMMIT_DATE_STR "2026.09.12 20:22"
+#define CORE_TERMINAL_COMMIT_DATE_STR "2026.11.08 20:44"
 
 // Компоненты даты (для числовых операций)
 #define CORE_TERMINAL_COMMIT_YEAR 2026
-#define CORE_TERMINAL_COMMIT_MONTH 9
-#define CORE_TERMINAL_COMMIT_DAY 12
+#define CORE_TERMINAL_COMMIT_MONTH 11
+#define CORE_TERMINAL_COMMIT_DAY 8
 #define CORE_TERMINAL_COMMIT_HOUR 20
-#define CORE_TERMINAL_COMMIT_MINUTE 22
+#define CORE_TERMINAL_COMMIT_MINUTE 44
 
 // Полная дата в формате YYYY-MM-DD HH:MM (для отладки)
-#define CORE_TERMINAL_COMMIT_DATE "2026-09-12 20:22"
+#define CORE_TERMINAL_COMMIT_DATE "2026-11-08 20:44"
 
 // ============================================================
 // ИНФОРМАЦИЯ О ГЕНЕРАЦИИ
 // ============================================================
 
-#define CORE_TERMINAL_GENERATED_TIME "2026-09-12 20:24"
-#define CORE_TERMINAL_GENERATED_TIMESTAMP "20260912_202411"
+#define CORE_TERMINAL_GENERATED_TIME "2026-11-09 07:35"
+#define CORE_TERMINAL_GENERATED_TIMESTAMP "20261109_073543"
 
 #endif // CORE_TERMINAL_VERSION_H
