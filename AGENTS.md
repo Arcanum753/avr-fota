@@ -140,6 +140,7 @@ glob-масками `src/*/*.ini` и `src/*/*/*.ini` в `[platformio] extra_conf
   - Чтение массивов из JSON — через `is<JsonArray>()` + `as<JsonArray>()` с проверкой границ.
   - Сохранение массивов — через `doc["key"].to<JsonArray>()` + `arr.add()`.
 - `web/_menu.html` — ссылки в меню.
+- `module_xxx_terminal.cpp` — эталон терминальных команд: `terminalRegister()` из `begin()`, команда верхнего уровня, подкоманды с проверкой аргументов, `helpText` в `PROGMEM`; изменения только apply, на FS пишет явная подкоманда `save` (см. `module_template/AGENTS.md`, раздел «Терминал»).
 - `web/xxx.html` — HTML-страница с формой, JS через `fetch` и `ApplyCVT()` из общих файлов `GetJson.js`/`GetMarkup.js` (не дублировать `applyCvtData` на каждой странице), сохранение без перезагрузки страницы.
 - `web/config_xxx.json` — дефолтный конфиг
 - Интеграция в `src/core_web/FSWebServerLib.cpp` под флагом `MODULE_XXX`

@@ -35,6 +35,29 @@ void CLASS_MODULE_TEMPLATE::applyGpioState() {
     digitalWrite(TEMPLATE_GPIO2, _config.gpio2State ? HIGH : LOW);
 }
 
+void CLASS_MODULE_TEMPLATE::applyGpioTarget() {
+    // Единая политика для всех путей (веб и терминал): при включённом
+    // моргании вывод обновит ближайший тик blinkTimerTask, иначе — сразу.
+    if (_config.blinkInterval == 0) {
+        applyGpioState();
+    }
+}
+
+void CLASS_MODULE_TEMPLATE::applyBlinkTimer() {
+    // Старый таймер снимаем всегда: SetTimerTask идемпотентен по указателю,
+    // но сброс _blinkState гарантирует старт новой настройки с первой фазы.
+    DelTimerTask(blinkTimerTask);
+    _blinkState = false;
+
+    if (_config.blinkInterval > 0) {
+        SetTimerTask(blinkTimerTask, _config.blinkInterval);
+        return;
+    }
+
+    // Моргание выключено — сразу выставляем статическое состояние выходов.
+    applyGpioState();
+}
+
 void CLASS_MODULE_TEMPLATE::blinkTimerTask() {
     if (module_template._config.blinkInterval == 0) {
         module_template.applyGpioState();

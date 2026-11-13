@@ -23,6 +23,9 @@
 
 #define CONFIG_FILE_TEMPLATE    "/config_template.json"
 
+// Верхняя граница периода моргания, мс (синхронизирована с max на странице template.html).
+#define TEMPLATE_BLINK_MS_MAX   60000
+
 // Структура конфига — сохраняется в config_template.json
 typedef struct {
     bool gpio1State;

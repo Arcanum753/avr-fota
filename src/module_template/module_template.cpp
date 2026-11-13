@@ -33,9 +33,13 @@ void CLASS_MODULE_TEMPLATE::begin() {
     defaultConfigTemplate();
     if (load_config_template() == false) { save_config_template(); }
 
-    _blinkState = false;
+    // Терминальные команды регистрируем после загрузки конфига:
+    // 'templ show' должен сразу видеть прочитанные значения.
+    terminalRegister();
 
-    if (_config.blinkInterval > 0) { SetTimerTask(blinkTimerTask, _config.blinkInterval); }
+    // Единая точка запуска/остановки моргания: при interval == 0
+    // она сразу выставляет статическое состояние выходов.
+    applyBlinkTimer();
 }
 
 void CLASS_MODULE_TEMPLATE::begin(ModContext& ctx) {
@@ -130,23 +134,24 @@ void CLASS_MODULE_TEMPLATE::handleConfigGpio(AsyncWebServerRequest *request) {
                 continue;
             }
             if (request->argName(i) == "blinkInterval") {
-                uint16_t newInterval = (uint16_t)request->arg(i).toInt();
-                if (newInterval > 0) {
-                    DelTimerTask(blinkTimerTask);
-                    _config.blinkInterval = newInterval;
-                    _blinkState = false;
-                    SetTimerTask(blinkTimerTask, _config.blinkInterval);
-                } else {
-                    DelTimerTask(blinkTimerTask);
-                    _config.blinkInterval = 0;
-                    applyGpioState();
-                }
+                // Ограничиваем значение тем же пределом, что и терминал:
+                // веб-форма проверяет max, но URL может принести что угодно.
+                long newInterval = request->arg(i).toInt();
+                if (newInterval < 0) { newInterval = 0; }
+                if (newInterval > TEMPLATE_BLINK_MS_MAX) { newInterval = TEMPLATE_BLINK_MS_MAX; }
+                _config.blinkInterval = (uint16_t)newInterval;
+                applyBlinkTimer();
                 continue;
             }
         }
 
-        applyGpioState();
+        // Единая политика применения: при выключенном моргании вывод
+        // обновляется сразу, при включённом — на ближайшем тике таймера.
+        applyGpioTarget();
 
+        // Изменения уже в памяти: отмечаем до записи, чтобы неудачное
+        // сохранение было видно в 'templ show' как modified.
+        _configDirty = true;
         save_config_template();
         request->send(200, "text/plain", "OK");
     }
@@ -173,6 +178,8 @@ void CLASS_MODULE_TEMPLATE::handleConfigDemo(AsyncWebServerRequest *request) {
             }
         }
 
+        // Демо-поля меняются только через веб: сохранение — пользовательский путь.
+        _configDirty = true;
         save_config_template();
         request->send(200, "text/plain", "OK");
     }
@@ -189,6 +196,9 @@ void CLASS_MODULE_TEMPLATE::defaultConfigTemplate() {
     _config.demoSampleText = "demo text";
 
     for (uint8_t i = 0; i < 3; i++) { _config.demoArray[i] = ""; }
+
+    // Дефолты живут пока только в памяти: до успешной записи конфиг считается изменённым.
+    _configDirty = true;
 }
 
 bool CLASS_MODULE_TEMPLATE::load_config_template() {
@@ -217,6 +227,8 @@ bool CLASS_MODULE_TEMPLATE::load_config_template() {
     DEBUGTEMPLATE("blinkInterval: %d\r\n",  _config.blinkInterval);
     DEBUGTEMPLATE("demoSampleText: %s\r\n", _config.demoSampleText.c_str());
 
+    // Файл прочитан — память и FS совпадают.
+    _configDirty = false;
     return true;
 }
 
@@ -235,7 +247,11 @@ bool CLASS_MODULE_TEMPLATE::save_config_template() {
         arr.add(_config.demoArray[i]);
     }
 
-    return core_json.jsonFileSaveDoc(CONFIG_FILE_TEMPLATE, doc);
+    bool saved = core_json.jsonFileSaveDoc(CONFIG_FILE_TEMPLATE, doc);
+    // Сбрасываем флаг только при успешной записи: иначе 'templ show'
+    // продолжит показывать modified и подскажет повторить save.
+    if (saved) { _configDirty = false; }
+    return saved;
 }
 
 // ============================================================
