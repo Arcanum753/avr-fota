@@ -1,6 +1,6 @@
 // Auto-generated version file for module: core_json
-// Generated: 2026-10-26 08:04
-// Environment: esp32_electronica7_rgb_macros
+// Generated: 2026-11-17 08:11
+// Environment: esp32
 
 #ifndef CORE_JSON_VERSION_H
 #define CORE_JSON_VERSION_H
@@ -10,36 +10,36 @@
 // ============================================================
 
 // Числовая версия (для сравнений)
-#define CORE_JSON_VERSION 4
+#define CORE_JSON_VERSION 5
 
 // Строковая версия
-#define CORE_JSON_VERSION_STR "4"
+#define CORE_JSON_VERSION_STR "5"
 
 // Хэш последнего обработанного коммита кода (без учёта *_version.h)
-#define CORE_JSON_COMMIT_HASH "423ec4384a992aa7b31be73edc83d7606ef47611"
+#define CORE_JSON_COMMIT_HASH "91d032845fcb4754d3366246e4307fc31900aded"
 
 // ============================================================
 // ДАТА ПОСЛЕДНЕГО ИЗМЕНЕНИЯ
 // ============================================================
 
 // Дата в формате yyyy.mm.dd hh.mm (как строка)
-#define CORE_JSON_COMMIT_DATE_STR "2026.10.26 07:50"
+#define CORE_JSON_COMMIT_DATE_STR "2026.11.17 08:07"
 
 // Компоненты даты (для числовых операций)
 #define CORE_JSON_COMMIT_YEAR 2026
-#define CORE_JSON_COMMIT_MONTH 10
-#define CORE_JSON_COMMIT_DAY 26
-#define CORE_JSON_COMMIT_HOUR 7
-#define CORE_JSON_COMMIT_MINUTE 50
+#define CORE_JSON_COMMIT_MONTH 11
+#define CORE_JSON_COMMIT_DAY 17
+#define CORE_JSON_COMMIT_HOUR 8
+#define CORE_JSON_COMMIT_MINUTE 7
 
 // Полная дата в формате YYYY-MM-DD HH:MM (для отладки)
-#define CORE_JSON_COMMIT_DATE "2026-10-26 07:50"
+#define CORE_JSON_COMMIT_DATE "2026-11-17 08:07"
 
 // ============================================================
 // ИНФОРМАЦИЯ О ГЕНЕРАЦИИ
 // ============================================================
 
-#define CORE_JSON_GENERATED_TIME "2026-10-26 08:04"
-#define CORE_JSON_GENERATED_TIMESTAMP "20261026_080457"
+#define CORE_JSON_GENERATED_TIME "2026-11-17 08:11"
+#define CORE_JSON_GENERATED_TIMESTAMP "20261117_081142"
 
 #endif // CORE_JSON_VERSION_H
