@@ -25,7 +25,7 @@
 // ============================================================
 
 static const char* const kSysCommands[] = {
-    "?", "info", "ver", "stat", "name", "serial", "auth", "reset", nullptr
+    "?", "info", "ver", "stat", "name", "serial", "auth", "reset", "mode", nullptr
 };
 
 static const char kSysHelp[] PROGMEM =
@@ -42,7 +42,8 @@ static const char kSysHelp[] PROGMEM =
     "  auth on|off      enable/disable web auth\r\n"
     "  auth reset       disable and clear user/password (y/n)\r\n"
     "  reset            reboot (y/n)\r\n"
-    "  id               show device name/serial (alias)\r\n";
+    "  id               show device name/serial (alias)\r\n"
+    "  mode [<name>]    show/set core mode (debug: init/normal/ota/fs_update/prog/test)\r\n";
 
 static const char kAuthHelp[] PROGMEM =
     "auth commands:\r\n"
@@ -125,6 +126,39 @@ void CLASS_CORE_SYS::s_cmdSys() {
     char* arg = term.getNext();
     if (arg != nullptr && strcmp(arg, "help") == 0) {
         TerminalPrintText(kSysHelp);
+        return;
+    }
+
+    // sys mode [<name|index>] — отладочная команда: показать/сменить режим ядра
+    if (arg != nullptr && strcmp(arg, "mode") == 0) {
+        char* value = term.getNext();
+        if (value == nullptr) {
+            Serial.printf("Core mode: %s (%d)\r\n", modeName().c_str(), core_state.getMode());
+            Serial.print("Modes:");
+            for (uint8_t i = 0; i < CORE_MODE_COUNT; i++) {
+                const char* n = core_state.enumNameByIndex("system.mode", i);
+                Serial.printf(" %s=%u", (n != nullptr) ? n : "?", (unsigned)i);
+            }
+            Serial.println();
+            return;
+        }
+        int m = core_state.enumIndexByName("system.mode", value);
+        if (m < 0) {
+            long v = 0;
+            if (ns_core_terminal::parseIntStrict(String(value), v, 0, CORE_MODE_COUNT - 1)) {
+                m = (int)v;
+            }
+        }
+        if (m < 0 || m >= CORE_MODE_COUNT) {
+            Serial.println("Usage: sys mode [init|normal|ota|fs_update|prog|test|<0..5>]");
+            return;
+        }
+        int rc = core_state.requestMode(m);
+        if (rc == 0) {
+            Serial.printf("Core mode set: %s (%d)\r\n", modeName().c_str(), core_state.getMode());
+        } else {
+            Serial.printf("Core mode set failed: rc=%d\r\n", rc);
+        }
         return;
     }
 

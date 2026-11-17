@@ -197,6 +197,9 @@ core_sys.addTimeSource("ntp", 100, ntpGetTime, nullptr, ntpStatus);
 - `name`/`serial`: 1..63, `A-Za-z0-9-_`; `auth user`: 1..32, `A-Za-z0-9._-`;
   `auth pass`: 8..63, `A-Za-z0-9`. `auth` показывает user/pass/secq/seca открыто.
 - `reset`, `auth off`, `auth reset` — через `TerminalConfirm()` (`y/n`, 30 с).
+- `sys mode [<name|index>]` — отладочная команда: без аргумента показывает текущий
+  режим ядра и список значений, с аргументом вызывает `core_state.requestMode()`
+  (`init/normal/ota/fs_update/prog/test`).
 - Редактирование TZ/DST из терминала отсутствует (только веб).
 - `components_info.h/.cpp` + weak-заглушка; сильная таблица генерируется в
   `modules_registry.cpp` (`python/module_registry_gen.py`).

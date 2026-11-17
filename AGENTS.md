@@ -577,7 +577,8 @@ on("wifi.just_connected", function(ev) e7.speed(40) end)
 
 Ядровые команды:
 - `help [module]`, `echo` — встроенные команды `core_terminal`;
-- `?`, `sys`, `info`, `ver`, `stat`, `name`, `serial`, `auth`, `reset`, `id` — `core_sys` (`sys help` — справка);
+- `?`, `sys`, `info`, `ver`, `stat`, `name`, `serial`, `auth`, `reset`, `id`, `mode` — `core_sys` (`sys help` — справка);
+  `sys mode [<name|index>]` — отладочная команда: показать/сменить режим ядра (`init/normal/ota/fs_update/prog/test`);
 - `fs ls [-r] [path]` — `core_fs` (только чтение);
 - `ntp show|period|server|sync` — `core_ntp`;
 - `wifi show|slot|set|sys|apply|connect|clients` — `core_wifi`;
@@ -1013,12 +1014,15 @@ avr-fota/
    (`core_wifi_types.h`), поле `_restartDeferredSince` (`core_wifi.h`). В `staTick()`
    при `_wifiInitFailCount >= WIFI_INIT_FAIL_MAX` и режиме не `normal/init` рестарт
    откладывается не дольше 60 с, затем `ESP.restart()`. Сброс — при успешном скане и
-   в `onWiFiConnectedGotIP`. **На плате не проверено.** Хук `WIFI_GUARD_TEST` для
-   проверки не подходит: он валит скан на старте, устройство не подключается к Wi-Fi,
-   и `system.mode` нельзя перевести в `prog` по HTTP. Нужен другой способ перевода в
-   небезопасный режим до 5-й неудачи (serial-терминал или хук, сам выставляющий
-   `CORE_MODE_PROG`). Штатная ветка проверена: при `normal` 5-я неудача даёт лог
-   `WiFi init failed 5 times. Restarting.` и `Reset reason: Software reset`.
+   в `onWiFiConnectedGotIP`. **Проверено на плате** (ESCOP32-D0WDQ6, COM4, сборка с
+   `WIFI_GUARD_TEST` + `DEBUG_CORE_WIFI`): после `sys mode prog` в терминале 5-я
+   неудача даёт `restart deferred (mode 4)` без рестарта (6-я и 7-я — тоже), через
+   63 с — `restart deferred timeout, restarting` и `Reset reason: Software reset`.
+   Штатная ветка: при `normal` 5-я неудача даёт `WiFi init failed 5 times. Restarting.`
+   и `Software reset`. Хук в релиз не коммитить.
+   Для проверки добавлена отладочная команда терминала `sys mode [<name|index>]`
+   (`core_sys_terminal.cpp`): без аргумента — текущий режим и список, с аргументом —
+   `core_state.requestMode()`.
 2. **`handleSave` — только изменённые поля.**
    - `core_wifi/web/wifi.html`: `saveWifiSysConf()` отправляет только «грязные» поля,
      при их отсутствии — «No changes» без POST.
@@ -1055,7 +1059,6 @@ avr-fota/
 
 **Не выполнено:**
 
-- Проверка на плате: отложенный рестарт в небезопасном режиме (пункт 1; причина выше).
 - Пуш модулей в удалённые репозитории.
 
 **Плата после сессии:** прошита чистым ядром `esp32` (без `WIFI_GUARD_TEST`) с
