@@ -1,7 +1,8 @@
 #if defined(ESP32)
 #include <LittleFS.h>
 #include <esp32-hal-gpio.h>
-#elif defined(ESP8266)
+#endif
+#if !defined(ESP32) && defined(ESP8266)
 #include <LittleFS.h>
 #include <avr/pgmspace.h>
 #endif
@@ -64,11 +65,15 @@ bool  CLASS_CORE_OTA::ConfigureOTA( String _hostname, String _password) {
 
 #if defined(ESP32)
 	ArduinoOTA.onEnd(std::bind([](fs::LittleFSFS* fs)
-#elif defined(ESP8266)
+#endif
+#if !defined(ESP32) && defined(ESP8266)
 	ArduinoOTA.onEnd(std::bind([](FS* fs)
 #endif
 	{
-		fs->end();
+		if (fs != nullptr && !_ota_fsEndCalled) {
+			fs->end();
+			_ota_fsEndCalled = true;
+		}
 		DEBUGOTA("\r\n ArduinoOTA end. \r\n");
 	}, _fs));
 	ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
@@ -103,7 +108,8 @@ void CLASS_CORE_OTA::fsRemount() {
         DEBUGOTA("Remounting filesystem...\n");
 #if defined(ESP32)
         _fs->begin(true);
-#elif defined(ESP8266)
+#endif
+#if !defined(ESP32) && defined(ESP8266)
         _fs->begin();
 #endif
     }

@@ -893,6 +893,14 @@ def prepare_fs_image() -> Optional[Path]:
     log_info(f"FS preparation completed successfully")
     return target_web_dir
 
+def get_pio_command() -> list:
+    # Команда PlatformIO: 'pio' может отсутствовать в PATH (Windows, penv не в PATH),
+    # поэтому используем тот же интерпретатор, что и сборка, через модуль platformio.
+    pio = shutil.which("pio")
+    if pio:
+        return [pio]
+    return [sys.executable, "-m", "platformio"]
+
 def run_fs_build_with_retry(project_dir: Path, env_name: str, target_web_dir: Path) -> bool:
     for attempt in range(FS_BUILD_RETRY_COUNT + 1):
         if attempt > 0:
@@ -901,7 +909,7 @@ def run_fs_build_with_retry(project_dir: Path, env_name: str, target_web_dir: Pa
         
         try:
             result = subprocess.run(
-                ["pio", "run", "--target", "buildfs", "--environment", env_name],
+                get_pio_command() + ["run", "--target", "buildfs", "--environment", env_name],
                 cwd=project_dir,
                 env={
                     **os.environ,

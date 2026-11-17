@@ -49,10 +49,13 @@ unsigned char h2int(char c) {
 String urldecode(String input) { // (based on https://code.google.com/p/avr-netino/)
 	char c;
 	String ret = "";
-	for (byte t = 0; t < input.length(); t++) {
+	// size_t, а не byte: byte переполнялся на строках длиннее 255 символов
+	// (бесконечный цикл), а индексация выходила за границы при '%' в конце.
+	for (size_t t = 0; t < input.length(); t++) {
 		c = input[t];
 		if (c == '+') { c = ' ';}
 		if (c == '%') {
+			if (t + 2 >= input.length()) { break; }
 			t++;
 			c = input[t];
 			t++;

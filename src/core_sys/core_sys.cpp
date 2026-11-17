@@ -304,7 +304,11 @@ void CLASS_CORE_SYS::set_wwwauth_configuration(AsyncWebServerRequest *request)	{
 				request->send(400, "text/plain", "User must be filled");
 				return;
 			}
-			if (newPass != oldPass && !ns_core_sys::isAdminPassValid(newPass)) {
+			if (newPass.length() == 0) {
+				request->send(400, "text/plain", "Password must be filled");
+				return;
+			}
+			if (!ns_core_sys::isAdminPassValid(newPass)) {
 				request->send(400, "text/plain", "Password: 8-63 chars, only latin letters and digits");
 				return;
 			}

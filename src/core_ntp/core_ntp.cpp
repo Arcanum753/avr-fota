@@ -145,7 +145,18 @@ void CLASS_CORE_NTP::html2ntp_configuration(AsyncWebServerRequest *request) {
 		_ntpConfig.ntpServerName2 = s2;
 		_ntpConfig.updateNTPTimeEvery = period;
 
-		save_configNTP();
+		// Пишем в файл только поля, отличающиеся от сохранённых: форма всегда шлёт все поля,
+		// и значение, изменённое в памяти без persist, не должно уйти в конфиг вместе с ними.
+		JsonDocument doc;
+		core_json.jsonFileLoadDoc(CONFIG_FILE_NTP, doc);
+		bool changed = false;
+		if (doc["ntp0"].isNull() || doc["ntp0"].as<String>() != s0) { doc["ntp0"] = s0; changed = true; }
+		if (doc["ntp1"].isNull() || doc["ntp1"].as<String>() != s1) { doc["ntp1"] = s1; changed = true; }
+		if (doc["ntp2"].isNull() || doc["ntp2"].as<String>() != s2) { doc["ntp2"] = s2; changed = true; }
+		if (doc["NTPperiod"].isNull() || doc["NTPperiod"].as<long>() != period) { doc["NTPperiod"] = period; changed = true; }
+		if (changed) {
+			core_json.jsonFileSaveDoc(CONFIG_FILE_NTP, doc);
+		}
 		// NTPClient не трогаем из задачи веб-сервера: применяем в loop().
 		_pendingApply = true;
 	}

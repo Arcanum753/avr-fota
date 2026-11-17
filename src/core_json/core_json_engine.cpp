@@ -17,17 +17,29 @@ bool CLASS_CORE_JSON::load_jsonDoc(const String& file, JsonDocument& jsonDoc){
 		return false;
 	}
 	size_t size = configFile.size();
-	/*if (size > 1024) {
-	DEBUGJSON("Config file size is too large");
-	configFile.close();
-	return false;
-	}*/
-	char * buf = (char *) malloc(size);
-	if ( buf == NULL){ return false;	}
+	if (size == 0 || size > 65535) {
+		DEBUGJSON("Config file size invalid: %u\r\n", (unsigned)size);
+		configFile.close();
+		return false;
+	}
+	// +1 под завершающий '\0': десериализатор в v7 для char* ожидает
+	// null-terminated строку, буфер ровно size байт давал чтение за границей.
+	char * buf = (char *) malloc(size + 1);
+	if (buf == NULL) {
+		DEBUGJSON("Failed to allocate %u bytes for %s\r\n", (unsigned)size, file.c_str());
+		configFile.close();
+		return false;
+	}
 	DEBUGJSON("File: %s, size: %d\r\n", file.c_str(), size);
-	configFile.readBytes(buf, size);
+	size_t read = configFile.readBytes(buf, size);
 	configFile.close();
-	auto error = deserializeJson(jsonDoc, buf);
+	if (read != size) {
+		DEBUGJSON("Failed to read config file: %u of %u\r\n", (unsigned)read, (unsigned)size);
+		free(buf);
+		return false;
+	}
+	buf[size] = '\0';
+	auto error = deserializeJson(jsonDoc, buf, size);
 	free(buf);
 	if (error) {
 		DEBUGJSON("Failed to parse config file. Error: %s\r\n", error.c_str());

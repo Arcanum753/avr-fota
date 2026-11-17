@@ -57,6 +57,10 @@ protected:
     int      _uploadError = 0;
     String   _uploadPath;
     uint32_t _uploadSize = 0;
+    // «Владелец» текущей загрузки: позволяет отбросить подвисший сеанс
+    // (клиент оборвал соединение, handleUploadDone не пришёл).
+    AsyncWebServerRequest* _uploadReq = nullptr;
+    uint32_t _uploadStartMs = 0;
 };
 
 extern CLASS_CORE_FS core_fs;

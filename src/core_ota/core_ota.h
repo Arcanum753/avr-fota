@@ -28,13 +28,15 @@ public:
 
 #if ESP32
     fs::LittleFSFS*               _fs = nullptr;
-#elif defined(ESP8266)
+#endif
+#if !ESP32 && defined(ESP8266)
     FS*                         _fs = nullptr;                  // esp8266/esp32 flash file system
 #endif
 
 #if ESP32
     void setFs(fs::LittleFSFS* fs);
-#elif defined(ESP8266)
+#endif
+#if !ESP32 && defined(ESP8266)
     void setFs(FS* fs);
 #endif
 
@@ -86,7 +88,13 @@ protected:
     void prepareSizesForUpdate();
     UpdateTypeFile  typeOTAfile;
     uint32_t freeSketchSpace   ;
-    
+
+    // Состояние upload-обработчика (раньше было static, что опасно при
+    // прерывании/переподключении и не защищено от одновременных загрузок).
+    long _otaUploadTotalSize = 0;
+    bool _otaUploadErrorOccurred = false;
+    bool _otaUploadResponseSent = false;
+    bool _otaUploadStarted = false;
 };
 
 extern CLASS_CORE_OTA core_ota;

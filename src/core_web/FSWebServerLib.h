@@ -53,7 +53,8 @@ public:
     AsyncFSWebServer(uint16_t port);
 #if ESP32
     void begin(fs::LittleFSFS* fs);
-#elif defined(ESP8266)
+#endif
+#if !ESP32 && defined(ESP8266)
     void begin(FS* fs) ;                        // esp8266/esp32 flash file system
 #endif
 	// Тонкие форвардеры к core_sys (совместимость публичного API).
@@ -77,7 +78,8 @@ public:
 protected:
 #if ESP32
     fs::LittleFSFS*               _fs;
-#elif defined(ESP8266)
+#endif
+#if !ESP32 && defined(ESP8266)
     FS*                         _fs;                        // esp8266/esp32 flash file system
 #endif
 public:

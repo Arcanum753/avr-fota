@@ -33,12 +33,14 @@ class  CLASS_CORE_WIFI    {
     public:
     #if ESP32
     fs::LittleFSFS*               _fs;
-    #elif defined(ESP8266)
+    #endif
+    #if !ESP32 && defined(ESP8266)
     FS*                         _fs;                        // esp8266/esp32 flash file system
     #endif
     #if defined(ESP32)  
     void begin(fs::LittleFSFS* fs);
-    #elif defined(ESP8266)
+    #endif
+    #if !defined(ESP32) && defined(ESP8266)
     void begin(FS* fs) ;                        // esp8266/esp32 flash file system
     #endif
 
@@ -49,7 +51,8 @@ class  CLASS_CORE_WIFI    {
     WiFiEventId_t onStationModeConnectedHandler
     , onStationModeDisconnectedHandler
     , onStationModeGotIPHandler;
-    #elif defined(ESP8266)
+    #endif
+    #if !defined(ESP32) && defined(ESP8266)
     WiFiEventHandler onStationModeConnectedHandler, onStationModeDisconnectedHandler, onStationModeGotIPHandler ;
     #endif
     
@@ -102,7 +105,8 @@ class  CLASS_CORE_WIFI    {
     void onWiFiConnected        ();
 	void onWiFiDisconnected     (WiFiEventInfo_t info);
 	void onWiFiConnectedGotIP   ();
-    #elif defined(ESP8266)
+    #endif
+    #if !ESP32 && defined(ESP8266)
     void onWiFiConnected        (WiFiEventStationModeConnected      data);
 	void onWiFiDisconnected     (WiFiEventStationModeDisconnected   data);
 	void onWiFiConnectedGotIP   (WiFiEventStationModeGotIP          data);
@@ -173,6 +177,7 @@ protected:
     uint8_t  _suppressDisc = 0;  // кол-во секунд, в течение которых события отключения игнорируются
     uint32_t _nextStaScanAt = 0; // тик, с которого можно снова запускать скан (пауза при отсутствии сети)
     uint8_t  _wifiInitFailCount = 0; // подряд идущие ошибки init/scan (для контролируемого рестарта)
+    uint32_t _restartDeferredSince = 0; // тик _stateSeconds, с которого рестарт отложен (0 = не отложен)
     bool     _scanActive = false;    // асинхронный скан запущен (WiFi.scanNetworks) и результат ещё не обработан
     uint32_t _apScanPhaseUntil = 0;  // тик _stateSeconds, до которого после выхода из AP держимся в STA-скане (0 = фаза неактивна)
     // --- Ресурсная шина: режим/цель и runtime-поля ---

@@ -187,7 +187,7 @@ void SerialTerminal::readSerial()
                     Serial.print("\b \b"); // 1 char back, space, 1 char back
                 }
             }
-        } else if (isprint(c)) {
+        } else if (isprint((unsigned char)c)) {
             // Store printable characters in serial receive buffer
             if (_rxBufferIndex < ST_RX_BUFFER_SIZE) {
                 _rxBuffer[_rxBufferIndex++] = c;

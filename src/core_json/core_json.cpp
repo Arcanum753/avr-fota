@@ -12,7 +12,8 @@ CLASS_CORE_JSON core_json;
 
 #if defined(ESP32)
     void CLASS_CORE_JSON::setFs(fs::LittleFSFS* fs)
-#elif defined(ESP8266)
+#endif
+#if !defined(ESP32) && defined(ESP8266)
     void CLASS_CORE_JSON::setFs(FS* fs)	// esp8266/esp32 flash file system
 #endif
 {	_fs = fs;	}

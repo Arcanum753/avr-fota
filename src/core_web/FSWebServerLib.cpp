@@ -120,7 +120,7 @@ AsyncFSWebServer::AsyncFSWebServer(uint16_t port) : AsyncWebServer(port) {}
 	DBG_OUTPUT_PORT.setDebugOutput(true);
 #endif // RELEASE
 
-    if (!_fs) { _fs->begin();  }// If LittleFS is not started
+    if (_fs) { _fs->begin();  }// If LittleFS is not started
 
 	g_ctx.fs = fs;
 

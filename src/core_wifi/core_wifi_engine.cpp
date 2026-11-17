@@ -306,7 +306,16 @@ void CLASS_CORE_WIFI::staTick() {
 				ESP.restart();
 				return;
 			}
-			// Длительная операция (OTA/FS/prog) — рестарт откладываем
+			// Длительная операция (OTA/FS/prog) — рестарт откладываем не дольше WIFI_INIT_FAIL_DEFER_MAX_SEC
+			if (_restartDeferredSince == 0) {
+				_restartDeferredSince = _stateSeconds;
+			}
+			if ((uint32_t)(_stateSeconds - _restartDeferredSince) >= WIFI_INIT_FAIL_DEFER_MAX_SEC) {
+				DEBUG_CORE_WIFI("WiFi init failed %d times, restart deferred timeout, restarting\r\n",
+				           _wifiInitFailCount);
+				ESP.restart();
+				return;
+			}
 			DEBUG_CORE_WIFI("WiFi init failed %d times, restart deferred (mode %d)\r\n",
 			           _wifiInitFailCount, mode);
 		}
@@ -326,6 +335,7 @@ void CLASS_CORE_WIFI::staTick() {
 	_scanActive = false;
 	connectionTimout = 0;
 	_wifiInitFailCount = 0;
+	_restartDeferredSince = 0;
 	int slot = (st > 0) ? scanWifi() : -1;
 	if (st > 0) { WiFi.scanDelete(); }
 	if (slot < 0) {
@@ -593,6 +603,7 @@ void CLASS_CORE_WIFI::onWiFiConnectedGotIP(WiFiEventStationModeGotIP data) {
 	wifiDisconnectedSince = 0;
 	connectionTimout = 0;
 	_wifiInitFailCount = 0;
+	_restartDeferredSince = 0;
 	_scanActive = false;
 	_apScanPhaseUntil = 0;
 	wifiStatus = FS_STAT_CONNECTED;
@@ -723,7 +734,7 @@ String CLASS_CORE_WIFI::getMacAddress() {
 	uint8_t mac[6];
 	char macStr[18] = { 0 };
 	WiFi.macAddress(mac);
-	sprintf(macStr, "%02X:%02X:%02X:%02X:%02X:%02X", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+	snprintf(macStr, sizeof(macStr), "%02X:%02X:%02X:%02X:%02X:%02X", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
 	return  String(macStr);
 }
 

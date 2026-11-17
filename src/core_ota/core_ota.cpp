@@ -1,6 +1,7 @@
 #if defined(ESP32)
 #include <LittleFS.h>
-#elif defined(ESP8266)
+#endif
+#if !defined(ESP32) && defined(ESP8266)
 #include <LittleFS.h>
 #endif
 
@@ -26,7 +27,8 @@ static const char* const otaStateNames[5] = {
 
 #if ESP32
     void CLASS_CORE_OTA::setFs(fs::LittleFSFS* fs)
-#elif defined(ESP8266)
+#endif
+#if !ESP32 && defined(ESP8266)
     void CLASS_CORE_OTA::setFs(FS* fs)
 #endif
 {	_fs = fs;	}
@@ -55,12 +57,19 @@ void CLASS_CORE_OTA::begin(ModContext& ctx){
 	// Ресурсы шины (namespace ota): состояние state (ENUM idle/upload/verify/done/error)
 	// и server_reachable (BOOL). Каталог /macros/resources.json собирается при сборке ФС
 	// (python/gen_resources_catalog.py) — вручную не правим.
+static int s_cbOtaSave(void* user, int argc, const BusValue* argv, BusValue& result) {
+    (void)user; (void)argc; (void)argv; (void)result;
+    // У core_ota нет собственного конфига на FS: save — no-op.
+    return BUS_OK;
+}
+
 void CLASS_CORE_OTA::register_resources() {
 	DEBUGOTA("%s\r\n", __FUNCTION__);
 
 	core_state.regEnum("state", 5, otaStateNames, "OTA state");
 	core_state.regState("server_reachable", BusValue::BOOL,
 	                    "OTA server reachable", false);
+	core_state.regFunc("save", "->", "persist OTA state (no-op)", s_cbOtaSave, this);
 }
 
 // ============================================================
@@ -124,6 +133,12 @@ void CLASS_CORE_OTA::html_fileuploadProgress(AsyncWebServerRequest *request) {
 void CLASS_CORE_OTA::html_md5_set(AsyncWebServerRequest *request) {
 	DEBUGOTA(__FUNCTION__);	DEBUGOTA("\r\n");
 	_browserFileMD5 = "";
+	// Сброс состояния upload: /update/setmd5 вызывается страницей до загрузки,
+	// поэтому новый сеанс не наследует флаги прошлого.
+	_otaUploadStarted = false;
+	_otaUploadErrorOccurred = false;
+	_otaUploadResponseSent = false;
+	_otaUploadTotalSize = 0;
 	
 	DEBUGOTA("Arg number: %d\r\n", request->args());
 	if (request->args() > 0)  {
@@ -256,29 +271,59 @@ void CLASS_CORE_OTA::html_filename_check(AsyncWebServerRequest *request) {
 
 void CLASS_CORE_OTA::updateFileExecute (AsyncWebServerRequest *request) {
 	DEBUGOTA(__FUNCTION__);	DEBUGOTA("\r\n");
-	
-	String message;
-	bool needReboot = true;
-	
-	if (!Update.hasError()) {
-#if defined(ESP32)
-		if (typeOTAfile == FILE_TYPE_FILESYSTEM) {
-			needReboot = true;
-			message = "UPDATE_COMPLETE_REBOOT";
-			DEBUGOTA("FS update on ESP32: reboot needed\n");
-			core_sys.invalidateFsVersionCache();
-		}
-#endif
+
+	// Ответ уже отправлен из upload-обработчика (ошибка валидации/записи):
+	// повторный send недопустим, AsyncWebServer рассчитан на один ответ.
+	if (_otaUploadResponseSent) {
+		core_state.signal("ota.state", BusValue::en(OTA_ST_ERROR));
+		_otaUploadResponseSent = false;
+		return;
 	}
-	
+
+	// Тело запроса не приходило — обновления не было.
+	if (!_otaUploadStarted) {
+		request->send(400, "text/plain", "NO UPDATE DATA");
+		return;
+	}
+	_otaUploadStarted = false;
+
+	if (Update.hasError()) {
+		String err;
+#if defined(ESP32)
+		err = Update.errorString();
+#endif
+#if defined(ESP8266)
+		err = Update.getErrorString();
+#endif
+		if (err.length() == 0) { err = "UPDATE_ERROR"; }
+		DEBUGOTA("Update failed: %s\n", err.c_str());
+		AsyncWebServerResponse *response = request->beginResponse(500, "text/plain", err);
+		response->addHeader("Connection", "close");
+		response->addHeader("Access-Control-Allow-Origin", "*");
+		request->send(response);
+		ledMacrosUpdateError();
+		core_state.signal("ota.state", BusValue::en(OTA_ST_ERROR));
+		return;
+	}
+
+	bool needReboot = true;
+
+#if defined(ESP32)
+	if (typeOTAfile == FILE_TYPE_FILESYSTEM) {
+		needReboot = true;
+		DEBUGOTA("FS update on ESP32: reboot needed\n");
+		core_sys.invalidateFsVersionCache();
+	}
+#endif
+
 	AsyncWebServerResponse *response = request->beginResponse(200, "text/plain", "UPDATE_COMPLETE_REBOOT");
 	response->addHeader("Connection", "close");
 	response->addHeader("Access-Control-Allow-Origin", "*");
 	request->send(response);
-	
+
 	delay(100);
-	
-	if (needReboot && !Update.hasError()) {
+
+	if (needReboot) {
 		core_sys.invalidateFsVersionCache();
 		ESPHTTPServer.restart_esp();
 	}
@@ -286,9 +331,6 @@ void CLASS_CORE_OTA::updateFileExecute (AsyncWebServerRequest *request) {
 
 void CLASS_CORE_OTA::html_uploadUpdateFile(AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final) {
     String values = "";
-    static long totalSize = 0;
-    static bool errorOccurred = false;
-    static bool responseSent = false;  
     int updatePartition = 1;
     
     DEBUGLOAD("index=%u, len=%u, final=%d\r\n", index, len, final);
@@ -297,9 +339,10 @@ void CLASS_CORE_OTA::html_uploadUpdateFile(AsyncWebServerRequest *request, Strin
         DEBUGOTA("===== UPLOAD START =====\r\n");
         DEBUGOTA("File: %s\r\n", filename.c_str());
         
-        errorOccurred = false;
-        responseSent = false;  
-        totalSize = 0;
+        _otaUploadErrorOccurred = false;
+        _otaUploadResponseSent = false;  
+        _otaUploadTotalSize = 0;
+        _otaUploadStarted = true;
         
         prepareSizesForUpdate();
         
@@ -307,7 +350,8 @@ void CLASS_CORE_OTA::html_uploadUpdateFile(AsyncWebServerRequest *request, Strin
             values = "OTA Update error UNSUPPORTED file!";
             DEBUGOTA("%s\n", values.c_str());
             request->send(500, "text/plain", values);
-            errorOccurred = true;
+            _otaUploadErrorOccurred = true;
+            _otaUploadResponseSent  = true;
             return;
         }
         
@@ -315,7 +359,8 @@ void CLASS_CORE_OTA::html_uploadUpdateFile(AsyncWebServerRequest *request, Strin
             values = "Invalid filename";
             DEBUGOTA("%s: %s\n", values.c_str(), filename.c_str());
             request->send(500, "text/plain", values);
-            errorOccurred = true;
+            _otaUploadErrorOccurred = true;
+            _otaUploadResponseSent  = true;
             return;
         }
 
@@ -324,7 +369,8 @@ void CLASS_CORE_OTA::html_uploadUpdateFile(AsyncWebServerRequest *request, Strin
                 values = "Firmware too large for available space!";
                 DEBUGOTA("%s %u > %u\n", values.c_str(), _updateFileSize, freeSketchSpace);
                 request->send(500, "text/plain", values);
-                errorOccurred = true;
+                _otaUploadErrorOccurred = true;
+                _otaUploadResponseSent  = true;
                 return;
             }
         }
@@ -337,13 +383,15 @@ void CLASS_CORE_OTA::html_uploadUpdateFile(AsyncWebServerRequest *request, Strin
             values = "OTA Update error no MD5 hash!";
             DEBUGOTA("%s\n", values.c_str());
             request->send(500, "text/plain", values);
-            errorOccurred = true;
+            _otaUploadErrorOccurred = true;
+            _otaUploadResponseSent  = true;
             return;
         }
         
 #if defined(ESP32)
         if (typeOTAfile == FILE_TYPE_FILESYSTEM) { updatePartition = U_SPIFFS; }
-#elif defined(ESP8266)
+#endif
+#if !defined(ESP32) && defined(ESP8266)
         if (typeOTAfile == FILE_TYPE_FILESYSTEM) { updatePartition = U_FS; }
 #endif
         if (typeOTAfile == FILE_TYPE_FIRMWARE) { updatePartition = U_FLASH; }
@@ -364,7 +412,8 @@ void CLASS_CORE_OTA::html_uploadUpdateFile(AsyncWebServerRequest *request, Strin
             values = "OTA Update error at begin";
             DEBUGOTA("%s\n", values.c_str());
             request->send(500, "text/plain", values);
-            errorOccurred = true;
+            _otaUploadErrorOccurred = true;
+            _otaUploadResponseSent  = true;
             ledMacrosUpdateError();
             
             fsRemount();
@@ -383,33 +432,34 @@ void CLASS_CORE_OTA::html_uploadUpdateFile(AsyncWebServerRequest *request, Strin
         core_state.signal("ota.state", BusValue::en(OTA_ST_UPLOAD));
     }
     
-    if (errorOccurred)  {
+    if (_otaUploadErrorOccurred)  {
         core_state.signal("ota.state", BusValue::en(OTA_ST_ERROR));
         return;
     }
-    if (responseSent)   { return; }
+    if (_otaUploadResponseSent)   { return; }
     
-    totalSize += len;
+    _otaUploadTotalSize += len;
     
-    uint16_t percentLoaded = (totalSize * 100) / _updateFileSize;
+    uint16_t percentLoaded = (_otaUploadTotalSize * 100) / _updateFileSize;
     fileUpadedpercent = percentLoaded;
     if ((percentLoaded % 5) == 0 && (percentLoaded != percentLoadedPrev)) {
         percentLoadedPrev = percentLoaded;
-        DEBUGOTA("Uploaded: %ld bytes %u %%\r\n", totalSize, percentLoaded);
+        DEBUGOTA("Uploaded: %ld bytes %u %%\r\n", _otaUploadTotalSize, percentLoaded);
     }
 
     size_t written = Update.write(data, len);
     if (written != len) {
         values = "OTA Update error data load!";
-        DEBUGOTA("%s len=%d written=%d total=%ld\n", values.c_str(), len, written, totalSize);
+        DEBUGOTA("%s len=%d written=%d total=%ld\n", values.c_str(), len, written, _otaUploadTotalSize);
         request->send(500, "text/plain", values);
-        errorOccurred = true;
-        responseSent = true;  
+        _otaUploadErrorOccurred = true;
+        _otaUploadResponseSent = true;  
         ledMacrosUpdateError();
         
 #if defined(ESP32)
         Update.abort();
-#elif defined(ESP8266)
+#endif
+#if !defined(ESP32) && defined(ESP8266)
         Update.end();
 #endif
         
@@ -418,7 +468,7 @@ void CLASS_CORE_OTA::html_uploadUpdateFile(AsyncWebServerRequest *request, Strin
     }
     
     if (final) {
-        if (errorOccurred) {
+        if (_otaUploadErrorOccurred) {
             return;
         }
         

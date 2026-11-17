@@ -57,7 +57,7 @@ static BusValue busCoerce(const BusValue& v, BusValue::Kind k) {
             r.i = (int32_t)busNumeric(v);
             break;
         case BusValue::F32:
-            r.f = (float)busNumeric(v);
+            r.f = (v.kind == BusValue::F32) ? v.f : (float)busNumeric(v);
             break;
         case BusValue::TIME:
             r.t = busNumeric(v);
@@ -684,16 +684,22 @@ int CLASS_CORE_STATE::call_async(const char* name, BusCb cb, void* user,
 void CLASS_CORE_STATE::asyncComplete(uint32_t handle, int rc, const BusValue& result) {
     for (uint8_t i = 0; i < CORE_STATE_MAX_ASYNC; i++) {
         if (_async[i].used && _async[i].handle == handle) {
-            if (_doneCount < CORE_STATE_MAX_ASYNC) {
-                BusDone& d = _doneQueue[_doneCount];
-                d.used = true;
-                d.handle = handle;
-                d.rc = rc;
-                d.result = result;
-                d.cb = _async[i].cb;
-                d.cbUser = _async[i].cbUser;
-                _doneCount++;
+            if (_doneCount >= CORE_STATE_MAX_ASYNC) {
+                // Очередь результатов заполнена: отбрасываем самый старый
+                // результат, чтобы не потерять завершение текущего вызова.
+                for (uint8_t j = 0; j + 1 < CORE_STATE_MAX_ASYNC; j++) {
+                    _doneQueue[j] = _doneQueue[j + 1];
+                }
+                _doneCount = CORE_STATE_MAX_ASYNC - 1;
             }
+            BusDone& d = _doneQueue[_doneCount];
+            d.used = true;
+            d.handle = handle;
+            d.rc = rc;
+            d.result = result;
+            d.cb = _async[i].cb;
+            d.cbUser = _async[i].cbUser;
+            _doneCount++;
             _async[i].used = false;
             return;
         }

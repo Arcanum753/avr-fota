@@ -30,7 +30,8 @@ class  CLASS_CORE_NTP    {
 
     #if ESP32
     fs::LittleFSFS*               _fs;
-    #elif defined(ESP8266)
+    #endif
+    #if !ESP32 && defined(ESP8266)
     FS*                         _fs;                        // esp8266/esp32 flash file system
     #endif
     

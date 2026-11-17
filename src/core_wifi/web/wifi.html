@@ -367,21 +367,42 @@ async function saveSlotData(slotNumber) {
 }
 
         // Функция сохранения WiFi системных настроек
+        // Поля, которые уходят на сервер только если пользователь их изменил
+        const sysconfFields = { scantime_hours: 'scantime', scantime_mins: 'scantime', aptime: 'aptime', busmode: 'busmode', scan_retries: 'scan_retries' };
+        const sysconfDirty = new Set();
+        function markSysconfDirty(e) {
+            const key = sysconfFields[e.target.id];
+            if (key) sysconfDirty.add(key);
+        }
+        document.addEventListener('input', markSysconfDirty);
+        document.addEventListener('change', markSysconfDirty);
+
         async function saveWifiSysConf() {
             const statusEl = document.getElementById('sysconfStatus');
+            if (sysconfDirty.size === 0) {
+                statusEl.innerHTML = 'No changes';
+                statusEl.style.color = 'gray';
+                setTimeout(() => { statusEl.innerHTML = ''; }, 3000);
+                return;
+            }
             statusEl.innerHTML = 'Saving...';
             statusEl.style.color = 'orange';
             
-            const hours = parseInt(document.getElementById('scantime_hours').value) || 0;
-            const mins = parseInt(document.getElementById('scantime_mins').value) || 0;
-            const totalMins = hours * 60 + mins;
-            
-            const data = {
-                scantime: totalMins,
-                aptime: parseInt(document.getElementById('aptime').value) || 0,
-                busmode: parseInt(document.getElementById('busmode').value) || 0,
-                scan_retries: parseInt(document.getElementById('scan_retries').value) || 10
-            };
+            const data = {};
+            if (sysconfDirty.has('scantime')) {
+                const hours = parseInt(document.getElementById('scantime_hours').value) || 0;
+                const mins = parseInt(document.getElementById('scantime_mins').value) || 0;
+                data.scantime = hours * 60 + mins;
+            }
+            if (sysconfDirty.has('aptime')) {
+                data.aptime = parseInt(document.getElementById('aptime').value) || 0;
+            }
+            if (sysconfDirty.has('busmode')) {
+                data.busmode = parseInt(document.getElementById('busmode').value) || 0;
+            }
+            if (sysconfDirty.has('scan_retries')) {
+                data.scan_retries = parseInt(document.getElementById('scan_retries').value) || 10;
+            }
             
             try {
                 const response = await fetch('/wifi/sysconf', {
@@ -391,6 +412,7 @@ async function saveSlotData(slotNumber) {
                 });
                 const result = await response.json();
                 if (result.success) {
+                    sysconfDirty.clear();
                     statusEl.innerHTML = 'Saved';
                     statusEl.style.color = 'green';
                 } else {

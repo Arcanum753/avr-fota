@@ -7,7 +7,8 @@
 
 #if defined(ESP32)
 typedef fs::LittleFSFS CoreFs;
-#elif defined(ESP8266)
+#endif
+#if !defined(ESP32) && defined(ESP8266)
 typedef FS CoreFs;
 #endif
 

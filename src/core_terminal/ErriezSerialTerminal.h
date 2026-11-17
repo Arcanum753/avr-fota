@@ -81,7 +81,7 @@ class SerialTerminal
         char _newlineChar;
         char _delimiter[2];
         char _rxBuffer[ST_RX_BUFFER_SIZE + 1];
-        byte _rxBufferIndex;
+        uint16_t _rxBufferIndex;
         char *_lastPos;
 
         bool doCharEcho;

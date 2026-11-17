@@ -33,7 +33,7 @@ void CLASS_CORE_WIFI::begin(fs::LittleFSFS* fs)
 #endif
 {
 	_fs = fs;
-	if (!_fs) { _fs->begin();  }// If LittleFS is not started
+	if (_fs) { _fs->begin();  }// If LittleFS is not started
 	connectionTimout = 0;
 	String hostName = core_sys.getHostName();
 	WiFi.hostname(hostName.c_str());
@@ -424,7 +424,7 @@ void CLASS_CORE_WIFI::send_scanwifi_trigger(AsyncWebServerRequest *request) {
 
 void CLASS_CORE_WIFI::send_network_configuration_html(AsyncWebServerRequest *request) {
 	// DEBUG_CORE_WIFI(__FUNCTION__);	DEBUG_CORE_WIFI("\r\n");
-	int _saveIn = 0;
+	int _saveIn = -1;
 	if (request->args() > 0)  // Save Settings
 	{
 		//String temp = "";
@@ -454,11 +454,12 @@ void CLASS_CORE_WIFI::send_network_configuration_html(AsyncWebServerRequest *req
 		}
 		request->send_P(200, "text/html", Page_ConfigRefresh);
 
-		if (_saveIn == 0) {save_configWifi(0);}
-		if (_saveIn == 1) {save_configWifi(1);}
-		if (_saveIn == 2) {save_configWifi(2);}
-		if (_saveIn == 3) {save_configWifi(3);}
-		_applyWifiPending = true;   // применить конфиг в следующем тике loop
+		// Без явного wificonf слот не сохраняем (не перезаписываем чужой слот
+		// и не переподключаемся по несохранённым значениям).
+		if (_saveIn >= 0 && _saveIn <= 3) {
+			save_configWifi(_saveIn);
+			_applyWifiPending = true;   // применить конфиг в следующем тике loop
+		}
 
 	}
 	else {
@@ -545,11 +546,15 @@ void CLASS_CORE_WIFI::handle_slot_post(AsyncWebServerRequest *request, int slot)
 // Обработчик для загрузки тела запроса (добавьте эту функцию)
 void CLASS_CORE_WIFI::handle_slot_upload(AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total) {
     if (!request->_tempObject) {
+        if (total == 0) { return; }
         char *buff = (char*)malloc(total + 1);
+        if (buff == nullptr) { return; }
         request->_tempObject = buff;
     }
     
     char *buff = (char*)request->_tempObject;
+    if (buff == nullptr) { return; }
+    if (index + len > total) { return; }
     memcpy(buff + index, data, len);
     
     if (index + len == total) { buff[total] = '\0'; }
@@ -579,41 +584,64 @@ void CLASS_CORE_WIFI::handle_wifi_sysconf_post(AsyncWebServerRequest *request) {
     free(request->_tempObject);
     request->_tempObject = NULL;
 
-    int32_t scantimeVal = 0, aptimeVal = 0;
-    if (!core_json.jsonParseInt(body, "scantime", scantimeVal)) {
+    JsonDocument doc;
+    if (deserializeJson(doc, body)) {
         request->send(400, "application/json", "{\"success\":false,\"error\":\"JSON parse error\"}");
         return;
     }
-    if (scantimeVal < 0) scantimeVal = 0;
-    if (scantimeVal > 720) scantimeVal = 720;
-    _wifiScanTime = (uint16_t)scantimeVal;
 
-    core_json.jsonParseInt(body, "aptime", aptimeVal);
-    if (aptimeVal < 0) aptimeVal = 0;
-    if (aptimeVal > 60) aptimeVal = 60;
-    _wifiAPLifeTime = (uint16_t)aptimeVal;
-
-    // busmode/scan_retries — опционально: применяем только если ключ реально присутствует,
-    // чтобы старые клиенты (без этих полей) не сбросили значения в дефолт.
-    {
-        JsonDocument doc;
-        DeserializationError err = deserializeJson(doc, body);
-        if (!err) {
-            if (doc["busmode"].is<int>()) {
-                int32_t busmodeVal = doc["busmode"].as<int32_t>();
-                if (busmodeVal != WIFI_MODE_AUTO && busmodeVal != WIFI_MODE_MACRO) busmodeVal = WIFI_MODE_AUTO;
-                setWifiMode((uint8_t)busmodeVal);
-            }
-            if (doc["scan_retries"].is<int>()) {
-                int32_t sr = doc["scan_retries"].as<int32_t>();
-                if (sr < WIFI_SCAN_RETRIES_MIN) sr = WIFI_SCAN_RETRIES_MIN;
-                if (sr > WIFI_SCAN_RETRIES_MAX) sr = WIFI_SCAN_RETRIES_MAX;
-                setScanRetries((uint8_t)sr);
-            }
-        }
+    // Все поля опциональны: применяем и сохраняем только пришедшие и отличающиеся от текущих.
+    // Фронт шлёт только изменённые поля; значение, изменённое в памяти без persist (например,
+    // busmode через шину), в конфиг не уходит, если пользователь его не менял.
+    bool chScan = false, chAp = false, chBus = false, chSr = false;
+    if (doc["scantime"].is<int>()) {
+        int32_t v = doc["scantime"].as<int32_t>();
+        if (v < 0) v = 0;
+        if (v > 720) v = 720;
+        if ((uint16_t)v != _wifiScanTime) { _wifiScanTime = (uint16_t)v; chScan = true; }
+    }
+    if (doc["aptime"].is<int>()) {
+        int32_t v = doc["aptime"].as<int32_t>();
+        if (v < 0) v = 0;
+        if (v > 60) v = 60;
+        if ((uint16_t)v != _wifiAPLifeTime) { _wifiAPLifeTime = (uint16_t)v; chAp = true; }
+    }
+    if (doc["busmode"].is<int>()) {
+        int32_t busmodeVal = doc["busmode"].as<int32_t>();
+        if (busmodeVal != WIFI_MODE_AUTO && busmodeVal != WIFI_MODE_MACRO) busmodeVal = WIFI_MODE_AUTO;
+        uint8_t prev = _busMode;
+        setWifiMode((uint8_t)busmodeVal);
+        if (_busMode != prev) chBus = true;
+    }
+    if (doc["scan_retries"].is<int>()) {
+        int32_t sr = doc["scan_retries"].as<int32_t>();
+        if (sr < WIFI_SCAN_RETRIES_MIN) sr = WIFI_SCAN_RETRIES_MIN;
+        if (sr > WIFI_SCAN_RETRIES_MAX) sr = WIFI_SCAN_RETRIES_MAX;
+        uint8_t prev = _scanRetries;
+        setScanRetries((uint8_t)sr);
+        if (_scanRetries != prev) chSr = true;
     }
 
-    if (save_configWifiSys()) {
+    if (!chScan && !chAp && !chBus && !chSr) {
+        scanTime = _wifiScanTime * MINUTES;
+        request->send(200, "application/json", "{\"success\":true,\"changed\":false}");
+        return;
+    }
+
+    bool saved = false;
+    JsonDocument fileDoc;
+    if (!core_json.jsonFileLoadDoc(WIFI_CONFIG_SYS, fileDoc)) {
+        // Файла нет: создаём штатный полный sys-конфиг с текущими значениями.
+        saved = save_configWifiSys();
+    } else {
+        if (chScan) fileDoc["scantime"] = _wifiScanTime;
+        if (chAp) fileDoc["aptime"] = _wifiAPLifeTime;
+        if (chBus) fileDoc["busmode"] = _busMode;
+        if (chSr) fileDoc["scan_retries"] = _scanRetries;
+        saved = core_json.jsonFileSaveDoc(WIFI_CONFIG_SYS, fileDoc);
+    }
+
+    if (saved) {
         scanTime = _wifiScanTime * MINUTES;
         request->send(200, "application/json", "{\"success\":true}");
         DEBUG_CORE_WIFI("WiFi sys config saved: scantime=%d, aptime=%d, busmode=%d, scan_retries=%d\n",
@@ -630,15 +658,15 @@ void CLASS_CORE_WIFI::handle_wifi_sysconf_post(AsyncWebServerRequest *request) {
 bool CLASS_CORE_WIFI::load_configWifi(int _in) {
 	if (_in < 0){ return false; }
 	char filename[40];
-	sprintf(filename, "/%s%d.json", WIFI_CONFIG_FILE_NAME, _in);
+	snprintf(filename, sizeof(filename), "/%s%d.json", WIFI_CONFIG_FILE_NAME, _in);
 	if (!core_json.jsonFileLoadSlot(filename, _wifiConfig.ssid, _wifiConfig.password, _wifiConfig.dhcp,
 	                                   _wifiConfig.ip, _wifiConfig.netmask, _wifiConfig.gateway, _wifiConfig.dns)) {
 	    return false;
 	}
-	if (_in == 0)  sprintf(_strWifi0, "%s", _wifiConfig.ssid.c_str());
-	if (_in == 1)  sprintf(_strWifi1, "%s", _wifiConfig.ssid.c_str());
-	if (_in == 2)  sprintf(_strWifi2, "%s", _wifiConfig.ssid.c_str());
-	if (_in == 3)  sprintf(_strWifi3, "%s", _wifiConfig.ssid.c_str());
+	if (_in == 0)  snprintf(_strWifi0, sizeof(_strWifi0), "%s", _wifiConfig.ssid.c_str());
+	if (_in == 1)  snprintf(_strWifi1, sizeof(_strWifi1), "%s", _wifiConfig.ssid.c_str());
+	if (_in == 2)  snprintf(_strWifi2, sizeof(_strWifi2), "%s", _wifiConfig.ssid.c_str());
+	if (_in == 3)  snprintf(_strWifi3, sizeof(_strWifi3), "%s", _wifiConfig.ssid.c_str());
 
 	return true;
 }
@@ -647,13 +675,13 @@ bool CLASS_CORE_WIFI::save_configWifi(int _in) {
 	//flag_config = false;
 	DEBUG_CORE_WIFI("Save config\r\n");
 	char filename[40];
-	sprintf(filename, "/%s%d.json", WIFI_CONFIG_FILE_NAME, _in);
+	snprintf(filename, sizeof(filename), "/%s%d.json", WIFI_CONFIG_FILE_NAME, _in);
 	// Синхронизируем in-memory SSID слота: scanWifi() сравнивает по _strWifiN,
 	// иначе новый SSID подхватится только после перезагрузки.
-	if (_in == 0)  { sprintf(_strWifi0, "%s", _wifiConfig.ssid.c_str()); _wifiFailCount[0] = 0; }
-	if (_in == 1)  { sprintf(_strWifi1, "%s", _wifiConfig.ssid.c_str()); _wifiFailCount[1] = 0; }
-	if (_in == 2)  { sprintf(_strWifi2, "%s", _wifiConfig.ssid.c_str()); _wifiFailCount[2] = 0; }
-	if (_in == 3)  { sprintf(_strWifi3, "%s", _wifiConfig.ssid.c_str()); _wifiFailCount[3] = 0; }
+	if (_in == 0)  { snprintf(_strWifi0, sizeof(_strWifi0), "%s", _wifiConfig.ssid.c_str()); _wifiFailCount[0] = 0; }
+	if (_in == 1)  { snprintf(_strWifi1, sizeof(_strWifi1), "%s", _wifiConfig.ssid.c_str()); _wifiFailCount[1] = 0; }
+	if (_in == 2)  { snprintf(_strWifi2, sizeof(_strWifi2), "%s", _wifiConfig.ssid.c_str()); _wifiFailCount[2] = 0; }
+	if (_in == 3)  { snprintf(_strWifi3, sizeof(_strWifi3), "%s", _wifiConfig.ssid.c_str()); _wifiFailCount[3] = 0; }
 	return core_json.jsonFileSaveSlot(filename, _wifiConfig.ssid, _wifiConfig.password, _wifiConfig.dhcp,
 	                                      _wifiConfig.ip, _wifiConfig.netmask, _wifiConfig.gateway, _wifiConfig.dns);
 }

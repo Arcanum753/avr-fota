@@ -960,3 +960,115 @@ avr-fota/
 - `module_macros`: размер файла кэшируется в `MacroFile.size` (обновляется при
   старте, создании и записи); `/macros/list` не открывает файлы на каждый запрос
   (0.05 с вместо ~0.9 с).
+
+---
+
+## Сессия 2026-11-17: аудит ядра — сделано и что осталось
+
+Аудит `src/core_*` + `src/common` без правок логики модулей. **Решено оставить
+пункты 1–3 ниже на новую сессию** (код не менялся), в этом разделе — план и принятые
+решения.
+
+### Сделано (16 файлов, сборки `esp32`, `esp8266`, `esp32-ds3231` — SUCCESS)
+
+- `core_terminal/ErriezSerialTerminal.h/.cpp`: `_rxBufferIndex` → `uint16_t`
+  (буфер 320 байт, `byte` переполнялся на 255); `isprint((unsigned char)c)`.
+- `core_wifi/core_wifi.cpp` + `core_web/FSWebServerLib.cpp`: `if (!_fs) { _fs->begin(); }`
+  → `if (_fs)` (было разыменование `nullptr`; `LittleFS::begin()` идемпотентен на
+  обеих платформах).
+- `common/common.cpp`: `urldecode()` — `size_t` вместо `byte` (бесконечный цикл на
+  строках > 255 символов), проверка `t + 2 >= length` перед hex-парой.
+- `core_json/core_json_engine.cpp`: `load_jsonDoc()` — лимит размера (1..65535),
+  `malloc(size + 1)`, `'\0'`-терминатор, `deserializeJson(doc, buf, size)` (раньше
+  читалось за границей буфера), проверка `malloc`/`readBytes`.
+- `core_ota/core_ota.cpp/.h/.cpp(engine)`: `updateFileExecute()` отдаёт `500` с текстом
+  ошибки (`Update.errorString()` ESP32 / `getErrorString()` ESP8266) и **не** ребутит при
+  ошибке; состояние upload (`_otaUploadStarted/_otaUploadErrorOccurred/
+  _otaUploadResponseSent/_otaUploadTotalSize`) перенесено из `static` в поля класса;
+  исключён двойной `send()` (ответ из body-хендлера + ответ из POST-хендлера) и ложный
+  «успех» при пустом теле; `ArduinoOTA.onEnd` не делает повторный `fs->end()`;
+  добавлена bus-функция `ota.save` (no-op) — контракт «`res=1` ⇒ `<ns>.save`».
+- `core_state/core_state_engine.cpp`: `asyncComplete()` при переполненной `_doneQueue`
+  сдвигает очередь (самый старый результат отбрасывается, текущий доставляется);
+  `busCoerce()` для `F32` сохраняет дробную часть.
+- `core_wifi/core_wifi.cpp`: `snprintf` вместо `sprintf` (`_strWifiN`, `filename`);
+  `handle_slot_upload()` проверяет `malloc`, `total == 0`, `index + len <= total`;
+  `send_network_configuration_html()` — `_saveIn = -1`, без `wificonf` слот не
+  сохраняется и не применяется.
+- `core_fs/core_fs.cpp/.h`: `new (std::nothrow)`; `create` для `secret.json` → `403`;
+  подвисший upload (оборванный клиент) сбрасывается по чужому запросу/таймауту 60 с,
+  больше не блокирует `/fs/upload` до перезагрузки.
+- `core_sys/eertos.cpp`: `TimerService()` читает/модифицирует слот под
+  `EERTOS_ENTER_CRITICAL_ISR()`; `SetTaskFromISR()` учитывает переполнение в
+  `EertosDropped`.
+- `core_sys/core_sys.cpp`: при включённой auth пароль обязателен и валидируется всегда
+  (`isAdminPassValid`), а не только при изменении.
+- `core_ntp/NTPClientLib.cpp`: `setNtpServerName(char*)` — проверка длины + `strncpy`.
+
+### Статус (обновлено 2026-11-17, вторая половина сессии)
+
+**Выполнено в коде:**
+
+1. **`core_wifi` — отложенный рестарт, таймаут 60 с.** `WIFI_INIT_FAIL_DEFER_MAX_SEC`
+   (`core_wifi_types.h`), поле `_restartDeferredSince` (`core_wifi.h`). В `staTick()`
+   при `_wifiInitFailCount >= WIFI_INIT_FAIL_MAX` и режиме не `normal/init` рестарт
+   откладывается не дольше 60 с, затем `ESP.restart()`. Сброс — при успешном скане и
+   в `onWiFiConnectedGotIP`. **На плате не проверено.** Хук `WIFI_GUARD_TEST` для
+   проверки не подходит: он валит скан на старте, устройство не подключается к Wi-Fi,
+   и `system.mode` нельзя перевести в `prog` по HTTP. Нужен другой способ перевода в
+   небезопасный режим до 5-й неудачи (serial-терминал или хук, сам выставляющий
+   `CORE_MODE_PROG`). Штатная ветка проверена: при `normal` 5-я неудача даёт лог
+   `WiFi init failed 5 times. Restarting.` и `Reset reason: Software reset`.
+2. **`handleSave` — только изменённые поля.**
+   - `core_wifi/web/wifi.html`: `saveWifiSysConf()` отправляет только «грязные» поля,
+     при их отсутствии — «No changes» без POST.
+   - `core_wifi.cpp::handle_wifi_sysconf_post()`: все ключи опциональны; пишется только
+     изменившееся; без изменений ответ `{"success":true,"changed":false}`.
+   - `core_ntp.cpp::html2ntp_configuration()`: пишет в JSON только отличающиеся поля.
+   - `core_sys.cpp::html_system_Save()` и slot-формы `/api/wifi/slot/N` не менялись.
+   **Проверено на плате** (ESP32-D0WDQ6, COM4, HTTP): POST `/wifi/sysconf` только с
+   `{"aptime":N}` меняет в `config_wifi.json` лишь `aptime`; POST `/ntp.html` с
+   изменённым только `ntpserver0` меняет лишь `ntp0`. Сценарий «macros меняет
+   `busmode` в памяти, затем веб-сохранение другого поля» через HTTP не
+   воспроизводим: смена `wifi.mode` по шине штатно вызывает `wifi.save_mode` и
+   персистит `busmode` сама.
+3. **Терминал модулей.** `module_macros` (коммит `a762a9d`) и `module_veml7700`
+   (коммит `38125b2`) переведены на `TerminalRegisterModule` с новой сигнатурой,
+   ручные `term.addCommand` и `macroTerminalRegister`/`luxTerminalRegister` удалены.
+   У `lux` подкоманд нет (`kLuxCommands = {nullptr}`), `show` не вводился.
+4. **`#elif` в ядре** заменён на `#if` с отрицанием предыдущих условий (41 директива,
+   ~20 файлов, включая `core_web`, `core_json.h`, `core_fs_engine.h`, `core_ntp.h`,
+   `NtpClientLib.h`, `eertos.cpp`). `grep "^\s*#\s*elif"` по `src/core_*`, `src/common`
+   — пусто.
+5. **Сборка FS на Windows.** `python/4_fs_builder.py`: `get_pio_command()` — сначала
+   `shutil.which("pio")`, иначе `sys.executable -m platformio`. Причина `WinError 2`:
+   `pio.exe` лежит в `%USERPROFILE%\.platformio\penv\Scripts`, который не в `PATH`.
+   Предупреждение `WinError 1314` (symlink) безвредно.
+6. **Сборки** `esp32`, `esp8266`, `esp32-ds3231`, `esp32_electronica7_rgb_macros`,
+   `esp32-veml7700` — SUCCESS.
+
+**Инцидент сессии:** скрипт замены `#elif` повредил 12 файлов ядра (включая
+незакоммиченные правки аудита `core_ota.*`, `eertos.cpp`, `NTPClientLib.cpp`).
+Восстановлено реплеем `edit`/`read` из `%APPDATA%`-истории агента (`kilo.db`) и сверено
+с `HEAD`. Для будущих массовых правок: сначала `git stash`/коммит, затем скрипт с
+проверкой баланса `#if`/`#endif` и выводом в `.new`-файл.
+
+**Не выполнено:**
+
+- Проверка на плате: отложенный рестарт в небезопасном режиме (пункт 1; причина выше).
+- Пуш модулей в удалённые репозитории.
+
+**Плата после сессии:** прошита чистым ядром `esp32` (без `WIFI_GUARD_TEST`) с
+отладочными флагами; подключается к Wi-Fi (`192.168.88.123`), NTP синхронизируется,
+перезагрузок нет. Конфиги возвращены к исходным (`aptime=10`, `busmode=0`,
+`ntp0=pool.ntp.org`).
+
+### Не исправлено (низкий приоритет, зафиксировано)
+
+- `core_state::regEnum()` хранит сырые `const char*` из `enumVals` — контракт
+  «строки должны жить вечно»; сейчас все вызовы статические, но хрупко.
+- `applyValue()` для ресурса `*.mode` с **async** write-функцией не вызывает
+  `save_mode` (сейчас все `.mode` sync).
+- **Окружение:** `pio` не в `PATH` при запуске из обычной оболочки; перед сборкой
+  выставлять `$env:PATH = "$env:USERPROFILE\.platformio\penv\Scripts;$env:PATH"`.
+

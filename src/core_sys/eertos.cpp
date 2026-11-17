@@ -24,7 +24,8 @@
     #define EERTOS_ENTER_CRITICAL_ISR() portENTER_CRITICAL_ISR(&eertosMux)
     #define EERTOS_EXIT_CRITICAL_ISR()  portEXIT_CRITICAL_ISR(&eertosMux)
 
-#elif defined(ESP8266)
+#endif
+#if !defined(ESP32) && defined(ESP8266)
     // Для ESP8266 простые noInterrupts/interrupts
     #define EERTOS_ENTER_CRITICAL() noInterrupts()
     #define EERTOS_EXIT_CRITICAL()  interrupts()
@@ -33,7 +34,8 @@
     #define EERTOS_ENTER_CRITICAL_ISR() noInterrupts()
     #define EERTOS_EXIT_CRITICAL_ISR()  interrupts()
 
-#else
+#endif
+#if !defined(ESP32) && !defined(ESP8266)
     #error "Unsupported platform"
 #endif
 
@@ -112,6 +114,7 @@ void SetTaskFromISR(TPTR TS) {
             return;
         }
     }
+    EertosDropped++;
     EERTOS_EXIT_CRITICAL_ISR();
 }
 
@@ -206,23 +209,29 @@ void TaskManager(void) {
  */
 void IRAM_ATTR TimerService(void) {
     for (uint32_t index = 0; index < MainTimerQueueSize; index++) {
+        // Читаем и модифицируем слот под ISR-критической секцией:
+        // SetTimerTaskEx/DelTimerTask из основного цикла используют
+        // обычную критическую секцию, и на ESP32 между ними возможна гонка.
+        EERTOS_ENTER_CRITICAL_ISR();
+
         /* On Idle_task go to the next slot */
-        if (MainTimer[index].GoToTask == Idle_task) { continue; }
+        if (MainTimer[index].GoToTask == Idle_task) {
+            EERTOS_EXIT_CRITICAL_ISR();
+            continue;
+        }
 
         /* Decrease timer and push task to the queue on zero */
         if (--MainTimer[index].Time == 0) {
-            // В прерывании используем ISR-версию критической секции
-            EERTOS_ENTER_CRITICAL_ISR();
-            
             TPTR taskToRun = MainTimer[index].GoToTask;
             MainTimer[index].GoToTask = Idle_task;
-            
-            // Выходим из ISR-критической секции
+
             EERTOS_EXIT_CRITICAL_ISR();
-            
+
             // Используем ISR-безопасную версию SetTask
             // Это гарантирует корректную работу на ESP32 с spinlock
             SetTaskFromISR(taskToRun);
+        } else {
+            EERTOS_EXIT_CRITICAL_ISR();
         }
     }
 }

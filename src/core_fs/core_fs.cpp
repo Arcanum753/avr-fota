@@ -167,7 +167,7 @@ void CLASS_CORE_FS::handleInfo(AsyncWebServerRequest* request) {
 void CLASS_CORE_FS::handleList(AsyncWebServerRequest* request) {
     if (_fs == nullptr) { return sendError(request, 503, "FS NOT READY"); }
 
-    FsEntry* entries = new FsEntry[CORE_FS_MAX_ENTRIES];
+    FsEntry* entries = new (std::nothrow) FsEntry[CORE_FS_MAX_ENTRIES];
     if (entries == nullptr) { return sendError(request, 503, "LOW MEMORY"); }
 
     size_t count = 0;
@@ -228,7 +228,7 @@ void CLASS_CORE_FS::handleCreate(AsyncWebServerRequest* request) {
     if (!normalizeArg(request, "path", path)) {
         return sendError(request, 400, "BAD PATH");
     }
-    if (ns_core_fs::fsIsSecretPath(path)) { return sendError(request, 409, "EXISTS"); }
+    if (ns_core_fs::fsIsSecretPath(path)) { return sendError(request, 403, "FORBIDDEN"); }
     if (_fs->exists(path)) { return sendError(request, 409, "EXISTS"); }
 
     if (!ns_core_fs::fsCreateFile(*_fs, path)) {
@@ -295,14 +295,26 @@ void CLASS_CORE_FS::resetUpload() {
     _uploadError = 0;
     _uploadPath = "";
     _uploadSize = 0;
+    _uploadReq = nullptr;
+    _uploadStartMs = 0;
 }
 
 bool CLASS_CORE_FS::uploadPrepare(AsyncWebServerRequest* request) {
     if (_uploadActive) {
-        _uploadError = 409;
-        return false;
+        // Подвисший сеанс (оборванное соединение) не должен блокировать
+        // загрузки до перезагрузки устройства.
+        bool stale = (_uploadReq != request)
+                     || (_uploadStartMs != 0
+                         && (millis() - _uploadStartMs) > 60000UL);
+        if (!stale) {
+            _uploadError = 409;
+            return false;
+        }
+        resetUpload();
     }
     _uploadActive = true;
+    _uploadReq = request;
+    _uploadStartMs = millis();
 
     if (_fs == nullptr) {
         _uploadError = 503;
