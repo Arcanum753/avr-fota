@@ -628,7 +628,7 @@ void CLASS_CORE_WIFI::onWiFiConnectedGotIP(WiFiEventStationModeGotIP data) {
 
 #if defined(MODULE_UDP)
 //udp start to listen
-	module_udp.begin();
+	module_udp.startSocket();
 	//udp broadcast - we are online!
     if (module_udp.powerOnGet() == true ) {  broadcastSimple(); }
 #endif

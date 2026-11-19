@@ -361,8 +361,9 @@ loop = 0       # есть loop() — вызывается в *_loop
 Особые случаи:
 - `module_otaclient` (`module_otaclient`) при наличии в `src_filter` включается в **core**-группах
   (begin/web/loop) вместе с базовым OTA, а не в modules-группах.
-- `module_udp` (`module_udp`) — `begin()` вызывается из `core_wifi` при подключении, поэтому
-  `begin` в registry не дублируется; регистрируется только `web_Init()`.
+- `module_udp` (`module_udp`) — штатный `begin(ctx)` из registry (загрузка конфига и
+  регистрация терминала); сокет поднимается отдельным `startSocket()` из `core_wifi`
+  при подключении к сети (в registry не дублируется).
 - `core_sys` — всегда компилируется; в `core_begin` идёт сразу после `core_json`
   (загружает identity/auth и заполняет `ctx.hostname`/`ctx.password` до `core_wifi` и mDNS);
   `web_Init()` регистрирует `/system/*` и `/recover*`.
@@ -585,7 +586,7 @@ on("wifi.just_connected", function(ev) e7.speed(40) end)
 - `wifi show|slot|set|sys|apply|connect|clients` — `core_wifi`;
 - `led <times> <mask>` — `core_led`.
 
-`reset` и `auth off|reset` требуют подтверждения `y/n` (таймаут 30 с). Строки терминала: буфер 320 байт. `udp*`, `1` и команды отладки программатора удалены; `udp*` должны быть реализованы в `module_udp` отдельной задачей.
+`reset` и `auth off|reset` требуют подтверждения `y/n` (таймаут 30 с). Строки терминала: буфер 320 байт. `udp*`, `1` и команды отладки программатора удалены; команда `udp` регистрируется в `module_udp` (`begin()` → `TerminalRegisterModule`), подкоманды — `show/status/send/test/set/apply/save/stop`. Устройства регистрируют свои команды в `begin()`: `clock` (`device_clock-mech`, алиасы `c-*`), `ring` (`device_mech-ring`, алиасы `r-*`).
 
 ### Обработчики форматов (`module_program/module_prog/`)
 

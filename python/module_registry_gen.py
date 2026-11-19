@@ -700,11 +700,7 @@ def main():
             if loop_flag:
                 dev_loop.append(f"{obj}.loop();")
         else:
-            if mod == "module_udp":
-                # begin() UDP вызывается из core_wifi при подключении — в registry не дублируем.
-                pass
-            else:
-                modules_begin.append(f"{obj}.begin(ctx);")
+            modules_begin.append(f"{obj}.begin(ctx);")
             if web_flag:
                 modules_web.append(f"{obj}.web_Init();")
             if loop_flag:

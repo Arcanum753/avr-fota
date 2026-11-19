@@ -35,6 +35,9 @@ version_counter.txt
 src/modules_registry.*
 src/modules_defines.h
 
+# CMake build tree (VS Code / ccronexpr tests), генерируется локально
+/build/
+
 # Внешние компоненты: отдельные git-репозитории, клонируются пользователем в src/
 /src/module_*/
 /src/submodule_*/

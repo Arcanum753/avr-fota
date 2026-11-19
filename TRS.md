@@ -233,7 +233,7 @@
 - FR-CORE-WIFI-5: Принудительно включать AP по кнопке `AP_ENABLE_BUTTON` с таймаутом `AP_ENABLE_TIMEOUT=60`.
 - FR-CORE-WIFI-6: Вести счётчики неудач по SSID (`MAX_WIFI_FAIL_COUNT=3`, `WIFI_RESCAN_PAUSE_SEC=20`, `WIFI_CONNECT_BUDGET_SEC=20`, `WIFI_SCAN_STUCK_SEC=60`).
 - FR-CORE-WIFI-7: Обрабатывать отказ драйвера: бэкофф `WIFI_INIT_FAIL_PAUSE_SEC=20` и контролируемый `ESP.restart()` после `WIFI_INIT_FAIL_MAX=5` (с отсрочкой в небезопасных режимах).
-- FR-CORE-WIFI-8: При подключении вызывать `module_udp.begin()` (если модуль включён) и инициировать синхронизацию NTP.
+- FR-CORE-WIFI-8: При подключении вызывать `module_udp.startSocket()` (если модуль включён) и инициировать синхронизацию NTP.
 - FR-CORE-WIFI-9: Публиковать состояния `wifi.connected` (BOOL), `wifi.rssi` (I32), `wifi.ip` (STR), `wifi.slot_name` (STR), `wifi.ap_mode` (BOOL), `wifi.ap_clients` (I32), `wifi.ap_busy` (BOOL) и события `wifi.just_connected`, `wifi.just_disconnected`, `wifi.ap_client_joined`, `wifi.ap_client_left`, `wifi.target_reached`, `wifi.sta_pending`, `wifi.sta_applied`.
 - FR-CORE-WIFI-10: Режимы `wifi.mode` (ENUM `auto`/`macro`): в `auto` работает штатный автомат без изменений; в `macro` автомат подчиняется цели `wifi.target` (ENUM `auto`/`ap`/`sta`). Гейт `wifiBusAllowed()`: все функции записи (кроме `wifi.mode` и `wifi.save`) при `mode != macro` возвращают `BUS_ERR_DENIED`; записи `set()` в runtime-состояния в `auto` принимаются, но игнорируются автоматом.
 - FR-CORE-WIFI-11: Force-команды `wifi.force_ap`, `wifi.force_ap_kick`, `wifi.force_connect`, `wifi.force_connect_kick`, `wifi.force_scan(n)`, `wifi.force_disconnect` — разовые действия, минуя приоритеты. При активном клиенте AP `force_ap`/`force_connect` — `BUS_ERR_BUSY`; SSID не найден — `BUS_ERR_NOT_FOUND`, слот не заполнен — `BUS_ERR_NOT_READY`. `setTarget(STA)` при клиентах AP откладывается до освобождения (события `sta_pending`/`sta_applied`).
@@ -615,27 +615,26 @@
 | Команда | Назначение | Доступность |
 |---------|-----------|-------------|
 | `help [module]` | список модулей/команд или справка модуля | всегда |
-| `?` | информация о системе (about) | всегда |
-| `reset` | перезагрузка | всегда |
+| `sys` (алиасы `?`, `info`, `ver`, `stat`, `name`, `serial`, `auth`, `reset`, `id`) | состояние системы, серийник/имя, auth, перезагрузка (y/n) | всегда |
+| `sys mode [<name|index>]` | режим ядра: init/normal/ota/fs_update/prog/test | всегда |
 | `echo` | эхо-тест | всегда |
-| `?` / `sys` | состояние системы (CPU/RAM/FS/WiFi) | всегда |
-| `info` | серийник и chip info | всегда |
-| `ver` | прошивка/FS/git + версии всех компонентов | всегда |
-| `stat` | режимы/приоритеты/флаги компонентов | всегда |
-| `name` / `serial` | показать/установить имя/серийник | всегда |
-| `auth` | показать/изменить/сбросить web-auth (пароль открыто) | всегда |
-| `reset` | перезагрузка (y/n) | всегда |
-| `id` | показать имя/серийник (алиас) | всегда |
 | `fs ls [-r] [path]` | список файлов | всегда |
 | `ntp show/period/server/sync` | NTP | всегда |
 | `wifi show/slot/set/sys/apply/connect/clients` | Wi-Fi | всегда |
 | `led <times> <mask>` | тест светодиода | всегда |
+| `udp show/status/send/test/set/apply/save/stop` | UDP broadcast/телеметрия | только `module_udp` |
+| `ds3231 show/time/set/temp/alarm1/alarm2/alarms/sqw/sqr/autocor/save` (+ алиасы `ds-*`) | DS3231 | только `module_ds3231` |
+| `macro list/reload/run/stop/prio/msg/btn` | макросы/сценарии | только `module_macros` |
+| `i2c show/scan/ping` (алиас `i2c-scan`) | сканер шины I2C | только `module_i2c-mapper` |
+| `lux` | люксметр VEML7700 | только `module_veml7700` |
+| `templ` | эталон шаблона модуля | только `module_template` |
+| `clock show/step/dir/en/sled/sens/n/cnt/mode/pol/set/save/xx00/12xx/1200` (+ алиасы `c-*`) | механические часы | только `device_clock-mech` |
+| `ring show/en/sens/home/cnt/mode/trn/time/save` (+ алиасы `r-*`) | часы с боем | только `device_mech-ring` |
 
-`macro/ds-*/i2c-scan/lux/udp*` в `core_terminal` больше не регистрируются; их должны
-регистрировать соответствующие `module_*` через `TerminalRegisterModule()` в своём `begin()`
-(внешние репозитории — отдельные задачи).
-| `c-*` / `r-*` | отладка механических часов | только соответствующие `device_*` |
-| `flash`/`flash2`/`stm32`/`swdf`/`avr` | отладка программатора | закомментированы, неактивны |
+Команды модулей регистрируют сами модули через `TerminalRegisterModule()` в своём `begin()`;
+в `core_terminal` команд модулей нет. Разрушительные операции — через `TerminalConfirm()`.
+Отладочные команды программатора (`flash`/`flash2`/`stm32`/`swdf`/`avr`) в текущем коде
+отсутствуют; планируются `isp`/`swd`.
 
 ### 6.4. Аппаратные интерфейсы
 

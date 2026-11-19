@@ -27,12 +27,12 @@
 | core_web | ядро | `src/core_web/` | — | TRS §3.1.1 | не требуется (вне registry) | обе | — | — |
 | core_fs | ядро | `src/core_fs/` | — | TRS §3.1.13 | CORE_FS (всегда) | обе | — | — |
 | core_sys | ядро | `src/core_sys/` | — | TRS §3.1.2 | CORE_SYS (всегда) | обе | — | system, time |
-| core_wifi | ядро | `src/core_wifi/` | — | TRS §3.1.3 | CORE_WIFI | обе | вызывает `module_udp.begin()` | wifi |
+| core_wifi | ядро | `src/core_wifi/` | — | TRS §3.1.3 | CORE_WIFI | обе | вызывает `module_udp.startSocket()` | wifi |
 | core_ntp | ядро | `src/core_ntp/` | — | TRS §3.1.4 | CORE_NTP | обе | — | ntp (источник времени для `core_sys`) |
 | core_ota | ядро | `src/core_ota/` | — | TRS §3.1.5 | CORE_OTA | обе | — | ota |
 | core_json | ядро | `src/core_json/` | — | TRS §3.1.6 | всегда | обе | — | — |
 | core_led | ядро | `src/core_led/` | — | TRS §3.1.7 | всегда (`ledInit` вручную) | обе | — | — |
-| core_terminal | ядро | `src/core_terminal/` | — | TRS §3.1.8 | всегда | обе | опц. `module_udp`/`module_macros`/`module_ds3231`/`module_i2c-mapper` | — |
+| core_terminal | ядро | `src/core_terminal/` | — | TRS §3.1.8 | всегда | обе | опц. `module_ds3231`/`module_macros`/`module_i2c-mapper`/`module_veml7700`/`module_udp`/`module_template` | — |
 | core_state | ядро | `src/core_state/` | — | TRS §3.1.9 | всегда | обе | — | system |
 | core_task | ядро | `src/core_task/` | — | TRS §3.1.10 | всегда | обе | — | task |
 | EERTOS | ядро (планировщик) | `src/core_sys/eertos.*` | — | TRS §3.1.11 | всегда | обе | — | — |

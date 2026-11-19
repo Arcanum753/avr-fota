@@ -81,9 +81,10 @@ platformio device monitor -e <env> -p COM3   # 115200, фильтры из env
 `-D RELEASE` гасит общие логи; `DEBUG_MACROS` и Wi-Fi-лог не гейтятся `RELEASE`.
 Каждая строка модуля префиксуется `[C_]/[M_]/[D_]` через `DBG_MOD` (`src/debug.h`).
 
-Терминальные команды (через serial): `help`, `reset`, `echo`, `?`, `id`, `led`;
-при `MODULE_UDP` — `udpp/udpc/udps`; у макросов — `macro list|run|stop|reload|prio|msg|btn`;
-`ds-*` (DS3231), `i2c-scan`, `c-*`/`r-*` (механические часы).
+Терминальные команды (через serial): `help`, `reset`, `echo`, `?`, `id`, `led`, `sys mode`;
+при `MODULE_UDP` — `udp show/status/send/test/set/apply/save/stop`; при `MODULE_MACROS` —
+`macro list/reload/run/stop/prio/msg/btn`; `ds3231 ...` (+ алиасы `ds-*`), `i2c show/scan/ping`,
+`lux`, `templ`; `clock ...` (+ алиасы `c-*`) и `ring ...` (+ алиасы `r-*`) — механические часы.
 
 ## 5. Проверка по HTTP (без перепрошивки)
 
