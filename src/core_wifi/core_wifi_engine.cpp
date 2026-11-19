@@ -197,10 +197,10 @@ void CLASS_CORE_WIFI::leaveApToScan() {
 	core_state.signal("wifi.ap_busy", BusValue::bo(false));
 	core_state.signal("wifi.ap_ssid", BusValue::str(""));
 	core_state.signal("wifi.ap_ip", BusValue::str(""));
-	_scanActive = true;
+	_scanActive = false;
+	_scanStartedAt = 0;
 	_apScanPhaseUntil = _stateSeconds + WIFI_AP_RETRY_PHASE_SEC;
 	_nextStaScanAt = _stateSeconds;
-	WiFi.scanNetworks(true);
 	ledMacrosWifiScan();
 }
 
@@ -212,6 +212,7 @@ void CLASS_CORE_WIFI::enterApWait() {
 		return;
 	}
 	_scanActive = false;
+	_scanStartedAt = 0;
 	_apScanPhaseUntil = 0;
 	if (_wifiAPLifeTime == 0) {
 		wifiStatus = FS_STAT_CONNECTING;
@@ -236,6 +237,50 @@ bool CLASS_CORE_WIFI::anySlotFree() {
 	return false;
 }
 
+// Запуск асинхронного скана. false — драйвер не принял запрос (нет скана).
+bool CLASS_CORE_WIFI::startScan() {
+	int16_t st = WiFi.scanNetworks(true);
+	if (st == WIFI_SCAN_FAILED) {
+		DEBUG_CORE_WIFI("scan start failed\r\n");
+		return false;
+	}
+	_scanActive = true;
+	_scanStartedAt = _stateSeconds;
+	return true;
+}
+
+// Скан/драйвер не поднялся: не дёргаем esp_wifi_init каждую секунду, а
+// работаем с бэкоффом WIFI_INIT_FAIL_PAUSE_SEC и контролируемым рестартом.
+void CLASS_CORE_WIFI::onScanFailed() {
+	connectionTimout = 0;
+	_wifiInitFailCount++;
+	if (_wifiInitFailCount >= WIFI_INIT_FAIL_MAX) {
+		int mode = core_state.getMode();
+		if (mode == CORE_MODE_NORMAL || mode == CORE_MODE_INIT) {
+			DEBUG_CORE_WIFI("WiFi init failed %d times. Restarting.\r\n", _wifiInitFailCount);
+			ESP.restart();
+			return;
+		}
+		// Длительная операция (OTA/FS/prog) — рестарт откладываем не дольше WIFI_INIT_FAIL_DEFER_MAX_SEC
+		if (_restartDeferredSince == 0) {
+			_restartDeferredSince = _stateSeconds;
+		}
+		if ((uint32_t)(_stateSeconds - _restartDeferredSince) >= WIFI_INIT_FAIL_DEFER_MAX_SEC) {
+			DEBUG_CORE_WIFI("WiFi init failed %d times, restart deferred timeout, restarting\r\n",
+			           _wifiInitFailCount);
+			ESP.restart();
+			return;
+		}
+		DEBUG_CORE_WIFI("WiFi init failed %d times, restart deferred (mode %d)\r\n",
+		           _wifiInitFailCount, mode);
+	}
+	WiFi.scanDelete();
+	_scanActive = false;
+	_scanStartedAt = 0;
+	_nextStaScanAt = _stateSeconds + WIFI_INIT_FAIL_PAUSE_SEC;
+	ledMacrosWifiScan();
+}
+
 // STA: скан сети из конфигов / попытка подключения
 void CLASS_CORE_WIFI::staTick() {
 	// Идёт попытка подключения (WiFi.begin вызван) — контролируем бюджет
@@ -249,6 +294,7 @@ void CLASS_CORE_WIFI::staTick() {
 				WifiScan = WF_STAT_SCANING;
 				connectionTimout = 0;
 				_scanActive = false;
+				_scanStartedAt = 0;
 				_nextStaScanAt = _stateSeconds;
 				return;
 			}
@@ -265,9 +311,11 @@ void CLASS_CORE_WIFI::staTick() {
 
 	// Скан ещё не запущен — запускаем асинхронный скан
 	if (!_scanActive) {
-		_scanActive = true;
 		connectionTimout = 0;
-		WiFi.scanNetworks(true);
+		if (!startScan()) {
+			// Драйвер не принял запуск скана — это ошибка init/драйвера.
+			onScanFailed();
+		}
 		ledMacrosWifiScan();
 		return;
 	}
@@ -281,6 +329,7 @@ void CLASS_CORE_WIFI::staTick() {
 			connectionTimout = 0;
 			WiFi.scanDelete();
 			_scanActive = false;
+			_scanStartedAt = 0;
 			if (_wifiAPLifeTime > 0) {
 				enterApWait();
 			} else {
@@ -294,36 +343,18 @@ void CLASS_CORE_WIFI::staTick() {
 		return;
 	}
 	if (st == WIFI_SCAN_FAILED) {
-		// Скан/драйвер не поднялся. Не дёргаем WiFi.scanNetworks() каждую
-		// секунду — иначе esp_wifi_init зацикливается. Работаем с бэкоффом:
-		// одна повторная попытка за окно WIFI_INIT_FAIL_PAUSE_SEC.
-		connectionTimout = 0;
-		_wifiInitFailCount++;
-		if (_wifiInitFailCount >= WIFI_INIT_FAIL_MAX) {
-			int mode = core_state.getMode();
-			if (mode == CORE_MODE_NORMAL || mode == CORE_MODE_INIT) {
-				DEBUG_CORE_WIFI("WiFi init failed %d times. Restarting.\r\n", _wifiInitFailCount);
-				ESP.restart();
-				return;
-			}
-			// Длительная операция (OTA/FS/prog) — рестарт откладываем не дольше WIFI_INIT_FAIL_DEFER_MAX_SEC
-			if (_restartDeferredSince == 0) {
-				_restartDeferredSince = _stateSeconds;
-			}
-			if ((uint32_t)(_stateSeconds - _restartDeferredSince) >= WIFI_INIT_FAIL_DEFER_MAX_SEC) {
-				DEBUG_CORE_WIFI("WiFi init failed %d times, restart deferred timeout, restarting\r\n",
-				           _wifiInitFailCount);
-				ESP.restart();
-				return;
-			}
-			DEBUG_CORE_WIFI("WiFi init failed %d times, restart deferred (mode %d)\r\n",
-			           _wifiInitFailCount, mode);
+		// WiFiScanClass::scanComplete() возвращает WIFI_SCAN_FAILED не только при
+		// реальной ошибке, но и по внутреннему таймауту (max_ms_per_chan*20 мс,
+		// 6 с при штатных 300 мс/канал). В зашумлённом эфире скан 13 каналов
+		// легко длится дольше: драйвер продолжает сканировать, а результат
+		// придёт с событием SCAN_DONE. Не выбрасываем его (раньше это давало
+		// потерю первого скана, паузу 20 с и рестарт-цикл): ждём результат до
+		// WIFI_SCAN_STUCK_SEC, и только затем считаем скан сорванным.
+		if ((uint32_t)(_stateSeconds - _scanStartedAt) < WIFI_SCAN_STUCK_SEC) {
+			ledMacrosWifiScan();
+			return;
 		}
-		// Не дёргаем драйвер каждую секунду: ждём окно бэкоффа, затем пробуем снова
-		WiFi.scanDelete();
-		_scanActive = false;
-		_nextStaScanAt = _stateSeconds + WIFI_INIT_FAIL_PAUSE_SEC;
-		ledMacrosWifiScan();
+		onScanFailed();
 		return;
 	}
 	if (st < 0) {
@@ -333,6 +364,7 @@ void CLASS_CORE_WIFI::staTick() {
 
 	// Скан завершён
 	_scanActive = false;
+	_scanStartedAt = 0;
 	connectionTimout = 0;
 	_wifiInitFailCount = 0;
 	_restartDeferredSince = 0;
@@ -437,6 +469,7 @@ void CLASS_CORE_WIFI::configureWifiAP() {
 	_apUptime = 0;
 	_apClientActivity = false;
 	_scanActive = false;
+	_scanStartedAt = 0;
 	_apScanPhaseUntil = 0;
 	_apClientCount = 0;
 	core_state.signal("wifi.ap_mode", BusValue::bo(true));
@@ -462,6 +495,7 @@ int CLASS_CORE_WIFI::scanWifi() {
 	// Пропускаем SSID, у которых превышен лимит неудачных попыток.
 	int nets = WiFi.scanComplete();
 	if (nets <= 0) { return -1; }
+	DEBUG_CORE_WIFI("scanWifi: nets=%d\r\n", nets);
 
 	// Приоритетный слот после `wifi connect <n>`: пробуем его первым.
 	int forced = _forcedSlot;
@@ -555,10 +589,10 @@ void CLASS_CORE_WIFI::configureWifi() { // вход в STA-режим: скан 
 	ledSetSteady(false);	// выход из steady-on при подключении
 	_apUptime = 0;
 	_apClientActivity = false;
-	_scanActive = true;
+	_scanActive = false;
+	_scanStartedAt = 0;
 	_apScanPhaseUntil = 0;
 	_nextStaScanAt = _stateSeconds;
-	WiFi.scanNetworks(true);
 	ledMacrosWifiScan();
 }
 
@@ -605,6 +639,7 @@ void CLASS_CORE_WIFI::onWiFiConnectedGotIP(WiFiEventStationModeGotIP data) {
 	_wifiInitFailCount = 0;
 	_restartDeferredSince = 0;
 	_scanActive = false;
+	_scanStartedAt = 0;
 	_apScanPhaseUntil = 0;
 	wifiStatus = FS_STAT_CONNECTED;
 	_enterApPending = false;
@@ -682,6 +717,7 @@ void CLASS_CORE_WIFI::onWiFiDisconnected(WiFiEventStationModeDisconnected data) 
 	wifiStatus = FS_STAT_CONNECTING;
 	connectionTimout = 0;
 	_scanActive = false;
+	_scanStartedAt = 0;
 	_apScanPhaseUntil = 0;
 
 	core_state.signal("wifi.connected", BusValue::bo(false));
@@ -1029,6 +1065,7 @@ int CLASS_CORE_WIFI::forceConnect() {
 	_apClientActivity = false;
 	_apClientCount = 0;
 	_scanActive = false;
+	_scanStartedAt = 0;
 	_apScanPhaseUntil = 0;
 	_seriesHadIp = false;
 	_scanEmptyCount = 0;
@@ -1085,6 +1122,7 @@ int CLASS_CORE_WIFI::forceDisconnect() {
 	WifiScan = WF_STAT_SCANING;
 	connectionTimout = 0;
 	_scanActive = false;
+	_scanStartedAt = 0;
 	core_state.signal("wifi.connected", BusValue::bo(false));
 	core_state.signal("wifi.slot_name", BusValue::str(""));
 	core_state.emit("wifi.just_disconnected");

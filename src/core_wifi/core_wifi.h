@@ -163,6 +163,8 @@ private:
     void secondTick();          // шаг автомата (раз в секунду)
     void apTick();              // шаг в состоянии AP (ожидание/обслуживание клиента)
     void staTick();             // шаг в состоянии STA (скан/попытка подключения)
+    bool startScan();           // запустить асинхронный скан (false — драйвер не принял скан)
+    void onScanFailed();        // скан/драйвер не поднялся: бэкофф и контролируемый рестарт
     void enterApWait();         // вход в AP-ожидание (или STA-реконнект при _wifiAPLifeTime==0)
     void leaveApToScan();       // выход из AP и запуск скана сети
     void rescanSoon();          // разрешить пересканирование в ближайший тик
@@ -179,6 +181,7 @@ protected:
     uint8_t  _wifiInitFailCount = 0; // подряд идущие ошибки init/scan (для контролируемого рестарта)
     uint32_t _restartDeferredSince = 0; // тик _stateSeconds, с которого рестарт отложен (0 = не отложен)
     bool     _scanActive = false;    // асинхронный скан запущен (WiFi.scanNetworks) и результат ещё не обработан
+    uint32_t _scanStartedAt = 0;     // тик _stateSeconds запуска текущего скана (защита от ложного таймаута библиотеки)
     uint32_t _apScanPhaseUntil = 0;  // тик _stateSeconds, до которого после выхода из AP держимся в STA-скане (0 = фаза неактивна)
     // --- Ресурсная шина: режим/цель и runtime-поля ---
     uint8_t  _busMode = WIFI_MODE_AUTO;        // режим модуля (wifi.mode)

@@ -41,6 +41,7 @@ void setUp(void) {
     core_wifi._stateSeconds = 0;
     core_wifi._nextStaScanAt = 0;
     core_wifi._scanActive = false;
+    core_wifi._scanStartedAt = 0;
     core_wifi._apScanPhaseUntil = 0;
     core_wifi._applyWifiPending = false;
     core_wifi._enterApPending = false;
@@ -59,21 +60,72 @@ void tearDown(void) {}
 // ============================================================
 static void test_scan_failed_backoff(void) {
     WiFi.setScanResult(WIFI_SCAN_FAILED);
-    core_wifi._scanActive = true;   // скан уже запущен асинхронно
+    core_wifi._scanActive = false;
+    // Драйвер не принял запуск скана.
+    WiFi.setScanStartResult(WIFI_SCAN_FAILED);
     core_wifi.staTick();
     TEST_ASSERT_EQUAL_UINT8(1, core_wifi._wifiInitFailCount);
     TEST_ASSERT_EQUAL_UINT32(WIFI_INIT_FAIL_PAUSE_SEC, core_wifi._nextStaScanAt);
+    TEST_ASSERT_FALSE(core_wifi._scanActive);
     TEST_ASSERT_EQUAL_INT(0, mockEspRestartCount());
+}
+
+// Ложный таймаут библиотеки: скан уже запущен, scanComplete() вернул FAILED,
+// но драйвер ещё сканирует — результат нельзя выбрасывать.
+static void test_scan_failed_within_grace_keeps_waiting(void) {
+    core_wifi._stateSeconds = 10;
+    core_wifi.staTick();                 // запуск скана (RUNNING)
+    TEST_ASSERT_TRUE(core_wifi._scanActive);
+    TEST_ASSERT_EQUAL_UINT32(10, core_wifi._scanStartedAt);
+
+    WiFi.setScanResult(WIFI_SCAN_FAILED);
+    core_wifi._stateSeconds = 16;        // 6 с: внутренний таймаут библиотеки
+    core_wifi.staTick();
+    TEST_ASSERT_EQUAL_UINT8(0, core_wifi._wifiInitFailCount);
+    TEST_ASSERT_TRUE(core_wifi._scanActive);
+    TEST_ASSERT_EQUAL_UINT32(0, core_wifi._nextStaScanAt);
+}
+
+// После ложного таймаута скан всё-таки завершился — подключаемся, не теряя результат.
+static void test_late_scan_result_after_library_timeout(void) {
+    WiFi.addNetwork("net0");
+    strcpy(core_wifi._strWifi0, "net0");
+    core_wifi._stateSeconds = 0;
+    core_wifi.staTick();                 // запуск скана
+    WiFi.setScanResult(WIFI_SCAN_FAILED);
+    core_wifi._stateSeconds = 6;
+    core_wifi.staTick();                 // таймаут библиотеки, но ждём результат
+    TEST_ASSERT_TRUE(core_wifi._scanActive);
+
+    WiFi.setScanResult(1);               // SCAN_DONE: результат пришёл
+    core_wifi._stateSeconds = 7;
+    core_wifi.staTick();
+    TEST_ASSERT_FALSE(core_wifi._scanActive);
+    TEST_ASSERT_EQUAL_UINT8(0, core_wifi._wifiInitFailCount);
+}
+
+// Скан сорван по-настоящему: за окном WIFI_SCAN_STUCK_SEC — бэкофф.
+static void test_scan_failed_after_grace_backs_off(void) {
+    core_wifi._stateSeconds = 0;
+    core_wifi.staTick();                 // запуск скана
+    WiFi.setScanResult(WIFI_SCAN_FAILED);
+    core_wifi._stateSeconds = WIFI_SCAN_STUCK_SEC;
+    core_wifi.staTick();
+    TEST_ASSERT_EQUAL_UINT8(1, core_wifi._wifiInitFailCount);
+    TEST_ASSERT_FALSE(core_wifi._scanActive);
+    TEST_ASSERT_EQUAL_UINT32(WIFI_SCAN_STUCK_SEC + WIFI_INIT_FAIL_PAUSE_SEC,
+                             core_wifi._nextStaScanAt);
 }
 
 static void test_scan_failed_restart_in_normal_mode(void) {
     WiFi.setScanResult(WIFI_SCAN_FAILED);
     core_state.setMode(CORE_MODE_NORMAL);
-    // Каждый цикл: запуск скана (_scanActive=false -> true), затем обработка FAILED.
+    // Каждый цикл: запуск скана, затем таймаут/срыв за окном WIFI_SCAN_STUCK_SEC.
     for (int i = 0; i < WIFI_INIT_FAIL_MAX; i++) {
         core_wifi._stateSeconds += WIFI_INIT_FAIL_PAUSE_SEC;
         core_wifi.staTick(); // запуск асинхронного скана
-        core_wifi.staTick(); // скан завершился FAILED
+        core_wifi._stateSeconds += WIFI_SCAN_STUCK_SEC;
+        core_wifi.staTick(); // ложный таймаут истёк -> сорванный скан
     }
     TEST_ASSERT_EQUAL_INT(1, mockEspRestartCount());
     TEST_ASSERT_EQUAL_UINT8(WIFI_INIT_FAIL_MAX, core_wifi._wifiInitFailCount);
@@ -82,13 +134,31 @@ static void test_scan_failed_restart_in_normal_mode(void) {
 static void test_scan_failed_deferred_in_prog_mode(void) {
     WiFi.setScanResult(WIFI_SCAN_FAILED);
     core_state.setMode(CORE_MODE_PROG);
-    for (int i = 0; i < WIFI_INIT_FAIL_MAX + 2; i++) {
+    // Доводим счётчик до порога: при достижении WIFI_INIT_FAIL_MAX рестарт
+    // откладывается (небезопасный режим), немедленного рестарта нет.
+    for (int i = 0; i < WIFI_INIT_FAIL_MAX; i++) {
         core_wifi._stateSeconds += WIFI_INIT_FAIL_PAUSE_SEC;
         core_wifi.staTick(); // запуск асинхронного скана
-        core_wifi.staTick(); // скан завершился FAILED
+        core_wifi._stateSeconds += WIFI_SCAN_STUCK_SEC;
+        core_wifi.staTick(); // ложный таймаут истёк -> сорванный скан
     }
     TEST_ASSERT_EQUAL_INT(0, mockEspRestartCount());
-    TEST_ASSERT_TRUE(core_wifi._wifiInitFailCount >= WIFI_INIT_FAIL_MAX);
+    TEST_ASSERT_EQUAL_UINT8(WIFI_INIT_FAIL_MAX, core_wifi._wifiInitFailCount);
+    TEST_ASSERT_TRUE(core_wifi._restartDeferredSince != 0);
+}
+
+// Отложенный рестарт не бесконечен: через WIFI_INIT_FAIL_DEFER_MAX_SEC — рестарт.
+static void test_scan_failed_deferred_timeout_restarts(void) {
+    core_state.setMode(CORE_MODE_PROG);
+    core_wifi._wifiInitFailCount = WIFI_INIT_FAIL_MAX;
+    core_wifi._restartDeferredSince = 100;
+    core_wifi._scanActive = false;
+    WiFi.setScanStartResult(WIFI_SCAN_FAILED);
+
+    core_wifi._stateSeconds = 100 + WIFI_INIT_FAIL_DEFER_MAX_SEC;
+    core_wifi._nextStaScanAt = 0;
+    core_wifi.staTick();   // порог превышен, окно отсрочки истекло -> рестарт
+    TEST_ASSERT_EQUAL_INT(1, mockEspRestartCount());
 }
 
 static void test_connect_budget_expires_to_ap_wait(void) {
@@ -195,8 +265,12 @@ static void test_enter_ap_wait_with_ap(void) {
 int main(int, char**) {
     UNITY_BEGIN();
     RUN_TEST(test_scan_failed_backoff);
+    RUN_TEST(test_scan_failed_within_grace_keeps_waiting);
+    RUN_TEST(test_late_scan_result_after_library_timeout);
+    RUN_TEST(test_scan_failed_after_grace_backs_off);
     RUN_TEST(test_scan_failed_restart_in_normal_mode);
     RUN_TEST(test_scan_failed_deferred_in_prog_mode);
+    RUN_TEST(test_scan_failed_deferred_timeout_restarts);
     RUN_TEST(test_connect_budget_expires_to_ap_wait);
     RUN_TEST(test_wrong_password_counter);
     RUN_TEST(test_any_slot_free);

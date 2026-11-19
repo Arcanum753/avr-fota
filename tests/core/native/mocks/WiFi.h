@@ -57,6 +57,9 @@ public:
     void reset();
     void setStatus(int st) { _status = st; }
     void setScanResult(int result) { _scanResult = result; }
+    // Результат запуска асинхронного скана: по умолчанию скан стартует (RUNNING),
+    // WIFI_SCAN_FAILED имитирует отказ драйвера принять запрос.
+    void setScanStartResult(int result) { _scanStartResult = result; }
     void addNetwork(const String& ssid, int rssi = -50, int enc = 0);
     int  restartCount() const { return _restartCount; }
     void noteRestart() { _restartCount++; }
@@ -91,7 +94,7 @@ public:
     int channel(int i) { return (i >= 0 && (size_t)i < _nets.size()) ? _nets[i].channel : 0; }
     int encryptionType(int i) { return (i >= 0 && (size_t)i < _nets.size()) ? _nets[i].encryption : 0; }
     bool isHidden(int) { return false; }
-    int scanNetworks(bool async = false) { return async ? _scanResult : (int)_nets.size(); }
+    int scanNetworks(bool async = false) { return async ? _scanStartResult : (int)_nets.size(); }
     int scanComplete() { return _scanResult; }
     void scanDelete() {}
     void macAddress(uint8_t* mac) { for (int i = 0; i < 6; i++) mac[i] = (uint8_t)i; }
@@ -100,6 +103,7 @@ private:
     int      _status = WL_DISCONNECTED;
     WiFiMode_t _mode = WIFI_OFF;
     int      _scanResult = 0;
+    int      _scanStartResult = WIFI_SCAN_RUNNING;
     int      _restartCount = 0;
     int      _softAPDisconnectCount = 0;
     int      _modeSetCount = 0;

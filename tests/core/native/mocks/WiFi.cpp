@@ -6,6 +6,7 @@ void MockWiFi::reset() {
     _status = WL_DISCONNECTED;
     _mode = WIFI_OFF;
     _scanResult = 0;
+    _scanStartResult = WIFI_SCAN_RUNNING;
     _restartCount = 0;
     _softAPDisconnectCount = 0;
     _modeSetCount = 0;
