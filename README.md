@@ -785,10 +785,14 @@ ESP при включении сканирует эфир в течение за
 7. **ESP8266/ESP32 FS Browser** (`/edit.html`) — браузер ФС и редактор файлов (предоставляется опциональным модулем `module_editor`);
 8. **ESP8266/ESP32 FOTA** (`/update.html`) — самообновление прошивки ESP;
 9. **Modules** (`/state.html`) — список модулей (namespace) и переключение режимов off/auto/macro; страница входит в опциональный `module_macros`.
+10. **Macros** (`/macros.html`) — Lua-сценарии (файлы, start/stop, справка `macros_help.html`, `cron.html`); предоставляется опциональным `module_macros` (ESP32).
+11. **Resources** (`/state/*`) — ресурсная шина ядра `core_state`: `/state/catalog` (каталог ресурсов), `/state/info`, `/state/set`, `/state/call`.
 
 > **При наличии других модулей в сборке список динамически дополняется пунктами меню из `web/_menu.html` модулей (см. `gen_page_head.py` в `BUILD.md`). Полный перечень страниц модуля — в `AGENTS.md` этого модуля.**
 
-> TODO: уточнить — `README.md` частично устарел (OPEN-10): не отражает `core_state`/`core_task`/`module_macros`.
+### Ресурсная шина и задачи (`core_state`, `core_task`)
+
+`core_state` — реестр ресурсов (`namespace.field`, типы BOOL/I32/F32/STR/TIME/ENUM): модули публикуют состояния (pull), события (push), sync/async-функции и режимы (`off/auto/macro`); межмодульное взаимодействие идёт только через шину (прямые `#include` соседних `module_*` запрещены). Каталог отдаётся по `/state/catalog`, управление — `/state/set`/`/state/call`. `core_task` — именованные периодические/отложенные задачи поверх EERTOS (`every`/`after`/`cancel`), второго планировщика нет. Потребитель шины — `module_macros`: один Lua-интерпретатор, namespace-таблицы ресурсов (`time.hour`, `e7.brightness`), планировщик `every`/`after`/`on`; страницы `macros.html` и `state.html`.
 
 ---
 
@@ -805,12 +809,6 @@ ESP при включении сканирует эфир в течение за
 - GPIO-модуль — `src/module_gpio/AGENTS.md`.
 
 Общий перечень модулей и устройств со ссылками — в разделах выше и в `INVENTORY.md`.
-
----
-
-## Известные проблемы документации
-
-- OPEN-10: `README.md` частично устарел (не отражает `core_state`/`core_task`/`module_macros`). `> TODO: уточнить`.
 
 ---
 

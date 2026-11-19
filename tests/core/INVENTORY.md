@@ -32,8 +32,8 @@
 
 - `main.h` определяет `HIDE_SECRET` (включён) и `HIDE_CONFIG` (выключен) — L4-тесты
   учитывают это.
-- Наличие env `TestCore32`/`TestCore8266` обеспечивается
-  `targets/targets_example.ini` (подключён в `extra_configs`); это сборки
-  «ядро без внешних компонентов» для AC-22.
+- Env `TestCore32`/`TestCore8266` определены в `targets/targets_example.ini` (сборки
+  «ядро без внешних компонентов» для AC-22), но на 2026-11-19 этот файл **закомментирован**
+  в `extra_configs` — локально env не определены (см. `TRS.md` OPEN-11).
 - `ParseCVT`/`ApplyCVT` — JavaScript, поэтому L1 для core_web включает Node.js-тесты
   (`tests/core/core_web/js/`), см. §D8 плана.

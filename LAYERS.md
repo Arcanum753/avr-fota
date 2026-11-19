@@ -58,7 +58,7 @@
 | `module_lcd-i2c` | модуль | `src/module_lcd-i2c/AGENTS.md` |
 | `module_i2c-mapper` | модуль | `src/module_i2c-mapper/AGENTS.md` |
 | `module_veml7700` | модуль | `src/module_veml7700/AGENTS.md` |
-| `module_RDA5807m` | модуль (WIP) | `src/module_RDA5807m/AGENTS.md` |
+| `module_RDA5807m` | модуль (freeze) | `src/module_RDA5807m/AGENTS.md` |
 | `module_template` | модуль (в ядре) | `src/module_template/AGENTS.md` |
 | `module_program` | контейнер программатора | `src/module_program/AGENTS.md` |
 | `device_clock-mech` | устройство | `src/device_clock-mech/AGENTS.md` |

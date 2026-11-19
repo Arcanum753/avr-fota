@@ -456,10 +456,10 @@
 | `module_editor` | `src/module_editor/AGENTS.md` | FR-EDITOR-1…4, AC-9, OPEN-7 |
 | `module_ds3231` | `src/module_ds3231/AGENTS.md` | FR-DS3231-1…5 |
 | `module_veml7700` | `src/module_veml7700/AGENTS.md` | FR-VEML-1…6, AC-VEML |
-| `module_RDA5807m` (WIP) | `src/module_RDA5807m/AGENTS.md` | FR-RDA-1…7, AC-RDA-1…4 |
+| `module_RDA5807m` (freeze) | `src/module_RDA5807m/AGENTS.md` | FR-RDA-1…7, AC-RDA-1…4 |
 | `module_gpio` (заглушка) | `src/module_gpio/AGENTS.md` | FR-GPIO-1…2, AC-15, OPEN-7 |
 | `module_lcd-i2c` | `src/module_lcd-i2c/AGENTS.md` | FR-LCD-1…4 |
-| `module_macros` | `src/module_macros/AGENTS.md` | FR-MACROS-1…14, AC-11, OPEN-4/5/6 |
+| `module_macros` | `src/module_macros/AGENTS.md` | FR-MACROS-1…14, AC-11, OPEN-4/5 |
 | `module_otaclient` | `src/module_otaclient/AGENTS.md` | FR-OTACLIENT-1…6 |
 | `module_rgb` | `src/module_rgb/AGENTS.md` | FR-RGB-1…5, OPEN-7 |
 | `module_i2c-mapper` | `src/module_i2c-mapper/AGENTS.md` | FR-I2CMAP-1…4 |
@@ -574,7 +574,7 @@
 - CON-6: `src/modules_registry.cpp/.h` — генерируемые, не в git; пересоздаются pre-скриптом `1_registry_pre_build.py` под текущий env.
 - CON-7: Порядок скриптов: `0_esp32_common` → `1_registry_pre_build` → `2_version_builder` → `3_module_version_gen` → `4_fs_builder` → `5_set_fs_data_dir` (pre); `6_copy_fw` → `7_copy_fs` (post).
 - CON-8: Компоненты — отдельные репозитории; для сборки устройства должны быть склонированы оно само и все модули из его `.ini`.
-- CON-9: env-конфиги компонентов перечисляются в `extra_configs` явными путями (glob-маски `src/*/*.ini` и `src/*/*/*.ini` закомментированы); при смене `src_filter`/`build_flags` нужна перегенерация registry.
+- CON-9: env-конфиги компонентов перечисляются в `extra_configs` явными путями (неиспользуемые закомментированы; glob-маски удалены); при смене `src_filter`/`build_flags` нужна перегенерация registry.
 - CON-10: Инструменты — PlatformIO (VSCode); монитор 115200, скорость загрузки 921600.
 - CON-11: Выбор ISP/SWD — через `src_filter` (подключается один `submodule_*`), а не через `#if PROGTYPE_*`.
 
@@ -773,12 +773,14 @@
 
 ### 8.3. Открытые требования (не реализовано; учесть при приёмке)
 
-- OPEN-1: bus-функция `<namespace>.save` реализована только у `device_electronica7_rgb` (`e7.save`); `core_*.save` и `save` у остальных модулей отсутствуют. Масштабировать правило apply/save на все компоненты с resource-bus.
-- OPEN-2: `handleSave` сохраняет конфиг целиком; нужно сохранять только реально изменённые поля.
-- OPEN-3: Guard от цикла `esp_wifi_init` (`WIFI_SCAN_FAILED` → бэкофф → рестарт) не проверен инъекцией реального отказа драйвера; в небезопасных режимах рестарт откладывается бессрочно.
-- OPEN-8: `targets/targets_user.ini` и `src/module_rgb/esp32_macrotest.ini` отсутствуют, но упомянуты в `extra_configs`.
+- OPEN-1: bus-функция `<namespace>.save` реализована у `device_electronica7_rgb` (`e7.save`), `module_veml7700` (`veml7700.save`), `device_projection_clock` (`proj_clock.save`) и ядра `core_ota` (`ota.save`, no-op); у остальных ядер/модулей `save` отсутствует. Масштабировать правило apply/save на все компоненты с resource-bus.
+- OPEN-2: `handleSave` сохраняет конфиг целиком; нужно сохранять только реально изменённые поля (в `core_wifi` sysconf и `core_ntp` уже сделано).
+- OPEN-3: **закрыт** — guard от цикла `esp_wifi_init` (`WIFI_SCAN_FAILED` → бэкофф → рестарт) проверен на плате 2026-11-17: бэкофф 20 с, рестарт на 5-й неудаче, отсрочка в длительных режимах ограничена 60 с. Подробности — `AGENTS.md`, «Сессия 2026-11-17: аудит ядра».
+- OPEN-8: `targets/targets_user.ini` закомментирован в `extra_configs` и опционален (может отсутствовать — PlatformIO это допускает); `src/module_rgb/esp32_macrotest.ini` упомянут в `extra_configs`, но файла нет — открыто.
+- OPEN-11: `targets/targets_example.ini` закомментирован в `extra_configs`, поэтому env `TestCore32`/`TestCore8266` локально не определены; L3 (`tests/compile_matrix/run_matrix.py`, AC-22) и часть матрицы `platformio_ci.yml` по ним неработоспособны. Исправление — отдельная сессия.
+- OPEN-12: CI не адаптирован к мульти-репо разделению: `platformio_ci.yml` не клонирует компонентные репозитории, поэтому env с `module_*`/`device_*` не собираются; триггеры только `main`/`master`/`dev`; `tests-core.yml` ни разу не запускался. Адаптация — отдельная сессия.
 
-> Открытые требования **опциональных** компонентов вынесены в `AGENTS.md`: OPEN-4/OPEN-5/OPEN-6 — `src/module_macros/AGENTS.md`; OPEN-7 — `src/module_rgb/AGENTS.md` (ссылки из `module_gpio`, `module_editor`); OPEN-9 — `src/module_program/AGENTS.md`; OPEN-10 — корневой `README.md` (пометка `> TODO: уточнить`).
+> Открытые требования **опциональных** компонентов вынесены в `AGENTS.md`: OPEN-4/OPEN-5 — `src/module_macros/AGENTS.md`; OPEN-7 — `src/module_rgb/AGENTS.md` (ссылки из `module_gpio`, `module_editor`); OPEN-9 — `src/module_program/AGENTS.md`. OPEN-10 **закрыт**: корневой `README.md` дополнен разделами `core_state`/`core_task`/`module_macros`.
 
 ---
 
@@ -802,7 +804,7 @@
 | `MODULE_LCD_I2C` | Модуль LCD I2C | `src/module_lcd-i2c/AGENTS.md` |
 | `MODULE_DS3231` | Модуль DS3231 | `src/module_ds3231/AGENTS.md` |
 | `MODULE_VEML7700` | Модуль люксметра VEML7700 | `src/module_veml7700/AGENTS.md` |
-| `MODULE_RDA5807M` | Модуль FM/RDS-приёмника RDA5807M (WIP) | `src/module_RDA5807m/AGENTS.md` |
+| `MODULE_RDA5807M` | Модуль FM/RDS-приёмника RDA5807M (freeze) | `src/module_RDA5807m/AGENTS.md` |
 | `MODULE_MACROS` | Модуль макросов (ESP32) | `src/module_macros/AGENTS.md` |
 | `MODULE_OTACLIENT` | OTA-клиент (внедряется в core-группы) | `src/module_otaclient/AGENTS.md` |
 | `MODULE_RGB` | Модуль RGB | `src/module_rgb/AGENTS.md` |

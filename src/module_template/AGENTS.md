@@ -114,9 +114,9 @@ AJAX-страница с `GetJson.js`/`GetMarkup.js`.
 ## Слоистая структура
 
 Из `../../LAYERS.md`: `module_template` — шаблон optional-модуля (эталон структуры);
-demo-логика в `.cpp`; выделить `_types.h`, `_engine.cpp` (показать паттерн).
+demo-логика в `_engine.cpp`; слои выделены (паттерн для копирования).
 
-Ожидаемый набор файлов (см. `../../LAYERS.md`):
+Набор файлов (см. `../../LAYERS.md`):
 
 ```
 module_template_types.h   — define'ы и struct/enum

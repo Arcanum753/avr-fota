@@ -41,8 +41,9 @@
   через env, как раньше). Тулинг и python-скрипты умеют работать с вложенными компонентами
   (`src/<dir...>/<name>`), генератор registry ищет `<name>.ini` по полному пути.
 
-Сборка набора: клонировать нужные репозитории в `src/` → env из их `.ini` подхватывается
-glob-масками `src/*/*.ini` и `src/*/*/*.ini` в `[platformio] extra_configs` → выбрать env и собрать.
+Сборка набора: клонировать нужные репозитории в `src/` → env-файлы компонентов (`.ini`)
+перечисляются в `[platformio] extra_configs` **явными путями** (неиспользуемые закомментированы) →
+при добавлении компонента его `.ini` вносится в список вручную → выбрать env и собрать.
 Репозиторий ядра игнорирует внешние папки через `.gitignore` (`/src/module_*/`, `/src/device_*/`,
 `!/src/module_template/`).
 
@@ -61,7 +62,7 @@ glob-масками `src/*/*.ini` и `src/*/*/*.ini` в `[platformio] extra_conf
 | `module_otaclient` | `src/module_otaclient/` | OTA-клиент |
 | `module_rgb` | `src/module_rgb/` | RGB-матрица (WS2812) |
 | `module_i2c-mapper` | `src/module_i2c-mapper/` | I2C-сканер |
-| `module_RDA5807m` | `src/module_RDA5807m/` | FM/RDS-приёмник RDA5807M, источник времени |
+| `module_RDA5807m` | `src/module_RDA5807m/` | FM/RDS-приёмник RDA5807M, источник времени (**freeze**) |
 | `module_veml7700` | `src/module_veml7700/` | люксметр VEML7700 (I2C) |
 | `device_clock-mech` | `src/device_clock-mech/` | часы механические |
 | `device_mech-ring` | `src/device_mech-ring/` | часы механические с боем |
@@ -113,7 +114,7 @@ glob-масками `src/*/*.ini` и `src/*/*/*.ini` в `[platformio] extra_conf
 | `module_template` | `-D MODULE_TEMPLATE` | Шаблон модуля — основа для создания новых модулей (в ядре) |
 | `module_i2c-mapper` | `-D MODULE_I2C_MAPPER` | Сканер шины I2C (веб-интерфейс, Wire0) |
 | `module_veml7700` | `-D MODULE_VEML7700` | Люксметр VEML7700 (I2C), ресурсы `veml7700.lux/available` |
-| `module_RDA5807m` | `-D MODULE_RDA5807M` | FM/RDS-приёмник RDA5807M, источник времени (WIP) |
+| `module_RDA5807m` | `-D MODULE_RDA5807M` | FM/RDS-приёмник RDA5807M, источник времени (**freeze**) |
 | `module_editor` | `-D MODULE_EDITOR` | Браузер FS, редактор файлов (html/txt/json/js), загрузка/удаление — форк Ace (опционально) |
 
 ### Устройства (device_*) — отдельные репозитории, клонируются в `src/device_*`
@@ -389,8 +390,8 @@ src_filter = ${platformio.src_filter} +<module_program/module_prog/> +<module_pr
 build_flags = ${env.build_flags} -D SWDPIN_CLK=21 -D SWDPIN_DATA=19
 ```
 После изменения `src_filter` в env — перезапустить `python/module_registry_gen.py --env <env>`.
-`extra_configs` в `platformio.ini` использует glob-маски (`src/*/*.ini`, `src/*/*/*.ini`) — env
-подхватываются автоматически из склонированных в `src/` компонентов без ручной регистрации.
+`extra_configs` в `platformio.ini` содержит **явный список** `.ini`-файлов компонентов (неиспользуемые
+закомментированы); при добавлении/удалении компонента список правится вручную.
 
 ### Ресурсная шина и реестр (`core_state`)
 
@@ -611,7 +612,13 @@ on("wifi.just_connected", function(ev) e7.speed(40) end)
 | `TestCore32` | espressif32 | — | «Ядро без внешних компонентов» (`targets/targets_example.ini`), L3/AC-22 |
 | `TestCore8266` | espressif8266 | — | «Ядро без внешних компонентов» (`targets/targets_example.ini`), L3/AC-22 |
 
-Конфиги конкретных таргетов: `targets/targets_example.ini` (примеры) и `targets/targets_user.ini` (пользовательские). Оба подключены в `extra_configs`; `targets_user.ini` может отсутствовать — PlatformIO это допускает. `TestCore32`/`TestCore8266` определены в `targets_example.ini` и используются в L3 и `platformio_ci.yml`.
+Конфиги конкретных таргетов: `targets/targets_example.ini` (примеры) и
+`targets/targets_user.ini` (пользовательские). **На 2026-11-19 оба закомментированы в
+`extra_configs`** (`platformio.ini`): `targets_user.ini` опционален, а `targets_example.ini`
+локально не подключён. Следствие: `TestCore32`/`TestCore8266` определены в
+`targets_example.ini`, но локально **не подключены** — env не определены, поэтому L3 по ним и
+соответствующая часть матрицы `platformio_ci.yml` неработоспособны (открытые проблемы, см.
+`TRS.md` OPEN-11/OPEN-12). Исправление — отдельная сессия.
 
 ### Скрипты сборки (`python/`)
 
@@ -653,11 +660,17 @@ pre-скриптами под текущий env; параллельная сб�
 
 GitHub Actions в ядре:
 
-- `.github/workflows/platformio_ci.yml` — сборка firmware для матрицы env
-  (ядро + клонированные компоненты), загрузка артефактов.
+- `.github/workflows/platformio_ci.yml` — сборка firmware для матрицы env, загрузка артефактов.
+  **Не адаптирован к мульти-репо:** workflow не клонирует компонентные репозитории, поэтому env,
+  требующие `module_*`/`device_*`, не собираются; матрица ссылается на `esp32-gpio`,
+  `esp8266-gpio`, `esp32-c3-devkitm-1`, `TestCore32`, `TestCore8266`, которых сейчас нет в
+  `extra_configs`/`targets_example.ini` (см. `TRS.md` OPEN-11/OPEN-12). Триггеры — только
+  `main`/`master`/`dev`; текущая рабочая ветка `add-macros-and-cron` CI не запускает. Последний
+  успешный прогон — 2026-08-21 на `dev`, до разделения на мульти-репо.
 - `.github/workflows/tests-core.yml` — юнит-тесты ядра: job `core-tests`
   (L1+L2+L3 через `bash tests/scripts/run_core.sh`) на push/PR и job `core-http`
-  (L4, self-hosted с платой, `workflow_dispatch`/тег).
+  (L4, self-hosted с платой, `workflow_dispatch`/тег). На 2026-11-19 workflow ни разу не
+  запускался.
 
 ### Юнит-тестирование ядра (`tests/`)
 
@@ -671,6 +684,8 @@ GitHub Actions в ядре:
   Сейчас собираются только `TestCore32`/`TestCore8266` («ядро без внешних
   компонентов», AC-22); полные `esp32`/`esp8266`/`esp32cam` намеренно исключены
   ради времени (в `envs.txt` — закомментированным списком «на будущее»).
+  `targets_example.ini` сейчас закомментирован в `extra_configs`, поэтому локально env
+  не определены (см. `TRS.md` OPEN-11).
 - **L4** — HTTP API на реальной плате (pytest); без `DEVICE_HOST` — auto-skip.
 
 Запуск:
@@ -848,10 +863,11 @@ avr-fota/
 `esp32_electronica7_rgb_macros`, прошивка 0.082.20260912_2233.1530). Считать их
 списком задач, а не описанием текущего устройства.
 
-1. **`core_*.save` — «функция сохранения» не реализована для ядер.** По правилу
+1. **`core_*.save` — «функция сохранения» не реализована для ядер (частично).** По правилу
    «Применение vs сохранение конфига» компонент с resource-bus обязан иметь bus-функцию
    `save`. Сделано для `device_electronica7_rgb` (`e7.save`), `module_veml7700`
-   (`veml7700.save`) и `device_projection_clock` (`proj_clock.save`). Компоненты без
+   (`veml7700.save`), `device_projection_clock` (`proj_clock.save`), а также в ядре
+   `core_ota` (`ota.save`, no-op — сохранять нечего). Компоненты без
    resource-bus (`module_rgb`, `module_lcd-i2c`, `module_ds3231`,
    `device_clock-mech`, `device_mech-ring`) **не имеют** ни `regFunc`, ни функции
    сохранения — их веб-обработчики сохраняют напрямую, из макросов они недоступны.
@@ -862,14 +878,14 @@ avr-fota/
    памяти (без persist), а пользователь затем через веб поменял другое поле и нажал
    Save — макросное значение тоже уйдёт в конфиг. Нужно: сохранять только реально
    изменённые поля (сравнение с загруженным конфигом). Отмечено в коде
-   `// TODO: уточнить — сохранять только изменённые поля?`.
-3. **`core_wifi`: guard от цикла `esp_wifi_init` не проверен инъекцией отказа.** В
-   `staTick()` при `WIFI_SCAN_FAILED` есть бэкофф (`WIFI_INIT_FAIL_PAUSE_SEC=20`) и
-   контролируемый `ESP.restart()` после `WIFI_INIT_FAIL_MAX=5`, но успешность
-   восстановления при реальном отказе драйвера не подтверждена. Дополнительно: при
-   `system.mode` не `normal/init` рестарт откладывается бессрочно — устройство может
-   остаться без сети. Нужно: продумать восстановление в этих режимах (безопасно для
-   OTA/FS/prog) и проверить на живом сбое. Методика проверки — ниже.
+   `// TODO: уточнить — сохранять только изменённые поля?`. Сделано для
+   `core_wifi` (`/wifi/sysconf`) и `core_ntp`; `core_sys::html_system_Save()` и
+   slot-формы `/api/wifi/slot/N` — открыто.
+3. **Закрыт:** `core_wifi` guard от цикла `esp_wifi_init` проверен на плате 2026-11-17.
+   В `staTick()` при `WIFI_SCAN_FAILED` работает бэкофф (`WIFI_INIT_FAIL_PAUSE_SEC=20`),
+   контролируемый `ESP.restart()` на `WIFI_INIT_FAIL_MAX=5`-й неудаче и отсрочка рестарта
+   в длительных режимах с абсолютным таймаутом `WIFI_INIT_FAIL_DEFER_MAX_SEC=60`. Методика
+   проверки и результаты — ниже, в разделе «Методика проверки `core_wifi` guard».
 4. **`module_macros`: refs после сдвига массива `_files`.** `_files` в heap; при
    удалении/переименовании записи сдвигаются копированием (`_files[j] = _files[j+1]`).
    Активный runtime (`chunkRef`/`envRef`/`stateRef`, массив `handlers`) освобождается в
@@ -896,6 +912,11 @@ avr-fota/
 который не срабатывает в небезопасных режимах. Проверка требует временного
 тестового хука — «естественно» получить `WIFI_SCAN_FAILED` на живой плате нельзя
 (потеря точки доступа даёт «0 сетей», а не отказ драйвера).
+
+**Статус: проверено на плате 2026-11-17** (ESCOP32-D0WDQ6, COM4, сборка с
+`WIFI_GUARD_TEST` + `DEBUG_CORE_WIFI`). Результаты и подробности — в разделе
+«Сессия 2026-11-17: аудит ядра», пункт 1 «Выполнено в коде». Ниже — методика
+(сохранена для повторных проверок).
 
 1. **Тестовый хук (только для отладки, в релиз не коммитить).** В `staTick()`
    (`core_wifi_engine.cpp`) сразу после `int st = WiFi.scanComplete();` добавить
@@ -1057,9 +1078,8 @@ avr-fota/
 с `HEAD`. Для будущих массовых правок: сначала `git stash`/коммит, затем скрипт с
 проверкой баланса `#if`/`#endif` и выводом в `.new`-файл.
 
-**Не выполнено:**
-
-- Пуш модулей в удалённые репозитории.
+**Пуш модулей — закрыто:** все компонентные репозитории и `otasyncer-server`
+синхронизированы с `origin/main` (проверено `git status` 2026-11-19).
 
 **Плата после сессии:** прошита чистым ядром `esp32` (без `WIFI_GUARD_TEST`) с
 отладочными флагами; подключается к Wi-Fi (`192.168.88.123`), NTP синхронизируется,

@@ -81,8 +81,10 @@
    компонентов»; полные `esp32`/`esp8266`/`esp32cam`/`esp32-c3-devkitm-1`
    намеренно исключены ради времени.
 4. **CVT — Node.js** (`ParseCVT`/`ApplyCVT` — JavaScript).
-5. **`targets/targets_example.ini` включён** в `extra_configs` — иначе
-   `TestCore32`/`TestCore8266` не определены.
+5. **`targets/targets_example.ini`** содержит `TestCore32`/`TestCore8266`, но на
+   2026-11-19 файл **закомментирован** в `extra_configs` (`platformio.ini`) — локально
+   env не определены, L3 по ним даёт «env не определён» до отдельного решения о включении
+   (`TRS.md` OPEN-11).
 6. **L4** при отсутствии `DEVICE_HOST` пропускается (exit 0).
 7. **Python через `python3`**: в Ubuntu `python` не существует; резолвер `PY`
    в скриптах, shebang `python3` в py-файлах.
@@ -97,10 +99,8 @@
   локальной полной проверки нужны Linux-тулчейны ESP в `~/.platformio/packages/`.
 - **`size_limits.json` пуст** — пороги RAM/Flash задаются после реальной сборки
   в CI; сейчас размеры только логируются.
-- **Коммиты не делались** — `tests/` и `.github/workflows/tests-core.yml`
-  остаются untracked; `platformio.ini`/`targets/targets_example.ini`/
-  `.github/workflows/platformio_ci.yml`/`.gitignore`/`AGENTS.md` — правки
-  инфраструктуры тестов из предыдущих сессий (не коммитились).
+- **Коммиты — закрыто:** `tests/` и оба workflow отслеживаются git (проверено
+  `git ls-files` 2026-11-19).
 - `src/core_wifi/*` (5 файлов) — правки логики переподключения из соседней
   задачи, к тестам не относятся.
 
