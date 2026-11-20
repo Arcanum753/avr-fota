@@ -37,9 +37,10 @@
 
 - `src/module_template/` остаётся в ядре — эталон для создания новых модулей.
 - Программатор — один репозиторий-контейнер `module_program`, клонируется в `src/module_program/`
-  и содержит вложенные компоненты `module_prog/`, `submodule_isp/`, `submodule_swd/` (выбор ISP/SWD —
-  через env, как раньше). Тулинг и python-скрипты умеют работать с вложенными компонентами
-  (`src/<dir...>/<name>`), генератор registry ищет `<name>.ini` по полному пути.
+  и содержит вложенные компоненты `module_prog/`, `submodule_isp/`, `submodule_swd/`,
+  `submodule_rpico/` (выбор ISP/SWD/RP2040 — через env, как раньше). Тулинг и python-скрипты
+  умеют работать с вложенными компонентами (`src/<dir...>/<name>`), генератор registry ищет
+  `<name>.ini` по полному пути.
 
 Сборка набора: клонировать нужные репозитории в `src/` → env-файлы компонентов (`.ini`)
 перечисляются в `[platformio] extra_configs` **явными путями** (неиспользуемые закомментированы) →
@@ -52,7 +53,7 @@
 | Репозиторий | Папка в `src/` | Содержимое |
 |-------------|----------------|------------|
 | `avr-fota` | — (ядро) | этот репозиторий: core_*, common, core_sys, core_web, python/, targets/, `module_template` |
-| `module_program` | `src/module_program/` | контейнер программатора: `module_prog/` + `submodule_isp/` + `submodule_swd/` |
+| `module_program` | `src/module_program/` | контейнер программатора: `module_prog/` + `submodule_isp/` + `submodule_swd/` + `submodule_rpico/` |
 | `module_udp` | `src/module_udp/` | UDP broadcast |
 | `module_editor` | `src/module_editor/` | файловый редактор FS (форк Ace) |
 | `module_ds3231` | `src/module_ds3231/` | часы реального времени DS3231 |
@@ -104,6 +105,7 @@
 |--------|------|---------|
 | `module_program` (репо) | `-D PROGTYPE_ISP` | AVR-ISP программатор (AtMega/AtTiny): `src/module_program/module_prog` + `.../submodule_isp` |
 | `module_program` (репо) | `-D PROGTYPE_SWD` | SWD программатор (STM32 F1/F4): `src/module_program/module_prog` + `.../submodule_swd` |
+| `module_program` (репо) | `-D PROGTYPE_RPICO` | SWD программатор RP2040 (Raspberry Pi Pico): `src/module_program/module_prog` + `.../submodule_rpico` |
 | `module_gpio` | `-D MODULE_GPIO` | Управление GPIO через web |
 | `module_lcd-i2c` | `-D MODULE_LCD_I2C` | Управление LCD I2C дисплеем (LiquidCrystal_I2C, маски date/time, подсветка) |
 | `module_ds3231` | `-D MODULE_DS3231` | Часы реального времени DS3231 |
@@ -243,7 +245,8 @@
 ```
 Class_ProgBase (module_program/module_prog/module_prog.h)
 ├── Class_SubIsp (module_program/submodule_isp/) — AVR-ISP
-└── Class_SubSwd (module_program/submodule_swd/) — STM32 SWD
+├── Class_SubSwd (module_program/submodule_swd/) — STM32 SWD
+└── Class_SubRpico (module_program/submodule_rpico/) — RP2040 SWD
 
 CLASS_CORE_OTA (core_ota/core_ota.h)
 └── CLASS_MODULE_OTACLIENT (module_otaclient/) — расширенный OTA-клиент
@@ -572,6 +575,7 @@ on("wifi.just_connected", function(ev) e7.speed(40) end)
 | `config_otaclient.json` | `module_otaclient/web/` | Конфиг OTA-клиента |
 | `avrisp_cfg.json` | `module_program/submodule_isp/web/` | База чипов AVR (signature, размер flash, размер страницы) |
 | `swd_cfg.json` | `module_program/submodule_swd/web/` | База чипов SWD (IDCODE, параметры flash) |
+| `rpico_cfg.json` | `module_program/submodule_rpico/web/` | База чипов RP2040 (IDCODE, flash/sector/page) |
 
 ### Последовательный терминал
 
@@ -801,7 +805,7 @@ avr-fota/
 │   ├── module_template/     # Шаблон модуля (эталон для создания новых; остаётся в ядре, не клон)
 │   └── module_*/device_*/   # Клоны внешних репозиториев (в dev-копии лежат все компоненты), каждый со
 │                           # своей .git; вне учёта ядра (см. .gitignore). Программатор:
-│                           # src/module_program/{module_prog,submodule_isp,submodule_swd};
+│                           # src/module_program/{module_prog,submodule_isp,submodule_swd,submodule_rpico};
 │                           # редактор FS: src/module_editor/.
 │   └── *version.h           # Заголовки версий модулей (отслеживаются в git)
 ├── targets/                 # Конфиги таргетов PlatformIO
@@ -854,7 +858,7 @@ avr-fota/
 - `AP_ENABLE_BUTTON` — GPIO для кнопки принудительного AP (по умолчанию -1 = отключено)
 - `USE_LITTLEFS` — включить файловую систему LittleFS
 - `HIDE_SECRET` — скрыть secret.json из браузера FS
-- `PROGTYPE_ISP` / `PROGTYPE_SWD` — включить субмодули программатора (выводятся из `submodule_isp`/`submodule_swd` в `src_filter`)
+- `PROGTYPE_ISP` / `PROGTYPE_SWD` / `PROGTYPE_RPICO` — включить субмодули программатора (выводятся из `submodule_isp`/`submodule_swd`/`submodule_rpico` в `src_filter`)
 - `SWDPIN_CLK`, `SWDPIN_DATA` — назначение выводов SWD
 - `PIN_MISO`, `PIN_MOSI`, `PIN_SCK`, `PIN_RST` — назначение выводов ISP
 

@@ -37,7 +37,7 @@
 | core_task | ядро | `src/core_task/` | — | TRS §3.1.10 | всегда | обе | — | task |
 | EERTOS | ядро (планировщик) | `src/core_sys/eertos.*` | — | TRS §3.1.11 | всегда | обе | — | — |
 | common | ядро (утилиты) | `src/common/` | — | TRS §3.1.12 | всегда | обе | — | — |
-| module_program | модуль | `src/module_program/` | `module_prog`, `submodule_isp`, `submodule_swd` | `src/module_program/AGENTS.md` | PROGTYPE_ISP / PROGTYPE_SWD | ESP32 (env) | — | — |
+| module_program | модуль | `src/module_program/` | `module_prog`, `submodule_isp`, `submodule_swd`, `submodule_rpico` | `src/module_program/AGENTS.md` | PROGTYPE_ISP / PROGTYPE_SWD / PROGTYPE_RPICO | ESP32 (env) | — | — |
 | module_udp | модуль | `src/module_udp/` | — | `src/module_udp/AGENTS.md` | MODULE_UDP | обе | — | — |
 | module_editor | модуль | `src/module_editor/` | — | `src/module_editor/AGENTS.md` | MODULE_EDITOR | обе | — | — |
 | module_ds3231 | модуль | `src/module_ds3231/` | — | `src/module_ds3231/AGENTS.md` | MODULE_DS3231 | обе (SQW — ESP32) | — | — |
@@ -60,7 +60,7 @@
 Мульти-репозиторная компоновка: ядро `avr-fota` — один репозиторий; каждый `module_*` и
 `device_*` — отдельный репозиторий под аккаунтом `Arcanum753` (ветка `main`), клонируемый в
 `src/<имя>`. `module_program` — **один** репозиторий, включающий `module_prog/`,
-`submodule_isp/`, `submodule_swd/`. `module_template` — часть ядра (не клон).
+`submodule_isp/`, `submodule_swd/`, `submodule_rpico/`. `module_template` — часть ядра (не клон).
 
 Для сборки устройства необходимо клонировать само устройство и все указанные в его `.ini`
 модули. Ядро игнорирует внешние папки через `.gitignore` (`/src/module_*/`, `/src/device_*/`,

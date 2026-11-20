@@ -100,6 +100,7 @@
 | `module_prog` | да | да | нет | нет | низкий | `src/module_program/AGENTS.md` |
 | `submodule_isp` | да | частично | нет | нет | низкий | `src/module_program/AGENTS.md` |
 | `submodule_swd` | да | частично | нет | нет | низкий | `src/module_program/AGENTS.md` |
+| `submodule_rpico` | да | частично | нет | нет | низкий | `src/module_program/AGENTS.md` |
 
 Приоритет: `core_*` (высокий) → `module_*`/`device_*` (средний) → `submodule_*` (низкий).
 

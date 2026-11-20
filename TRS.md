@@ -69,7 +69,7 @@
 | Репозиторий | Папка в `src/` | Содержимое |
 |-------------|----------------|------------|
 | `avr-fota` | — (ядро) | `core_*`, `common`, `python/`, `targets/`, `module_template` |
-| `module_program` | `src/module_program/` | контейнер: `module_prog/` + `submodule_isp/` + `submodule_swd/` |
+| `module_program` | `src/module_program/` | контейнер: `module_prog/` + `submodule_isp/` + `submodule_swd/` + `submodule_rpico/` |
 | `module_udp` | `src/module_udp/` | UDP broadcast |
 | `module_editor` | `src/module_editor/` | редактор FS (форк Ace) |
 | `module_ds3231` | `src/module_ds3231/` | часы реального времени DS3231 |
@@ -138,7 +138,8 @@
         │
  module_program ── module_prog (Class_ProgBase)
                   ├── submodule_isp (Class_SubIsp)  → PROGTYPE_ISP
-                  └── submodule_swd (Class_SubSwd)  → PROGTYPE_SWD
+                  ├── submodule_swd (Class_SubSwd)  → PROGTYPE_SWD
+                  └── submodule_rpico (Class_SubRpico) → PROGTYPE_RPICO
 ```
 
 Документация **опциональных** компонентов (каждый — отдельный репозиторий, подключается
@@ -452,6 +453,7 @@
 | `module_program` — контейнер (`module_prog`, `Class_ProgBase`) | `src/module_program/AGENTS.md` | FR-MODPROG-1…6, FR-FMT-1…4, OPEN-9 |
 | `submodule_isp` (в `module_program`) | `src/module_program/AGENTS.md` | FR-ISP-1…9, AC-7 |
 | `submodule_swd` (в `module_program`) | `src/module_program/AGENTS.md` | FR-SWD-1…8, AC-8 |
+| `submodule_rpico` (в `module_program`) | `src/module_program/AGENTS.md` | FR-RPICO-1…10, AC-9 |
 | `module_udp` | `src/module_udp/AGENTS.md` | FR-UDP-1…5, AC-14 |
 | `module_editor` | `src/module_editor/AGENTS.md` | FR-EDITOR-1…4, AC-9, OPEN-7 |
 | `module_ds3231` | `src/module_ds3231/AGENTS.md` | FR-DS3231-1…5 |
@@ -498,6 +500,7 @@
 | module_prog | модуль | `Class_ProgBase` | — | — | 0 | 0 | 0 | — | `src/module_program/AGENTS.md` |
 | submodule_isp | субмодуль | `Class_SubIsp` | `progIsp` | — | 1 | 0 | 0 | — | `src/module_program/AGENTS.md` |
 | submodule_swd | субмодуль | `Class_SubSwd` | `progSwd` | — | 1 | 0 | 0 | — | `src/module_program/AGENTS.md` |
+| submodule_rpico | субмодуль | `Class_SubRpico` | `progRpico` | — | 1 | 0 | 0 | — | `src/module_program/AGENTS.md` |
 | module_udp | модуль | `CLASS_MODULE_UDPBROADCAST` | `module_udp` | — | 1 | 0 | 0 | — | `src/module_udp/AGENTS.md` |
 | module_editor | модуль | `CLASS_MODULE_EDITOR` | `module_editor` | — | 1 | 0 | 0 | — | `src/module_editor/AGENTS.md` |
 | module_ds3231 | модуль | `CLASS_MODULE_DS3231` | `module_ds3231` | — | 1 | 0 | 0 | — | `src/module_ds3231/AGENTS.md` |
@@ -644,6 +647,7 @@
 |-----------|-----------|---------------------|-----------|--------------|
 | AVR ISP | MISO/MOSI/SCK/RST | 19 / 23 / 18 / 5 | `submodule_isp` | `src/module_program/AGENTS.md` |
 | STM32 SWD | CLK/DATA | 21 / 19 | `submodule_swd` | `src/module_program/AGENTS.md` |
+| RP2040 SWD | CLK/DATA | 21 / 19 | `submodule_rpico` | `src/module_program/AGENTS.md` |
 | I2C (DS3231) | SDA/SCL | ESP32 21/22, ESP8266 4/5 | `module_ds3231` | `src/module_ds3231/AGENTS.md` |
 | I2C (LCD) | SDA/SCL | ESP32 21/22, ESP8266 4/5 | `module_lcd-i2c` | `src/module_lcd-i2c/AGENTS.md` |
 | I2C (сканер) | SDA/SCL | ESP32 21/22, ESP8266 4/5 | `module_i2c-mapper` | `src/module_i2c-mapper/AGENTS.md` |
@@ -687,6 +691,7 @@
 | `config_prog.json`, `prog_filelist.json` | module_prog | `src/module_program/AGENTS.md` |
 | `avrisp_cfg.json` | submodule_isp | `src/module_program/AGENTS.md` |
 | `swd_cfg.json` | submodule_swd | `src/module_program/AGENTS.md` |
+| `rpico_cfg.json` | submodule_rpico | `src/module_program/AGENTS.md` |
 | `config_udp.json` | module_udp | `src/module_udp/AGENTS.md` |
 | `config_ds3231.json` | module_ds3231 | `src/module_ds3231/AGENTS.md` |
 | `config_veml7700.json` | module_veml7700 | `src/module_veml7700/AGENTS.md` |
@@ -795,6 +800,7 @@
 | `AP_ENABLE_BUTTON` | GPIO кнопки принудительного AP (`-1` — выключено) | TRS §3.1.3 |
 | `PROGTYPE_ISP` | Сборка с AVR ISP (определяется env/`src_filter`) | `src/module_program/AGENTS.md` |
 | `PROGTYPE_SWD` | Сборка с STM32 SWD | `src/module_program/AGENTS.md` |
+| `PROGTYPE_RPICO` | Сборка с RP2040 SWD (Raspberry Pi Pico) | `src/module_program/AGENTS.md` |
 | `PIN_MISO` / `PIN_MOSI` / `PIN_SCK` / `PIN_RST` | Выводы ISP | `src/module_program/AGENTS.md` |
 | `SWDPIN_CLK` / `SWDPIN_DATA` | Выводы SWD | `src/module_program/AGENTS.md` |
 | `MODULE_UDP` | Модуль UDP broadcast | `src/module_udp/AGENTS.md` |

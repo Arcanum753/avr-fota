@@ -88,6 +88,7 @@
 |--------|-----------|---------------|-----------|--------------|
 | **module_program** (ISP) | `src/module_program/` (module_prog + submodule_isp) | `-D PROGTYPE_ISP` | AVR-ISP программатор (AtMega/AtTiny) | `src/module_program/AGENTS.md` |
 | **module_program** (SWD) | `src/module_program/` (module_prog + submodule_swd) | `-D PROGTYPE_SWD` | SWD программатор (STM32) | `src/module_program/AGENTS.md` |
+| **module_program** (RP2040) | `src/module_program/` (module_prog + submodule_rpico) | `-D PROGTYPE_RPICO` | SWD программатор RP2040 (Raspberry Pi Pico) | `src/module_program/AGENTS.md` |
 | **module_udp** | `src/module_udp/` | `-D MODULE_UDP` | UDP-широковещание, обнаружение устройств в сети | `src/module_udp/AGENTS.md` |
 | **module_editor** | `src/module_editor/` | `-D MODULE_EDITOR` | Браузер файловой системы, редактор .html/.txt/.json/.js файлов (форк Ace), загрузка/удаление | `src/module_editor/AGENTS.md` |
 | **module_ds3231** | `src/module_ds3231/` | `-D MODULE_DS3231` | Часы реального времени DS3231 | `src/module_ds3231/AGENTS.md` |
@@ -140,6 +141,21 @@ build_flags=
     -D SWDPIN_CLK=21
     -D SWDPIN_DATA=19
 ```
+
+**ESP32 + RP2040 SWD программатор (Raspberry Pi Pico):**
+```ini
+[env:esp32-rpico]
+extends = env:esp32
+src_filter = ${platformio.src_filter} +<module_program/module_prog/> +<module_program/submodule_rpico/> +<module_udp/>
+build_flags=
+    ${env.build_flags}
+    ${env:esp32.build_flags}
+    -D SWDPIN_CLK=21
+    -D SWDPIN_DATA=19
+    -D RPICO_RST_PIN=22
+    -D RPICO_SWD_DELAY=2
+```
+`MODULE_*`/`PROGTYPE_*` выводятся в `src/modules_defines.h` автоматически из `src_filter`.
 
 **ESP32 + AVR-ISP программатор:**
 ```ini
@@ -706,6 +722,7 @@ ESP8266 скрипт не затрагивает.
 | **config_prog.json**, **prog_filelist.json** | module_program | `src/module_program/AGENTS.md` |
 | **avrisp_cfg.json** | module_program (submodule_isp) | `src/module_program/AGENTS.md` |
 | **swd_cfg.json** | module_program (submodule_swd) | `src/module_program/AGENTS.md` |
+| **rpico_cfg.json** | module_program (submodule_rpico) | `src/module_program/AGENTS.md` |
 | **config_ds3231.json** | module_ds3231 | `src/module_ds3231/AGENTS.md` |
 | **config_lcd-i2c.json** | module_lcd-i2c | `src/module_lcd-i2c/AGENTS.md` |
 | **config_macros.json** | module_macros | `src/module_macros/AGENTS.md` |
