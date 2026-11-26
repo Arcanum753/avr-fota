@@ -65,6 +65,7 @@
 | `module_i2c-mapper` | `src/module_i2c-mapper/` | I2C-сканер |
 | `module_RDA5807m` | `src/module_RDA5807m/` | FM/RDS-приёмник RDA5807M, источник времени (**freeze**) |
 | `module_veml7700` | `src/module_veml7700/` | люксметр VEML7700 (I2C) |
+| `module_uart2tcp` | `src/module_uart2tcp/` | UART2↔TCP/WebSocket мост (веб-терминал xterm.js) |
 | `device_clock-mech` | `src/device_clock-mech/` | часы механические |
 | `device_mech-ring` | `src/device_mech-ring/` | часы механические с боем |
 | `device_electronica7_rgb` | `src/device_electronica7_rgb/` | часы Электроника-7 RGB |
@@ -117,6 +118,7 @@
 | `module_i2c-mapper` | `-D MODULE_I2C_MAPPER` | Сканер шины I2C (веб-интерфейс, Wire0) |
 | `module_veml7700` | `-D MODULE_VEML7700` | Люксметр VEML7700 (I2C), ресурсы `veml7700.lux/available` |
 | `module_RDA5807m` | `-D MODULE_RDA5807M` | FM/RDS-приёмник RDA5807M, источник времени (**freeze**) |
+| `module_uart2tcp` | `-D MODULE_UART2TCP` | UART2↔TCP/WebSocket мост с веб-терминалом xterm.js (только ESP32) |
 | `module_editor` | `-D MODULE_EDITOR` | Браузер FS, редактор файлов (html/txt/json/js), загрузка/удаление — форк Ace (опционально) |
 
 ### Устройства (device_*) — отдельные репозитории, клонируются в `src/device_*`
