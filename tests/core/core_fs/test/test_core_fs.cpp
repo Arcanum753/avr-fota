@@ -34,8 +34,8 @@ static void test_safe(void) {
     while (longPath.length() <= CORE_FS_MAX_PATH) { longPath += 'x'; }
     TEST_ASSERT_FALSE(fsPathIsSafe(longPath));
 
-    String longName = "/x";
-    while (longName.length() <= CORE_FS_MAX_NAME) { longName += 'x'; }
+    String longName = "/";
+    while ((int)longName.length() - 1 <= CORE_FS_MAX_NAME) { longName += 'x'; }
     TEST_ASSERT_FALSE(fsPathIsSafe(longName));
 }
 

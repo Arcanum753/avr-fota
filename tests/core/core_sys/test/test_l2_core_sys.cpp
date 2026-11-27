@@ -535,6 +535,7 @@ static void test_time_rtc_reverse_sync_interval(void) {
     TEST_ASSERT_EQUAL_INT(0, g_bSetCalls);
 
     mockMillisAdvance(11000);
+    g_aT += 11;                // источник идёт вместе с часами (иначе backward-jump)
     tickOnce();                // интервал истёк — одна запись в b
     TEST_ASSERT_EQUAL_INT(1, g_bSetCalls);
 

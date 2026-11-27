@@ -50,7 +50,8 @@ jobs:
 
       - name: Install tools
         run: |
-          pip install --upgrade platformio gcovr pytest
+          # intelhex/pyelftools нужны L3-сборке TestCore32 (bootloader.bin, ELF).
+          pip install --upgrade platformio gcovr pytest intelhex pyelftools
 
       # Версии закреплены в platformio.ini: espressif32@7.0.1 (core 2.0.17) и
       # espressif8266@4.2.1. Свежая espressif32@8.0.0 несовместима с

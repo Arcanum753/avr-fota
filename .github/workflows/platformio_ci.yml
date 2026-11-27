@@ -46,7 +46,8 @@ jobs:
         python-version: '3.11'
 
     - name: Install PlatformIO
-      run: pip install --upgrade platformio
+      # intelhex/pyelftools нужны esp32-сборке (bootloader.bin, анализ ELF).
+      run: pip install --upgrade platformio intelhex pyelftools
 
     # Платформа ставится явно, чтобы кэш ~/.platformio наполнялся предсказуемо
     # и сборка не зависела от автоустановки при первом pio run.
