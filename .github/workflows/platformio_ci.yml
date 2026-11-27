@@ -52,11 +52,11 @@ jobs:
     # и сборка не зависела от автоустановки при первом pio run.
     - name: Install ESP32 platform
       if: matrix.env != 'esp8266'
-      run: pio pkg install --global --platform "platformio/espressif32"
+      run: pio pkg install --global --platform "platformio/espressif32@7.0.1"
 
     - name: Install ESP8266 platform
       if: matrix.env == 'esp8266'
-      run: pio pkg install --global --platform "platformio/espressif8266"
+      run: pio pkg install --global --platform "platformio/espressif8266@4.2.1"
 
     # src/modules_registry.cpp генерируется под текущий env pre-скриптом
     # python/1_registry_pre_build.py (без #if defined) — отдельный шаг не нужен.

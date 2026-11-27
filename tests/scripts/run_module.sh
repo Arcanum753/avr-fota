@@ -32,6 +32,13 @@ elif command -v python > /dev/null 2>&1; then
     PY="python"
 fi
 
+# modules_defines.h генерируется pre-скриптом сборки; native-тесты запускаются
+# без root extra_scripts, поэтому в чистом клоне создаём заголовок заранее.
+if [[ -n "$PY" && ! -f "$ROOT/src/modules_defines.h" && -f "$ROOT/python/module_registry_gen.py" ]]; then
+    "$PY" "$ROOT/python/module_registry_gen.py" --env TestCore32 > /dev/null 2>&1 \
+        || echo "[$MODULE] WARN: не удалось сгенерировать src/modules_defines.h" >&2
+fi
+
 mkdir -p "$OUT"
 
 rc=0

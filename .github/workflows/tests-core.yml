@@ -52,12 +52,14 @@ jobs:
         run: |
           pip install --upgrade platformio gcovr pytest
 
-      # Нужны для L3: pio run -e TestCore32/TestCore8266 (espressif32/espressif8266).
+      # Версии закреплены в platformio.ini: espressif32@7.0.1 (core 2.0.17) и
+      # espressif8266@4.2.1. Свежая espressif32@8.0.0 несовместима с
+      # AsyncTCP-esphome@2.1.4 (нет IPv6Address.h).
       - name: Install ESP32 platform
-        run: pio pkg install --global --platform "platformio/espressif32"
+        run: pio pkg install --global --platform "platformio/espressif32@7.0.1"
 
       - name: Install ESP8266 platform
-        run: pio pkg install --global --platform "platformio/espressif8266"
+        run: pio pkg install --global --platform "platformio/espressif8266@4.2.1"
 
       - name: Run core tests (orchestrator)
         run: bash tests/scripts/run_core.sh

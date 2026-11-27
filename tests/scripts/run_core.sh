@@ -33,6 +33,14 @@ elif command -v python > /dev/null 2>&1; then
     PY="python"
 fi
 
+# modules_defines.h генерируется pre-скриптом сборки (1_registry_pre_build.py).
+# Native-тесты используют свои tests/core/<module>/platformio.ini без root
+# extra_scripts, поэтому в чистом клоне (CI) заголовка нет — создаём под core-env.
+if [[ -n "$PY" && -f "$ROOT/python/module_registry_gen.py" ]]; then
+    "$PY" "$ROOT/python/module_registry_gen.py" --env TestCore32 > /dev/null 2>&1 \
+        || echo "[orchestrator] WARN: не удалось сгенерировать src/modules_defines.h" >&2
+fi
+
 MODULES=(
   common
   core_web
