@@ -3,8 +3,10 @@
 
 #include "main.h"
 
+#include "mod_context.h"
+
 #ifdef DEBUG_TEMPLATE
-#define DEBUGTEMPLATE(...) Serial.printf(__VA_ARGS__)
+#define DEBUGTEMPLATE(...) DBG_MOD("[M_TEMPLATE] ", __VA_ARGS__)
 #else
 #define DEBUGTEMPLATE(...)
 #endif
@@ -15,38 +17,33 @@
 #include <LittleFS.h>
 #endif
 
-// Пины для двух GPIO, управляемых с веб-страницы
-#if defined(ESP32)
-#define TEMPLATE_GPIO1  32   // D32
-#define TEMPLATE_GPIO2  33   // D33
-#elif defined(ESP8266)
-#define TEMPLATE_GPIO1  16   // D0
-#define TEMPLATE_GPIO2  14   // D5
-#endif
+#include "module_template_types.h"
 
-#define CONFIG_FILE_TEMPLATE    "/config_template.json"
-
-// Структура конфига — сохраняется в config_template.json
-typedef struct {
-    bool gpio1State;
-    bool gpio2State;
-    uint16_t blinkInterval;   // период моргания в мс, 0 = не моргать
-    String demoSampleText;    // демо-поле, ни на что не влияет
-    String demoArray[3];      // пример массива строк — см. load_config_template()
-} strTmplConfig;
-
-class MODULE_CLASS_TEMPLATE {
+class CLASS_MODULE_TEMPLATE {
 public:
-    MODULE_CLASS_TEMPLATE(bool _in);
 #if ESP32
     void setFs(fs::LittleFSFS* fs);
 #elif defined(ESP8266)
     void setFs(FS* fs);
 #endif
     void begin();
-    void webInit();
+    void begin(ModContext& ctx);
+    void web_Init();
+    void terminalRegister();
+
+    // Демо-кассета светодиодной индикации (пример: как модуль носит свою кассету)
+    void ledMacrosTemplateDemo();
 
 private:
+    // Терминальные команды: статические методы-члены, поэтому имеют
+    // прямой доступ к приватному состоянию модуля (см. _terminal.cpp).
+    static void s_terminalCmd();
+    static void s_cmdShow();
+    static void s_cmdGpio();
+    static void s_cmdBlink();
+    static void s_cmdText();
+    static void s_cmdSave();
+
     String getVersionStr();
     String getGeneratedTime();
     String getCommitDateStr();
@@ -65,10 +62,11 @@ private:
 
     // Логика моргания
     void applyGpioState();
+    void applyGpioTarget();
+    void applyBlinkTimer();
     static void blinkTimerTask();
 
 protected:
-    bool dumb;
 #if ESP32
     fs::LittleFSFS*               _fs;
 #elif defined(ESP8266)
@@ -77,8 +75,10 @@ protected:
 
     strTmplConfig _config;
     bool _blinkState;
+    // true — в памяти есть изменения, которых нет на FS (правило apply/save).
+    bool _configDirty;
 };
 
-extern MODULE_CLASS_TEMPLATE ModClassTemplate;
+extern CLASS_MODULE_TEMPLATE module_template;
 
 #endif // _MODULE_TEMPLATE_h

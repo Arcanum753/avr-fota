@@ -1,0 +1,598 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>ESP Firmware &amp FS OTA</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-type" content="text/html; charset=utf-8">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <markup>./page_head.html</markup>
+    <h2 class="title" style="background: #7D8EE2; padding: 8px;"> ESP chip firmware &amp filesystem self update page</h2>
+    <hr>
+    
+    <div id="progressContainer" class="prog-container" style="display: none;">
+        <div id="progressText">Upload progress: 0%</div>
+        <div class="prog-bar-bg">
+            <div id="progressBar" class="prog-bar-fill" style="width: 0%;"></div>
+        </div>
+    </div>
+    
+    <div class="content">
+    <form id="uploadForm" enctype='multipart/form-data'>
+        <table class="global_table_style">
+            <thead><tr><th colspan="2">Firmware & Filesystem Update</th></tr></thead>
+            <tr><td colspan="2">
+                 <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                     <input id="fileName" type='file' name='update' onchange="summd5()" style="padding: 6px; font-size: 14px; flex: 1; min-width: 200px;">
+                 </div>
+            </td></tr>
+            <tr><td colspan="2" id="md5row" >
+                    Calculated file MD5 hash: <span id="clientHash">Select a file</span><br>
+                    Size: <span id="fileSize"></span> Bytes <br>
+                    Filename: <span id="fileNameLoaded"></span>
+                  </td>
+            </tr>
+             <tr><td id="versionInfoSection" style="padding: 0;">
+                 <table style="width: 100%; border: none; border-collapse: collapse;">
+                     <!-- Current versions -->
+                     <tr><td style="border: none; padding: 2px 4px;">
+                         <div class="diff-block-label">Current device versions</div>
+                         <span id="updFsCurrentFW" class="ver-abs-row"> </span><br>
+                         <span id="updFsCurrentFS" class="ver-abs-row"> </span><br>
+                     </td></tr>
+                     <!-- File info & diffs -->
+                     <tr><td style="border: none; padding: 2px 4px;">
+                         <div class="diff-block-label">File check results</div>
+                         <span id="updStatus"> </span><br>
+                         <span id="updSizeFree"> </span><br>
+                         <span id="updSizeMax"> </span><br>
+                         <span id="updFileType"> </span><br>
+                         <span id="updVerDiffName"> </span><br>
+                         <span id="updVerFileVersion" class="ver-abs-row"> </span><br>
+                         <span id="updVerCurrentVersion" class="ver-abs-row"> </span><br>
+                         <span id="updVerDiffMaj"> </span><br>
+                         <span id="updVerDiffMinor"> </span><br>
+                         <span id="updVerDiffDate"> </span><br>
+                         <span id="updVerDiffBuild"> </span><br>
+                         <span id="updIsDebug"> </span><br>
+                         <span id="updFsCompare"> </span><br>
+                         <span id="updBlockReason" class="block-reason" style="display: none;"> </span>
+                     </td></tr>
+                  </table>
+              </td></tr>
+             <tr><td colspan="2" style="text-align: center;">
+                 <div style="display: flex; align-items: center; justify-content: center; gap: 12px; flex-wrap: wrap;">
+                     <input id="updateButton" type='button' value='Update ESP chip firmware.' disabled onclick="uploadFile()" class="button-prog" style="padding: 8px 24px; font-size: 15px;">
+                     <label>
+                         <input type="checkbox" id="ignoreCheck" onchange="updateButtonState()">Ignore validation and force upload
+                     </label>
+                 </div>
+               </td> </tr>
+        </table>
+    </form>
+    </div>
+
+    <markup>./page_bottom.html</markup>
+    <script src="GetMarkup.js" defer></script>
+    <script src="GetJson.js" defer></script>
+    <script src="spark-md5.js" defer></script>
+    <script> 
+        let progressTimer = null;
+        let isUploading = false;
+
+        window.onload = function () {
+            setTimeout(() => {
+                ApplyCVT("/system/version")
+                    .then(() => ApplyCVT("/system/infovalues"))
+                    .then(() => {
+                        return new Promise((resolve) => {
+                            const xhr = new XMLHttpRequest();
+                            xhr.open('GET', '/update/ver', true);
+                            xhr.onload = function() {
+                                if (xhr.status === 200) {
+                                    const fieldsRows = ParseCVT(xhr.response);
+                                    let fwVersion = "";
+                                    let fsVersion = "";
+                                    for (let fields of fieldsRows) {
+                                        if (fields[0] === "fwVersion") {
+                                            fwVersion = fields[1];
+                                        } else if (fields[0] === "fsVersion") {
+                                            fsVersion = fields[1];
+                                        }
+                                    }
+                                    if (fwVersion) {
+                                        document.getElementById('updFsCurrentFW').innerHTML = "Current Firmware: " + fwVersion;
+                                    }
+                                    if (fsVersion) {
+                                        document.getElementById('updFsCurrentFS').innerHTML = "Current File System: " + fsVersion;
+                                    }
+                                }
+                                resolve();
+                            };
+                            xhr.onerror = function() { resolve(); };
+                            xhr.send();
+                        });
+                    });
+            }, 500);
+        };
+
+        var blobSlice = File.prototype.slice || File.prototype.mozSlice || File.prototype.webkitSlice,
+                  input = document.getElementById('fileName'),
+                  running = false,
+                  ua = navigator.userAgent.toLowerCase();
+
+        let lastCheckResult = {
+            canUpdate: false,
+            fileType: "UNSUPPORTED",
+            buttonText: ""
+        };
+
+        function stopProgressPolling() {
+            if (progressTimer) {
+                clearInterval(progressTimer);
+                progressTimer = null;
+            }
+            isUploading = false;
+        }
+
+        function hideProgressBar() {
+            document.getElementById('progressContainer').style.display = 'none';
+            updateProgressDisplay(0);
+        }
+
+        function startProgressPolling() {
+            document.getElementById('progressContainer').style.display = 'block';
+            isUploading = true;
+            
+            if (progressTimer) {
+                clearInterval(progressTimer);
+                progressTimer = null;
+            }
+            
+            progressTimer = setInterval(function() {
+                if (!isUploading) {
+                    stopProgressPolling();
+                    return;
+                }
+                
+                const xhr = new XMLHttpRequest();
+                xhr.open('GET', '/update/progress', true);
+                
+                xhr.onload = function() {
+                    if (!isUploading) {
+                        stopProgressPolling();
+                        return;
+                    }
+                    if (xhr.status === 200) {
+                        const fieldsRows = ParseCVT(xhr.response);
+                        for (let fields of fieldsRows) {
+                            if (fields[0] === "percent") {
+                                const percent = parseInt(fields[1]);
+                                updateProgressDisplay(percent);
+                                
+                                if (percent >= 100) {
+                                    setTimeout(() => {
+                                        if (isUploading) {
+                                        }
+                                    }, 2000);
+                                }
+                                break;
+                            }
+                        }
+                    }
+                };
+                
+                xhr.onerror = function() { 
+                    console.error('Progress poll error — device may be rebooting');
+                    stopProgressPolling();
+                    hideProgressBar();
+                };
+                
+                xhr.send();
+            }, 1000);
+        }
+
+        function updateProgressDisplay(percent) {
+            const progressText = document.getElementById('progressText');
+            const progressBar = document.getElementById('progressBar');
+            
+            if (progressText) {
+                progressText.innerHTML = `Upload progress: ${percent}%`;
+            }
+            if (progressBar) {
+                progressBar.style.width = percent + '%';
+                if (percent < 30) {
+                    progressBar.style.backgroundColor = '#ff4444';
+                } else if (percent < 70) {
+                    progressBar.style.backgroundColor = '#ffaa00';
+                } else {
+                    progressBar.style.backgroundColor = '#4CAF50';
+                }
+            }
+        }
+
+        function formatFsCompare(value) {
+            switch(value) {
+                case "SAME": return "✓ Same version (OK)";
+                case "NEWER": return "↑ Newer than current (OK)";
+                case "OLDER": return "↓ Older than current (WARNING)";
+                case "NO_JSON": return "⚠ No version_fs.json, comparing with firmware";
+                default: return "Unknown: " + value;
+            }
+        }
+
+        function formatDiffSpan(diff) {
+            if (diff > 0) return '<span class="diff-newer">+' + diff + ' (newer)</span>';
+            if (diff < 0) return '<span class="diff-older">' + diff + ' (older)</span>';
+            return '<span class="diff-same">0 (same)</span>';
+        }
+
+        function formatDateDiffSpan(diffSeconds) {
+            if (diffSeconds === 0) return '<span class="diff-same">0 (same)</span>';
+            
+            let absDiff = Math.abs(diffSeconds);
+            let isOlder = diffSeconds < 0;
+            let result = "";
+            
+            let years = Math.floor(absDiff / 31536000);
+            absDiff %= 31536000;
+            let months = Math.floor(absDiff / 2592000);
+            absDiff %= 2592000;
+            let days = Math.floor(absDiff / 86400);
+            absDiff %= 86400;
+            let hours = Math.floor(absDiff / 3600);
+            absDiff %= 3600;
+            let minutes = Math.floor(absDiff / 60);
+            let seconds = absDiff % 60;
+            
+            if (years > 0) {
+                result += years + "y ";
+            }
+            if (months > 0) {
+                result += months + "m ";
+            }
+            if (days > 0) {
+                result += days + "d ";
+            }
+            if (years === 0 && months === 0 && days === 0 && hours > 0) {
+                result += hours + "h ";
+            }
+            if (years === 0 && months === 0 && days === 0 && hours === 0 && minutes > 0) {
+                result += minutes + "min ";
+            }
+            if (years === 0 && months === 0 && days === 0 && hours === 0 && minutes === 0 && seconds > 0) {
+                result += seconds + "s ";
+            }
+            
+            result = result.trim();
+            let cls = isOlder ? 'diff-older' : 'diff-newer';
+            let label = isOlder ? " (older)" : " (newer)";
+            if (!isOlder) {
+                result = "+" + result;
+            }
+            return '<span class="' + cls + '">' + result + label + '</span>';
+        }
+
+        function summd5() {
+            input = document.getElementById("fileName");
+            if (running) { return; }
+            if (!input.files.length) {
+                console.error('Please select a file');
+                return;
+            }
+            
+            var file = input.files[0];
+
+            var fileReader = new FileReader(),
+                time;
+            
+            fileReader.onload = function (e) {
+                running = false;
+                if (file.size != e.target.result.length) {
+                    console.error('ERROR: Browser reported success but could not read the file until the end');
+                } else {
+                    md5hash = SparkMD5.hashBinary(e.target.result);
+                    console.info('Finished loading!');
+                    console.info('Computed hash: ' + md5hash);
+                    console.info('Total time: ' + (new Date().getTime() - time) + 'ms');
+                    
+                    document.getElementById('md5row').hidden = false;
+                    document.getElementById('clientHash').innerHTML = md5hash;
+                    document.getElementById('fileSize').innerHTML = file.size;
+                    document.getElementById('fileNameLoaded').innerHTML = file.name;
+                    
+                    const xhr = new XMLHttpRequest();
+                    const url = '/update/setmd5?md5=' + encodeURIComponent(md5hash) + 
+                                '&size=' + file.size + 
+                                '&name=' + encodeURIComponent(file.name);
+                    
+                    xhr.open('GET', url, true);
+                    
+                    xhr.onload = function() {
+                        if (xhr.status == 200) {
+                            console.info('MD5 data sent successfully');
+                            setTimeout(fileChechInfoGet, 250);
+                        } else {
+                            console.error('Error sending MD5 data: ' + xhr.status);
+                        }
+                    };
+                    
+                    xhr.onerror = function() {
+                        console.error('Network error sending MD5 data');
+                    };
+                    
+                    xhr.send();
+                }
+            };
+            
+            fileReader.onerror = function () {
+                running = false;
+                console.error('ERROR: FileReader onerror was triggered, maybe the browser aborted due to high memory usage');
+            };
+            
+            running = true;
+            console.info('Starting normal test (' + file.name + ')');
+            time = new Date().getTime();
+            fileReader.readAsBinaryString(file);
+        }
+                
+        function fileChechInfoGet() {
+            const updStatus = document.getElementById('updStatus');
+            const updSizeFree = document.getElementById('updSizeFree');
+            const updSizeMax = document.getElementById('updSizeMax');
+            const updFileType = document.getElementById('updFileType');
+            const updVerDiffName = document.getElementById('updVerDiffName');
+            const updVerFileVersion = document.getElementById('updVerFileVersion');
+            const updVerCurrentVersion = document.getElementById('updVerCurrentVersion');
+            const updVerDiffMaj = document.getElementById('updVerDiffMaj');
+            const updVerDiffMinor = document.getElementById('updVerDiffMinor');
+            const updVerDiffDate = document.getElementById('updVerDiffDate');
+            const updVerDiffBuild = document.getElementById('updVerDiffBuild');
+            const updIsDebug = document.getElementById('updIsDebug');
+            const updFsCompare = document.getElementById('updFsCompare');
+            const updFsCurrentFS = document.getElementById('updFsCurrentFS');
+            const updFsCurrentFW = document.getElementById('updFsCurrentFW');
+            const updBlockReason = document.getElementById('updBlockReason');
+            
+            const xhr = new XMLHttpRequest();
+            xhr.open('get', "/update/firmwarefilecheck");
+            xhr.send();
+            
+            xhr.addEventListener('loadend', () => {
+                const fieldsRows = ParseCVT(xhr.response);
+                
+                let fileType = "UNSUPPORTED";
+                let nameMatch = "NO";
+                let majorDiff = 0, minorDiff = 0, dateDiff = 0, buildDiff = 0, isDebug = 0;
+                let status = "", sizeFree = "", sizeMax = "";
+                let fsCompare = "", fsCurrentMajor = 0, fsCurrentMinor = 0, fsCurrentDate = 0, fsCurrentBuild = 0;
+                let fileAbsoluteMajor = 0, fileAbsoluteMinor = 0, fileAbsoluteDate = 0, fileAbsoluteBuild = 0;
+                
+                for (let fields of fieldsRows) {
+                    const key = fields[0];
+                    const value = fields[1];
+                    
+                    switch(key) {
+                        case "updStatus": 
+                            status = value;
+                            updStatus.innerHTML = "Status: " + value;
+                            break;
+                        case "updSizeFree": 
+                            sizeFree = value;
+                            updSizeFree.innerHTML = "Free space: " + value + " bytes";
+                            break;
+                        case "updSizeMax": 
+                            sizeMax = value;
+                            updSizeMax.innerHTML = "Max space: " + value + " bytes";
+                            break;
+                        case "updFileType": 
+                            fileType = value;
+                            updFileType.innerHTML = 'File type: <span style="font-weight: bold; color: #4CAF50;">' + value + '</span>';
+                            break;
+                        case "updVerDiffName": 
+                            nameMatch = value;
+                            if (value === "MATCHED") {
+                                updVerDiffName.innerHTML = 'Device: <span class="diff-matched">MATCHED</span>';
+                            } else {
+                                updVerDiffName.innerHTML = 'Device: <span class="diff-unmatched">' + value + '</span>';
+                            }
+                            break;
+                        case "updVerDiffMaj": 
+                            majorDiff = parseInt(value);
+                            break;
+                        case "updVerDiffMinor": 
+                            minorDiff = parseInt(value);
+                            break;
+                        case "updVerDiffDate": 
+                            dateDiff = parseInt(value);
+                            break;
+                        case "updVerDiffBuild": 
+                            buildDiff = parseInt(value);
+                            break;
+                        case "updIsDebug": 
+                            isDebug = parseInt(value);
+                            if (isDebug) {
+                                updIsDebug.innerHTML = 'Debug build: <span class="diff-debug-yes">Yes</span>';
+                            } else {
+                                updIsDebug.innerHTML = 'Debug build: <span class="diff-debug-no">No</span>';
+                            }
+                            break;
+                        case "updFsCompare":
+                            fsCompare = value;
+                            updFsCompare.innerHTML = "FS vs Current: " + formatFsCompare(value);
+                            break;
+                        case "updFsCurrentMajor":
+                            fsCurrentMajor = parseInt(value);
+                            break;
+                        case "updFsCurrentMinor":
+                            fsCurrentMinor = parseInt(value);
+                            break;
+                        case "updFsCurrentDate":
+                            fsCurrentDate = parseInt(value);
+                            break;
+                        case "updFsCurrentBuild":
+                            fsCurrentBuild = parseInt(value);
+                            break;
+                    }
+                }
+                
+                // Compute absolute file version = current + diff
+                fileAbsoluteMajor = fsCurrentMajor + majorDiff;
+                fileAbsoluteMinor = fsCurrentMinor + minorDiff;
+                fileAbsoluteDate = fsCurrentDate + dateDiff;
+                fileAbsoluteBuild = fsCurrentBuild + buildDiff;
+                
+                // Display absolute versions
+                if (updVerFileVersion) {
+                    updVerFileVersion.innerHTML = "File version: " + fileAbsoluteMajor + "." + fileAbsoluteMinor + "." + fileAbsoluteDate + "." + fileAbsoluteBuild;
+                }
+                if (updVerCurrentVersion) {
+                    updVerCurrentVersion.innerHTML = "Current version: " + fsCurrentMajor + "." + fsCurrentMinor + "." + fsCurrentDate + "." + fsCurrentBuild;
+                }
+                
+                // Display diffs with colored styling
+                updVerDiffMaj.innerHTML = "Major diff: " + formatDiffSpan(majorDiff);
+                updVerDiffMinor.innerHTML = "Minor diff: " + formatDiffSpan(minorDiff);
+                updVerDiffDate.innerHTML = "Date diff: " + formatDateDiffSpan(dateDiff);
+                updVerDiffBuild.innerHTML = "Build diff: " + formatDiffSpan(buildDiff);
+                
+                // Compute canUpdate: must match server logic from fileNameCheck (core_ota.cpp)
+                let canUpdate = false;
+                let blockReason = "";
+                let buttonText = "Update ESP chip firmware.";
+
+                if (status === "OK" && nameMatch === "MATCHED") {
+                    if (fsCompare === "NEWER") {
+                        let majorOk = majorDiff >= 0;
+                        let minorOk = minorDiff >= 0;
+                        if (majorOk && minorOk && isDebug) {
+                            canUpdate = buildDiff >= 0 && buildDiff > 0;
+                            if (!canUpdate) blockReason = "Build is not newer (debug build requires buildDiff > 0)";
+                        } else if (majorOk && minorOk) {
+                            canUpdate = dateDiff >= 0 && dateDiff > 0;
+                            if (!canUpdate) blockReason = "Date is not newer (release build requires dateDiff > 0)";
+                        } else {
+                            blockReason = "Major/minor version is not newer";
+                        }
+                    } else if (fsCompare === "SAME") {
+                        blockReason = "Version is identical to current";
+                    } else if (fsCompare === "OLDER") {
+                        blockReason = "File version is older than current";
+                    } else {
+                        blockReason = "Unknown FS version comparison: " + fsCompare;
+                    }
+                    if (canUpdate) {
+                        buttonText = "Update " + fileType + ".";
+                    }
+                } else {
+                    if (status !== "OK") blockReason = "Server rejected file (status: " + status + ")";
+                    else if (nameMatch !== "MATCHED") blockReason = "Device name mismatch";
+                }
+                
+                if (updBlockReason) {
+                    if (blockReason) {
+                        updBlockReason.style.display = "block";
+                        updBlockReason.innerHTML = "⛔ " + blockReason;
+                    } else {
+                        updBlockReason.style.display = "none";
+                    }
+                }
+                
+                lastCheckResult = {
+                    canUpdate: canUpdate,
+                    fileType: fileType,
+                    buttonText: buttonText
+                };
+                
+                updateButtonState();
+            });
+        }
+
+        function updateButtonState() {
+            const _button = document.getElementById('updateButton');
+            const ignoreCheck = document.getElementById('ignoreCheck');
+            
+            if (ignoreCheck.checked) {
+                _button.disabled = false;
+                _button.value = "Upload (forced)";
+            } else {
+                _button.disabled = !lastCheckResult.canUpdate;
+                _button.value = lastCheckResult.buttonText || "Update ESP chip firmware.";
+            }
+        }
+
+        function uploadFile() {
+            const fileInput = document.getElementById('fileName');
+            const file = fileInput.files[0];
+            
+            if (!file) {
+                alert('Please select a file first');
+                return;
+            }
+            
+            startProgressPolling();
+            
+            const formData = new FormData();
+            formData.append('update', file);
+            
+            const xhr = new XMLHttpRequest();
+            
+            xhr.open('POST', '/update', true);
+            
+            xhr.onload = function() {
+                stopProgressPolling();
+                
+                if (xhr.status === 200) {
+                    const text = xhr.responseText;
+                    
+                    if (text.includes('UPDATE_COMPLETE_REBOOT')) {
+                        updateProgressDisplay(100);
+                        document.getElementById('progressText').innerHTML = 'Update complete! Device is rebooting...';
+                        document.getElementById('progressBar').style.backgroundColor = '#4CAF50';
+                        
+                        setTimeout(function() {
+                            window.location.href = '/index.html';
+                        }, 15000);
+                    } else {
+                        console.log('Upload response:', text);
+                        updateProgressDisplay(100);
+                        document.getElementById('progressText').innerHTML = 'Update complete!';
+                        
+                        setTimeout(function() {
+                            hideProgressBar();
+                            ApplyCVT("/system/infovalues");
+                            ApplyCVT("/system/version");
+                            const fi = document.getElementById('fileName');
+                            if (fi.files.length > 0) {
+                                setTimeout(fileChechInfoGet, 500);
+                            }
+                        }, 2000);
+                    }
+                } else {
+                    console.error('Upload failed:', xhr.status);
+                    alert('Upload failed with status: ' + xhr.status);
+                    hideProgressBar();
+                }
+            };
+            
+            xhr.onerror = function() {
+                console.error('Network error during upload (device may be rebooting)');
+                stopProgressPolling();
+                hideProgressBar();
+            };
+            
+            xhr.ontimeout = function() {
+                console.error('Upload timeout');
+                alert('Upload timeout');
+                stopProgressPolling();
+                hideProgressBar();
+            };
+            
+            xhr.send(formData);
+        }
+
+    </script>
+   
+</body>
+</html>

@@ -1,0 +1,13 @@
+# tests/compile_matrix/envs.txt
+# Обязательные env ядра (отсутствие -> fail).
+#
+# Определены в targets/targets_core.ini, который подключён в platformio.ini
+# всегда: клон ядра не требует внешних компонентов (src_filter исключает
+# module_*/submodule_*/device_*). На первом обязательном env проверяются
+# AC-19 (чистота modules_registry.cpp) и AC-22 (negative_nocore/).
+TestCore32
+TestCore8266
+
+# Полные ядровые прошивки (esp32/esp8266/esp32cam) в L3 не собираются —
+# их проверяет .github/workflows/platformio_ci.yml. Env, зависящие от
+# module_*/device_*, сюда добавлять нельзя: в CI их репозитории не клонируются.

@@ -1,0 +1,517 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>WiFi &amp Network Configuration.</title>
+    <meta http-equiv="Content-type" content="text/html; charset=utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+    <markup>./page_head.html</markup>
+    <h2 class="title" style="background: #7D8EE2"> <span id="devicename"></span> WiFi &amp; network configuration </h2>
+    Connect to Router with these settings:<br>
+    
+    <div style="margin-bottom: 10px; text-align: center;">
+        <strong>Current selected slot: <span id="selectedSlotDisplay">1</span></strong>
+        <span style="margin-left: 10px; color: #666; font-size: 12px;">(click on any slot to select it)</span>
+    </div>
+    
+    <div style="margin-bottom: 10px; text-align: center; padding: 10px; background: #f0f8ff; border-radius: 5px;">
+        <strong>Режим модуля:</strong>
+        <select id="busmode" onchange="updateBusModeWarning();">
+            <option value="0">auto</option>
+            <option value="1">macro</option>
+        </select>
+        <div id="busModeWarn" class="bus-warn" style="display:none; margin-top: 8px; color: #8a6d3b; background: #fcf8e3; border: 1px solid #faebcc; border-radius: 4px; padding: 8px;">
+            Модуль управляется сценариями. Цель, слот, удержание AP и force-команды — через Lua.
+            Из формы доступны только ручное редактирование слотов и системные параметры (scantime/aptime/scan_retries).
+            force_ap_kick / force_connect_kick на ESP8266 перезапускают AP.
+        </div>
+    </div>
+    
+    <table border="1" cellspacing="1" cellpadding="1" align="center">
+        <tr>
+            <td class="config-slot" id="slot0" data-slot="0">
+                <form action="" method="get" class="wifi-form" data-slot="0" onsubmit="return handleFormSubmit(event, 0);"> 
+                    <table border="0" cellspacing="0" cellpadding="2">
+                        <tr><td align="right">SSID1: </td>        <td><input type="text"  id="p0_ssid" name="ssid" value="" class="slot0-field"> </td></tr>
+                        <tr><td align="right">Password: </td>    <td><input type="password"  id="p0_password" name="password" value="" class="slot0-field"> </td></tr>
+                        <tr><td align="right">DHCP: </td>        <td><input type="checkbox"  id="p0_dhcp" name="dhcp" class="slot0-field"></td> </tr>
+                        <tr><td align="right">IP: </td>
+                            <td><input type="text"  id="p0_ip_0" name="ip_0" size="3" class="slot0-field">.<input type="text"  id="p0_ip_1" name="ip_1" size="3" class="slot0-field">.<input type="text"  id="p0_ip_2" name="ip_2" size="3" class="slot0-field">.<input type="text"  id="p0_ip_3" name="ip_3" value="" size="3" class="slot0-field"></td></tr>
+                        <tr><td align="right">Netmask:</td>
+                            <td><input type="text"  id="p0_nm_0" name="nm_0" size="3" class="slot0-field">.<input type="text"  id="p0_nm_1" name="nm_1" size="3" class="slot0-field">.<input type="text"  id="p0_nm_2" name="nm_2" size="3" class="slot0-field">.<input type="text"  id="p0_nm_3" name="nm_3" size="3" class="slot0-field"></td></tr>
+                        <tr><td align="right">Gateway:</td>
+                            <td><input type="text"  id="p0_gw_0" name="gw_0" size="3" class="slot0-field">.<input type="text"  id="p0_gw_1" name="gw_1" size="3" class="slot0-field">.<input type="text"  id="p0_gw_2" name="gw_2" size="3" class="slot0-field">.<input type="text"  id="p0_gw_3" name="gw_3" size="3" class="slot0-field"></td></tr>
+                        <tr><td align="right">DNS:</td>
+                            <td><input type="text"  id="p0_dns_0" name="dns_0" size="3" class="slot0-field">.<input type="text"  id="p0_dns_1" name="dns_1" size="3" class="slot0-field">.<input type="text"  id="p0_dns_2" name="dns_2" size="3" class="slot0-field">.<input type="text"  id="p0_dns_3" name="dns_3" size="3" class="slot0-field"></td> </tr>
+                        <input type="hidden" name="wificonf" value="0" />
+                        <tr><td colspan="2" align="center"><input type="submit" value="Save Slot 1" class="button-prog"></td></tr>
+                    </table>
+                </form>
+            </td>
+            <td class="config-slot" id="slot1" data-slot="1">
+                <form action="" method="get" class="wifi-form" data-slot="1" onsubmit="return handleFormSubmit(event, 1);">
+                    <table border="0" cellspacing="0" cellpadding="2">
+                        <tr><td align="right">SSID2: </td>        <td><input type="text"  id="p1_ssid" name="ssid" value="" class="slot1-field"> </td></tr>
+                        <tr><td align="right">Password: </td>    <td><input type="password"  id="p1_password" name="password" value="" class="slot1-field"> </td></tr>
+                        <tr><td align="right">DHCP: </td>        <td><input type="checkbox"  id="p1_dhcp" name="dhcp" class="slot1-field"></td> </tr>
+                        <tr><td align="right">IP: </td>
+                            <td><input type="text"  id="p1_ip_0" name="ip_0" size="3" class="slot1-field">.<input type="text"  id="p1_ip_1" name="ip_1" size="3" class="slot1-field">.<input type="text"  id="p1_ip_2" name="ip_2" size="3" class="slot1-field">.<input type="text"  id="p1_ip_3" name="ip_3" value="" size="3" class="slot1-field"></td></tr>
+                        <tr><td align="right">Netmask:</td>
+                            <td><input type="text"  id="p1_nm_0" name="nm_0" size="3" class="slot1-field">.<input type="text"  id="p1_nm_1" name="nm_1" size="3" class="slot1-field">.<input type="text"  id="p1_nm_2" name="nm_2" size="3" class="slot1-field">.<input type="text"  id="p1_nm_3" name="nm_3" size="3" class="slot1-field"></td></tr>
+                        <tr><td align="right">Gateway:</td>
+                            <td><input type="text"  id="p1_gw_0" name="gw_0" size="3" class="slot1-field">.<input type="text"  id="p1_gw_1" name="gw_1" size="3" class="slot1-field">.<input type="text"  id="p1_gw_2" name="gw_2" size="3" class="slot1-field">.<input type="text"  id="p1_gw_3" name="gw_3" size="3" class="slot1-field"></td></tr>
+                        <tr><td align="right">DNS:</td>
+                            <td><input type="text"  id="p1_dns_0" name="dns_0" size="3" class="slot1-field">.<input type="text"  id="p1_dns_1" name="dns_1" size="3" class="slot1-field">.<input type="text"  id="p1_dns_2" name="dns_2" size="3" class="slot1-field">.<input type="text"  id="p1_dns_3" name="dns_3" size="3" class="slot1-field"></td> </tr>
+                        <input type="hidden" name="wificonf" value="1" />
+                        <tr><td colspan="2" align="center"><input type="submit" value="Save Slot 2" class="button-prog"></td></tr>
+                    </table>
+                </form>
+            </td>
+        </tr>
+        <tr>
+            <td class="config-slot" id="slot2" data-slot="2">
+                <form action="" method="get" class="wifi-form" data-slot="2" onsubmit="return handleFormSubmit(event, 2);">
+                    <table border="0" cellspacing="0" cellpadding="2">
+                        <tr><td align="right">SSID: </td>        <td><input type="text"  id="p2_ssid" name="ssid" value="" class="slot2-field"> </td></tr>
+                        <tr><td align="right">Password: </td>    <td><input type="password"  id="p2_password" name="password" value="" class="slot2-field"> </td></tr>
+                        <tr><td align="right">DHCP: </td>        <td><input type="checkbox"  id="p2_dhcp" name="dhcp" class="slot2-field"></td> </tr>
+                        <tr><td align="right">IP: </td>
+                            <td><input type="text"  id="p2_ip_0" name="ip_0" size="3" class="slot2-field">.<input type="text"  id="p2_ip_1" name="ip_1" size="3" class="slot2-field">.<input type="text"  id="p2_ip_2" name="ip_2" size="3" class="slot2-field">.<input type="text"  id="p2_ip_3" name="ip_3" value="" size="3" class="slot2-field"></td></tr>
+                        <tr><td align="right">Netmask:</td>
+                            <td><input type="text"  id="p2_nm_0" name="nm_0" size="3" class="slot2-field">.<input type="text"  id="p2_nm_1" name="nm_1" size="3" class="slot2-field">.<input type="text"  id="p2_nm_2" name="nm_2" size="3" class="slot2-field">.<input type="text"  id="p2_nm_3" name="nm_3" size="3" class="slot2-field"></td></tr>
+                        <tr><td align="right">Gateway:</td>
+                            <td><input type="text"  id="p2_gw_0" name="gw_0" size="3" class="slot2-field">.<input type="text"  id="p2_gw_1" name="gw_1" size="3" class="slot2-field">.<input type="text"  id="p2_gw_2" name="gw_2" size="3" class="slot2-field">.<input type="text"  id="p2_gw_3" name="gw_3" size="3" class="slot2-field"></td></tr>
+                        <tr><td align="right">DNS:</td>
+                            <td><input type="text"  id="p2_dns_0" name="dns_0" size="3" class="slot2-field">.<input type="text"  id="p2_dns_1" name="dns_1" size="3" class="slot2-field">.<input type="text"  id="p2_dns_2" name="dns_2" size="3" class="slot2-field">.<input type="text"  id="p2_dns_3" name="dns_3" size="3" class="slot2-field"></td> </tr>
+                        <input type="hidden" name="wificonf" value="2" />
+                        <tr><td colspan="2" align="center"><input type="submit" value="Save Slot 3" class="button-prog"></td></tr>
+                    </table>
+                </form>
+            </td>
+            <td class="config-slot" id="slot3" data-slot="3">
+                <form action="" method="get" class="wifi-form" data-slot="3" onsubmit="return handleFormSubmit(event, 3);">
+                    <table border="0" cellspacing="0" cellpadding="2">
+                        <tr><td align="right">SSID: </td>        <td><input type="text"  id="p3_ssid" name="ssid" value="" class="slot3-field"> </td></tr>
+                        <tr><td align="right">Password: </td>    <td><input type="password"  id="p3_password" name="password" value="" class="slot3-field"> </td></tr>
+                        <tr><td align="right">DHCP: </td>        <td><input type="checkbox"  id="p3_dhcp" name="dhcp" class="slot3-field"></td> </tr>
+                        <tr><td align="right">IP: </td>
+                            <td><input type="text"  id="p3_ip_0" name="ip_0" size="3" class="slot3-field">.<input type="text"  id="p3_ip_1" name="ip_1" size="3" class="slot3-field">.<input type="text"  id="p3_ip_2" name="ip_2" size="3" class="slot3-field">.<input type="text"  id="p3_ip_3" name="ip_3" value="" size="3" class="slot3-field"></td></tr>
+                        <tr><td align="right">Netmask:</td>
+                            <td><input type="text"  id="p3_nm_0" name="nm_0" size="3" class="slot3-field">.<input type="text"  id="p3_nm_1" name="nm_1" size="3" class="slot3-field">.<input type="text"  id="p3_nm_2" name="nm_2" size="3" class="slot3-field">.<input type="text"  id="p3_nm_3" name="nm_3" size="3" class="slot3-field"></td></tr>
+                        <tr><td align="right">Gateway:</td>
+                            <td><input type="text"  id="p3_gw_0" name="gw_0" size="3" class="slot3-field">.<input type="text"  id="p3_gw_1" name="gw_1" size="3" class="slot3-field">.<input type="text"  id="p3_gw_2" name="gw_2" size="3" class="slot3-field">.<input type="text"  id="p3_gw_3" name="gw_3" size="3" class="slot3-field"></td></tr>
+                        <tr><td align="right">DNS:</td>
+                            <td><input type="text"  id="p3_dns_0" name="dns_0" size="3" class="slot3-field">.<input type="text"  id="p3_dns_1" name="dns_1" size="3" class="slot3-field">.<input type="text"  id="p3_dns_2" name="dns_2" size="3" class="slot3-field">.<input type="text"  id="p3_dns_3" name="dns_3" size="3" class="slot3-field"></td> </tr>
+                        <input type="hidden" name="wificonf" value="3" />
+                        <tr><td colspan="2" align="center"><input type="submit" value="Save Slot 4" class="button-prog"></td></tr>
+                    </table>
+                </form>
+            </td>
+        </tr>
+    </table>
+    
+    <!-- WiFi System Settings -->
+    <div style="margin: 15px 0; padding: 10px; background: #f0f8ff; border-radius: 5px;">
+        <table border="0" cellspacing="2" cellpadding="2" align="center">
+            <tr><th colspan="2" style="background: #7D8EE2; color: white; padding: 5px;">WiFi System Settings</th></tr>
+            <tr><td align="right">Scan Wifi for:</td>
+                <td><input type="number" id="scantime_hours" min="0" max="12" value="0" style="width:70px;"> h
+                    <input type="number" id="scantime_mins" min="0" max="59" value="0" style="width:70px;"> m (бюджет попытки подключения; 0 = короткий)</td></tr>
+            <tr><td align="right">WiFi AP lifetime:</td>
+                <td><input type="number" id="aptime" name="aptime" min="0" max="60" value="10" style="width:70px;"> minute (AP ждёт клиента перед проверкой сети; 0 = не включать AP)</td></tr>
+            <tr><td align="right">Scan retries:</td>
+                <td><input type="number" id="scan_retries" min="5" max="50" value="10" style="width:70px;"> (сканов подряд без результата; 5..50)</td></tr>
+            <tr><td colspan="2" align="center">
+                <input type="button" value="Save WiFi System" class="button-prog" onclick="saveWifiSysConf();">
+                <span id="sysconfStatus" style="margin-left:10px;font-size:12px;"></span>
+            </td></tr>
+        </table>
+    </div>
+    
+    <!-- Глобальные настройки -->
+    <div style="margin: 15px 0; padding: 10px; background: #f5f5f5; border-radius: 5px; text-align: center;">
+        <label>
+            <input type="checkbox" id="globalResetCheckbox"> 
+            <strong>Reset after save</strong> - перезагрузить устройство после сохранения
+        </label>
+        <div style="margin-top: 5px; font-size: 12px; color: #666;">
+            <span id="saveStatus"></span>
+        </div>
+    </div>
+    
+    <hr>
+    <table><tr><td><strong>Connection State:</strong></td> <td><div id="connectionstate">N/A</div> </td></tr></table>
+
+    <hr>
+    <strong>WiFi networks scanned around: </strong><span id="numNets"></span>
+    <br>
+    <table border="0" cellspacing="3" align="center">
+        <tr>
+            <td>
+                <table class="global_table_style">
+                    <thead bgcolor='#DDDDDD'>
+                        <tr>
+                            <th style="width:200px">SSID</th>
+                            <th>Channel</th>
+                            <th style="width:80px">Secure</th>
+                            <th>RSSI</th>
+                        </tr>
+                    </thead>
+                    <tbody id="networks"></tbody>
+                </table>
+            </td>
+        </tr>
+        <tr><td align="center"><a href="javascript: getNetwork();" >Refresh</a></td></tr>
+    </table>
+
+    <markup>./page_bottom.html</markup>
+    <script src="GetJson.js" defer></script>
+    <script src="GetMarkup.js" defer></script>
+    <script src="wifi-slot.js" defer></script>
+    
+    <script>
+        // Функция securityStr
+        function securityStr(security) {
+            if (security == 7) { return 'Open'; } 
+            else if (security == 5) { return 'WEP'; }
+            else if (security == 2) { return 'WPA'; }
+            else if (security == 4) { return 'WPA2'; }
+            else if (security == 8) { return 'WPA/WPA2'; }
+            return 'Unknown';
+        }
+
+        // Функция getNetwork
+        function getNetwork() {
+            console.log('Scanning networks...');
+            const request = new XMLHttpRequest();
+            if (request) {
+                request.open("GET", "/scan", true);
+                request.addEventListener("load", wifiScan);
+                request.send();
+            }
+        }
+
+        // Функция wifiScan
+        function wifiScan(res) {
+            let array;
+
+            if (!res || (res.target.responseText == '[]')) {
+                console.log('No networks found, retrying...');
+                setTimeout(function() {
+                    getNetwork();
+                }, 5000);
+                return;
+            }
+            
+            try {
+                array = JSON.parse(res.target.responseText);
+                console.log('Networks found:', array.length);
+                
+                array.sort(function(a, b) {
+                    return b.rssi - a.rssi;
+                });
+                
+                document.getElementById("numNets").innerHTML = array.length;
+                const table = document.getElementById("networks");
+                table.innerHTML = "";
+                
+                for (let i = 0; i < array.length; i++) {
+                    const row = document.createElement("tr");
+                    
+                    const ssidCell = document.createElement("td");
+                    const safeSsid = array[i].ssid.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+                    ssidCell.innerHTML = `<a href="javascript:selssid('${safeSsid}')" title="Click to fill in selected slot">${array[i].ssid}</a>`;
+                    
+                    const channelCell = document.createElement("td");
+                    channelCell.innerHTML = array[i].channel;
+                    
+                    const secureCell = document.createElement("td");
+                    secureCell.innerHTML = securityStr(array[i].secure);
+                    
+                    const rssiCell = document.createElement("td");
+                    rssiCell.innerHTML = array[i].rssi;
+                    
+                    row.appendChild(ssidCell);
+                    row.appendChild(channelCell);
+                    row.appendChild(secureCell);
+                    row.appendChild(rssiCell);
+                    
+                    table.appendChild(row);
+                }
+            } catch (e) {
+                console.error("Error parsing WiFi scan data:", e);
+            }
+        }
+
+        // Функция загрузки данных слота через AJAX
+        async function loadSlotData(slotNumber) {
+            try {
+                const response = await fetch(`/api/wifi/slot/${slotNumber}`);
+                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                const data = await response.json();
+                
+                document.getElementById(`p${slotNumber}_ssid`).value = data.ssid || '';
+                document.getElementById(`p${slotNumber}_password`).value = data.password || '';
+                document.getElementById(`p${slotNumber}_dhcp`).checked = data.dhcp || false;
+                
+                if (data.ip && Array.isArray(data.ip)) {
+                    document.getElementById(`p${slotNumber}_ip_0`).value = data.ip[0] || 0;
+                    document.getElementById(`p${slotNumber}_ip_1`).value = data.ip[1] || 0;
+                    document.getElementById(`p${slotNumber}_ip_2`).value = data.ip[2] || 0;
+                    document.getElementById(`p${slotNumber}_ip_3`).value = data.ip[3] || 0;
+                }
+                
+                if (data.netmask && Array.isArray(data.netmask)) {
+                    document.getElementById(`p${slotNumber}_nm_0`).value = data.netmask[0] || 0;
+                    document.getElementById(`p${slotNumber}_nm_1`).value = data.netmask[1] || 0;
+                    document.getElementById(`p${slotNumber}_nm_2`).value = data.netmask[2] || 0;
+                    document.getElementById(`p${slotNumber}_nm_3`).value = data.netmask[3] || 0;
+                }
+                
+                if (data.gateway && Array.isArray(data.gateway)) {
+                    document.getElementById(`p${slotNumber}_gw_0`).value = data.gateway[0] || 0;
+                    document.getElementById(`p${slotNumber}_gw_1`).value = data.gateway[1] || 0;
+                    document.getElementById(`p${slotNumber}_gw_2`).value = data.gateway[2] || 0;
+                    document.getElementById(`p${slotNumber}_gw_3`).value = data.gateway[3] || 0;
+                }
+                
+                if (data.dns && Array.isArray(data.dns)) {
+                    document.getElementById(`p${slotNumber}_dns_0`).value = data.dns[0] || 0;
+                    document.getElementById(`p${slotNumber}_dns_1`).value = data.dns[1] || 0;
+                    document.getElementById(`p${slotNumber}_dns_2`).value = data.dns[2] || 0;
+                    document.getElementById(`p${slotNumber}_dns_3`).value = data.dns[3] || 0;
+                }
+                
+                return true;
+            } catch (error) {
+                console.error(`Error loading slot ${slotNumber}:`, error);
+                return false;
+            }
+        }
+
+        // Функция сохранения данных слота через AJAX - БЕЗ FORMDATA
+   // Функция сохранения данных слота через AJAX
+async function saveSlotData(slotNumber) {
+    const statusElement = document.getElementById('saveStatus');
+    statusElement.innerHTML = 'Сохранение...';
+    statusElement.style.color = 'orange';
+    
+    // Собираем данные напрямую из полей ввода
+    const data = {
+        ssid: document.getElementById(`p${slotNumber}_ssid`).value,
+        password: document.getElementById(`p${slotNumber}_password`).value,
+        dhcp: document.getElementById(`p${slotNumber}_dhcp`).checked,
+        ip: [
+            parseInt(document.getElementById(`p${slotNumber}_ip_0`).value) || 0,
+            parseInt(document.getElementById(`p${slotNumber}_ip_1`).value) || 0,
+            parseInt(document.getElementById(`p${slotNumber}_ip_2`).value) || 0,
+            parseInt(document.getElementById(`p${slotNumber}_ip_3`).value) || 0
+        ],
+        netmask: [
+            parseInt(document.getElementById(`p${slotNumber}_nm_0`).value) || 0,
+            parseInt(document.getElementById(`p${slotNumber}_nm_1`).value) || 0,
+            parseInt(document.getElementById(`p${slotNumber}_nm_2`).value) || 0,
+            parseInt(document.getElementById(`p${slotNumber}_nm_3`).value) || 0
+        ],
+        gateway: [
+            parseInt(document.getElementById(`p${slotNumber}_gw_0`).value) || 0,
+            parseInt(document.getElementById(`p${slotNumber}_gw_1`).value) || 0,
+            parseInt(document.getElementById(`p${slotNumber}_gw_2`).value) || 0,
+            parseInt(document.getElementById(`p${slotNumber}_gw_3`).value) || 0
+        ],
+        dns: [
+            parseInt(document.getElementById(`p${slotNumber}_dns_0`).value) || 0,
+            parseInt(document.getElementById(`p${slotNumber}_dns_1`).value) || 0,
+            parseInt(document.getElementById(`p${slotNumber}_dns_2`).value) || 0,
+            parseInt(document.getElementById(`p${slotNumber}_dns_3`).value) || 0
+        ]
+    };
+    
+    try {
+        const response = await fetch(`/api/wifi/slot/${slotNumber}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(data)
+        });
+        
+        // Читаем ответ как текст для отладки
+        const responseText = await response.text();
+        console.log('Server response:', responseText);
+        
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}, response: ${responseText}`);
+        }
+        
+        // Парсим JSON ответ
+        const result = JSON.parse(responseText);
+        
+        if (result.success) {
+            statusElement.innerHTML = 'Настройки сохранены';
+            statusElement.style.color = 'green';
+            return true;
+        } else {
+            throw new Error(result.error || 'Unknown error');
+        }
+    } catch (error) {
+        console.error('Save error:', error);
+        statusElement.innerHTML = 'Ошибка при сохранении';
+        statusElement.style.color = 'red';
+        return false;
+    }
+}
+
+        // Функция сохранения WiFi системных настроек
+        // Поля, которые уходят на сервер только если пользователь их изменил
+        const sysconfFields = { scantime_hours: 'scantime', scantime_mins: 'scantime', aptime: 'aptime', busmode: 'busmode', scan_retries: 'scan_retries' };
+        const sysconfDirty = new Set();
+        function markSysconfDirty(e) {
+            const key = sysconfFields[e.target.id];
+            if (key) sysconfDirty.add(key);
+        }
+        document.addEventListener('input', markSysconfDirty);
+        document.addEventListener('change', markSysconfDirty);
+
+        async function saveWifiSysConf() {
+            const statusEl = document.getElementById('sysconfStatus');
+            if (sysconfDirty.size === 0) {
+                statusEl.innerHTML = 'No changes';
+                statusEl.style.color = 'gray';
+                setTimeout(() => { statusEl.innerHTML = ''; }, 3000);
+                return;
+            }
+            statusEl.innerHTML = 'Saving...';
+            statusEl.style.color = 'orange';
+            
+            const data = {};
+            if (sysconfDirty.has('scantime')) {
+                const hours = parseInt(document.getElementById('scantime_hours').value) || 0;
+                const mins = parseInt(document.getElementById('scantime_mins').value) || 0;
+                data.scantime = hours * 60 + mins;
+            }
+            if (sysconfDirty.has('aptime')) {
+                data.aptime = parseInt(document.getElementById('aptime').value) || 0;
+            }
+            if (sysconfDirty.has('busmode')) {
+                data.busmode = parseInt(document.getElementById('busmode').value) || 0;
+            }
+            if (sysconfDirty.has('scan_retries')) {
+                data.scan_retries = parseInt(document.getElementById('scan_retries').value) || 10;
+            }
+            
+            try {
+                const response = await fetch('/wifi/sysconf', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                const result = await response.json();
+                if (result.success) {
+                    sysconfDirty.clear();
+                    statusEl.innerHTML = 'Saved';
+                    statusEl.style.color = 'green';
+                } else {
+                    statusEl.innerHTML = 'Error: ' + (result.error || 'unknown');
+                    statusEl.style.color = 'red';
+                }
+            } catch (e) {
+                statusEl.innerHTML = 'Connection error';
+                statusEl.style.color = 'red';
+            }
+            
+            setTimeout(() => { statusEl.innerHTML = ''; }, 3000);
+        }
+
+        // Функция отправки запроса на перезагрузку
+        function sendRestartRequest() {
+            console.log('Sending restart request...');
+            const statusElement = document.getElementById('saveStatus');
+            statusElement.innerHTML = 'Перезагрузка устройства...';
+            statusElement.style.color = 'orange';
+            
+            fetch('/system/restart', {
+                method: 'POST'
+            })
+            .then(response => {
+                if (response.ok) {
+                    statusElement.innerHTML = 'Устройство перезагружается. Страница обновится через 10 секунд...';
+                    statusElement.style.color = 'green';
+                    
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 10000);
+                } else {
+                    statusElement.innerHTML = 'Ошибка при перезагрузке';
+                    statusElement.style.color = 'red';
+                }
+            })
+            .catch(error => {
+                console.error('Restart error:', error);
+                statusElement.innerHTML = 'Ошибка соединения при перезагрузке';
+                statusElement.style.color = 'red';
+            });
+        }
+
+        // Обработчик отправки формы - БЕЗ FORMDATA
+        function handleFormSubmit(event, slotNumber) {
+            event.preventDefault(); // Предотвращаем отправку формы
+            const shouldReset = document.getElementById('globalResetCheckbox').checked;
+            
+            saveSlotData(slotNumber).then(success => {
+                if (success && shouldReset) {
+                    setTimeout(() => {
+                        sendRestartRequest();
+                    }, 1000);
+                }
+            });
+            
+            return false;
+        }
+
+        // Загрузка всех слотов при старте
+        async function loadAllSlots() {
+            for (let i = 0; i < 4; i++) {
+                await loadSlotData(i);
+            }
+            console.log('All slots loaded');
+            
+            const lastSlot = localStorage.getItem('lastSelectedWifiSlot');
+            if (lastSlot !== null && window.selectWifiSlot) {
+                window.selectWifiSlot(parseInt(lastSlot));
+            }
+            
+            document.getElementById('globalResetCheckbox').checked = false;
+        }
+
+        // Показ баннера предупреждения при режиме macro
+        function updateBusModeWarning() {
+            const mode = parseInt(document.getElementById('busmode').value) || 0;
+            const warn = document.getElementById('busModeWarn');
+            if (warn) {
+                warn.style.display = (mode === 1) ? 'block' : 'none';
+            }
+        }
+
+        // Загрузка страницы
+        window.onload = function() {
+            console.log('Page loaded, initializing...');
+            
+            setTimeout(() => {
+                ApplyCVT("/system/version")
+                    .then(() => ApplyCVT("/system/infovalues"))
+                    .then(() => ApplyCVT("/wifi/info"))
+                    .then(() => ApplyCVT("/wifi/sysconf"))
+                    .then(() => { updateBusModeWarning(); })
+                    .then(() => loadAllSlots())
+                    .then(() => getNetwork());
+            }, 500);
+        };
+    </script>
+</body>
+
+</html>

@@ -56,9 +56,9 @@ extern "C" {
 
 #endif
 
-#include "eertos.h"
+#include "core_sys/eertos.h"
 
-#include <TimeLib.h>
+#include "common/TimeLib.h"
 
 #if defined(ARDUINO) && ARDUINO >= 100
 #include "Arduino.h"
@@ -89,11 +89,14 @@ const int NTP_PACKET_SIZE = 48; // NTP time is in the first 48 bytes of message
 
 #ifdef ARDUINO_ARCH_ESP8266
 #define NETWORK_TYPE NETWORK_ESP8266
-#elif defined ARDUINO_ARCH_SAMD || defined ARDUINO_ARCH_ARC32
+#endif
+#if !defined(ARDUINO_ARCH_ESP8266) && (defined ARDUINO_ARCH_SAMD || defined ARDUINO_ARCH_ARC32)
 #define NETWORK_TYPE NETWORK_WIFI101 // SET YOUR NETWORK INTERFACE
-#elif defined ARDUINO_ARCH_AVR
+#endif
+#if !defined(ARDUINO_ARCH_ESP8266) && !(defined ARDUINO_ARCH_SAMD || defined ARDUINO_ARCH_ARC32) && (defined ARDUINO_ARCH_AVR)
 #define NETWORK_TYPE NETWORK_W5100
-#elif defined ARDUINO_ARCH_ESP32 || defined ESP32
+#endif
+#if !defined(ARDUINO_ARCH_ESP8266) && !(defined ARDUINO_ARCH_SAMD || defined ARDUINO_ARCH_ARC32) && !(defined ARDUINO_ARCH_AVR) && (defined ARDUINO_ARCH_ESP32 || defined ESP32)
 #define NETWORK_TYPE NETWORK_ESP32
 #endif
 
@@ -103,17 +106,21 @@ const int NTP_PACKET_SIZE = 48; // NTP time is in the first 48 bytes of message
 #include <Ethernet.h>
 #include <Dns.h>
 //#include <Dhcp.h>
-#elif NETWORK_TYPE == NETWORK_WIFI101
+#endif
+#if !(NETWORK_TYPE == NETWORK_W5100) && (NETWORK_TYPE == NETWORK_WIFI101)
 #include <WiFiClient.h>
 #include <WiFiUdp.h>
 #include <WiFi101.h>
-#elif NETWORK_TYPE == NETWORK_ESP8266
+#endif
+#if !(NETWORK_TYPE == NETWORK_W5100) && !(NETWORK_TYPE == NETWORK_WIFI101) && (NETWORK_TYPE == NETWORK_ESP8266)
 #include <ESP8266WiFi.h>
 #include <ESPAsyncUDP.h>
-#elif NETWORK_TYPE == NETWORK_ESP32
+#endif
+#if !(NETWORK_TYPE == NETWORK_W5100) && !(NETWORK_TYPE == NETWORK_WIFI101) && !(NETWORK_TYPE == NETWORK_ESP8266) && (NETWORK_TYPE == NETWORK_ESP32)
 #include <WiFi.h>
 #include <AsyncUDP.h>
-#else
+#endif
+#if !(NETWORK_TYPE == NETWORK_W5100) && !(NETWORK_TYPE == NETWORK_WIFI101) && !(NETWORK_TYPE == NETWORK_ESP8266) && !(NETWORK_TYPE == NETWORK_ESP32)
 #error "Incorrect platform. Only ARDUINO and ESP8266 MCUs are valid."
 #endif // NETWORK_TYPE
 
@@ -172,9 +179,11 @@ public:
     */
 #if NETWORK_TYPE == NETWORK_W5100
     bool begin (String ntpServerName = DEFAULT_NTP_SERVER, int8_t timeOffset = DEFAULT_NTP_TIMEZONE, bool daylight = false, int8_t minutes = 0, EthernetUDP* udp_conn = NULL);
-#elif NETWORK_TYPE == NETWORK_WIFI101
+#endif
+#if !(NETWORK_TYPE == NETWORK_W5100) && (NETWORK_TYPE == NETWORK_WIFI101)
     bool begin (String ntpServerName = DEFAULT_NTP_SERVER, int8_t timeOffset = DEFAULT_NTP_TIMEZONE, bool daylight = false, int8_t minutes = 0, WiFiUDP* udp_conn = NULL);
-#elif NETWORK_TYPE == NETWORK_ESP8266 || NETWORK_TYPE == NETWORK_ESP32
+#endif
+#if !(NETWORK_TYPE == NETWORK_W5100) && !(NETWORK_TYPE == NETWORK_WIFI101) && (NETWORK_TYPE == NETWORK_ESP8266 || NETWORK_TYPE == NETWORK_ESP32)
     bool begin (String ntpServerName = DEFAULT_NTP_SERVER, int8_t timeOffset = DEFAULT_NTP_TIMEZONE, bool daylight = false, int8_t minutes = 0, AsyncUDP* udp_conn = NULL);
 #endif
 
@@ -437,9 +446,11 @@ protected:
 
 #if NETWORK_TYPE == NETWORK_W5100
     EthernetUDP *udp;
-#elif NETWORK_TYPE == NETWORK_WIFI101
+#endif
+#if !(NETWORK_TYPE == NETWORK_W5100) && (NETWORK_TYPE == NETWORK_WIFI101)
     WiFiUDP *udp;
-#elif NETWORK_TYPE == NETWORK_ESP8266 || NETWORK_TYPE == NETWORK_ESP32
+#endif
+#if !(NETWORK_TYPE == NETWORK_W5100) && !(NETWORK_TYPE == NETWORK_WIFI101) && (NETWORK_TYPE == NETWORK_ESP8266 || NETWORK_TYPE == NETWORK_ESP32)
     AsyncUDP *udp;              ///< UDP connection object
     IPAddress ntpServerIPAddress;
 #endif
@@ -452,7 +463,9 @@ protected:
     int _longInterval = DEFAULT_NTP_INTERVAL;          ///< Interval to set periodic time sync
     time_t _lastSyncd = 0;      ///< Stored time of last successful sync
     time_t _firstSync = 0;      ///< Stored time of first successful sync after boot
-    unsigned long _uptime = 0;  ///< Time since boot
+    unsigned long _uptime = 0;  ///< Time since boot, seconds
+    uint32_t _uptimeLastMs = 0; ///< millis() предыдущего вызова getUptime()
+    uint64_t _uptimeTotalMs = 0;///< накопленный аптайм, мс (устойчив к переполнению millis())
     uint16_t ntpTimeout = 1500; ///< Response timeout for NTP requests
     onSyncEvent_t onSyncEvent;  ///< Event handler callback
 

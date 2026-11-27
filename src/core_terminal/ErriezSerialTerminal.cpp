@@ -46,6 +46,9 @@ SerialTerminal::SerialTerminal(char newlineChar, char delimiterChar) :
         _numCommands(0),
         _newlineChar(newlineChar),
         _lastPos(NULL),
+        doCharEcho(false),
+        _postCommandHandler(NULL),
+        _preCommandHandler(NULL),
         _defaultHandler(NULL)
 {
     // strtok_r needs a null-terminated string
@@ -64,10 +67,21 @@ SerialTerminal::SerialTerminal(char newlineChar, char delimiterChar) :
  *      The function to be called when receiving the \c command.
  */
 void SerialTerminal::addCommand(const char *command, void (*function)())    {
+    if (command == NULL || function == NULL) { return; }
+    // Не допускаем дубликаты: иначе неясно, какой обработчик вызовется.
+    for (byte i = 0; i < _numCommands; i++) {
+        if (strncmp(command, _commandList[i].command, ST_NUM_COMMAND_CHARS) == 0) {
+            return;
+        }
+    }
     // Increase size command list by one
-    _commandList = (SerialTerminalCallback *)realloc(_commandList, sizeof(SerialTerminalCallback) * (_numCommands + 1));
-    // Copy command and store command callback handler
+    SerialTerminalCallback *list = (SerialTerminalCallback *)realloc(
+        _commandList, sizeof(SerialTerminalCallback) * (_numCommands + 1));
+    if (list == NULL) { return; }
+    _commandList = list;
+    // Copy command and store command callback handler (с гарантированным '\0')
     strncpy(_commandList[_numCommands].command, command, ST_NUM_COMMAND_CHARS);
+    _commandList[_numCommands].command[ST_NUM_COMMAND_CHARS] = '\0';
     _commandList[_numCommands].function = function;
     // Increment number of commands
     _numCommands++;
@@ -94,6 +108,11 @@ void SerialTerminal::setSerialEcho(bool doEcho) {    doCharEcho = doEcho; }
 void SerialTerminal::setPostCommandHandler(void (*function)(void))
 {
     _postCommandHandler = function;
+}
+
+void SerialTerminal::setPreCommandHandler(void (*function)(const char *))
+{
+    _preCommandHandler = function;
 }
 
 /*!
@@ -135,6 +154,9 @@ void SerialTerminal::readSerial()
             command = strtok_r(_rxBuffer, _delimiter, &_lastPos);
 
             if (command != NULL) {
+                if (_preCommandHandler != NULL) {
+                    (*_preCommandHandler)(command);
+                }
                 for (int i = 0; i < _numCommands; i++) {
                     // Compare the found command against the list of known commands for a match
                     if (strncmp(command, _commandList[i].command, ST_NUM_COMMAND_CHARS) == 0) {
@@ -165,7 +187,7 @@ void SerialTerminal::readSerial()
                     Serial.print("\b \b"); // 1 char back, space, 1 char back
                 }
             }
-        } else if (isprint(c)) {
+        } else if (isprint((unsigned char)c)) {
             // Store printable characters in serial receive buffer
             if (_rxBufferIndex < ST_RX_BUFFER_SIZE) {
                 _rxBuffer[_rxBufferIndex++] = c;
@@ -213,7 +235,7 @@ char *SerialTerminal::getRemaining()
 void SerialTerminal::helpShow(void) {
     Serial.print("Supported commands: \n \t");
     for (int i = 0; i < _numCommands; i++)    {
-        Serial.printf(_commandList[i].command );
+        Serial.print(_commandList[i].command);
         Serial.print(" \n\t");
     }
 }

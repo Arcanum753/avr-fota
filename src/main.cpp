@@ -10,12 +10,11 @@
 #include <Ticker.h>
 
 #include "main.h"
-#include "FSWebServerLib.h"
-#include "eertos.h"
+#include "core_web/FSWebServerLib.h"
+#include "core_sys/core_sys.h"
+#include "core_sys/eertos.h"
 
-#include "core_ota/core_ota.h"
-#include "core_terminal/ErriezSerialTerminal.h"
-#include "core_terminal/core_terminal.h"
+#include "modules_registry.h"
 
 #include "version.h"
 #include "core_led/core_led.h"
@@ -39,67 +38,68 @@ void setup() {
     Serial.begin(115200);
     InitRTOS(); // init eertos
     fsMounted = LittleFS.begin();
-    if (fsMounted == false) { Serial.println("\n\r\nLittleFS Mount Failed\n\r\n\r"); }
+    if (fsMounted == false) { DBG_MOD("[SYS] ", "\n\r\nLittleFS Mount Failed\n\r\n\r"); }
     printGitInfo();
 	// WiFi is started inside library
     ESPHTTPServer.begin(&LittleFS);
-    TerminalInit();
     ledInit(); 
     // flashLED(CONNECTION_LED, 25, 150);
-    ledMacroTimerTask();
-	_secondEERtos.attach_ms(1, &TimerService); // init eertos time manager and start.
+    // ledMacroTimerTask() вызывается внутри ledInit() — повторная регистрация удваивала скорость моргания
+    _secondEERtos.attach_ms(1, &TimerService); // init eertos time manager and start.
 }
 
 void loop() {
+    // Критическая секция: сериализация с веб-обработчиками (задача AsyncTCP).
+    // Блокирующие сетевые циклы (core_loop_net) вынесены НИЖЕ, вне лока.
+    {
+        SysLockGuard _sysLock;
 #if defined(ESP32)
-    esp_task_wdt_reset();
+        esp_task_wdt_reset();
 #endif
 #if defined(ESP8266)
-    // yield() обрабатывает AsyncTCP колбэки и сбрасывает watchdog
-    // БЕЗ yield() ESPAsyncWebServer не может корректно обрабатывать
-    // входящие HTTP-соединения, что приводит к Panic __yield
-    // при рекурсивном вызове yield() внутри beginResponse()
-    yield();
+        // yield() обрабатывает AsyncTCP колбэки и сбрасывает watchdog
+        // БЕЗ yield() ESPAsyncWebServer не может корректно обрабатывать
+        // входящие HTTP-соединения, что приводит к Panic __yield
+        // при рекурсивном вызове yield() внутри beginResponse()
+        yield();
 #endif
-    // Сбрасываем watchdog перед выполнением задач EERTOS
-    // TaskManager может выполнять длительные операции (LittleFS, WiFi)
-    TaskManager();
-    
-    // Сбрасываем watchdog после TaskManager
+        // Сбрасываем watchdog перед выполнением задач EERTOS
+        // TaskManager может выполнять длительные операции (LittleFS, WiFi)
+        TaskManager();
+
+        // Сбрасываем watchdog после TaskManager
 #if defined(ESP32)
-    esp_task_wdt_reset();
+        esp_task_wdt_reset();
 #endif
 #if defined(ESP8266)
-    ESP.wdtFeed();
+        ESP.wdtFeed();
 #endif
-    
-    loop_user();
-    TerminalLoop();
-    modOtaClass.loopHandler();
+        core_loop();
+        modules_loop();
+        dev_loop();
+    }
 
-}
-
-void loop_user(){
-
+    // Блокирующие сетевые задачи (OTA-клиент/core_ota) — вне лока, чтобы их
+    // сокетные таймауты не блокировали веб-задачу AsyncTCP.
+    core_loop_net();
 }
 
 void printGitInfo() {
-    Serial.println("\n");
+    DBG_MOD("[SYS] ", "\r\n");
     #if defined(ESP32)
-    Serial.println("*** ESP32 FIRMWARE INFORMATION ***");
+    DBG_MOD("[SYS] ", "*** ESP32 FIRMWARE INFORMATION ***\r\n");
 	#endif
     #if defined(ESP8266)
-    Serial.println("*** ESP8266 FIRMWARE INFORMATION ***");
+    DBG_MOD("[SYS] ", "*** ESP8266 FIRMWARE INFORMATION ***\r\n");
 	#endif
-    Serial.println("Envoirement: " + String(BUILD_ENV));
+    DBG_MOD("[SYS] ", "Envoirement: %s\r\n", String(BUILD_ENV).c_str());
     
-    Serial.println("Chip firmware ver: " + String(FIRMWARE_VERSION));
-    Serial.println("File system ver: " + ESPHTTPServer.getFsVersionStr());
+    DBG_MOD("[SYS] ", "Chip firmware ver: %s\r\n", String(FIRMWARE_VERSION).c_str());
+    DBG_MOD("[SYS] ", "File system ver: %s\r\n", core_sys.getFsVersionStr().c_str());
+    DBG_MOD("[SYS] ", "Reset reason: %s\r\n", core_sys.getResetReason().c_str());
     
-    
-    
-    Serial.println("Git Branch: " + String(GIT_BRANCH));
-    Serial.println("Git Commit: " + String(GIT_COMMIT));
+    DBG_MOD("[SYS] ", "Git Branch: %s\r\n", String(GIT_BRANCH).c_str());
+    DBG_MOD("[SYS] ", "Git Commit: %s\r\n", String(GIT_COMMIT).c_str());
 
     
     #if defined(ESP32)

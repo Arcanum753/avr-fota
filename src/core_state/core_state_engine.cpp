@@ -1,0 +1,807 @@
+#include "core_web/FSWebServerLib.h"
+
+#include <string.h>
+#include <ctype.h>
+
+#include "core_state.h"
+#include "common_module.h"
+
+// Имена режимов ядра (индексы соответствуют CoreMode).
+extern const char* const coreModeNames[CORE_MODE_COUNT] = {
+    "init",
+    "normal",
+    "ota",
+    "fs_update",
+    "prog",
+    "test",
+};
+
+// ============================================================
+// Вспомогательные преобразования значений
+// ============================================================
+
+static int64_t busNumeric(const BusValue& v) {
+    switch (v.kind) {
+        case BusValue::BOOL: return v.b ? 1 : 0;
+        case BusValue::I32:  return v.i;
+        case BusValue::F32:  return (int64_t)v.f;
+        case BusValue::TIME: return v.t;
+        case BusValue::ENUM: return v.i;
+        case BusValue::STR:  return (int64_t)v.s.toInt();
+        default:             return 0;
+    }
+}
+
+String coreStateBusText(const BusValue& v) {
+    switch (v.kind) {
+        case BusValue::BOOL: return v.b ? "true" : "false";
+        case BusValue::I32:  return String(v.i);
+        case BusValue::F32:  return ns_core_state::formatF32(v.f);
+        case BusValue::TIME: return String((long)v.t);
+        case BusValue::ENUM: return String(v.i);
+        case BusValue::STR:  return v.s;
+        default:             return "";
+    }
+}
+
+// Приводит значение к целевому типу ресурса.
+static BusValue busCoerce(const BusValue& v, BusValue::Kind k) {
+    BusValue r;
+    r.kind = k;
+    switch (k) {
+        case BusValue::BOOL:
+            r.b = (busNumeric(v) != 0);
+            break;
+        case BusValue::I32:
+        case BusValue::ENUM:
+            r.i = (int32_t)busNumeric(v);
+            break;
+        case BusValue::F32:
+            r.f = (v.kind == BusValue::F32) ? v.f : (float)busNumeric(v);
+            break;
+        case BusValue::TIME:
+            r.t = busNumeric(v);
+            break;
+        case BusValue::STR:
+            r.s = coreStateBusText(v);
+            break;
+        default:
+            break;
+    }
+    return r;
+}
+
+// ============================================================
+// Контекст регистрации/вызова
+// ============================================================
+int CLASS_CORE_STATE::findNs(const char* ns, bool create) {
+    if (ns == nullptr || ns[0] == 0) { return -1; }
+    for (uint8_t i = 0; i < _nsCount; i++) {
+        if (strcmp(_ns[i].name, ns) == 0) { return i; }
+    }
+    if (create && _nsCount < CORE_STATE_MAX_NS) {
+        uint8_t id = _nsCount;
+        strncpy(_ns[id].name, ns, CORE_STATE_NS_NAME_LEN - 1);
+        _ns[id].name[CORE_STATE_NS_NAME_LEN - 1] = 0;
+        _ns[id].id = id;
+        _ns[id].privileged = false;
+        _nsCount++;
+        return id;
+    }
+    return -1;
+}
+
+void CLASS_CORE_STATE::setNamespace(const char* ns) {
+    _currentNs = (int8_t)findNs(ns, true);
+    _privileged = (_currentNs >= 0) ? _ns[_currentNs].privileged : false;
+}
+
+void CLASS_CORE_STATE::clearNamespace() {
+    _currentNs = -1;
+    _privileged = false;
+}
+
+void CLASS_CORE_STATE::setPrivileged(bool on) {
+    _privileged = on;
+    if (_currentNs >= 0) { _ns[_currentNs].privileged = on; }
+}
+
+void CLASS_CORE_STATE::setModulePrio(int prio) {
+    if (_currentNs >= 0) { _ns[_currentNs].prio = (int16_t)prio; }
+}
+
+// ============================================================
+// Регистрация ресурсов
+// ============================================================
+void CLASS_CORE_STATE::makeFullName(char* out, const char* name) {
+    if (name == nullptr) { out[0] = 0; return; }
+    if (_currentNs < 0 || ns_core_state::nameHasDot(name)) {
+        strncpy(out, name, CORE_STATE_NAME_LEN - 1);
+        out[CORE_STATE_NAME_LEN - 1] = 0;
+        return;
+    }
+    snprintf(out, CORE_STATE_NAME_LEN, "%s.%s", _ns[_currentNs].name, name);
+}
+
+int CLASS_CORE_STATE::findRes(const char* name) {
+    if (name == nullptr) { return -1; }
+    for (uint16_t i = 0; i < _resCount; i++) {
+        if (strcmp(_res[i].name, name) == 0) { return (int)i; }
+    }
+    return -1;
+}
+
+int CLASS_CORE_STATE::findFunc(const char* name) {
+    int idx = findRes(name);
+    if (idx < 0) { return -1; }
+    return _res[idx].isFunc ? idx : -1;
+}
+
+bool CLASS_CORE_STATE::regStateAs(const char* full_name, BusValue::Kind kind,
+                                  const char* desc, bool writable) {
+    int idx = findRes(full_name);
+    if (idx < 0) {
+        if (_resCount >= CORE_STATE_MAX_RES) { return false; }
+        idx = _resCount++;
+        BusRes& r = _res[idx];
+        strncpy(r.name, full_name, CORE_STATE_NAME_LEN - 1);
+        r.name[CORE_STATE_NAME_LEN - 1] = 0;
+        // Разбиение на namespace/поле по первой точке.
+        const char* dot = strchr(r.name, '.');
+        if (dot != nullptr) {
+            size_t nlen = (size_t)(dot - r.name);
+            if (nlen >= CORE_STATE_NS_LEN) { nlen = CORE_STATE_NS_LEN - 1; }
+            memcpy(r.ns, r.name, nlen);
+            r.ns[nlen] = 0;
+            strncpy(r.field, dot + 1, CORE_STATE_FIELD_LEN - 1);
+        } else {
+            strncpy(r.field, r.name, CORE_STATE_FIELD_LEN - 1);
+        }
+        r.ownerId = (_currentNs >= 0) ? (uint8_t)_currentNs : 255;
+    }
+
+    // При обновлении существующего ресурса не сбрасываем поля функции/события:
+    // regEnum() создаёт состояние, а regFunc()/regEvent() дополняют его тем же
+    // именем (e7.mode = ENUM-состояние + sync-функция записи).
+    BusRes& r = _res[idx];
+    r.kind = kind;
+    if (desc != nullptr) { r.desc = desc; }
+    r.writable = writable;
+    return true;
+}
+
+bool CLASS_CORE_STATE::regState(const char* name, BusValue::Kind kind,
+                                const char* desc, bool writable) {
+    char full[CORE_STATE_NAME_LEN];
+    makeFullName(full, name);
+    return regStateAs(full, kind, desc, writable);
+}
+
+bool CLASS_CORE_STATE::regEnum(const char* name, int count, const char* const* values,
+                               const char* desc) {
+    char full[CORE_STATE_NAME_LEN];
+    makeFullName(full, name);
+    if (regStateAs(full, BusValue::ENUM, desc, true) == false) { return false; }
+    int idx = findRes(full);
+    BusRes& r = _res[idx];
+    r.enumCount = 0;
+    for (int i = 0; i < count && i < CORE_STATE_MAX_ENUM; i++) {
+        r.enumVals[i] = values[i];
+        r.enumCount++;
+    }
+    r.value = BusValue::en(0);
+    return true;
+}
+
+bool CLASS_CORE_STATE::regEvent(const char* name, const char* desc) {
+    char full[CORE_STATE_NAME_LEN];
+    makeFullName(full, name);
+    int idx = findRes(full);
+    if (idx < 0) {
+        if (regStateAs(full, BusValue::NONE, desc, false) == false) { return false; }
+        idx = findRes(full);
+    }
+    _res[idx].isEvent = true;
+    return true;
+}
+
+bool CLASS_CORE_STATE::regFunc(const char* name, const char* sig, const char* desc,
+                               BusCb fn, void* user) {
+    (void)sig;
+    char full[CORE_STATE_NAME_LEN];
+    makeFullName(full, name);
+    int idx = findRes(full);
+    if (idx < 0) {
+        if (regStateAs(full, BusValue::NONE, desc, false) == false) { return false; }
+        idx = findRes(full);
+    } else if (desc != nullptr && _res[idx].desc == nullptr) {
+        _res[idx].desc = desc;
+    }
+    BusRes& r = _res[idx];
+    r.isFunc = true;
+    r.async = false;
+    r.fn = fn;
+    r.afn = nullptr;
+    r.user = user;
+    return true;
+}
+
+bool CLASS_CORE_STATE::regFuncAsync(const char* name, const char* sig, const char* desc,
+                                    BusAsyncCb fn, void* user, uint32_t timeout_ms) {
+    (void)sig;
+    char full[CORE_STATE_NAME_LEN];
+    makeFullName(full, name);
+    int idx = findRes(full);
+    if (idx < 0) {
+        if (regStateAs(full, BusValue::NONE, desc, false) == false) { return false; }
+        idx = findRes(full);
+    } else if (desc != nullptr && _res[idx].desc == nullptr) {
+        _res[idx].desc = desc;
+    }
+    BusRes& r = _res[idx];
+    r.isFunc = true;
+    r.async = true;
+    r.fn = nullptr;
+    r.afn = fn;
+    r.user = user;
+    r.timeoutMs = timeout_ms;
+    return true;
+}
+
+bool CLASS_CORE_STATE::regFuncCode(const char* func_name, int code, const char* meaning) {
+    int idx = findFunc(func_name);
+    if (idx < 0) { return false; }
+    BusRes& r = _res[idx];
+    if (r.codeCount >= CORE_STATE_MAX_CODES) { return false; }
+    r.codes[r.codeCount].code = code;
+    r.codes[r.codeCount].meaning = meaning;
+    r.codeCount++;
+    return true;
+}
+
+// ============================================================
+// Чтение значений
+// ============================================================
+bool CLASS_CORE_STATE::has(const char* name) {
+    return findRes(name) >= 0;
+}
+
+bool CLASS_CORE_STATE::hasNamespace(const char* ns) {
+    if (ns == nullptr || ns[0] == 0) { return false; }
+    return findNs(ns, false) >= 0;
+}
+
+bool CLASS_CORE_STATE::getBool(const char* name, bool def) {
+    int idx = findRes(name);
+    if (idx < 0 || _res[idx].kind == BusValue::NONE) { return def; }
+    return busNumeric(_res[idx].value) != 0;
+}
+
+int32_t CLASS_CORE_STATE::getInt(const char* name, int32_t def) {
+    int idx = findRes(name);
+    if (idx < 0 || _res[idx].kind == BusValue::NONE) { return def; }
+    return (int32_t)busNumeric(_res[idx].value);
+}
+
+float CLASS_CORE_STATE::getF32(const char* name, float def) {
+    int idx = findRes(name);
+    if (idx < 0 || _res[idx].kind == BusValue::NONE) { return def; }
+    const BusValue& v = _res[idx].value;
+    switch (v.kind) {
+        case BusValue::F32:  return v.f;
+        case BusValue::BOOL: return v.b ? 1.0f : 0.0f;
+        default:             return (float)busNumeric(v);
+    }
+}
+
+String CLASS_CORE_STATE::getStr(const char* name, const String& def) {
+    int idx = findRes(name);
+    if (idx < 0 || _res[idx].kind == BusValue::NONE) { return def; }
+    return _res[idx].value.s;
+}
+
+int64_t CLASS_CORE_STATE::getTime(const char* name, int64_t def) {
+    int idx = findRes(name);
+    if (idx < 0 || _res[idx].kind == BusValue::NONE) { return def; }
+    return busNumeric(_res[idx].value);
+}
+
+int CLASS_CORE_STATE::info(const char* name, BusResInfo& out) {
+    int idx = findRes(name);
+    if (idx < 0) { return BUS_ERR_NOT_FOUND; }
+    BusRes& r = _res[idx];
+    out.name = r.name;
+    out.kind = r.kind;
+    out.desc = r.desc;
+    out.writable = r.writable;
+    out.isEvent = r.isEvent;
+    out.isFunc = r.isFunc;
+    out.async = r.async;
+    out.timeoutMs = r.timeoutMs;
+    out.enumCount = r.enumCount;
+    for (uint8_t i = 0; i < r.enumCount; i++) { out.enumVals[i] = r.enumVals[i]; }
+    return BUS_OK;
+}
+
+BusValue CLASS_CORE_STATE::valueToKind(const BusValue& v, BusValue::Kind k) {
+    return busCoerce(v, k);
+}
+
+// Сравнение строк без учёта регистра (по образцу compare_strings() из ccronexpr).
+static bool coreStateCompareCi(const char* a, const char* b) {
+    while (*a != 0 && *b != 0) {
+        if (toupper((unsigned char)*a) != toupper((unsigned char)*b)) { return false; }
+        ++a; ++b;
+    }
+    return *a == 0 && *b == 0;
+}
+
+int CLASS_CORE_STATE::enumIndexByName(const char* res, const char* name,
+                                      const char** canonical) {
+    if (res == nullptr || name == nullptr) { return -1; }
+    int idx = findRes(res);
+    if (idx < 0) { return -1; }
+    BusRes& r = _res[idx];
+    if (r.kind != BusValue::ENUM || r.enumCount == 0) { return -1; }
+    for (uint8_t i = 0; i < r.enumCount; i++) {
+        if (r.enumVals[i] != nullptr && coreStateCompareCi(r.enumVals[i], name)) {
+            if (canonical != nullptr) { *canonical = r.enumVals[i]; }
+            return (int)i;
+        }
+    }
+    return -1;
+}
+
+const char* CLASS_CORE_STATE::enumNameByIndex(const char* res, int index) {
+    if (res == nullptr) { return nullptr; }
+    int idx = findRes(res);
+    if (idx < 0) { return nullptr; }
+    BusRes& r = _res[idx];
+    if (r.kind != BusValue::ENUM || index < 0 || index >= (int)r.enumCount) { return nullptr; }
+    return r.enumVals[index];
+}
+
+// ============================================================
+// Запись значений
+// ============================================================
+
+// Сравнение значений одного (целевого) типа ресурса — для дедупликации записи.
+static bool busValueEqual(const BusValue& a, const BusValue& b, BusValue::Kind k) {
+    switch (k) {
+        case BusValue::BOOL: return a.b == b.b;
+        case BusValue::I32:
+        case BusValue::ENUM: return a.i == b.i;
+        case BusValue::F32:  return a.f == b.f;
+        case BusValue::TIME: return a.t == b.t;
+        case BusValue::STR:  return a.s == b.s;
+        default:             return false;
+    }
+}
+
+// Проверяет допустимость значения для ENUM-ресурса (индекс в диапазоне).
+static bool busEnumRangeOk(BusValue::Kind kind, uint8_t enumCount, const BusValue& coerced) {
+    if (kind != BusValue::ENUM || enumCount == 0) { return true; }
+    return coerced.i >= 0 && coerced.i < (int32_t)enumCount;
+}
+
+int CLASS_CORE_STATE::writeRes(int idx, const BusValue& v, bool checkAccess) {
+    BusRes& r = _res[idx];
+    // Чистые функции/события (kind == NONE) не являются значениями.
+    // Ресурс-состояние с функцией записи (kind != NONE, isFunc) допускает запись значения.
+    if (r.kind == BusValue::NONE) { return BUS_ERR_BAD_TYPE; }
+    if (checkAccess && !r.writable) { return BUS_ERR_READONLY; }
+    // Ресурсы ядровых namespace (system/wifi/time/ota) с writable=false защищены
+    // проверкой выше (режим ядра — через requestMode(), ro-состояния — через signal()).
+    // Явно rw-ресурсы (wifi.target, wifi.mode, wifi.ap_hold_min, ...) разрешено писать
+    // из макросов/веб через set() — этого требует интеграция core_wifi в шину.
+
+    if (checkAccess && !_privileged && _currentNs >= 0
+        && r.ownerId != 255 && r.ownerId != (uint8_t)_currentNs) {
+        DEBUGSTATE("access: write %s from %s (owner %s)\r\n",
+                   r.name,
+                   _ns[_currentNs].name,
+                   (r.ownerId < _nsCount) ? _ns[r.ownerId].name : "?");
+    }
+
+    BusValue coerced = busCoerce(v, r.kind);
+    if (!busEnumRangeOk(r.kind, r.enumCount, coerced)) {
+        return BUS_ERR_BAD_VALUE;
+    }
+
+    // Дедупликация записи: если значение не изменилось — не обновляем реестр и
+    // не эмитим "state.<name>". Сохраняет edge-семантику (запись из сценария
+    // повторно не «дёргает» подписчиков). Колбэки вызова (call) не дедуплицируются.
+    BusValue prev = busCoerce(r.value, r.kind);
+    if (busValueEqual(prev, coerced, r.kind)) {
+        return BUS_OK;
+    }
+
+    r.value = coerced;
+
+    char evt[CORE_STATE_NAME_LEN];
+    snprintf(evt, sizeof(evt), "state.%s", r.name);
+    queueEvent(evt, r.value);
+    return BUS_OK;
+}
+
+// Единая запись «значения ресурса»: dual → write-функция, чистое состояние → set.
+// Дедупликация — как в writeRes: при неизменном значении write-функция не вызывается.
+int CLASS_CORE_STATE::applyValue(const char* name, const BusValue& v) {
+    int idx = findRes(name);
+    if (idx < 0) { return BUS_ERR_NOT_FOUND; }
+    BusRes& r = _res[idx];
+
+    // Чистая функция/событие без состояния: применяем через функцию.
+    if (r.kind == BusValue::NONE) {
+        if (r.isFunc && !r.async) {
+            BusValue res;
+            return r.fn(r.user, 1, &v, res);
+        }
+        return BUS_ERR_BAD_TYPE;
+    }
+
+    BusValue coerced = busCoerce(v, r.kind);
+    if (!busEnumRangeOk(r.kind, r.enumCount, coerced)) {
+        return BUS_ERR_BAD_VALUE;
+    }
+
+    BusValue prev = busCoerce(r.value, r.kind);
+    bool same = busValueEqual(prev, coerced, r.kind);
+    if (same) { return BUS_OK; }
+
+    int rc;
+    // dual state+func: запись значения применяется write-функцией.
+    if (r.isFunc && !r.async) {
+        BusValue res;
+        rc = r.fn(r.user, 1, &coerced, res);
+    } else {
+        rc = writeRes(idx, coerced, true);
+    }
+    if (rc != BUS_OK) { return rc; }
+
+    // Смена режима модуля сохраняется отдельно от остальных параметров.
+    if (strcmp(r.field, "mode") == 0) {
+        rc = persistModuleMode(r.ns);
+    }
+    return rc;
+}
+
+int CLASS_CORE_STATE::setBool(const char* name, bool value) {
+    int idx = findRes(name);
+    if (idx < 0) { return BUS_ERR_NOT_FOUND; }
+    return writeRes(idx, BusValue::bo(value), true);
+}
+
+int CLASS_CORE_STATE::setInt(const char* name, int32_t value) {
+    int idx = findRes(name);
+    if (idx < 0) { return BUS_ERR_NOT_FOUND; }
+    return writeRes(idx, BusValue::i32(value), true);
+}
+
+int CLASS_CORE_STATE::setF32(const char* name, float value) {
+    int idx = findRes(name);
+    if (idx < 0) { return BUS_ERR_NOT_FOUND; }
+    return writeRes(idx, BusValue::f32(value), true);
+}
+
+int CLASS_CORE_STATE::setStr(const char* name, const String& value) {
+    int idx = findRes(name);
+    if (idx < 0) { return BUS_ERR_NOT_FOUND; }
+    return writeRes(idx, BusValue::str(value), true);
+}
+
+int CLASS_CORE_STATE::setTime(const char* name, int64_t value) {
+    int idx = findRes(name);
+    if (idx < 0) { return BUS_ERR_NOT_FOUND; }
+    return writeRes(idx, BusValue::tm(value), true);
+}
+
+// Сохранение только режима модуля: <ns>.save_mode. Вызывается после успешной
+// смены режима через шину. Для system.mode не применяется (runtime-режим ядра).
+int CLASS_CORE_STATE::persistModuleMode(const char* module_namespace) {
+    if (module_namespace == nullptr || strcmp(module_namespace, "system") == 0) {
+        return BUS_OK;
+    }
+
+    char full[CORE_STATE_NAME_LEN];
+    snprintf(full, sizeof(full), "%s.save_mode", module_namespace);
+    int f = findFunc(full);
+    if (f < 0 || _res[f].async) {
+        DEBUGSTATE("mode: %s has no sync save_mode\r\n", module_namespace);
+        return BUS_OK;
+    }
+
+    BusValue result;
+    int rc = _res[f].fn(_res[f].user, 0, nullptr, result);
+    if (rc != BUS_OK) {
+        DEBUGSTATE("mode save failed: %s rc=%d\r\n", module_namespace, rc);
+    }
+    return rc;
+}
+
+int CLASS_CORE_STATE::mode(const char* module_namespace, int new_mode) {
+    if (module_namespace == nullptr) { return BUS_ERR_BAD_TYPE; }
+    char full[CORE_STATE_NAME_LEN];
+    snprintf(full, sizeof(full), "%s.mode", module_namespace);
+    int idx = findRes(full);
+    if (idx < 0) { return BUS_ERR_NOT_FOUND; }
+    if (_res[idx].kind != BusValue::ENUM) { return BUS_ERR_BAD_TYPE; }
+    if (new_mode < 0) { return _res[idx].value.i; }
+    if (_res[idx].enumCount > 0 && new_mode >= (int)_res[idx].enumCount) {
+        return BUS_ERR_BAD_VALUE;
+    }
+    if (_res[idx].value.i == new_mode) { return BUS_OK; }
+
+    int f = findFunc(full);
+    int rc;
+    if (f >= 0 && !_res[f].async) {
+        BusValue a = BusValue::i32(new_mode);
+        BusValue res;
+        rc = _res[f].fn(_res[f].user, 1, &a, res);
+    } else {
+        rc = writeRes(idx, BusValue::en(new_mode), true);
+    }
+    if (rc != BUS_OK) { return rc; }
+
+    return persistModuleMode(module_namespace);
+}
+
+int CLASS_CORE_STATE::signal(const char* sig, const BusValue& v) {
+    int idx = findRes(sig);
+    if (idx < 0) { return BUS_ERR_NOT_FOUND; }
+    return writeRes(idx, v, false);
+}
+
+// ============================================================
+// События
+// ============================================================
+void CLASS_CORE_STATE::queueEvent(const char* evt, const BusValue& v) {
+    if (_evCount >= CORE_STATE_EV_QUEUE) {
+        DEBUGSTATE("event queue full, drop %s\r\n", evt);
+        return;
+    }
+    BusEv& e = _evQueue[_evTail];
+    strncpy(e.evt, evt, CORE_STATE_NAME_LEN - 1);
+    e.evt[CORE_STATE_NAME_LEN - 1] = 0;
+    e.v = v;
+    _evTail = (uint8_t)((_evTail + 1) % CORE_STATE_EV_QUEUE);
+    _evCount++;
+}
+
+void CLASS_CORE_STATE::emit(const char* evt, const BusValue& v) {
+    queueEvent(evt, v);
+}
+
+uint32_t CLASS_CORE_STATE::on(const char* evt, BusCb cb, void* user) {
+    if (evt == nullptr || cb == nullptr) { return 0; }
+    for (uint8_t i = 0; i < CORE_STATE_MAX_SUBS; i++) {
+        if (!_subs[i].used) {
+            _subs[i].used = true;
+            strncpy(_subs[i].evt, evt, CORE_STATE_NAME_LEN - 1);
+            _subs[i].evt[CORE_STATE_NAME_LEN - 1] = 0;
+            _subs[i].cb = cb;
+            _subs[i].user = user;
+            _subs[i].handle = _subNextHandle++;
+            return _subs[i].handle;
+        }
+    }
+    return 0;
+}
+
+void CLASS_CORE_STATE::off(uint32_t handle) {
+    for (uint8_t i = 0; i < CORE_STATE_MAX_SUBS; i++) {
+        if (_subs[i].used && _subs[i].handle == handle) {
+            _subs[i].used = false;
+            _subs[i].cb = nullptr;
+            _subs[i].user = nullptr;
+            return;
+        }
+    }
+}
+
+void CLASS_CORE_STATE::dispatchEvents() {
+    while (_evCount > 0) {
+        BusEv ev = _evQueue[_evHead];
+        _evHead = (uint8_t)((_evHead + 1) % CORE_STATE_EV_QUEUE);
+        _evCount--;
+
+        for (uint8_t i = 0; i < CORE_STATE_MAX_SUBS; i++) {
+            if (_subs[i].used && strcmp(_subs[i].evt, ev.evt) == 0) {
+                // argv[0] — имя события, argv[1] — значение.
+                BusValue args[2];
+                args[0] = BusValue::str(String(ev.evt));
+                args[1] = ev.v;
+                BusValue out;
+                _subs[i].cb(_subs[i].user, 2, args, out);
+            }
+        }
+    }
+
+    while (_doneCount > 0) {
+        BusDone d = _doneQueue[0];
+        for (uint8_t i = 0; i + 1 < _doneCount; i++) { _doneQueue[i] = _doneQueue[i + 1]; }
+        _doneCount--;
+        if (d.cb != nullptr) {
+            BusValue args[2];
+            args[0] = BusValue::i32(d.rc);
+            args[1] = d.result;
+            BusValue out;
+            d.cb(d.cbUser, 2, args, out);
+        }
+    }
+}
+
+// ============================================================
+// Асинхронные вызовы
+// ============================================================
+int CLASS_CORE_STATE::call(const char* name, int argc, BusValue args[], BusValue& result) {
+    int idx = findFunc(name);
+    if (idx < 0) { return BUS_ERR_NOT_FOUND; }
+    if (_res[idx].async) { return BUS_ERR_BAD_TYPE; }
+    if (argc > CORE_STATE_MAX_ARGS) { return BUS_ERR_BAD_ARGC; }
+    return _res[idx].fn(_res[idx].user, argc, args, result);
+}
+
+int CLASS_CORE_STATE::call_async(const char* name, BusCb cb, void* user,
+                                 int argc, BusValue args[]) {
+    int idx = findFunc(name);
+    if (idx < 0) { return BUS_ERR_NOT_FOUND; }
+    if (!_res[idx].async) { return BUS_ERR_BAD_TYPE; }
+    if (argc > CORE_STATE_MAX_ARGS) { return BUS_ERR_BAD_ARGC; }
+
+    if (_asyncOwner != nullptr) {
+        uint8_t cnt = 0;
+        for (uint8_t i = 0; i < CORE_STATE_MAX_ASYNC; i++) {
+            if (_async[i].used && _async[i].owner == _asyncOwner) { cnt++; }
+        }
+        if (cnt >= 3) { return BUS_ERR_BUSY; }
+    }
+
+    int slot = -1;
+    for (uint8_t i = 0; i < CORE_STATE_MAX_ASYNC; i++) {
+        if (!_async[i].used) { slot = i; break; }
+    }
+    if (slot < 0) { return BUS_ERR_BUSY; }
+
+    BusAsync& a = _async[slot];
+    a.used = true;
+    a.handle = _asyncNextHandle++;
+    a.fn = _res[idx].afn;
+    a.user = _res[idx].user;
+    a.cb = cb;
+    a.cbUser = user;
+    a.startMs = millis();
+    a.timeoutMs = _res[idx].timeoutMs;
+    a.owner = _asyncOwner;
+    a.argc = argc;
+    for (int i = 0; i < argc && i < CORE_STATE_MAX_ARGS; i++) { a.args[i] = args[i]; }
+
+    int rc = a.fn(a.user, a.handle, argc, args);
+    if (rc != BUS_OK) { a.used = false; }
+    return rc;
+}
+
+void CLASS_CORE_STATE::asyncComplete(uint32_t handle, int rc, const BusValue& result) {
+    for (uint8_t i = 0; i < CORE_STATE_MAX_ASYNC; i++) {
+        if (_async[i].used && _async[i].handle == handle) {
+            if (_doneCount >= CORE_STATE_MAX_ASYNC) {
+                // Очередь результатов заполнена: отбрасываем самый старый
+                // результат, чтобы не потерять завершение текущего вызова.
+                for (uint8_t j = 0; j + 1 < CORE_STATE_MAX_ASYNC; j++) {
+                    _doneQueue[j] = _doneQueue[j + 1];
+                }
+                _doneCount = CORE_STATE_MAX_ASYNC - 1;
+            }
+            BusDone& d = _doneQueue[_doneCount];
+            d.used = true;
+            d.handle = handle;
+            d.rc = rc;
+            d.result = result;
+            d.cb = _async[i].cb;
+            d.cbUser = _async[i].cbUser;
+            _doneCount++;
+            _async[i].used = false;
+            return;
+        }
+    }
+}
+
+void CLASS_CORE_STATE::cancel_async(int handle) {
+    for (uint8_t i = 0; i < CORE_STATE_MAX_ASYNC; i++) {
+        if (_async[i].used && _async[i].handle == (uint32_t)handle) {
+            _async[i].used = false;
+            return;
+        }
+    }
+}
+
+void CLASS_CORE_STATE::setAsyncOwner(void* ownerToken) {
+    _asyncOwner = ownerToken;
+}
+
+void CLASS_CORE_STATE::asyncCancelFor(void* ownerToken) {
+    for (uint8_t i = 0; i < CORE_STATE_MAX_ASYNC; i++) {
+        if (_async[i].used && _async[i].owner == ownerToken) {
+            _async[i].used = false;
+        }
+    }
+}
+
+void CLASS_CORE_STATE::processAsyncTimeouts() {
+    uint32_t nowMs = millis();
+    for (uint8_t i = 0; i < CORE_STATE_MAX_ASYNC; i++) {
+        BusAsync& a = _async[i];
+        if (!a.used) { continue; }
+        if (a.timeoutMs > 0 && (nowMs - a.startMs) >= a.timeoutMs) {
+            uint32_t h = a.handle;
+            asyncComplete(h, BUS_ERR_TIMEOUT);
+        }
+    }
+}
+
+// ============================================================
+// Режимы
+// ============================================================
+int CLASS_CORE_STATE::getMode() {
+    return _mode;
+}
+
+int CLASS_CORE_STATE::setMode(int m) {
+    if (m < 0 || m >= CORE_MODE_COUNT) { return BUS_ERR_BAD_VALUE; }
+
+    _mode = (uint8_t)m;
+    _modeSinceMs = millis();
+
+    if (m == CORE_MODE_TEST) {
+        _opHasTimeout = true;
+        _opTimeoutMs = _testTimeoutMs;
+    } else if (m == CORE_MODE_OTA || m == CORE_MODE_FS_UPDATE) {
+        _opHasTimeout = true;
+        _opTimeoutMs = _opMaxTimeoutMs;
+    } else {
+        _opHasTimeout = false;
+    }
+
+    queueEvent("system.mode_changed", BusValue::en(m));
+    DEBUGSTATE("mode -> %s\r\n", coreModeNames[m]);
+    return BUS_OK;
+}
+
+int CLASS_CORE_STATE::requestMode(int m) {
+    return requestMode(m, 50);
+}
+
+int CLASS_CORE_STATE::requestMode(int m, uint8_t prio) {
+    if (m < 0 || m >= CORE_MODE_COUNT) { return BUS_ERR_BAD_VALUE; }
+    if (m == _mode) { return BUS_OK; }
+
+    bool longReq = (m == CORE_MODE_OTA || m == CORE_MODE_FS_UPDATE || m == CORE_MODE_PROG);
+    bool longCur = (_mode == CORE_MODE_OTA || _mode == CORE_MODE_FS_UPDATE
+                    || _mode == CORE_MODE_PROG);
+
+    if (m == CORE_MODE_TEST && longCur) { return BUS_ERR_BUSY; }
+    if (longReq && _mode == CORE_MODE_TEST) { return BUS_ERR_BUSY; }
+    if (longReq && longCur) {
+        if (prio > _opPrio) { _opPrio = prio; return setMode(m); }
+        return BUS_ERR_BUSY;
+    }
+
+    _opPrio = prio;
+    return setMode(m);
+}
+
+void CLASS_CORE_STATE::processModeTimeouts() {
+    if (!_opHasTimeout) { return; }
+    if ((millis() - _modeSinceMs) < _opTimeoutMs) { return; }
+    DEBUGSTATE("mode timeout -> normal\r\n");
+    setMode(CORE_MODE_NORMAL);
+}
+
+// ============================================================
+// loop()
+// ============================================================
+void CLASS_CORE_STATE::loop() {
+    processAsyncTimeouts();
+    processModeTimeouts();
+    dispatchEvents();
+}

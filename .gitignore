@@ -9,14 +9,40 @@
 /log/
 __pycache__/
 /hex_bin/
+/otasyncer-server/
 *.bin
 # Web debug folders
 /web_debug/
+# Отчёты юнит-тестов ядра (JUnit/логи/сводки)
+/test_reports/
 .version_hashes
 build_counter.txt
-.module_versions
-.module_hashes
 task_progress.md
-*version.h
-/.kilo
+# Игнорируется только мажорный заголовок прошивки (генерируется при сборке);
+# заголовки версий модулей (*_version.h) отслеживаются в git
+/src/version.h
+# .kilo игнорируется целиком, кроме проектных skills (они должны попадать в git)
+/.kilo/*
+!/.kilo/skills/
+!/.kilo/skills/**
 /example
+
+# Запасные варианты реализации (не входят в сборку/коммиты)
+/alt_clock-mech-isr/
+
+# Генерируемые pre-скриптами артефакты (пересоздаются при каждой сборке)
+version_counter.txt
+src/modules_registry.*
+src/modules_defines.h
+
+# CMake build tree (VS Code / ccronexpr tests), генерируется локально
+/build/
+
+# Внешние компоненты: отдельные git-репозитории, клонируются пользователем в src/
+/src/module_*/
+/src/submodule_*/
+/src/device_*/
+!/src/module_template/
+
+# Локальные PowerShell-консоли для тестов UART-моста (не коммитятся)
+/test_uart/

@@ -22,18 +22,21 @@
 - [Система версионирования](#система-версионирования)
   - [Формат версии](#формат-версии)
   - [Файлы счётчиков версий](#файлы-счётчиков-версий)
-  - [Генерация version.h (version_builder.py)](#генерация-versionh-version_builderpy)
-  - [Генерация модульных версий (module_version_gen.py)](#генерация-модульных-версий-module_version_genpy)
+  - [Генерация version.h (2_version_builder.py)](#генерация-versionh-2_version_builderpy)
+  - [Генерация модульных версий (3_module_version_gen.py)](#генерация-модульных-версий-3_module_version_genpy)
   - [Именование файлов прошивки и ФС](#именование-файлов-прошивки-и-фс)
   - [Файл _version_fs.json](#файл-_version_fsjson)
 - [Python-скрипты сборки](#python-скрипты-сборки)
-  - [version_builder.py](#version_builderpy)
-  - [module_version_gen.py](#module_version_genpy)
-  - [fs_builder.py](#fs_builderpy)
+  - [0_esp32_common.py](#0_esp32_commonpy)
+  - [1_registry_pre_build.py](#1_registry_pre_buildpy)
+  - [2_version_builder.py](#2_version_builderpy)
+  - [3_module_version_gen.py](#3_module_version_genpy)
+  - [4_fs_builder.py](#4_fs_builderpy)
   - [gen_page_head.py](#gen_page_headpy)
-  - [set_fs_data_dir.py](#set_fs_data_dirpy)
-  - [copy_fw.py](#copy_fwpy)
-  - [copy_fs.py](#copy_fspy)
+  - [gen_resources_catalog.py](#gen_resources_catalogpy)
+  - [5_set_fs_data_dir.py](#5_set_fs_data_dirpy)
+  - [6_copy_fw.py](#6_copy_fwpy)
+  - [7_copy_fs.py](#7_copy_fspy)
   - [Порядок выполнения скриптов](#порядок-выполнения-скриптов)
 - [Файлы настроек (конфигурации)](#файлы-настроек-конфигурации)
 - [Компиляция и отладка](#компиляция-и-отладка)
@@ -43,13 +46,7 @@
 - [Резервирование точек доступа](#резервирование-точек-доступа)
 - [Веб-авторизация](#веб-авторизация)
 - [Список веб-страниц](#список-веб-страниц)
-- [Программатор AVR-ISP](#программатор-avr-isp)
-  - [Руководство пользователя AVR-ISP программатора](#руководство-пользователя-avr-isp-программатора)
-- [Программатор SWD (STM32)](#программатор-swd-stm32)
-  - [Руководство пользователя SWD программатора](#руководство-пользователя-swd-программатора)
-- [UDP-модуль](#udp-модуль)
-- [OTA-клиент](#ota-клиент)
-- [GPIO-модуль](#gpio-модуль)
+- [Подключаемые модули: документация](#подключаемые-модули-документация)
 - [Условия пользования](#условия-пользования)
 
 ---
@@ -73,25 +70,45 @@
 
 | Модуль | Директория | Назначение |
 |--------|-----------|-----------|
+| **core_sys** | `src/core_sys/` | Идентичность/конфиг системы, HTTP-auth, информация о системе; **виртуальное время**: агрегатор источников (NTP/DS3231/…), TZ/DST, ресурсы `time.*` |
 | **core_wifi** | `src/core_wifi/` | Wi-Fi клиент/точка доступа, управление 4 профилями подключения, сканирование эфира |
 | **core_ntp** | `src/core_ntp/` | NTP клиент с поддержкой 3 серверов (основной + 2 резервных), автоматическое переключение |
 | **core_ota** | `src/core_ota/` | Самообновление прошивки ESP (FOTA) через веб-интерфейс, проверка версий файловой системы |
-| **core_editor** | `src/core_editor/` | Браузер файловой системы, редактор .html/.txt/.json/.js файлов, загрузка/удаление файлов |
 | **core_json** | `src/core_json/` | Утилиты для работы с JSON-документами (сохранение/загрузка) |
 | **core_led** | `src/core_led/` | LED-индикация, макросы для отображения событий (Wi-Fi, ошибки, успех, ожидание) |
 | **core_terminal** | `src/core_terminal/` | Serial-терминал с набором команд для отладки и управления |
 
 ### Подключаемые модули
 
-Подключаемые модули **не входят** в базовую прошивку. Они добавляются через `src_filter` в конфигурации таргета и активируются соответствующими `build_flags`.
+Подключаемые модули **не входят** в базовую прошивку. Это **опциональные модули**: они добавляются через `src_filter` в конфигурации таргета и активируются соответствующими `build_flags`. Полный реестр компонентов — в `INVENTORY.md`; для сборки нужны склонированные репозитории модулей.
 
-| Модуль | Директория | Флаг активации | Назначение |
-|--------|-----------|---------------|-----------|
-| **module_prog_isp** | `src/module_prog_isp/` | `-D PROGTYPE_ISP` | AVR-ISP программатор (AtMega/AtTiny) |
-| **module_prog_swd** | `src/module_prog_swd/` | `-D PROGTYPE_SWD` | SWD программатор (STM32) |
-| **module_gpio** | `src/module_gpio/` | `-D MODULE_GPIO` | Управление GPIO через веб-интерфейс |
-| **module_udp** | `src/module_udp/` | `-D MODULE_UDP` | UDP-широковещание, обнаружение устройств в сети |
-| **module_otaclient** | `src/module_otaclient/` | `-D MODULE_OTACLIENT=1` | OTA-клиент (получение обновлений с удалённого сервера) |
+> Документация каждого компонента лежит в `<component>/AGENTS.md` (по аналогии с корневым `AGENTS.md`) — это инструкции, привязанные к компоненту и читаемые агентом в контексте этого компонента. Пользовательские разделы (руководства по работе с программаторами, веб-интерфейсом и т.п.) также находятся там.
+
+| Модуль | Директория | Флаг активации | Назначение | Документация |
+|--------|-----------|---------------|-----------|--------------|
+| **module_program** (ISP) | `src/module_program/` (module_prog + submodule_isp) | `-D PROGTYPE_ISP` | AVR-ISP программатор (AtMega/AtTiny) | `src/module_program/AGENTS.md` |
+| **module_program** (SWD) | `src/module_program/` (module_prog + submodule_swd) | `-D PROGTYPE_SWD` | SWD программатор (STM32) | `src/module_program/AGENTS.md` |
+| **module_program** (RP2040) | `src/module_program/` (module_prog + submodule_rpico) | `-D PROGTYPE_RPICO` | SWD программатор RP2040 (Raspberry Pi Pico) | `src/module_program/AGENTS.md` |
+| **module_udp** | `src/module_udp/` | `-D MODULE_UDP` | UDP-широковещание, обнаружение устройств в сети | `src/module_udp/AGENTS.md` |
+| **module_editor** | `src/module_editor/` | `-D MODULE_EDITOR` | Браузер файловой системы, редактор .html/.txt/.json/.js файлов (форк Ace), загрузка/удаление | `src/module_editor/AGENTS.md` |
+| **module_ds3231** | `src/module_ds3231/` | `-D MODULE_DS3231` | Часы реального времени DS3231 | `src/module_ds3231/AGENTS.md` |
+| **module_gpio** | `src/module_gpio/` | `-D MODULE_GPIO` | Управление GPIO через веб-интерфейс | `src/module_gpio/AGENTS.md` |
+| **module_lcd-i2c** | `src/module_lcd-i2c/` | `-D MODULE_LCD_I2C` | LCD I2C дисплей | `src/module_lcd-i2c/AGENTS.md` |
+| **module_macros** | `src/module_macros/` | `-D MODULE_MACROS=1` | Макросы/сценарии (Lua), только ESP32 | `src/module_macros/AGENTS.md` |
+| **module_otaclient** | `src/module_otaclient/` | `-D MODULE_OTACLIENT=1` | OTA-клиент (получение обновлений с удалённого сервера) | `src/module_otaclient/AGENTS.md` |
+| **module_rgb** | `src/module_rgb/` | `-D MODULE_RGB` | RGB-лента/матрица (WS2812) | `src/module_rgb/AGENTS.md` |
+| **module_i2c-mapper** | `src/module_i2c-mapper/` | `-D MODULE_I2C_MAPPER` | Сканер шины I2C | `src/module_i2c-mapper/AGENTS.md` |
+| **module_template** | `src/module_template/` | `-D MODULE_TEMPLATE` | Шаблон модуля — эталон для новых (входит в ядро) | `src/module_template/AGENTS.md` |
+
+### Устройства (device_*)
+
+Устройства — тоже **опциональные** репозитории-«рецепты сборки»: в `.ini` перечисляют нужные модули. Для сборки необходимо клонировать само устройство и все указанные в его `.ini` модули.
+
+| Устройство | Директория | Флаг активации | Назначение | Документация |
+|-----------|-----------|---------------|-----------|--------------|
+| **device_clock-mech** | `src/device_clock-mech/` | `-D DEVICE_CLOCKMECH=1` | Механические часы | `src/device_clock-mech/AGENTS.md` |
+| **device_mech-ring** | `src/device_mech-ring/` | `-D DEVICE_RINGMECH=1` | Механические часы с боем | `src/device_mech-ring/AGENTS.md` |
+| **device_electronica7_rgb** | `src/device_electronica7_rgb/` | `-D DEVICE_E7RGB=1` | Часы «Электроника-7» RGB (матрица) | `src/device_electronica7_rgb/AGENTS.md` |
 
 ---
 
@@ -115,7 +132,7 @@
 ```ini
 [env:esp32-swd]
 extends = env:esp32
-src_filter = ${platformio.src_filter} +<module_prog_swd/> +<module_udp/>
+src_filter = ${platformio.src_filter} +<module_program/module_prog/> +<module_program/submodule_swd/> +<module_udp/>
 build_flags=
     ${env.build_flags}
     ${env:esp32.build_flags}
@@ -125,11 +142,26 @@ build_flags=
     -D SWDPIN_DATA=19
 ```
 
+**ESP32 + RP2040 SWD программатор (Raspberry Pi Pico):**
+```ini
+[env:esp32-rpico]
+extends = env:esp32
+src_filter = ${platformio.src_filter} +<module_program/module_prog/> +<module_program/submodule_rpico/> +<module_udp/>
+build_flags=
+    ${env.build_flags}
+    ${env:esp32.build_flags}
+    -D SWDPIN_CLK=21
+    -D SWDPIN_DATA=19
+    -D RPICO_RST_PIN=22
+    -D RPICO_SWD_DELAY=2
+```
+`MODULE_*`/`PROGTYPE_*` выводятся в `src/modules_defines.h` автоматически из `src_filter`.
+
 **ESP32 + AVR-ISP программатор:**
 ```ini
 [env:esp32-isp]
 extends = env:esp32
-src_filter = ${platformio.src_filter} +<module_prog_isp/> +<module_udp/>
+src_filter = ${platformio.src_filter} +<module_program/module_prog/> +<module_program/submodule_isp/> +<module_udp/>
 build_flags=
     ${env.build_flags}
     ${env:esp32.build_flags}
@@ -259,13 +291,13 @@ MAJOR.MINOR.DATE.BUILD
 | **version_counter.txt** | Хранит MAJOR и MINOR версию | Две строки: первая — MAJOR (0-9), вторая — MINOR (0-999) |
 | **build_counter.txt** | Хранит номер сборки BUILD | Одна строка: число от 0 до 9999 |
 
-**version_counter.txt** редактируется вручную. При изменении содержимого git-коммита (появлении новых файлов или изменении существующих) скрипт `version_builder.py` автоматически увеличивает MINOR на 1.
+**version_counter.txt** редактируется вручную. При изменении содержимого git-коммита (появлении новых файлов или изменении существующих) скрипт `2_version_builder.py` автоматически увеличивает MINOR на 1.
 
 **build_counter.txt** увеличивается автоматически при каждом запуске сборки. Если файл отсутствует — создаётся со значением 0.
 
-### Генерация version.h (version_builder.py)
+### Генерация version.h (2_version_builder.py)
 
-Скрипт `python/version_builder.py` запускается **до** компиляции (pre-script) и генерирует файл `src/version.h`, который содержит макрос `FIRMWARE_VERSION` с полной строкой версии.
+Скрипт `python/2_version_builder.py` запускается **до** компиляции (pre-script) и генерирует файл `src/version.h`, который содержит макрос `FIRMWARE_VERSION` с полной строкой версии.
 
 **Алгоритм работы:**
 
@@ -302,9 +334,9 @@ MAJOR.MINOR.DATE.BUILD
 
 **Защита от двойного запуска:** скрипт проверяет, не был ли он уже запущен в текущей сессии (через переменную окружения `VERSION_BUILDER_RUN`). Это предотвращает повторное увеличение BUILD при перезапуске сборки PlatformIO.
 
-### Генерация модульных версий (module_version_gen.py)
+### Генерация модульных версий (3_module_version_gen.py)
 
-Скрипт `python/module_version_gen.py` запускается **до** компиляции (pre-script) и генерирует файлы `*_version.h` для каждого модуля (как core, так и module).
+Скрипт `python/3_module_version_gen.py` запускается **до** компиляции (pre-script) и генерирует файлы `*_version.h` для каждого модуля (как core, так и module).
 
 **Алгоритм работы:**
 
@@ -352,12 +384,12 @@ MAJOR.MINOR.DATE.BUILD
 - `{VERSION}` — полная строка версии из `FIRMWARE_VERSION` макроса
 
 Копирование выполняется скриптами:
-- `python/copy_fw.py` — копирует `firmware.bin` → `proj_fwbins/{ENV}-FIRMWARE-{VERSION}.bin`
-- `python/copy_fs.py` — копирует `spiffs.bin` (или `littlefs.bin`) → `proj_fwbins/{ENV}-FILESYS-{VERSION}.bin`
+- `python/6_copy_fw.py` — копирует `firmware.bin` → `proj_fwbins/{ENV}-FIRMWARE-{VERSION}.bin`
+- `python/7_copy_fs.py` — копирует `spiffs.bin` (или `littlefs.bin`) → `proj_fwbins/{ENV}-FILESYS-{VERSION}.bin`
 
 ### Файл _version_fs.json
 
-При сборке образа ФС скрипт `python/fs_builder.py` генерирует файл `_version_fs.json`, который помещается в корень ФС. Этот файл содержит полную информацию о версии прошивки и используется для проверки совместимости при OTA-обновлениях.
+При сборке образа ФС скрипт `python/4_fs_builder.py` генерирует файл `_version_fs.json`, который помещается в корень ФС. Этот файл содержит полную информацию о версии прошивки и используется для проверки совместимости при OTA-обновлениях.
 
 **Структура `_version_fs.json`:**
 
@@ -376,12 +408,12 @@ MAJOR.MINOR.DATE.BUILD
     "core_wifi": {"version": "1", "date": "20260403"},
     "core_ntp": {"version": "1", "date": "20260403"},
     "core_ota": {"version": "1", "date": "20260403"},
-    "core_editor": {"version": "1", "date": "20260403"},
     "core_json": {"version": "1", "date": "20260403"},
     "core_led": {"version": "1", "date": "20260403"},
     "core_terminal": {"version": "1", "date": "20260403"},
-    "module_prog_swd": {"version": "1", "date": "20260403"},
-    "module_udp": {"version": "1", "date": "20260403"}
+    "module_program/submodule_swd": {"version": "1", "date": "20260403"},
+    "module_udp": {"version": "1", "date": "20260403"},
+    "module_editor": {"version": "0", "date": "20260403"}
   },
   "fs_size": 1048576,
   "fs_used": 524288,
@@ -395,9 +427,37 @@ MAJOR.MINOR.DATE.BUILD
 
 ## Python-скрипты сборки
 
-Все скрипты находятся в директории `python/` и подключаются к процессу сборки PlatformIO через параметр `extra_scripts` в `platformio.ini`. Скрипты разделены на **pre-scripts** (выполняются до компиляции) и **post-scripts** (выполняются после компиляции).
+Все скрипты находятся в директории `python/` и подключаются к процессу сборки PlatformIO через параметр `extra_scripts` в `platformio.ini`. Скрипты разделены на **pre-scripts** (выполняются до компиляции) и **post-scripts** (выполняются после компиляции). Число в имени файла (`0_`, `1_`, …) — порядок выполнения. Утилиты `module_registry_gen.py`, `gen_page_head.py`, `gen_resources_catalog.py`, `build_all.py` запускаются другими скриптами или вручную, поэтому номера не имеют.
 
-### version_builder.py
+### 0_esp32_common.py
+
+**Назначение:** Единые флаги размера и единая таблица разделов для всех ESP32-сборок.
+
+**Тип:** Pre-script (только для `espressif32`)
+
+**Алгоритм:**
+
+1. Для `PIOPLATFORM=espressif32` добавляет `-fno-exceptions`, `-fno-unwind-tables`,
+   `-fno-asynchronous-unwind-tables`.
+2. Удаляет framework-флаг `-fexceptions` через `BUILD_UNFLAGS` (иначе framework снова
+   включит исключения).
+3. Принудительно ставит `board_build.partitions = partitions_esp32.csv`, перекрывая
+   env-настройки (включая macro/nonmacro и `esp32-c3-devkitm-1`).
+
+ESP8266 скрипт не затрагивает.
+
+### 1_registry_pre_build.py
+
+**Назначение:** Перегенерация списка модулей `src/modules_registry.cpp/.h` под текущий env.
+
+**Тип:** Pre-script
+
+**Алгоритм:**
+1. Определяет имя текущего окружения (env) из PlatformIO
+2. Запускает `python/module_registry_gen.py --env <env>` (см. [Inclusion mechanism](#inclusion-mechanism))
+3. При ошибке генератора — прерывает сборку
+
+### 2_version_builder.py
 
 **Назначение:** Генерация файла `src/version.h` с версией прошивки и информацией о git-репозитории.
 
@@ -445,7 +505,7 @@ MAJOR.MINOR.DATE.BUILD
 - `BUILD_DIGITS = 4` — количество цифр BUILD
 - `DATE_FORMAT = "%Y%m%d_%H%M"` — формат даты
 
-### module_version_gen.py
+### 3_module_version_gen.py
 
 **Назначение:** Генерация файлов `*_version.h` для каждого модуля (core_* и module_*).
 
@@ -480,7 +540,7 @@ MAJOR.MINOR.DATE.BUILD
    - Для каждого модуля создаёт файл вида `src/<module_name>/<module_name>_version.h`
    - Пример: `src/core_wifi/core_wifi_version.h`
 
-### fs_builder.py
+### 4_fs_builder.py
 
 **Назначение:** Подготовка и сборка образа файловой системы (ФС).
 
@@ -498,7 +558,7 @@ MAJOR.MINOR.DATE.BUILD
    - Формирует полную строку версии
 
 3. **Подготовка директории ФС:**
-   - Создаёт директорию `web_debug/<env_name>/` (или `web_debug/` для debug-сборок)
+   - Создаёт директорию `web_debug/web_<env_name>/` (или `web_debug/` для debug-сборок)
    - Копирует все файлы из `data/` в подготовленную директорию
    - Копирует файлы из `web/` папок подключённых модулей (если есть)
 
@@ -507,26 +567,31 @@ MAJOR.MINOR.DATE.BUILD
    - Подсчитывает статистику по файлам (количество, размеры)
    - Записывает JSON-файл в подготовленную директорию
 
-5. **Генерация `page_head.html`:**
+5. **Каталог ресурсов для `module_macros` (шаг 7b в `4_fs_builder.py`):**
+   - Если в сборке есть `module_macros`, вызывает `gen_resources_catalog.py`
+   - Парсит регистрации `setNamespace`/`regState`/`regStateAs`/`regEnum`/`regFunc`/`regEvent` компонентов сборки
+   - Кладёт результат в образ ФС как `/macros/resources.json` (дерево Resources страницы макросов)
+
+6. **Генерация `page_head.html`:**
    - Вызывает `gen_page_head.py` для генерации динамического заголовка страниц
    - Заменяет маркер `<!-- MODULES_RIGHT_COLUMN -->` на ссылки модулей
 
-6. **Перенаправление PROJECT_DATA_DIR:**
+7. **Перенаправление PROJECT_DATA_DIR:**
    - Устанавливает переменную окружения `PLATFORMIO_FS_DATA_DIR` на подготовленную директорию
    - Это заставляет PlatformIO собирать образ ФС из нестандартной директории
 
-7. **Запуск сборки ФС:**
+8. **Запуск сборки ФС:**
    - Вызывает PlatformIO для сборки образа ФС: `pio run --target buildfs --environment <env>`
    - Реализована логика повторных попыток при сбоях (retry)
 
-8. **Создание симлинка web_current:**
+9. **Создание симлинка web_current:**
    - Создаёт символическую ссылку `web_current`, указывающую на последнюю собранную директорию
 
 ### gen_page_head.py
 
 **Назначение:** Динамическая генерация HTML-заголовка страниц (`page_head.html`) на основе подключённых модулей.
 
-**Тип:** Вызывается из `fs_builder.py`
+**Тип:** Вызывается из `4_fs_builder.py`
 
 **Подробный алгоритм:**
 
@@ -545,18 +610,34 @@ MAJOR.MINOR.DATE.BUILD
    - Вставляет сгенерированные ссылки модулей вместо маркера
    - Записывает результат в подготовленную директорию ФС
 
-### set_fs_data_dir.py
+### gen_resources_catalog.py
+
+**Назначение:** Статический каталог ресурсов ресурсной шины (`core_state`) для страницы макросов: `/macros/resources.json`.
+
+**Тип:** Вызывается из `4_fs_builder.py` (шаг 7b, только при наличии `module_macros`); может запускаться вручную.
+
+**Подробный алгоритм:**
+
+1. **Сбор компонентов:** все `src/core_*` + компоненты из `src_filter` выбранного env (+ переданный список `included_modules`).
+2. **Парсинг регистраций:** находит в `.cpp` вызовы `setNamespace`, `regState`, `regStateAs`, `regEnum`, `regFunc`, `regEvent`; namespace — из `[registry]` в `<module>.ini` (или имени каталога) с переопределением через `setNamespace(...)`.
+3. **Значения ENUM:** ищет массивы строк по имени переменной во всех `.cpp` компонента.
+4. **Слияние:** объединяет состояние/функцию/событие с одним `full`-именем в одну запись (`ns`, `name`, `full`, `kind`, `desc`, `rw`, `e`, `f`, `a`, `enum`), сортирует по namespace и имени.
+5. **Запись:** `{"features":{"editor":0|1},"resources":[…]}` → `<каталог ФС>/macros/resources.json`.
+
+**Ограничения:** регистрации с вычисляемыми именами не попадают; `regFuncAsync` не парсится (асинхронные функции в каталог не попадают, флаг `a` всегда `false`); при ручном запуске без `--src-filter` сканируются только `core_*`.
+
+### 5_set_fs_data_dir.py
 
 **Назначение:** Перенаправление директории данных для сборки ФС.
 
 **Тип:** Pre-script
 
 **Алгоритм:**
-- Читает переменную окружения `PLATFORMIO_FS_DATA_DIR`, установленную `fs_builder.py`
+- Читает переменную окружения `PLATFORMIO_FS_DATA_DIR`, установленную `4_fs_builder.py`
 - Устанавливает `PROJECT_DATA_DIR` в PlatformIO на значение этой переменной
 - Это заставляет PlatformIO использовать подготовленную директорию (с `_version_fs.json` и сгенерированным `page_head.html`) вместо стандартной `data/`
 
-### copy_fw.py
+### 6_copy_fw.py
 
 **Назначение:** Копирование бинарного файла прошивки в директорию `proj_fwbins/` с версией в имени.
 
@@ -569,7 +650,7 @@ MAJOR.MINOR.DATE.BUILD
 4. Копирует `.pio/build/<env>/firmware.bin` → `proj_fwbins/{ENV}-FIRMWARE-{VERSION}.bin`
 5. Если директория `proj_fwbins/` не существует — создаёт её
 
-### copy_fs.py
+### 7_copy_fs.py
 
 **Назначение:** Копирование бинарного файла файловой системы в директорию `proj_fwbins/` с версией в имени.
 
@@ -590,10 +671,12 @@ MAJOR.MINOR.DATE.BUILD
 **Pre-scripts (до компиляции):**
 
 ```
-1. version_builder.py    → генерирует src/version.h (MAJOR.MINOR.DATE.BUILD)
-2. module_version_gen.py → генерирует *_version.h для каждого модуля
-3. fs_builder.py         → подготавливает директорию ФС, генерирует _version_fs.json и page_head.html
-4. set_fs_data_dir.py    → перенаправляет PROJECT_DATA_DIR на подготовленную директорию
+0. 0_esp32_common.py       → флаги размера и единая таблица разделов для всех ESP32
+1. 1_registry_pre_build.py → генерирует modules_registry.cpp/.h под текущий env
+2. 2_version_builder.py    → генерирует src/version.h (MAJOR.MINOR.DATE.BUILD)
+3. 3_module_version_gen.py → генерирует *_version.h для каждого модуля
+4. 4_fs_builder.py         → подготавливает директорию ФС, генерирует _version_fs.json и page_head.html
+5. 5_set_fs_data_dir.py    → перенаправляет PROJECT_DATA_DIR на подготовленную директорию
 ```
 
 **Компиляция:** PlatformIO компилирует исходный код в `firmware.bin`
@@ -601,16 +684,16 @@ MAJOR.MINOR.DATE.BUILD
 **Post-scripts (после компиляции):**
 
 ```
-5. copy_fw.py → копирует firmware.bin → proj_fwbins/{ENV}-FIRMWARE-{VERSION}.bin
-6. copy_fs.py → копирует spiffs.bin → proj_fwbins/{ENV}-FILESYS-{VERSION}.bin
+6. 6_copy_fw.py → копирует firmware.bin → proj_fwbins/{ENV}-FIRMWARE-{VERSION}.bin
+7. 7_copy_fs.py → копирует spiffs.bin → proj_fwbins/{ENV}-FILESYS-{VERSION}.bin
 ```
 
 **При сборке образа ФС (Build Filesystem Image):**
 
 ```
-1. fs_builder.py         → подготавливает директорию, генерирует _version_fs.json и page_head.html
-2. set_fs_data_dir.py    → перенаправляет PROJECT_DATA_DIR
-3. PlatformIO buildfs    → собирает образ ФС из подготовленной директории
+1. 4_fs_builder.py        → подготавливает директорию, генерирует _version_fs.json и page_head.html
+2. 5_set_fs_data_dir.py   → перенаправляет PROJECT_DATA_DIR
+3. PlatformIO buildfs     → собирает образ ФС из подготовленной директории
 ```
 
 ---
@@ -622,18 +705,32 @@ MAJOR.MINOR.DATE.BUILD
 | Файл | Назначение |
 |------|-----------|
 | **config_sys.json** | Основные настройки устройства (имя устройства, серийный номер, время сканирования Wi-Fi, время жизни AP) |
-| **config_ntp.json** | Настройки NTP клиента (адреса серверов, часовой пояс, летнее время) |
+| **config_ntp.json** | Настройки NTP клиента (адреса серверов, период опроса) |
+| **config_time.json** | Виртуальное время `core_sys`: часовой пояс, летнее время, период обратной синхронизации RTC, приоритеты/включение источников |
 | **config_wifi0.json** | Настройки для первой точки доступа Wi-Fi |
 | **config_wifi1.json** | Настройки для второй точки доступа Wi-Fi |
 | **config_wifi2.json** | Настройки для третьей точки доступа Wi-Fi |
 | **config_wifi3.json** | Настройки для четвёртой точки доступа Wi-Fi |
 | **secret.json** | Логин и пароль для веб-авторизации. Этот же пароль используется для ESP в режиме ТД. Не отображается в браузере ФС |
-| **config_udp.json** | Настройки UDP-модуля (порты, ключевое слово, таймаут) |
-| **config_otaclient.json** | Настройки OTA-клиента (адрес сервера, порт, путь к манифесту) |
-| **config_prog_isp.json** | Настройки AVR-ISP программатора (имя проекта, выбранный чип) |
-| **config_prog_swd.json** | Настройки SWD программатора (имя проекта, выбранный чип) |
-| **avrisp_cfg.json** | База данных AVR чипов (сигнатуры, размеры flash, страниц) |
-| **swd_cfg.json** | База данных чипов для SWD (IDCODE, размеры flash, параметры) |
+
+Конфиги **опциональных** модулей и устройств вынесены в `AGENTS.md` соответствующих компонентов (см. `INVENTORY.md`):
+
+| Файл | Владелец | Документация |
+|------|----------|--------------|
+| **config_udp.json** | module_udp | `src/module_udp/AGENTS.md` |
+| **config_otaclient.json** | module_otaclient | `src/module_otaclient/AGENTS.md` |
+| **config_prog.json**, **prog_filelist.json** | module_program | `src/module_program/AGENTS.md` |
+| **avrisp_cfg.json** | module_program (submodule_isp) | `src/module_program/AGENTS.md` |
+| **swd_cfg.json** | module_program (submodule_swd) | `src/module_program/AGENTS.md` |
+| **rpico_cfg.json** | module_program (submodule_rpico) | `src/module_program/AGENTS.md` |
+| **config_ds3231.json** | module_ds3231 | `src/module_ds3231/AGENTS.md` |
+| **config_lcd-i2c.json** | module_lcd-i2c | `src/module_lcd-i2c/AGENTS.md` |
+| **config_macros.json** | module_macros | `src/module_macros/AGENTS.md` |
+| **config_rgb.json** | module_rgb | `src/module_rgb/AGENTS.md` |
+| **config_template.json** | module_template | `src/module_template/AGENTS.md` |
+| **config_clock-mech.json** | device_clock-mech | `src/device_clock-mech/AGENTS.md` |
+| **config_ring-mech.json** | device_mech-ring | `src/device_mech-ring/AGENTS.md` |
+| **config_e7rgb.json** | device_electronica7_rgb | `src/device_electronica7_rgb/AGENTS.md` |
 
 ---
 
@@ -697,268 +794,38 @@ ESP при включении сканирует эфир в течение за
 Сверху каждой страницы есть ссылки на другие страницы с функционалом.
 
 1. **Main** (`/index.html`) — текущая информация об устройстве, основные настройки;
-2. **Device configuration** (`/system.html`) — имя устройства, серийный номер, настройки Wi-Fi сканирования и времени жизни AP;
-3. **NTP Settings** (`/ntp.html`) — настройка NTP серверов, времени опроса, часового пояса, летнего/зимнего времени;
-4. **AVR fOTA** (`/avr.html`) — прошивка AVR чипа, информация о версиях, редактирование fuse битов (доступен только при подключении модуля `module_prog_isp`);
-5. **STM32 SWD** (`/swd.html`) — прошивка STM32 чипов через SWD (доступен только при подключении модуля `module_prog_swd`);
-6. **ESP8266/ESP32 Network Configuration** (`/wifi.html`) — редактирование настроек ТД;
-7. **ESP8266/ESP32 Network Information** — отображение информации о текущем сетевом подключении;
-8. **ESP8266/ESP32 System Setting** (`/system.html`) — кнопка "Restart", редактирование логина и пароля;
-9. **ESP8266/ESP32 FS Browser** (`/edit.html`) — браузер ФС и редактор файлов;
-10. **ESP8266/ESP32 FOTA** (`/update.html`) — самообновление прошивки ESP;
-11. **UDP Configuration** (`/udp.html`) — настройки UDP-модуля (доступен только при подключении модуля `module_udp`);
-12. **OTA Client** (`/otaclient.html`) — настройки OTA-клиента (доступен только при подключении модуля `module_otaclient`);
-13. **GPIO Control** — управление GPIO (доступен только при подключении модуля `module_gpio`).
+2. **Device configuration** (`/system.html`) — имя устройства, серийный номер, настройки Wi-Fi сканирования и времени жизни AP, а также **Time Sources** — часовой пояс/DST, приоритеты и включение источников времени, текущее время и активный источник (`core_sys`);
+3. **NTP Settings** (`/ntp.html`) — настройка NTP серверов и периода опроса;
+4. **ESP8266/ESP32 Network Configuration** (`/wifi.html`) — редактирование настроек ТД;
+5. **ESP8266/ESP32 Network Information** — отображение информации о текущем сетевом подключении;
+6. **ESP8266/ESP32 System Setting** (`/system.html`) — кнопка "Restart", редактирование логина и пароля;
+7. **ESP8266/ESP32 FS Browser** (`/edit.html`) — браузер ФС и редактор файлов (предоставляется опциональным модулем `module_editor`);
+8. **ESP8266/ESP32 FOTA** (`/update.html`) — самообновление прошивки ESP;
+9. **Modules** (`/state.html`) — список модулей (namespace) и переключение режимов off/auto/macro; страница входит в опциональный `module_macros`.
+10. **Macros** (`/macros.html`) — Lua-сценарии (файлы, start/stop, справка `macros_help.html`, `cron.html`); предоставляется опциональным `module_macros` (ESP32).
+11. **Resources** (`/state/*`) — ресурсная шина ядра `core_state`: `/state/catalog` (каталог ресурсов), `/state/info`, `/state/set`, `/state/call`.
+
+> **При наличии других модулей в сборке список динамически дополняется пунктами меню из `web/_menu.html` модулей (см. `gen_page_head.py` в `BUILD.md`). Полный перечень страниц модуля — в `AGENTS.md` этого модуля.**
+
+### Ресурсная шина и задачи (`core_state`, `core_task`)
+
+`core_state` — реестр ресурсов (`namespace.field`, типы BOOL/I32/F32/STR/TIME/ENUM): модули публикуют состояния (pull), события (push), sync/async-функции и режимы (`off/auto/macro`); межмодульное взаимодействие идёт только через шину (прямые `#include` соседних `module_*` запрещены). Каталог отдаётся по `/state/catalog`, управление — `/state/set`/`/state/call`. `core_task` — именованные периодические/отложенные задачи поверх EERTOS (`every`/`after`/`cancel`), второго планировщика нет. Потребитель шины — `module_macros`: один Lua-интерпретатор, namespace-таблицы ресурсов (`time.hour`, `e7.brightness`), планировщик `every`/`after`/`on`; страницы `macros.html` и `state.html`.
 
 ---
 
-## Программатор AVR-ISP
-
-*Подключаемый модуль: `module_prog_isp`, флаг `-D PROGTYPE_ISP`.*
-
-### Подключение AVR чипа. Распиновка.
-
-> [!WARNING]
-> **ВНИМАНИЕ! ESP И AVR ЧИПЫ ДОЛЖНЫ БЫТЬ СОГЛАСОВАНЫ ПО УРОВНЮ НАПРЯЖЕНИЯ ПИТАНИЯ ИЛИ ДОЛЖЕН ИСПОЛЬЗОВАТЬСЯ СОГЛАСОВАТЕЛЬ НАПРЯЖЕНИЙ СИГНАЛЬНЫХ ЛИНИЙ!**
-
-| ESP8266 | AVR (Atmega328p) |
-|:--------|:-----------------|
-| G12     | MISO (D6)        |
-| G13     | MOSI (D7)        |
-| G14     | SCK (D5)         |
-| G5      | RST (D1)         |
-| GND     | GND              |
-| +3.3V   | +3.3V            |
-
-Распиновка приведена на примере чипа Atmega328p. Любой другой AVR чип подключается аналогично на интерфейс **SPI**.
-
-Для ESP32 пины настраиваются через `build_flags`:
-```
--D PIN_MISO=19
--D PIN_MOSI=23
--D PIN_SCK=18
--D PIN_RST=5
-```
-
-### Редактирование fuse битов
-
-Реализована возможность чтения и редактирования fuse битов подключенного чипа по маске. Редактор доступен на странице `/avr.html`, изначально скрыт (раскрывается чекбоксом "Expand").
-
-### Откат прошивки
-
-В ФС ESP постоянно хранится две версии .hex файла — текущая и предыдущая. По нажатию кнопки "Rollback version" происходит прошивка AVR чипа предыдущей версией.
-
-### Руководство пользователя AVR-ISP программатора
-
-Пошаговая инструкция по прошивке AVR чипа (AtMega/AtTiny) через веб-интерфейс.
-
-> Поддерживаются файлы прошивки в форматах: `.hex`, `.bin`, `binary` (сырой бинарный файл).
-
-#### Шаг 1. Подключите AVR чип к ESP
-
-Подключите AVR чип к ESP согласно распиновке, приведённой в разделе [Подключение AVR чипа. Распиновка.](#подключение-avr-чипа-распиновка). Убедитесь, что уровни напряжения согласованы.
-
-#### Шаг 2. Включите ESP и подключитесь к веб-интерфейсу
-
-Подайте питание на ESP. Подключитесь к веб-интерфейсу через браузер (по IP-адресу или через `http://<имя>_<серийник>.local`).
-
-#### Шаг 3. Откройте страницу программатора
-
-В меню веб-интерфейса перейдите на страницу **AVR fOTA** (`/avr.html`).
-
-#### Шаг 4. Настройте проект (однократно)
-
-Нажмите на ссылку **Project configuration** (или перейдите на `/project.html`):
-- В поле **Project name** введите название проекта (например, `MyAVRProject`).
-- Из выпадающего списка **Chip** выберите целевой чип AVR (например, `ATmega328p`).
-- Нажмите **Save**.
-- После сохранения отобразится информация о чипе: сигнатура, размер flash, размер страницы.
-
-> Конфигурация проекта сохраняется в ФС ESP и восстанавливается автоматически при последующих сессиях.
-
-#### Шаг 5. Загрузите файл прошивки
-
-На странице `/avr.html`:
-- Нажмите кнопку **Choose File** (или **Browse**) и выберите файл прошивки (форматы `.hex`, `.bin` или `binary`) на вашем компьютере.
-- Нажмите кнопку **Upload firmware file**.
-- Дождитесь завершения загрузки — прогресс отображается в индикаторе **Upload progress**.
-- После успешной загрузки файл появится в таблице файлов прошивки.
-
-
-#### Шаг 6. Выберите файл в таблице
-
-В таблице файлов прошивки кликните на строку с загруженным файлом — строка выделится. Отобразится информация:
-- **Name** — имя файла.
-- **Type** — тип файла (например, `hex`, `bin`, `binary`).
-- **Size** — размер файла.
-- **Upload date** — дата загрузки.
-- **Program date** — дата последней прошивки этим файлом.
-- **Status** — статус (например, `current` — текущая версия, `previous` — предыдущая).
-
-#### Шаг 7. Нажмите Program
-
-Убедитесь, что нужный файл выделен в таблице, и нажмите кнопку **Program**.
-- Начнётся процесс прошивки AVR чипа.
-- Прогресс отображается в индикаторе **Programming progress**.
-- Дождитесь завершения (100%).
-
-#### Шаг 8. Проверьте результат
-
-После завершения прошивки:
-- Статус файла изменится на `current`.
-- Предыдущая версия прошивки автоматически сохранится со статусом `previous` (для возможности отката).
-- AVR чип перезапустится и начнёт выполнять новую прошивку.
-
-#### Шаг 9. Откат к предыдущей версии (при необходимости)
-
-Если новая прошивка работает некорректно:
-- Выделите в таблице файл со статусом `current`.
-- Нажмите кнопку **Rollback version** (доступна, если есть файл со статусом `previous`).
-- ESP перепрошьёт AVR чип предыдущей версией прошивки.
-
----
-
-## Программатор SWD (STM32)
-
-*Подключаемый модуль: `module_prog_swd`, флаг `-D PROGTYPE_SWD`.*
-
-### Подключение STM32 чипа. Распиновка.
-
-> [!WARNING]
-> **ВНИМАНИЕ! ESP И STM32 ЧИПЫ ДОЛЖНЫ БЫТЬ СОГЛАСОВАНЫ ПО УРОВНЮ НАПРЯЖЕНИЯ ПИТАНИЯ ИЛИ ДОЛЖЕН ИСПОЛЬЗОВАТЬСЯ СОГЛАСОВАТЕЛЬ НАПРЯЖЕНИЙ СИГНАЛЬНЫХ ЛИНИЙ!**
-
-| ESP32 | STM32 SWD |
-|:-----|:----------|
-| G21   | SWCLK     |
-| G19   | SWDIO     |
-| GND   | GND       |
-| +3.3V | +3.3V     |
-
-Пины SWD настраиваются через `build_flags`:
-```
--D SWDPIN_CLK=21
--D SWDPIN_DATA=19
-```
-
-Поддерживаемые семейства STM32:
-- STM32F1 (протестировано)
-- STM32F4 (протестировано)
-
-### Руководство пользователя SWD программатора
-
-> [!WARNING]
-> **Прошивка STM32 через SWD может длиться продолжительное время (до нескольких минут), особенно для чипов с большим объёмом flash-памяти. Не прерывайте процесс и не отключайте питание ESP до завершения прошивки!**
-
-Пошаговая инструкция по прошивке STM32 чипа через SWD.
-
-> Поддерживаются файлы прошивки в форматах: `.hex`, `.bin`, `binary` (сырой бинарный файл).
-
-#### Шаг 1. Подключите STM32 чип к ESP
-
-Подключите STM32 чип к ESP согласно распиновке, приведённой в разделе [Подключение STM32 чипа. Распиновка.](#подключение-stm32-чипа-распиновка). Убедитесь, что уровни напряжения согласованы.
-
-#### Шаг 2. Включите ESP и подключитесь к веб-интерфейсу
-
-Подайте питание на ESP. Подключитесь к веб-интерфейсу через браузер (по IP-адресу или через `http://<имя>_<серийник>.local`).
-
-#### Шаг 3. Откройте страницу программатора
-
-В меню веб-интерфейса перейдите на страницу **STM32 SWD** (`/stm32.html`).
-
-#### Шаг 4. Настройте проект (однократно)
-
-Нажмите на ссылку **Project configuration** (или перейдите на `/project.html`):
-- В поле **Project name** введите название проекта (например, `MySTM32Project`).
-- Из выпадающего списка **Chip** выберите целевой чип STM32 (например, `STM32F103C8`).
-- Нажмите **Save**.
-- После сохранения отобразится информация о чипе: IDCODE, семейство, размер flash, размер страницы.
-
-> Конфигурация проекта сохраняется в ФС ESP и восстанавливается автоматически при последующих сессиях.
-
-#### Шаг 5. Загрузите файл прошивки
-
-На странице `/stm32.html`:
-- Нажмите кнопку **Choose File** (или **Browse**) и выберите файл прошивки (форматы `.hex`, `.bin` или `binary`) на вашем компьютере.
-- Нажмите кнопку **Upload firmware file**.
-- Дождитесь завершения загрузки — прогресс отображается в индикаторе **Upload progress**.
-- После успешной загрузки файл появится в таблице файлов прошивки.
-
-#### Шаг 6. Выберите файл в таблице
-
-В таблице файлов прошивки кликните на строку с загруженным файлом — строка выделится. Отобразится информация:
-- **Name** — имя файла.
-- **Type** — тип файла (например, `hex`, `bin`, `binary`).
-- **Size** — размер файла.
-- **Upload date** — дата загрузки.
-- **Program date** — дата последней прошивки этим файлом.
-- **Status** — статус (например, `current` — текущая версия, `previous` — предыдущая).
-
-#### Шаг 7. Нажмите Program
-
-Убедитесь, что нужный файл выделен в таблице, и нажмите кнопку **Program**.
-- Начнётся процесс прошивки STM32 чипа через SWD.
-- **Внимание:** прошивка может длиться от нескольких секунд до нескольких минут в зависимости от размера flash-памяти чипа.
-- Прогресс отображается в индикаторе **Programming progress**.
-- **Не закрывайте страницу и не отключайте питание ESP до завершения прошивки!**
-- Дождитесь завершения (100%).
-
-#### Шаг 8. Проверьте результат
-
-После завершения прошивки:
-- Статус файла изменится на `current`.
-- Предыдущая версия прошивки автоматически сохранится со статусом `previous` (для возможности отката).
-- STM32 чип перезапустится и начнёт выполнять новую прошивку.
-
-#### Шаг 9. Откат к предыдущей версии (при необходимости)
-
-Если новая прошивка работает некорректно:
-- Выделите в таблице файл со статусом `current`.
-- Нажмите кнопку **Rollback version** (доступна, если есть файл со статусом `previous`).
-- ESP перепрошьёт STM32 чип предыдущей версией прошивки.
-
----
-
-## UDP-модуль
-
-*Подключаемый модуль: `module_udp`, флаг `-D MODULE_UDP`.*
-
-> [!WARNING]
-> **Данный модуль находится в стадии активной разработки. API и функционал могут изменяться. Подробное руководство пользователя будет добавлено по мере стабилизации.**
-
-Обеспечивает:
-- UDP-широковещание для обнаружения устройств в локальной сети;
-- Настраиваемые порты приёма и передачи;
-- Ключевое слово для идентификации устройств;
-- Автоматический ответ на broadcast-запросы.
-
----
-
-## OTA-клиент
-
-*Подключаемый модуль: `module_otaclient`, флаг `-D MODULE_OTACLIENT=1`.*
-
-> [!WARNING]
-> **Данный модуль находится в стадии активной разработки. API и функционал могут изменяться. Подробное руководство пользователя будет добавлено по мере стабилизации.**
-
-Обеспечивает:
-- Автоматическую проверку обновлений на удалённом сервере;
-- Загрузку манифеста с сервера;
-- Сравнение версий прошивки и файловой системы;
-- Автоматическое обновление прошивки и/или ФС.
-
----
-
-## GPIO-модуль
-
-*Подключаемый модуль: `module_gpio`, флаг `-D MODULE_GPIO`.*
-
-> [!WARNING]
-> **Данный модуль находится в стадии активной разработки. API и функционал могут изменяться. Подробное руководство пользователя будет добавлено по мере стабилизации.**
-
-Обеспечивает:
-- Управление пинами GPIO через веб-интерфейс;
-- Чтение состояния пинов;
-- Установка режима (INPUT/OUTPUT).
+## Подключаемые модули: документация
+
+Модульные разделы (руководства по программаторам ISP/SWD, UDP, OTA-клиент, GPIO и др.)
+вынесены в `AGENTS.md` соответствующих **опциональных** модулей, чтобы документация жила в том
+же репозитории, что и код:
+
+- Программатор AVR-ISP (вкл. руководство пользователя) — `src/module_program/AGENTS.md`;
+- Программатор SWD (STM32) (вкл. руководство пользователя) — `src/module_program/AGENTS.md`;
+- UDP-модуль — `src/module_udp/AGENTS.md`;
+- OTA-клиент — `src/module_otaclient/AGENTS.md`;
+- GPIO-модуль — `src/module_gpio/AGENTS.md`.
+
+Общий перечень модулей и устройств со ссылками — в разделах выше и в `INVENTORY.md`.
 
 ---
 

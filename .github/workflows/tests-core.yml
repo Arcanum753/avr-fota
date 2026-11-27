@@ -1,0 +1,99 @@
+name: Core unit tests
+
+# Тесты только ядра: core_*, common/, EERTOS. Внешние компоненты
+# (module_*/submodule_*/device_*) в клоне отсутствуют и не нужны.
+#
+# L3 (compile matrix) собирает TestCore32/TestCore8266 из targets/targets_core.ini
+# (подключён по умолчанию) и проверяет AC-19/AC-22. Платформы ESP ставятся
+# заранее: run_matrix.py помечает сборку skip, если в ~/.platformio/packages
+# нет ни одного toolchain-*, т.е. без этого шага L3 не проверил бы сборку.
+
+on:
+  push:
+    branches: [main, master, dev]
+  pull_request:
+    branches: [main, master, dev]
+  workflow_dispatch:
+
+jobs:
+  core-tests:
+    name: Core L1+L2+L3
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          # Полная история: версии модулей считаются по git-хешам коммитов.
+          fetch-depth: 0
+
+      - name: Cache PlatformIO dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.platformio
+            .pio
+          key: ${{ runner.os }}-pio-tests-${{ hashFiles('platformio.ini', 'targets/*.ini') }}
+          restore-keys: |
+            ${{ runner.os }}-pio-tests-
+            ${{ runner.os }}-pio-
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install tools
+        run: |
+          # intelhex/pyelftools нужны L3-сборке TestCore32 (bootloader.bin, ELF).
+          pip install --upgrade platformio gcovr pytest intelhex pyelftools
+
+      # Версии закреплены в platformio.ini: espressif32@7.0.1 (core 2.0.17) и
+      # espressif8266@4.2.1. Свежая espressif32@8.0.0 несовместима с
+      # AsyncTCP-esphome@2.1.4 (нет IPv6Address.h).
+      - name: Install ESP32 platform
+        run: pio pkg install --global --platform "platformio/espressif32@7.0.1"
+
+      - name: Install ESP8266 platform
+        run: pio pkg install --global --platform "platformio/espressif8266@4.2.1"
+
+      - name: Run core tests (orchestrator)
+        run: bash tests/scripts/run_core.sh
+
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: core-test-reports
+          path: test_reports/
+          retention-days: 14
+
+  core-http:
+    name: Core L4 (real device)
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/')
+    runs-on: [self-hosted, device]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install tools
+        run: pip install --upgrade platformio pytest
+
+      - name: Run core tests with device
+        env:
+          DEVICE_HOST: ${{ secrets.DEVICE_HOST }}
+          DEVICE_USER: ${{ secrets.DEVICE_USER }}
+          DEVICE_PASS: ${{ secrets.DEVICE_PASS }}
+        run: bash tests/scripts/run_core.sh --with-device --no-l3

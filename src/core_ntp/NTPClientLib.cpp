@@ -31,10 +31,14 @@ or implied, of German Martin
 
 #include "NtpClientLib.h"
 
+#include "debug.h"
+
 #define DBG_PORT Serial
 
+// Локальный DEBUGLOG библиотеки NTP — снять переопределение глобального DEBUGLOG
+#undef DEBUGLOG
 #ifdef DEBUG_NTPCLIENT
-#define DEBUGLOG(...) DBG_PORT.printf(__VA_ARGS__)
+#define DEBUGLOG(...) DBG_MOD("[C_NTP] ", __VA_ARGS__)
 #else
 #define DEBUGLOG(...)
 #endif
@@ -56,9 +60,11 @@ bool NTPClient::setNtpServerName (char* ntpServerName) {
     char *name = ntpServerName;
     if (!name) {    return false;   }
     if (!strlen (name)) {   return false; }
+    if (strlen (name) >= SERVER_NAME_LENGTH) { return false; }
     DEBUGLOG ("NTP server set to %s\n", name);
     memset (_ntpServerName, 0, SERVER_NAME_LENGTH);
-    strcpy (_ntpServerName, name);
+    strncpy (_ntpServerName, name, SERVER_NAME_LENGTH - 1);
+    _ntpServerName[SERVER_NAME_LENGTH - 1] = '\0';
     return true;
 }
 
@@ -192,7 +198,8 @@ time_t NTPClient::getTime () {
         onSyncEvent (noResponse);
     return 0; // return 0 if unable to get the time
 }
-#elif NETWORK_TYPE == NETWORK_ESP8266 || NETWORK_TYPE == NETWORK_ESP32
+#endif
+#if !(NETWORK_TYPE == NETWORK_W5100 || NETWORK_TYPE == NETWORK_WIFI101) && (NETWORK_TYPE == NETWORK_ESP8266 || NETWORK_TYPE == NETWORK_ESP32)
 void NTPClient::s_dnsFound (const char *name, const ip_addr_t *ipaddr, void *callback_arg) {
     (void)name;
     reinterpret_cast<NTPClient*>(callback_arg)->dnsFound (ipaddr);
@@ -218,7 +225,8 @@ IPAddress getIPClass (const ip_addr_t *ipaddr) {
 	IPAddress ip;
 #ifdef ESP8266
     ip = IPAddress (ipaddr->addr);
-#elif defined ESP32
+#endif
+#if !defined(ESP8266) && (defined ESP32)
     ip = IPAddress (ipaddr->u_addr.ip4.addr);
 #endif
     DEBUGLOG ("%s - IPAddress: %s\n", __FUNCTION__, ip.toString ().c_str ());
@@ -285,7 +293,8 @@ time_t NTPClient::getTime () {
     DEBUGLOG ("%s - DNS name IP solved: %s\n", __FUNCTION__, ntpServerIPAddress.toString ().c_str ());
     if (error == ERR_OK && dnsStatus == DNS_SOLVED) {
         dnsStatus = DNS_IDLE;
-#elif NETWORK_TYPE == NETWORK_ESP32
+#endif
+#if !(NETWORK_TYPE == NETWORK_ESP8266) && (NETWORK_TYPE == NETWORK_ESP32)
     int error = WiFi.hostByName (getNtpServerName ().c_str (), ntpServerIPAddress);
     if (error) {
 #endif
@@ -447,9 +456,11 @@ time_t NTPClient::s_getTime () {
 
 #if NETWORK_TYPE == NETWORK_W5100
 bool NTPClient::begin (String ntpServerName, int8_t timeZone, bool daylight, int8_t minutes, EthernetUDP* udp_conn) {
-#elif NETWORK_TYPE == NETWORK_WIFI101
+#endif
+#if !(NETWORK_TYPE == NETWORK_W5100) && (NETWORK_TYPE == NETWORK_WIFI101)
 bool NTPClient::begin (String ntpServerName, int8_t timeZone, bool daylight, int8_t minutes, WiFiUDP* udp_conn) {
-#elif NETWORK_TYPE == NETWORK_ESP8266 || NETWORK_TYPE == NETWORK_ESP32
+#endif
+#if !(NETWORK_TYPE == NETWORK_W5100) && !(NETWORK_TYPE == NETWORK_WIFI101) && (NETWORK_TYPE == NETWORK_ESP8266 || NETWORK_TYPE == NETWORK_ESP32)
 bool NTPClient::begin (String ntpServerName, int8_t timeZone, bool daylight, int8_t minutes, AsyncUDP* udp_conn) {
 #endif
     if (!setNtpServerName (ntpServerName)) {
@@ -465,9 +476,11 @@ bool NTPClient::begin (String ntpServerName, int8_t timeZone, bool daylight, int
     } else if (!udp) { // Check if upd connection was already created
 #if NETWORK_TYPE == NETWORK_W5100
         udp = new EthernetUDP ();
-#elif NETWORK_TYPE == NETWORK_WIFI101
+#endif
+#if !(NETWORK_TYPE == NETWORK_W5100) && (NETWORK_TYPE == NETWORK_WIFI101)
         udp = new WiFiUDP ();
-#else
+#endif
+#if !(NETWORK_TYPE == NETWORK_W5100) && !(NETWORK_TYPE == NETWORK_WIFI101)
         udp = new AsyncUDP ();
 #endif
     }
@@ -598,8 +611,14 @@ void NTPClient::onNTPSyncEvent (onSyncEvent_t handler) {
 }
 
 time_t NTPClient::getUptime () {
-    _uptime = _uptime + (millis () - _uptime);
-    return _uptime / 1000;
+    // Накапливаем миллисекунды между вызовами: разность uint32_t корректна и при
+    // переполнении millis() (раз в 49.7 суток). Раньше здесь было
+    // `_uptime + (millis() - _uptime)`, т.е. всегда millis().
+    uint32_t nowMs = millis ();
+    _uptimeTotalMs += (uint32_t)(nowMs - _uptimeLastMs);
+    _uptimeLastMs = nowMs;
+    _uptime = (unsigned long)(_uptimeTotalMs / 1000ULL);
+    return (time_t)_uptime;
 }
 
 String NTPClient::getUptimeString () {

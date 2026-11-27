@@ -3,28 +3,30 @@
 #include "main.h"
 
 #ifdef DEBUG_JSON
-#define DEBUGJSON(...) Serial.printf(__VA_ARGS__)
+#define DEBUGJSON(...) DBG_MOD("[C_JSON] ", __VA_ARGS__)
 #else
 #define DEBUGJSON(...)
 #endif
 
 #include <ArduinoJson.h>
 
-#include "FSWebServerLib.h"
+#include "core_web/FSWebServerLib.h"
+#include "mod_context.h"
 
 
 #if defined(ESP32)
 #include <LittleFS.h>
-#elif defined(ESP8266)
+#endif
+#if !defined(ESP32) && defined(ESP8266)
 #include <LittleFS.h>
 #endif
 
 
-class  CORE_CLASS_JSON    {
+class  CLASS_CORE_JSON    {
     
 public:    
-    CORE_CLASS_JSON (bool _in);
-    void webInit(void);
+    void web_Init(void);
+    void begin(ModContext& ctx);
 private:
     String getVersionStr();
     String getGeneratedTime();
@@ -33,14 +35,16 @@ private:
 protected: 
     #if ESP32
     fs::LittleFSFS*               _fs;
-    #elif defined(ESP8266)
+    #endif
+    #if !ESP32 && defined(ESP8266)
     FS*                         _fs;                        // esp8266/esp32 flash file system
     #endif
     
 public:
 #if ESP32
     void setFs(fs::LittleFSFS* fs);
-#elif defined(ESP8266)
+#endif
+#if !ESP32 && defined(ESP8266)
     void setFs(FS* fs)  ;                       // esp8266/esp32 flash file system
 #endif
 
@@ -103,11 +107,10 @@ public:
     bool jsonFileSaveDoc(const String& file, JsonDocument& doc);
     
 protected:
-    bool  dumb = false;
 
 };
 
-extern CORE_CLASS_JSON ModClassJson;
+extern CLASS_CORE_JSON core_json;
 
 
 #endif // _MODULE_JSON_h

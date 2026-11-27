@@ -24,20 +24,26 @@
 #include "Arduino.h"
 
 #include <functional>
-#if defined(ESP32)
-#include <LittleFS.h>
+#include "FS.h"
+
+#include "common/StringArray.h"
+
+#if defined(ESP32) || defined(LIBRETINY)
 #include <WiFi.h>
 #include <AsyncTCP.h>
 #elif defined(ESP8266)
 #include <ESP8266WiFi.h>
 #include <ESPAsyncTCP.h>
-#include <FS.h>
-
 #else
 #error Platform not supported
 #endif
 
-#include "StringArray.h"
+#ifdef ASYNCWEBSERVER_REGEX
+#define ASYNCWEBSERVER_REGEX_ATTRIBUTE
+#else
+#define ASYNCWEBSERVER_REGEX_ATTRIBUTE __attribute__((warning("ASYNCWEBSERVER_REGEX not defined")))
+#endif
+
 #define DEBUGF(...) //Serial.printf(__VA_ARGS__)
 
 class AsyncWebServer;
@@ -63,7 +69,6 @@ typedef enum {
   HTTP_ANY     = 0b01111111,
 } WebRequestMethod;
 #endif
-
 
 //if this value is returned when asked for data, packet will not be sent and you will be asked for data again
 #define RESPONSE_TRY_AGAIN 0xFFFFFFFF
@@ -130,6 +135,7 @@ class AsyncWebServerRequest {
   using File = fs::File;
   using FS = fs::FS;
   friend class AsyncWebServer;
+  friend class AsyncCallbackWebHandler;
   private:
     AsyncClient* _client;
     AsyncWebServer* _server;
@@ -159,6 +165,7 @@ class AsyncWebServerRequest {
 
     LinkedList<AsyncWebHeader *> _headers;
     LinkedList<AsyncWebParameter *> _params;
+    LinkedList<String *> _pathParams;
 
     uint8_t _multiParseState;
     uint8_t _boundaryPosition;
@@ -180,6 +187,7 @@ class AsyncWebServerRequest {
     void _onData(void *buf, size_t len);
 
     void _addParam(AsyncWebParameter*);
+    void _addPathParam(const char *param);
 
     bool _parseReqHead();
     bool _parseReqHeader();
@@ -241,10 +249,10 @@ class AsyncWebServerRequest {
     AsyncWebServerResponse *beginResponse(Stream &stream, const String& contentType, size_t len, AwsTemplateProcessor callback=nullptr);
     AsyncWebServerResponse *beginResponse(const String& contentType, size_t len, AwsResponseFiller callback, AwsTemplateProcessor templateCallback=nullptr);
     AsyncWebServerResponse *beginChunkedResponse(const String& contentType, AwsResponseFiller callback, AwsTemplateProcessor templateCallback=nullptr);
+    AsyncResponseStream *beginResponseStream(const String& contentType, size_t bufferSize=1460);
     AsyncWebServerResponse *beginResponse_P(int code, const String& contentType, const uint8_t * content, size_t len, AwsTemplateProcessor callback=nullptr);
     AsyncWebServerResponse *beginResponse_P(int code, const String& contentType, PGM_P content, AwsTemplateProcessor callback=nullptr);
-    AsyncResponseStream    *beginResponseStream(const String& contentType, size_t bufferSize=1460);
-    
+
     size_t headers() const;                     // get header count
     bool hasHeader(const String& name) const;   // check if header exists
     bool hasHeader(const __FlashStringHelper * data) const;   // check if header exists
@@ -269,10 +277,13 @@ class AsyncWebServerRequest {
     bool hasArg(const char* name) const;         // check if argument exists
     bool hasArg(const __FlashStringHelper * data) const;         // check if F(argument) exists
 
+    const String& ASYNCWEBSERVER_REGEX_ATTRIBUTE pathArg(size_t i) const;
+
     const String& header(const char* name) const;// get request header value by name
     const String& header(const __FlashStringHelper * data) const;// get request header value by F(name)    
     const String& header(size_t i) const;        // get request header value by number
     const String& headerName(size_t i) const;    // get request header name by number
+    String urlDecode(const String& text) const;
 };
 
 /*

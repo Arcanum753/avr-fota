@@ -1,337 +1,1100 @@
-# AVR-FOTA Architecture & Build System
+# AVR-FOTA: архитектура и система сборки
 
-## Overview
+## Обзор
 
-Universal firmware for **ESP8266** and **ESP32** with a web interface for programming AVR (AtMega/AtTiny) and STM32 microcontrollers over LAN, plus remote device management. Forked from [FSBrowserNG](https://github.com/gmag11/FSBrowserNG) with ISP programming logic from [Standalone-Arduino-AVR-ISP-programmer](https://github.com/adafruit/Standalone-Arduino-AVR-ISP-programmer/) and SWD logic from [ESP32_nRF52_SWD](https://github.com/atc1441/ESP32_nRF52_SWD) / [blackmagic](https://codeberg.org/blackmagic-debug/blackmagic).
+Универсальная прошивка для **ESP8266** и **ESP32** с веб-интерфейсом для программирования AVR (AtMega/AtTiny) и STM32 микроконтроллеров по локальной сети, а также для удалённого управления устройствами. Форк [FSBrowserNG](https://github.com/gmag11/FSBrowserNG) с логикой ISP-программирования из [Standalone-Arduino-AVR-ISP-programmer](https://github.com/adafruit/Standalone-Arduino-AVR-ISP-programmer/) и логикой SWD из [ESP32_nRF52_SWD](https://github.com/atc1441/ESP32_nRF52_SWD) / [blackmagic](https://codeberg.org/blackmagic-debug/blackmagic).
 
-## Code style conventions
+## Правило для ИИ-агента: otasyncer-server
+
+- Главный и **единственный** репозиторий сервера — `D:\github\avr-fota\otasyncer-server`.
+- Все изменения сервера (`app.py`, `templates/`, `static/`, `config.json`, `requirements.txt`, `AGENTS.md`) вносить только в него.
+- Отдельные клоны `otasyncer-server` вне `avr-fota` не использовать, не синхронизировать и считать устаревшими.
+- Git-операции выполнять в `D:\github\avr-fota\otasyncer-server` (это отдельный git-репозиторий внутри проекта).
+
+## Соглашения о стиле кода
 
 - **Сохранять существующий стиль кода.** Не менять форматирование, отступы, расположение скобок или пробелы без необходимости.
 - **Запрещён `#elif`.** Все условные блоки оформляются только через `#if` / `#endif`. Никаких `#elif`/ `#else`. 
 - **Новые комментарии — на русском языке.** Существующие комментарии (на любом языке) сохранять как есть, если они остаются актуальными. Устаревшие комментарии можно удалять или обновлять, заменяя на русский.
 
-## Architecture
+## Архитектура
 
-### Modular design
+### Модульная структура
 
-The project is split into **two categories**:
+Проект разделён на **две категории**:
 
-1. **Cores (core_\*)** — always present, provide base functionality
-2. **Modules (module_\*)** — optional, added via `src_filter` and `build_flags` in target config
+1. **Ядра (`core_*`)** — присутствуют всегда, обеспечивают базовую функциональность
+2. **Модули (`module_*`)** — опциональны, добавляются через `src_filter` в конфиге таргета (define-флаг `MODULE_*` выводится из `src_filter` автоматически)
+3. **Устройства (`device_*`)** — опциональны, добавляются через `src_filter` в конфиге таргета. Используются для устройств со стабильным железом.
 
-Submodules (`submodule_*`) inherit from `Class_ProgBase` and implement specific programmers. The base programmer logic lives in `module_prog/`.
+Субмодули (`submodule_*`) наследуются от `Class_ProgBase` и реализуют конкретных программаторов. Базовая логика программатора находится в `module_prog/`.
 
-### Core modules (always compiled)
+### Мульти-репозиторная компоновка
 
-| Module | Directory | Purpose |
+Ядро — единый git-репозиторий (этот файл). Компоненты (`module_*`, `device_*`, контейнер
+программатора) — **отдельные git-репозитории**, которые клонируются пользователем в `src/<имя>`
+(устройства и модули — по репозиторию на компонент). Исключения:
+
+- `src/module_template/` остаётся в ядре — эталон для создания новых модулей.
+- Программатор — один репозиторий-контейнер `module_program`, клонируется в `src/module_program/`
+  и содержит вложенные компоненты `module_prog/`, `submodule_isp/`, `submodule_swd/`,
+  `submodule_rpico/` (выбор ISP/SWD/RP2040 — через env, как раньше). Тулинг и python-скрипты
+  умеют работать с вложенными компонентами (`src/<dir...>/<name>`), генератор registry ищет
+  `<name>.ini` по полному пути.
+
+Сборка набора: клонировать нужные репозитории в `src/` → env-файлы компонентов (`.ini`)
+перечисляются в `[platformio] extra_configs` **явными путями** (неиспользуемые закомментированы) →
+при добавлении компонента его `.ini` вносится в список вручную → выбрать env и собрать.
+Репозиторий ядра игнорирует внешние папки через `.gitignore` (`/src/module_*/`, `/src/device_*/`,
+`!/src/module_template/`).
+
+**Репозитории (под аккаунтом `Arcanum753`, ветка `main`):**
+
+| Репозиторий | Папка в `src/` | Содержимое |
+|-------------|----------------|------------|
+| `avr-fota` | — (ядро) | этот репозиторий: core_*, common, core_sys, core_web, python/, targets/, `module_template` |
+| `module_program` | `src/module_program/` | контейнер программатора: `module_prog/` + `submodule_isp/` + `submodule_swd/` + `submodule_rpico/` |
+| `module_udp` | `src/module_udp/` | UDP broadcast |
+| `module_editor` | `src/module_editor/` | файловый редактор FS (форк Ace) |
+| `module_ds3231` | `src/module_ds3231/` | часы реального времени DS3231 |
+| `module_gpio` | `src/module_gpio/` | GPIO через web |
+| `module_lcd-i2c` | `src/module_lcd-i2c/` | LCD I2C |
+| `module_macros` | `src/module_macros/` | макросы/сценарии |
+| `module_otaclient` | `src/module_otaclient/` | OTA-клиент |
+| `module_rgb` | `src/module_rgb/` | RGB-матрица (WS2812) |
+| `module_i2c-mapper` | `src/module_i2c-mapper/` | I2C-сканер |
+| `module_RDA5807m` | `src/module_RDA5807m/` | FM/RDS-приёмник RDA5807M, источник времени (**freeze**) |
+| `module_veml7700` | `src/module_veml7700/` | люксметр VEML7700 (I2C) |
+| `module_uart2tcp` | `src/module_uart2tcp/` | UART2↔TCP/WebSocket мост (веб-терминал xterm.js) |
+| `device_clock-mech` | `src/device_clock-mech/` | часы механические |
+| `device_mech-ring` | `src/device_mech-ring/` | часы механические с боем |
+| `device_electronica7_rgb` | `src/device_electronica7_rgb/` | часы Электроника-7 RGB |
+| `device_projection_clock` | `src/device_projection_clock/` | проекционные часы ЧЧ:ММ:СС (60 LED) |
+
+**Локальная разработка:** в рабочей копии ядра все компоненты клонированы в `src/` (у каждого
+своя `.git`, ветка `main`). Ядро их игнорирует. Коммиты/пуши выполняются отдельно в каждой папке;
+правки «всё сразу» — как обычные изменения файлов в одном окне VS Code. `module_template` — часть
+ядра (не клон).
+
+### Ядровые модули (компилируются всегда)
+
+| Модуль | Каталог | Назначение |
 |--------|-----------|---------|
-| `core_wifi` | `src/core_wifi/` | Wi-Fi client/AP, 4 profile management, scanning |
-| `core_ntp` | `src/core_ntp/` | NTP client with 3 servers (primary + 2 fallback) |
-| `core_ota` | `src/core_ota/` | Self-update (FOTA) via web, FS version checking |
-| `core_editor` | `src/core_editor/` | FS browser, file editor (html/txt/json/js), upload/delete |
-| `core_json` | `src/core_json/` | JSON utilities (save/load/parse) |
-| `core_led` | `src/core_led/` | LED indication macros (WiFi, errors, success, waiting) |
-| `core_terminal` | `src/core_terminal/` | Serial terminal with debug/management commands |
+| `core_sys` | `src/core_sys/` | Ядро системы: идентичность (имя/серийник устройства, хранилище в NVRAM), `config_sys.json`, HTTP-аутентификация/восстановление (`secret.json`), информация о системе (причина сброса, chipinfo, about), централизованное чтение версии FS (`_version_fs.json`), **подсистема виртуального времени** (реестр источников, `time.*`, TZ/DST, `config_time.json`), EERTOS |
+| `core_fs` | `src/core_fs/` | Файловая система: страница **Filesystem**, HTTP API `/fs/*` (info/list/download/create/mkdir/rename/delete/upload), без редактора; используется `otasyncer-server` для снимков настроек. Не публикуется в resource-bus/макросах |
+| `core_wifi` | `src/core_wifi/` | Wi-Fi клиент/AP, управление 4 профилями, сканирование |
+| `core_ntp` | `src/core_ntp/` | NTP-клиент с 3 серверами (основной + 2 запасных); **источник времени** для `core_sys` (namespace `ntp`, read-only) |
+| `core_ota` | `src/core_ota/` | Самообновление (FOTA) через web, проверка версии FS |
+| `core_json` | `src/core_json/` | Утилиты JSON (сохранение/загрузка/разбор) |
+| `core_led` | `src/core_led/` | Макросы индикации светодиодом (WiFi, ошибки, успех, ожидание) |
+| `core_terminal` | `src/core_terminal/` | Последовательный терминал: ввод/вывод, справка, подтверждения; команды регистрируют модули |
+| `core_state` | `src/core_state/` | Ресурсная шина: реестр ресурсов, события, async-вызовы, режимы ядра (`system.mode`) |
+| `core_task` | `src/core_task/` | Именованные задачи поверх EERTOS (`every`/`after`/`cancel`) + диагностика переполнения |
 
-### Optional modules
+Редактор FS ранее входил в ядро (`core_editor`); теперь это **опциональный** `module_editor`
+(отдельный репозиторий, включается флагом `-D MODULE_EDITOR`, инициализируется в
+`modules_begin()`/`modules_web_Init()` через registry). В `core_begin()` его больше нет.
 
-| Module | Flag | Purpose |
+### Опциональные модули
+
+Флаги `MODULE_*`/`PROGTYPE_*` ниже **не указываются в `build_flags` вручную**: они
+автоматически генерируются в `src/modules_defines.h` из модулей, перечисленных в `src_filter`
+(генератор `python/module_registry_gen.py`; см. «Механизм подключения»). В `build_flags`
+остаются только отладочные (`-D DEBUG_*`) и специфичные флаги (пины, `USE_LITTLEFS` и т.п.).
+
+| Модуль | Флаг | Назначение |
 |--------|------|---------|
-| `module_prog` + `submodule_isp` | `-D PROGTYPE_ISP` | AVR-ISP programmer (AtMega/AtTiny) |
-| `module_prog` + `submodule_swd` | `-D PROGTYPE_SWD` | SWD programmer (STM32 F1/F4) |
-| `module_gpio` | `-D MODULE_GPIO` | GPIO control via web |
-| `module_lcd-i2c` | `-D MODULE_LCD_I2C` | LCD I2C display control (LiquidCrystal_I2C, маски date/time, backlight) |
-| `module_udp` | `-D MODULE_UDP` | UDP broadcast for device discovery |
-| `module_otaclient` | `-D MODULE_OTACLIENT=1` | OTA client (auto-update from remote server) |
-| `module_template` | `-D MODULE_TEMPLATE` | Шаблон модуля — основа для создания новых модулей |
-| `module_i2c-mapper` | `-D MODULE_I2C_MAPPER` | I2C bus scanner (web interface, Wire0) |
+| `module_program` (репо) | `-D PROGTYPE_ISP` | AVR-ISP программатор (AtMega/AtTiny): `src/module_program/module_prog` + `.../submodule_isp` |
+| `module_program` (репо) | `-D PROGTYPE_SWD` | SWD программатор (STM32 F1/F4): `src/module_program/module_prog` + `.../submodule_swd` |
+| `module_program` (репо) | `-D PROGTYPE_RPICO` | SWD программатор RP2040 (Raspberry Pi Pico): `src/module_program/module_prog` + `.../submodule_rpico` |
+| `module_gpio` | `-D MODULE_GPIO` | Управление GPIO через web |
+| `module_lcd-i2c` | `-D MODULE_LCD_I2C` | Управление LCD I2C дисплеем (LiquidCrystal_I2C, маски date/time, подсветка) |
+| `module_ds3231` | `-D MODULE_DS3231` | Часы реального времени DS3231 |
+| `module_macros` | `-D MODULE_MACROS` | Макросы/сценарии |
+| `module_rgb` | `-D MODULE_RGB` | RGB-матрица (NeoPixelBus/WS2812) |
+| `module_udp` | `-D MODULE_UDP` | UDP broadcast для обнаружения устройств |
+| `module_otaclient` | `-D MODULE_OTACLIENT` | OTA-клиент (автообновление с удалённого сервера) |
+| `module_template` | `-D MODULE_TEMPLATE` | Шаблон модуля — основа для создания новых модулей (в ядре) |
+| `module_i2c-mapper` | `-D MODULE_I2C_MAPPER` | Сканер шины I2C (веб-интерфейс, Wire0) |
+| `module_veml7700` | `-D MODULE_VEML7700` | Люксметр VEML7700 (I2C), ресурсы `veml7700.lux/available` |
+| `module_RDA5807m` | `-D MODULE_RDA5807M` | FM/RDS-приёмник RDA5807M, источник времени (**freeze**) |
+| `module_uart2tcp` | `-D MODULE_UART2TCP` | UART2↔TCP/WebSocket мост с веб-терминалом xterm.js (только ESP32) |
+| `module_editor` | `-D MODULE_EDITOR` | Браузер FS, редактор файлов (html/txt/json/js), загрузка/удаление — форк Ace (опционально) |
+
+### Устройства (device_*) — отдельные репозитории, клонируются в `src/device_*`
+
+| Устройство | Env-примеры | Назначение |
+|--------|-------------|------------|
+| `device_clock-mech` | `esp32_clock-mech` | Механические часы |
+| `device_mech-ring` | `esp32_clock-mech_ring` | Механические часы с боем |
+| `device_electronica7_rgb` | `esp32_electronica7_rgb` | Часы «Электроника-7» RGB (матрица) |
+| `device_projection_clock` | `esp32_projection_clock` | Проекционные часы ЧЧ:ММ:СС (6×10 адресных LED) |
+
+Устройства описывают «рецепт» сборки: их `.ini` в `src_filter` перечисляют нужные модули
+(например `device_mech-ring.ini` подтягивает `module_udp`, `module_ds3231`, `module_otaclient`).
+Для сборки устройства должны быть склонированы и само устройство, и все указанные модули.
 
 ### module_template — шаблон нового модуля
 
 `src/module_template/` содержит эталонную структуру optional-модуля. При создании нового модуля копировать эту папку и переименовывать.
 
 **Что содержит шаблон (брать за основу):**
-- `module_xxx.h` — класс с debug-макросом, `setFs()`, `begin()`, `webInit()`, структурой конфига (`strXxxConfig`), версионными методами
-- `module_xxx.cpp` — глобальный объект, загрузка/сохранение JSON конфига через `ModClassJson`, AJAX-эндпоинты (`/xxx/info`, `/xxx/save`, `/xxx/ver`), ответ `text/plain "OK"`
-  - `save_config()` использует `ModClassJson.jsonFileLoadDoc()` + мерж (не перезапись), затем `jsonFileSaveDoc()`.
+- `module_xxx.h` — класс с debug-макросом, `setFs()`, `begin()`, `web_Init()`, структурой конфига (`strXxxConfig`), версионными методами
+- `module_xxx.cpp` — глобальный объект, загрузка/сохранение JSON конфига через `core_json`, AJAX-эндпоинты (`/xxx/info`, `/xxx/save`, `/xxx/ver`), ответ `text/plain "OK"`
+  - `save_config()` использует `core_json.jsonFileLoadDoc()` + мерж (не перезапись), затем `jsonFileSaveDoc()`.
   - Чтение массивов из JSON — через `is<JsonArray>()` + `as<JsonArray>()` с проверкой границ.
   - Сохранение массивов — через `doc["key"].to<JsonArray>()` + `arr.add()`.
 - `web/_menu.html` — ссылки в меню.
+- `module_xxx_terminal.cpp` — эталон терминальных команд: `terminalRegister()` из `begin()`, команда верхнего уровня, подкоманды с проверкой аргументов, `helpText` в `PROGMEM`; изменения только apply, на FS пишет явная подкоманда `save` (см. `module_template/AGENTS.md`, раздел «Терминал»).
 - `web/xxx.html` — HTML-страница с формой, JS через `fetch` и `ApplyCVT()` из общих файлов `GetJson.js`/`GetMarkup.js` (не дублировать `applyCvtData` на каждой странице), сохранение без перезагрузки страницы.
 - `web/config_xxx.json` — дефолтный конфиг
-- Интеграция в `FSWebServerLib.cpp` под флагом `MODULE_XXX`
+- Интеграция в `src/core_web/FSWebServerLib.cpp` под флагом `MODULE_XXX`
 - Таргеты в `targets/targets_example.ini`
+
+**Единый порядок функций в .cpp модуля (обязательно для всех core_/module_/device_/submodule_):**
+
+Шаблонный блок — всегда в начале файла, конкретная логика — после него (либо в
+`<module>_engine.cpp`, см. «Слоистая структура модуля» выше).
+
+1. **INCLUDES** — `#include "core_web/FSWebServerLib.h"` первым, затем библиотечные заголовки, `core_*/...`, свой `module_xxx.h`, `common/common.h`, `*_version.h`, `core_sys/eertos.h`.
+2. **ГЛОБАЛЬНЫЕ ОБЪЕКТЫ И ПЕРЕМЕННЫЕ** — глобальный объект класса, конструктор, глобальные/static переменные. Здесь же forward-declarations свободных функций, используемых шаблонным блоком.
+3. **setFs()**
+4. **begin()** и **begin(ModContext&)**
+5. **web_Init()** — регистрация HTTP-путей
+6. **ВЕБ-ОБРАБОТЧИКИ** — `handleInfo`/`handleSave`/`cmdXxxWeb` и вспомогательные методы веб-полей
+7. **КОНФИГ** — `defaultConfig` / `loadConfig` / `saveConfig`
+8. **ВЕРСИОННЫЕ МЕТОДЫ** — `getVersionStr` / `getGeneratedTime` / `getCommitDateStr` / `html_ver_get`
+9. **КОНКРЕТНАЯ ЛОГИКА МОДУЛЯ** — свободные функции (ISR, колбэки, `xxxTerminalRegister`), геттеры/публичное API, инициализация периферии, задачи/state machines, терминальные команды
+
+Разделы разделяются баннером `// ============================================================` + название на русском. Свободная функция, используемая в шаблонном блоке, должна быть объявлена в `.h` модуля или forward-declared в разделе 2.
+
+Порядок объявлений в `.h` соответствует порядку в `.cpp`: `public:` конструктор → `setFs` → `begin` → `begin(ctx)` → `web_Init` → публичное API; `private:` версионные методы → веб-обработчики → конфиг → логика; `protected:` поля (относительный порядок полей сохранять).
 
 **Что НЕ брать из шаблона (заменить под свою логику):**
 - Управление GPIO через `pinMode`/`digitalWrite` — это только пример. В новом модуле будет своя аппаратная логика.
 - Отображение времени через `/xxx/time` — только как демонстрация периодического AJAX-опроса. В новом модуле заменить на свою периодическую задачу или удалить.
 - Массив `demoArray` в конфиге — только как демонстрация паттерна `is<JsonArray>()`. В реальном модуле заменить на свои поля или удалить.
 
-### EERTOS — Cooperative scheduler
+**Слоистая структура модуля (обязательно для всех core_/module_/device_/submodule_):**
 
-`src/eertos.h` + `src/eertos.cpp` implement a cooperative task/timer dispatcher (not an RTOS):
-- `SetTask(TPTR)` — queue a function for execution in the main loop
-- `SetTimerTask(TPTR, uint32_t)` — schedule a function after N milliseconds
-- `DelTimerTask(TPTR)` — remove a scheduled timer
-- `TaskManager()` — called from `loop()`, dequeues and runs one task per call
-- `TimerService()` — called from a 1ms Ticker ISR, decrements timer counters and pushes expired tasks
+Эталон — `module_macros` (`module_macros.h` + `module_macros.cpp` + `module_macros_engine.h/.cpp`).
+Модуль раскладывается на слои, каждый файл имеет своё назначение:
 
-The main loop (`loop()` in `main.cpp`):
-1. Resets watchdog
-2. Calls `TaskManager()` — runs one queued task
-3. Resets watchdog again
-4. Calls `loop_user()` (user hook, empty by default)
-5. Calls `TerminalLoop()`
-6. Calls `modOtaClass.loopHandler()`
+- `<module>_types.h` — define'ы конфигов/лимитов и `struct`/`enum`/`typedef`, не привязанные к классу.
+  Минимум include'ов. Include guard: `_<DIR>_TYPES_h` (дефисы → подчёркивания, имя каталога модуля).
+- `<module>.h` — класс `CLASS_*` (не дробится: C++ не поддерживает partial class), debug-макрос,
+  `extern` на глобальный объект, HTML-шаблоны `Page_*[]`. Включает `_types.h` (и `_led.h`/`_engine.h`).
+- `<module>.cpp` — **шаблонный блок**: INCLUDES, определение глобального объекта, `setFs`,
+  `begin`/`begin(ctx)`, `web_Init` + веб-обработчики, `register_resources`, конфиг,
+  версионные методы, терминальные команды (регистрация). Порядок — как в разделе
+  «Единый порядок функций» ниже.
+- `<module>_engine.cpp` — **исполнительная логика**: state machine, алгоритмы, ISR-обработчики,
+  колбэки внешних API, специфичные хелперы, реализация LED-макросов, `static`-хелперы,
+  используемые только engine. Не переносить сюда методы-обёртки веб/терминала/конфига.
+- `<module>_led.h` — объявления внешних LED-макросов (например `core_wifi_led.h`,
+  `core_ota_led.h`). НЕ создавать для LED-функций, объявленных как статические методы класса.
+- `<module>_engine.h` — только если engine предоставляет интерфейс наружу или содержит
+  структуры, не влезающие в `_types.h` (например `module_udp_engine.h`).
 
-### Core initialization flow (`setup()`)
+Правила переноса:
+- Логику не менять — только переносить код. Все `DEBUGXXX`-вызовы сохранять.
+- Глобальные объекты модуля (`core_wifi`, `module_rgb`, …) остаются в `<module>.cpp`; прочие
+  глобальные переменные, используемые только engine, переносятся в engine-файл (`extern` при
+  необходимости).
+- Функция, используемая и шаблоном, и engine, объявляется в `.h` (метод класса) или в
+  `_engine.h` (свободная). `static`-хелпер, нужный обоим файлам, выносится в `common_module`
+  или `_engine.h`, но не дублируется.
+- Новые условные блоки — только `#if`/`#endif` (без `#elif`/`#else`).
+- Файлы `.ini` и генератор registry менять не нужно: `src_filter` включает каталог целиком.
 
-1. `InitRTOS()` — init EERTOS queues
-2. `LittleFS.begin()` — mount filesystem
-3. `ESPHTTPServer.begin(&LittleFS)` — starts the web server (`src/FSWebServerLib.cpp`):
-   - `ModClassJson.setFs()` — JSON core must be first
-   - Load `secret.json` (HTTP auth)
-   - Load `config_sys.json` (system config)
-   - `modWifiClass.begin()` — WiFi init + event hooks
-   - `serverInit()` — register core HTTP routes
-   - `modWifiClass.webInit()` — WiFi web routes
-   - `modNtpClass.begin()` + `webInit()` — NTP
+### EERTOS — кооперативный планировщик
+
+`src/core_sys/eertos.h` + `src/core_sys/eertos.cpp` реализуют кооперативный диспетчер задач/таймеров (не RTOS):
+- `SetTask(TPTR)` — поставить функцию в очередь на выполнение в главном цикле
+- `SetTimerTask(TPTR, uint32_t)` — запланировать функцию через N миллисекунд
+- `DelTimerTask(TPTR)` — удалить запланированный таймер
+- `TaskManager()` — вызывается из `loop()`, извлекает и выполняет одну задачу за вызов
+- `TimerService()` — вызывается из ISR Ticker на 1 мс, уменьшает счётчики таймеров и помещает истёкшие задачи в очередь
+
+Главный цикл (`loop()` в `main.cpp`):
+1. Сбрасывает watchdog
+2. Вызывает `TaskManager()` — выполняет одну задачу из очереди
+3. Снова сбрасывает watchdog
+4. Вызывает `loop_user()` (пользовательский хук, по умолчанию пустой)
+5. Вызывает `TerminalLoop()`
+6. Вызывает `core_loop()`, `modules_loop()`, `dev_loop()` (задача `core_ota.loop()`/`module_otaclient.loop()` вызывается через `core_loop`)
+
+### Порядок инициализации ядра (`setup()`)
+
+1. `InitRTOS()` — инициализация очередей EERTOS
+2. `LittleFS.begin()` — монтирование файловой системы
+3. `ESPHTTPServer.begin(&LittleFS)` — запускает веб-сервер (`src/core_web/FSWebServerLib.cpp`):
+   - Заполняет глобальный `ModContext` (fs, hostname, password)
+   - `core_begin(ModContext)` — инициализация ядра (WiFi, NTP, JSON, OTA)
+   - `modules_begin(ModContext)` — инициализация опциональных модулей
+   - `dev_begin(ModContext)` — инициализация устройств
+   - `serverInit()` — регистрация основных HTTP-маршрутов
+   - `core_web_Init()`, `modules_web_Init()`, `dev_web_Init()` — регистрация веб-маршрутов
    - `MDNS.begin()` — mDNS
-   - `modOtaClass` / `otaClient` init + web routes
-   - `ModClassEdit.webInit()` — editor web routes
-   - Conditional: GPIO, SWD, ISP module init + web routes
-4. `TerminalInit()` — serial terminal
-5. `ledInit()` — LED GPIO init
-6. `ledMacroTimerTask()` — start LED macro timer
-7. `_secondEERtos.attach_ms(1, TimerService)` — start 1ms tick
+   - Инициализация конкретных модулей регистрируется через `modules_registry` (см. ниже)
+4. `TerminalInit()` — последовательный терминал (вызывается через `core_begin`, см. ниже)
+5. `ledInit()` — инициализация GPIO светодиода
+6. `ledMacroTimerTask()` — запуск таймера LED-макросов
+7. `_secondEERtos.attach_ms(1, TimerService)` — запуск тика 1 мс
 
-### Key class hierarchy
+### Иерархия ключевых классов
 
 ```
-Class_ProgBase (module_prog/module_prog.h)
-├── Class_SubIsp (submodule_isp/) — AVR-ISP
-└── Class_SubSwd (submodule_swd/) — STM32 SWD
+Class_ProgBase (module_program/module_prog/module_prog.h)
+├── Class_SubIsp (module_program/submodule_isp/) — AVR-ISP
+├── Class_SubSwd (module_program/submodule_swd/) — STM32 SWD
+└── Class_SubRpico (module_program/submodule_rpico/) — RP2040 SWD
 
-CORE_OTA_CLASS (core_ota/core_ota.h)
-└── MODULE_CLASS_OTACLIENT (module_otaclient/) — extended OTA client
+CLASS_CORE_OTA (core_ota/core_ota.h)
+└── CLASS_MODULE_OTACLIENT (module_otaclient/) — расширенный OTA-клиент
 ```
 
-### Inclusion mechanism
+Ядро `CLASS_CORE_SYS` (`core_sys/core_sys.h`) не входит в иерархию программатора: владеет
+идентичностью/конфигом системы, HTTP-auth и информацией о системе; `AsyncFSWebServer`
+оставляет лишь web-инфраструктуру и тонкие форвардеры к `core_sys`.
 
-Core modules are unconditionally `#include`'d in `FSWebServerLib.cpp`. Optional modules are guarded by preprocessor flags:
+### Именование классов: паттерн `CLASS_<ПРИНАДЛЕЖНОСТЬ>_<ФУНКЦИЯ>`
 
-```cpp
-#include "core_ota/core_ota.h"      // always
-#if defined(MODULE_GPIO)
-#include "module_gpio/module_gpio.h" // conditional
-#endif
-#if defined(PROGTYPE_ISP)
-#include "submodule_isp/submodule_isp.h" // conditional
-#endif
+Имена классов образуются по паттерну `CLASS_<ПРИНАДЛЕЖНОСТЬ>_<ФУНКЦИЯ>`, где
+принадлежность — категория модуля:
+
+- Ядра: `CLASS_CORE_*` (например `CLASS_CORE_WIFI`, `CLASS_CORE_OTA`)
+- Модули: `CLASS_MODULE_*` (например `CLASS_MODULE_GPIO`, `CLASS_MODULE_UDPBROADCAST`,
+  `CLASS_MODULE_I2C_MAPPER`, `CLASS_MODULE_I2C_LCD`)
+- Устройства: `CLASS_DEVICE_*` (например `CLASS_DEVICE_CLOCKMECH`, `CLASS_DEVICE_RINGMECH`)
+
+Составные названия функции пишутся через подчёркивание: `I2C_MAPPER`, `I2C_LCD`.
+
+Исключения (не переименовывать):
+- `Class_ProgBase` (module_program/module_prog) — база субмодулей.
+- `Class_SubIsp` / `Class_SubSwd` (submodule_*) — особый случай.
+- Библиотечные/инфраструктурные классы (`SerialTerminal`, `AsyncWebServer*` и т.п.).
+
+Глобальные объекты модулей НЕ переименовываются — только типы.
+
+### Вспомогательные функции: `common/` и локальные `common_module`
+
+Вспомогательные (чистые, без состояния) функции выносятся из основной логики компонента:
+
+- **Общие для нескольких компонентов** — в `src/common/common.h/.cpp` (глобальное пространство
+  имён). В частности, экранирование строк:
+  - `String escapeHtml(const String&)` — вставка в HTML + защита разделителей CVT
+    (`& < > "`, `|`→`&#124;`, CR/LF→пробел);
+  - `String escapeJson(const String&)` — кавычки, `\`, `\b \f \n \r \t`, `\uXXXX` для байтов `< 0x20`.
+  Дублирующие `escHtml`/`escapeJsonStr`/`macroJsonEscape` запрещены — использовать только эти две.
+- **Локальные для компонента** — в `common_module.h/.cpp` внутри папки компонента, обёрнутые
+  в namespace **`ns_<dirname>`** (дефисы → подчёркивания): `ns_core_sys`, `ns_core_web`,
+  `ns_core_led`, `ns_module_ds3231`, `ns_module_macros`, `ns_module_rgb`,
+  `ns_device_electronica7_rgb`. Префикс `ns_` обязателен: namespace с «голым» именем компонента
+  конфликтует с глобальным объектом (`CLASS_MODULE_DS3231 module_ds3231;`). Include из файлов
+  компонента — локальный: `#include "common_module.h"`.
+
+Правила переноса (что считается вспомогательной функцией):
+
+- переносятся только **чистые stateless** свободные/статические функции: преобразования
+  (BCD/hex), форматирование даты/времени/цвета, парсинг/сборка, математика/цветовые утилиты;
+- **НЕ переносятся**: методы классов, обработчики прерываний (`IRAM_ATTR`), обёртки таймеров/задач
+  EERTOS, функции регистрации терминальных команд, C-callback-мосты (Lua/`cron`), работа с
+  аппаратурой и любые функции, читающие/пишущие глобальные переменные модуля;
+- исключения: сторонние форкнутые библиотеки (`NTPClientLib.*`, `ErriezSerialTerminal.*`,
+  `ESPAsyncWebServer.h`) и уже выделенные helper-файлы (`module_prog/format_bin.*`,
+  `format_hex.*`) не трогаются; `common_module` не создаётся, если подходящих функций нет;
+- include guard каждого `common_module.h` уникален: `_<DIR>_COMMON_MODULE_h`.
+- хелпер, используемый только engine-файлом компонента, остаётся `static` в
+  `<module>_engine.cpp` и в `common_module` не выносится.
+
+Текущие локальные `common_module`:
+
+| Компонент | Namespace | Содержимое |
+|-----------|-----------|------------|
+| `core_sys` | `ns_core_sys` | `isAdminPassValid`, `identCrcSkip`, `timeSelectActive`, `timeCsvNames`, `timeParseTz`, `timeFormatNowStr`, `timeSelectBackJump` |
+| `core_web` | `ns_core_web` | `getContentType` (перенесён из `FSWebServerLib.h`) |
+| `core_ntp` | `ns_core_ntp` | `ntpStaleSec`, `ntpElapsedSec`, `ntpServerNameValid`, `ntpNextServerIndex` |
+| `core_led` | `ns_core_led` | `ledPatLen`, `ledPatAt` |
+| `module_ds3231` | `ns_module_ds3231` | BCD/alarm-хелперы, `_formatAlarmTime/_formatAlarmStamp` (ESP32) |
+| `module_macros` | `ns_module_macros` | `macroFileBaseName` |
+| `module_rgb` | `ns_module_rgb` | `hexStringToUint32` |
+| `device_electronica7_rgb` | `ns_device_electronica7_rgb` | `e7*` (HSV/Lerp/ГПСЧ/эффекты/сэмплер) |
+| `device_projection_clock` | `ns_device_projection_clock` | карта цифр/LED, время, HSV/Lerp/цвета |
+
+### Механизм подключения: единый контракт модулей + автогенерация registry
+
+Все ядра/модули/устройства приводятся к единому контракту:
+- `begin(ModContext& ctx)` — инициализация периферии + загрузка конфигов. `ModContext`
+  (вын `src/mod_context.h`) содержит: `fs` (тип по `#if ESP32`/`#if ESP8266`),
+  `hostname`, `password`. Метод устанавливает `_fs = ctx.fs` и вызывает существующий `begin()`.
+- `web_Init()` — регистрация веб-путей (единое имя; историческое `webInit` удалено).
+- `loop()` — периодическая задача (опционально, включается флагом `loop = 1`).
+
+`src/core_web/FSWebServerLib.cpp` и `src/main.cpp` НЕ содержат ручного вызова `setFs`/`begin`/`webInit`
+для каждого модуля. Вместо этого вызываются функции из автогенерируемого
+`src/modules_registry.cpp`:
+- `core_begin(ctx)`, `modules_begin(ctx)`, `dev_begin(ctx)`
+- `core_web_Init()`, `modules_web_Init()`, `dev_web_Init()`
+- `core_loop()`, `modules_loop()`, `dev_loop()`
+
+Файл `src/modules_registry.cpp` генерируется сюкриптом `python/module_registry_gen.py`
+**под выбранный env** (без `#if defined(...)`):
+```bash
+python python/module_registry_gen.py --env esp32_clock-mech
 ```
 
-Source files are filtered by `src_filter` in `platformio.ini`:
+Определение включённых модулей:
+- Ядра (`core_*`) — статический список в генераторе (включаются всегда).
+- Модули/субмодули/устройства — извлекаются из `+<префикс>имя/>` в `src_filter` выбранного env.
+
+Для каждого модуля генератор читает секцию `[registry]` из `src/<module>/<module>.ini`:
 ```ini
-src_filter = +<*> -<.git/> -<.vscode/> -<module_*/> -<submodule_*/>
+[registry]
+object = module_ds3231
+define = MODULE_DS3231
+web = 1        # есть web_Init() — вызывается в *_web_Init
+loop = 0       # есть loop() — вызывается в *_loop
 ```
-Modules are added per-target:
+- `object` — имя глобального extern-объекта (например `module_ds3231`, `progIsp`, `module_otaclient`).
+- `define` — имя define-флага (`MODULE_*`/`PROGTYPE_*`), который генератор выдаёт в
+  `src/modules_defines.h` как `#define <define> 1`; этот заголовок подключается из `main.h`.
+  Поэтому `-D MODULE_*`/`-D PROGTYPE_*` в `build_flags` указывать не нужно.
+- `web` — 1 если у модуля есть `web_Init()`.
+- `loop` — 1 если у модуля есть `loop()`. Для `device_*` вызывается в `dev_loop()`, для остальных — в `modules_loop()`.
+
+Особые случаи:
+- `module_otaclient` (`module_otaclient`) при наличии в `src_filter` включается в **core**-группах
+  (begin/web/loop) вместе с базовым OTA, а не в modules-группах.
+- `module_udp` (`module_udp`) — штатный `begin(ctx)` из registry (загрузка конфига и
+  регистрация терминала); сокет поднимается отдельным `startSocket()` из `core_wifi`
+  при подключении к сети (в registry не дублируется).
+- `core_sys` — всегда компилируется; в `core_begin` идёт сразу после `core_json`
+  (загружает identity/auth и заполняет `ctx.hostname`/`ctx.password` до `core_wifi` и mDNS);
+  `web_Init()` регистрирует `/system/*` и `/recover*`.
+- `core_terminal` — без класса; `TerminalInit()` вызывается в `core_begin`,
+  `TerminalLoop()` — в `core_loop`. Модули регистрируют свои команды в своём `begin()`;
+  `TerminalRegisterModule()` сразу вызывает `term.addCommand()` и запоминает дескриптор
+  для `help` (ленивых слотов больше нет).
+- `core_led` вне контракта — инициализируется вручную в `main.cpp` (`ledInit()`).
+
+**ВАЖНОЕ ОГРАНИЧЕНИЕ:** `src/modules_registry.cpp` и `src/modules_defines.h` сгенерированы под
+ОДИН env и не содержат `#if defined(...)`. Файлы НЕ хранятся в git (добавлены в `.gitignore`):
+pre-скрипт `1_registry_pre_build.py` перегенерирует их при каждой сборке под выбранный env,
+поэтому при смене env/набора модулей достаточно просто собрать заново. Ручной запуск
+`python/module_registry_gen.py --env <env>` нужен только вне сборки.
+
+Исходные файлы фильтруются через `src_filter` в `platformio.ini`:
+```ini
+src_filter = +<*> -<.git/> -<.vscode/> -<module_*/> -<submodule_*/> -<device_*/>
+```
+Модули добавляются по таргетам (define-флаги `MODULE_*`/`PROGTYPE_*` выводятся из `src_filter`):
 ```ini
 [env:esp32-swd]
 extends = env:esp32
-src_filter = ${platformio.src_filter} +<module_prog/> +<submodule_swd/> +<module_udp/>
-build_flags = ${env.build_flags} -D MODULE_UDP=1 -D PROGTYPE_SWD=1 -D SWDPIN_CLK=21 -D SWDPIN_DATA=19
+src_filter = ${platformio.src_filter} +<module_program/module_prog/> +<module_program/submodule_swd/> +<module_udp/>
+build_flags = ${env.build_flags} -D SWDPIN_CLK=21 -D SWDPIN_DATA=19
 ```
+После изменения `src_filter` в env — перезапустить `python/module_registry_gen.py --env <env>`.
+`extra_configs` в `platformio.ini` содержит **явный список** `.ini`-файлов компонентов (неиспользуемые
+закомментированы); при добавлении/удалении компонента список правится вручную.
 
-### Web page structure
+### Ресурсная шина и реестр (`core_state`)
 
-`data/page_head.html` contains a static menu and a marker `<!-- MODULES_RIGHT_COLUMN -->`. The build script `gen_page_head.py` replaces this marker with links generated from each module's `web/` directory:
-- If a module has `web/_menu.html`, its content is used directly
-- Otherwise, `.html` files are scanned for `<title>` or first heading
+**Правило:** любое межмодульное взаимодействие — только через `core_state`. Прямые
+`#include` соседних `module_*` запрещены (кроме включения своего `common_module` и ядровых
+заголовков).
 
-Module web files (e.g. `module_prog/web/prog.html`, `submodule_isp/web/avrcfg.html`) are copied into the FS build directory by `fs_builder.py`.
+- `core_state` (`CLASS_CORE_STATE`, объект `core_state`) — реестр ресурсов:
+  - **pull (состояния):** модуль читает значения по имени в своём `loop()`/задаче;
+  - **push (события):** `emit` при изменении, подписка через `on`;
+  - системный тик — 1 с через EERTOS; раздача очереди — в `core_state.loop()`.
+- `core_task` (`CLASS_CORE_TASK`, объект `core_task`) — именованные периодические/отложенные
+  задачи поверх EERTOS: `every(name, fn, period, fire_now)`, `after(name, fn, delay)`,
+  `cancel(name)`. Второго планировщика нет; каждый слот использует свою статическую
+  trampoline-функцию (EERTOS `SetTimerTask` идемпотентен по указателю).
 
-### File system config files (in `data/` and module `web/` dirs)
+**Имена ресурсов:** `namespace.field` (один сегмент namespace, lowercase + `_`).
+Namespace задаётся в `[registry]` ini компонента (`namespace = otaclient`) — генератор
+выставляет его через `core_state.setNamespace()` перед вызовом `register_resources()`.
+`regState(name, ...)` авто-префиксует namespace; `regStateAs(full, ...)` — полное имя вручную.
 
-| File | Location | Purpose |
+**Контракт модуля:** третий фронтенд наряду с `web_Init` и `TerminalInit` — метод
+`register_resources()`. Поля `[registry]`: `object`, `define`, `web`, `loop`, `namespace`,
+`res = 1` (есть `register_resources()`), `prio = 0..100` (больше = важнее, дефолт `50`),
+`priv = 1` (привилегированный namespace — ядро/macros),
+`time_source = 1` (модуль — источник времени: генератор вызывает `<object>.registerTimeSource()`
+сразу после `*_register_resources()`, до `begin()` периферии; см. Time Source Provider API в
+`src/core_sys/AGENTS.md`). Генератор формирует
+`core_register_resources()`, `modules_register_resources()`, `dev_register_resources()`;
+регистрация выполняется до `begin()` соответствующей группы, порядок — по `prio` (при равенстве
+FCFS). Для ядровых источников `core_begin` дополнительно вызывает
+`core_sys.startTimeService()` (после `core_register_resources()`).
+
+**Типы:** `BOOL / I32 / F32 / STR / TIME / ENUM`. F32 в UI/JSON — 3 знака после запятой.
+ENUM хранит индекс, значения задаются `regEnum`.
+
+**Коды возврата:** `0` — успех, `>0` — коды модуля (`regFuncCode`), `<0` — ошибки ядра
+(`-1` NOT_REGISTERED, `-2` NOT_FOUND, `-3` BAD_TYPE, `-4` BAD_ARGC, `-5` BAD_VALUE,
+`-6` READONLY, `-7` DISABLED, `-8` BUSY, `-9` NOT_READY, `-10` TIMEOUT, `-11` INTERNAL,
+`-12` NOT_SUPPORTED, `-13` DENIED).
+
+**Async:** модуль регистрирует `regFuncAsync` (`async = 1`, таймаут дефолт 10 с); модули
+завершают вызов через `core_state.asyncComplete(handle, rc, value)`. `call()` для async и
+`call_async()` для sync — `ERR_BAD_TYPE`. До 3 параллельных на владельца
+(`setAsyncOwner`/`asyncCancelFor`). Callback получает rc первым аргументом.
+
+**Права:** `regState` фиксирует owner-namespace. Запись в чужой ресурс не запрещается, но при
+активном caller-контексте и `DEBUG_STATE` логируется warning. Ядро и `macros` —
+привилегированные.
+
+**Режимы модуля:** `off / auto / macro`. `idle` — не режим, а флаг ядра (`system.idle`).
+Режим хранится в `config_xxx.json` (`"mode"`), модуль сам читает/пишет. Модуль публикует
+`regState("mode", ENUM, ...)` и sync-функцию `mode`; `core_state.mode(ns, v)` читает/пишет
+(`v < 0` — чтение). Переключение режима не сбрасывает внутреннюю логику модуля. Без
+`module_macros` режим `macro` невозможен — модуль молча работает как `auto`.
+
+Смена режима через шину сохраняется **отдельно от остальных параметров**: после успешной
+записи `<ns>.mode` `core_state` вызывает `<ns>.save_mode`, которая пишет только поле режима.
+Полное сохранение параметров выполняют страница модуля (`handleSave`) или явная команда
+`<ns>.save`. `system.mode` не персистится.
+
+**Режимы ядра (`system.mode`):** `init / normal / ota / fs_update / prog / test`.
+`system.safe` — булев флаг, параллелен любому режиму. Блокировка — через режим, не mutex.
+Ручной `test` имеет таймаут (дефолт 30 мин, `/config_state.json` → `test_timeout_s`),
+длительные операции — абсолютный таймаут (`op_timeout_s`). Пока идёт длительная операция,
+вход в `test` — `ERR_BUSY`; пока пользователь в `test` — автономные `ota`/`fs_update` ждут.
+При конфликте длительных операций разрешает `prio` (при равенстве FCFS). Модуль узнаёт о смене
+режима через `getMode()`/`requestMode()` или событие `system.mode_changed`.
+
+**Веб:** `core_state.web_Init()` регистрирует `/state/catalog`, `/state/info`, `/state/set`,
+`/state/call`. Каталог отдаётся `catalogToJson()` (используется `/state/catalog` и отладкой).
+Дерево ресурсов `module_macros` работает со статическим `/macros/resources.json`, который
+`python/gen_resources_catalog.py` собирает при сборке ФС; рантайм-эндпоинта
+`/macros/resources` нет. Для ENUM-ресурсов каталог дополнительно содержит
+`value` (индекс) и `valueName` (каноничное имя из `enumVals`), чтобы UI показывал буквенное
+имя. Страница управления модулями (`state.html`) и маршруты `/state/modules`,
+`/state/module_mode` перенесены в `module_macros`; шина отдаёт для них данные через
+`modulesInfo`/`moduleMode`.
+
+### Применение vs сохранение конфига (правило для модулей и устройств)
+
+**Правило (в дальнейшем — обязательно для всех `core_*`/`module_*`/`device_*`/`submodule_*`):**
+
+- Публичные сеттеры/функции компонента **применяют** изменения в памяти и на экране, но
+  **не сохраняют** конфиг на FS. Макрос/шина не должны перезаписывать пользовательский конфиг.
+- Сохранение выполняет только пользовательский путь: веб-обработчик (`handleSave`), терминал,
+  а также **явная bus-функция `save`**.
+- Есть **два способа сохранения**: (1) явный — страница модуля пишет полный JSON через
+  `handleSave`; (2) команды шины — `<namespace>.save` (полный JSON параметров) и
+  `<namespace>.save_mode` (только поле режима). Способы 1 и `<ns>.save` должны сохранять
+  одинаковый набор полей.
+- Компонент с resource-bus (`res = 1`) обязан регистрировать функцию сохранения с полным именем
+  `<namespace>.save` (`core_state.regFunc("save", "->", "...", <bridge>, nullptr)`), которая
+  ставит отложенное сохранение (`_pendingSave = true; SetTask(deferredApplyTask);`).
+- Компонент с ресурсом `<namespace>.mode` обязан регистрировать sync-функцию
+  `<namespace>.save_mode`, которая сохраняет **только поле режима** (merge в существующий JSON,
+  остальные поля не трогает). `core_state` вызывает её автоматически после успешной смены
+  `<ns>.mode` через `core_state.mode()` или `applyValue()`; из `system.mode` сохранение не
+  выполняется. `save_mode` должна работать при любом режиме, включая `off`.
+- Если конфиг-файла ещё нет, `save_mode` может создать его штатным полным сохранением
+  (чтобы не потерять дефолты); при существующем файле менять только режим.
+- Сигналы `core_state.signal(...)` в сеттерах сохранять — другие модули/страницы должны видеть
+  текущее in-memory значение.
+
+**Статус:** правило внедрено в `device_electronica7_rgb` (public-сеттеры без persist +
+`saveNow()` + bus-функция `e7.save`). Отдельное сохранение режима реализовано в
+`core_wifi` (`wifi.save_mode`) и `device_electronica7_rgb` (`e7.save_mode`). Остальные
+компоненты (`module_rgb`, `module_lcd-i2c`, `module_ds3231`, `device_clock-mech`,
+`device_mech-ring`) пока не имеют resource-bus и персистить конфиг из макроса не могут.
+**Масштабирование разделения `apply`/`save` на все модули — отдельная будущая задача.**
+
+### module_macros: один «барабан» и реальный Lua
+
+`module_macros` держит **один** Lua-интерпретатор (`_lua`) на весь модуль. Файл-сценарий —
+произвольный Lua-чанк: при запуске он компилируется один раз, тело исполняется раз в секунду
+(тик главного цикла). Ресурсы шины доступны как namespace-таблицы (`time.hour`, `e7.brightness`,
+`wifi.connected`), функции — через вызов (`e7.speed(50)`). Отдельных `lua_State` на файл нет —
+иначе heap исчерпывался и `AsyncWebServer` падал.
+
+Пример сценария:
+```lua
+if time.hour >= 22 and veml7700.available and veml7700.lux < 20 then
+    e7.brightness = 5
+end
+
+every("*/10 * * * * *", function() e7.effect = "rainbow" end)
+on("wifi.just_connected", function(ev) e7.speed(40) end)
+```
+- Запись ENUM — только буквенным именем (`e7.effect = "rainbow"`), число отвергается.
+- dual-ресурсы (`e7.speed`, `e7.brightness`, `wifi.mode`) — function-first: `ns.field`
+  вызывается (`e7.speed(50)`) или пишется (`e7.brightness = 5`); чтение состояния — `get(...)`.
+- `state` — персистентная таблица на файл (фронты); `every`/`after`/`once`/`tick`,
+  `on`/`term`/`button` — планировщик/события; `print`/`now`/`clock`/`has`/`info`/`mode`/`meta`.
+- Запись значений дедуплицируется в `core_state` (`writeRes`/`applyValue`): равное значение не
+  эмитит `state.*` и не вызывает write-функцию; `call()` не дедуплицируется.
+- `handleList` защищён от OOM: heap-guard, ответ через `sendStringChunked` (chunked).
+  Страница макросов каталог в рантайме не собирает: читает `/macros/resources.json`,
+  сгенерированный при сборке ФС; `/state/catalog` остаётся отдельным эндпоинтом.
+
+### Структура веб-страниц
+
+`src/core_web/web/page_head.html` содержит статическое меню и маркер `<!-- MODULES_RIGHT_COLUMN -->`. Скрипт сборки `gen_page_head.py` заменяет этот маркер ссылками, сгенерированными из каталога `web/` каждого модуля:
+- Если у модуля есть `web/_menu.html`, его содержимое используется напрямую
+- Иначе файлы `.html` сканируются на наличие `<title>` или первого заголовка
+
+Веб-файлы модулей (например `module_program/module_prog/web/prog.html`, `module_program/submodule_isp/web/avrcfg.html`) копируются в каталог сборки FS скриптом `4_fs_builder.py`.
+
+### Единый стиль таблиц
+
+Все таблицы данных и списков в `core_*`, `module_*`, `device_*` и `submodule_*` обязаны
+использовать `class="global_table_style"`; стиль определён в
+`src/core_web/web/style.css`.
+
+- Таблица оборачивается в `.content` и `overflow-x: auto` (эталон —
+  `module_program/module_prog/web/prog.html`).
+- Числовые колонки помечаются `class="align-right"`; пустая/статусная строка использует
+  `colspan`, равный числу колонок.
+- Запрещены локальные стили таблиц в `<style>` страницы, `id`-селекторы таблиц, атрибуты
+  `border`/`cellspacing`/`cellpadding` и классы-конкуренты (`scan`, `mdbtab`, `fs-table`).
+  Обратной совместимости со старыми классами нет.
+- Интерактивные списки: одиночный клик выбирает строку (`.selected-row`), действия
+  размещаются под таблицей. Эталоны — `prog.html` и `core_fs/web/filesystem.html`.
+- Правило обязательно для всех новых и изменяемых страниц. Оставшиеся legacy-таблицы при
+  правке страницы переводятся на `global_table_style`.
+
+### Файлы конфигурации файловой системы (в `core_sys/web/`, `core_web/web/` и каталогах `web/` модулей)
+
+| Файл | Расположение | Назначение |
 |------|----------|---------|
-| `config_sys.json` | `data/` | Device name, serial, WiFi scan time, AP lifetime |
-| `config_ntp.json` | `data/` | NTP server addresses, timezone, DST |
-| `config_wifi0-3.json` | `data/` | 4 Wi-Fi profiles (SSID, password, DHCP/static IP) |
-| `secret.json` | `data/` | HTTP auth login/password (hidden from FS browser) |
-| `config_prog.json` | `module_prog/web/` | Programmer project config (chip, project name) |
-| `config_udp.json` | `module_udp/web/` | UDP module config |
-| `config_otaclient.json` | `module_otaclient/web/` | OTA client config |
-| `avrisp_cfg.json` | `submodule_isp/web/` | AVR chip database (signature, flash size, page size) |
-| `swd_cfg.json` | `submodule_swd/web/` | SWD chip database (IDCODE, flash params) |
+| `config_sys.json` | `core_sys/web/` | Имя устройства, серийный номер |
+| `config_ntp.json` | `core_ntp/web/` | Адреса NTP-серверов, часовой пояс, переход на летнее время |
+| `config_wifi0-3.json` | `core_wifi/web/` | 4 профиля Wi-Fi (SSID, пароль, DHCP/статический IP) |
+| `secret.json` | `core_sys/web/` | Логин/пароль HTTP-аутентификации (скрыт из браузера FS) |
+| `page_head.html` | `core_web/web/` | HTML-шаблон главной страницы устройства (с маркером меню) |
+| `config_prog.json` | `module_program/module_prog/web/` | Конфиг проекта программатора (чип, имя проекта) |
+| `config_udp.json` | `module_udp/web/` | Конфиг UDP-модуля |
+| `config_otaclient.json` | `module_otaclient/web/` | Конфиг OTA-клиента |
+| `avrisp_cfg.json` | `module_program/submodule_isp/web/` | База чипов AVR (signature, размер flash, размер страницы) |
+| `swd_cfg.json` | `module_program/submodule_swd/web/` | База чипов SWD (IDCODE, параметры flash) |
+| `rpico_cfg.json` | `module_program/submodule_rpico/web/` | База чипов RP2040 (IDCODE, flash/sector/page) |
 
-### Serial terminal
+### Последовательный терминал
 
-`core_terminal` wraps the [ErriezSerialTerminal](https://github.com/Erriez/ErriezSerialTerminal) library. Commands registered (via `TerminalInit()`):
-- `info` — system info
-- `reset` — ESP restart
-- `dirs` / `check` — FS operations
-- `blink` — LED test
-- `flash1` / `flash2` — programmer operations
-- `stm32` / `swd` / `swdflash1` / `swdflash` — SWD debug
-- `udpp` / `udpc` / `udps` — UDP module debug
-- `avr` — AVR-ISP module debug
+`core_terminal` оборачивает библиотеку [ErriezSerialTerminal](https://github.com/Erriez/ErriezSerialTerminal). Модуль отвечает только за ввод/вывод, справку и подтверждения; **команды регистрируют и обрабатывают сами модули** через `TerminalRegisterModule(...)` в своём `begin()` (обработчик — статический метод в `<module>_terminal.cpp`). Справка: `help` — список модулей и команд, `Editable:` — модули с правкой; `<module> help` — синтаксис; `help <module>` — алиас.
 
-### Format handlers (`module_prog/`)
+Ядровые команды:
+- `help [module]`, `echo` — встроенные команды `core_terminal`;
+- `?`, `sys`, `info`, `ver`, `stat`, `name`, `serial`, `auth`, `reset`, `id`, `mode` — `core_sys` (`sys help` — справка);
+  `sys mode [<name|index>]` — отладочная команда: показать/сменить режим ядра (`init/normal/ota/fs_update/prog/test`);
+- `fs ls [-r] [path]` — `core_fs` (только чтение);
+- `ntp show|period|server|sync` — `core_ntp`;
+- `wifi show|slot|set|sys|apply|connect|clients` — `core_wifi`;
+- `led <times> <mask>` — `core_led`.
 
-- `format_bin.h` — BIN file read API (open/read/close/isFormat)
-- `format_hex.h` — Intel HEX parser with streaming validation, callback-based flash write (`hexFileParseStreamWrite`), binary size estimation (`hexFileGetBinarySize`)
+`reset` и `auth off|reset` требуют подтверждения `y/n` (таймаут 30 с). Строки терминала: буфер 320 байт. `udp*`, `1` и команды отладки программатора удалены; команда `udp` регистрируется в `module_udp` (`begin()` → `TerminalRegisterModule`), подкоманды — `show/status/send/test/set/apply/save/stop`. Устройства регистрируют свои команды в `begin()`: `clock` (`device_clock-mech`, алиасы `c-*`), `ring` (`device_mech-ring`, алиасы `r-*`).
 
-## Build System
+### Обработчики форматов (`module_program/module_prog/`)
 
-### Platform — PlatformIO
+- `format_bin.h` — API чтения BIN-файлов (open/read/close/isFormat)
+- `format_hex.h` — парсер Intel HEX с потоковой валидацией, запись во flash через callback (`hexFileParseStreamWrite`), оценка размера бинарника (`hexFileGetBinarySize`)
 
-- Config: `platformio.ini`
-- Base platforms: `espressif8266`, `espressif32`
-- Framework: `arduino`
-- File system: LittleFS
-- ESP32 partition table: `partitions.csv` (2 OTA slots + spiffs)
+## Система сборки
 
-### Environment presets
+### Платформа — PlatformIO
 
-| env | Platform | Board | Notes |
+- Конфиг: `platformio.ini`
+- Базовые платформы: `espressif8266`, `espressif32`
+- Фреймворк: `arduino`
+- Файловая система: LittleFS
+- Таблица разделов ESP32: `partitions_esp32.csv` (2 слота OTA + spiffs)
+
+### Предустановленные окружения
+
+| env | Платформа | Плата | Примечания |
 |-----|----------|-------|-------|
-| `esp8266` | espressif8266 | d1_mini | Base for ESP8266 targets |
-| `esp32` | espressif32 | upesy_wroom | Base for ESP32 targets |
-| `esp32cam` | espressif32 | esp32cam | Extends esp32 |
+| `esp8266` | espressif8266 | d1_mini | База для таргетов ESP8266 |
+| `esp32` | espressif32 | upesy_wroom | База для таргетов ESP32 |
+| `esp32cam` | espressif32 | esp32cam | Расширяет esp32 |
+| `TestCore32` | espressif32 | — | «Ядро без внешних компонентов» (`targets/targets_core.ini`), L3/AC-22 |
+| `TestCore8266` | espressif8266 | — | «Ядро без внешних компонентов» (`targets/targets_core.ini`), L3/AC-22 |
 
-Target-specific configs: `targets/targets_example.ini` (examples) and `targets/targets_user.ini` (user).
+Конфиги таргетов: `targets/targets_core.ini` — ядровые env (подключён в
+`extra_configs` **всегда**), `targets/targets_example.ini` — примеры таргетов с
+компонентами (закомментирован), `targets/targets_user.ini` — пользовательские
+(опционален, может отсутствовать). `TestCore32`/`TestCore8266` определены всегда,
+поэтому L3 (`tests/compile_matrix/run_matrix.py`) и CI работают в чистом клоне ядра.
 
-### Build scripts (`python/`)
+### Скрипты сборки (`python/`)
 
-Run order and purpose:
+Порядок запуска и назначение:
 
-**Pre-scripts** (before compilation):
-1. `version_builder.py` — generates `src/version.h` with `MAJOR.MINOR.DATE.BUILD`, git info, auto-increment MINOR on commit change, auto-increment BUILD on every build. Protected against double-run via env var.
-2. `module_version_gen.py` — generates `*_version.h` for each core/module (git-hash-based change detection)
-3. `fs_builder.py` — prepares FS build directory at `web_debug/<env>/`, copies files from `data/` and module `web/` dirs, generates `_version_fs.json`, calls `gen_page_head.py`, redirects `PLATFORMIO_FS_DATA_DIR`
-4. `set_fs_data_dir.py` — sets PlatformIO's `PROJECT_DATA_DIR` to the prepared directory
+**ВАЖНО:** не запускать сборки разных env параллельно. `src/version.h`,
+`src/modules_registry.cpp` и `src/modules_defines.h` общие для проекта и перезаписываются
+pre-скриптами под текущий env; параллельная сборка esp32+esp8266 даёт прошивку с чужим
+`BUILD_ENV`. Собирать env последовательно.
 
-**Post-scripts** (after compilation):
-5. `copy_fw.py` — copies `firmware.bin` → `proj_fwbins/{ENV}-FIRMWARE-{VERSION}.bin`
-6. `copy_fs.py` — copies `littlefs.bin` → `proj_fwbins/{ENV}-FILESYS-{VERSION}.bin`
+**Pre-скрипты** (перед компиляцией, порядок = номер файла):
+0. `0_esp32_common.py` — для всех ESP32: общие флаги размера (`-fno-exceptions`/unwind) и единая таблица `partitions_esp32.csv`
+1. `1_registry_pre_build.py` — запускает `module_registry_gen.py` под текущий env (см. «Механизм подключения: единый контракт модулей + автогенерация registry»)
+2. `2_version_builder.py` — генерирует `src/version.h` с `MAJOR.MINOR.DATE.BUILD`, git-информацией, автоинкрементом MINOR при смене коммита, автоинкрементом BUILD при каждой сборке. Защищён от двойного запуска через переменную окружения.
+3. `3_module_version_gen.py` — генерирует `*_version.h` для каждого ядра/модуля (определение изменений по git-хешу)
+4. `4_fs_builder.py` — готовит каталог сборки FS в `web_debug/web_<env>/`, копирует файлы из `data/` и каталогов `web/` модулей, генерирует `_version_fs.json`, вызывает `gen_page_head.py`, для сборок с `module_macros` вызывает `gen_resources_catalog.py` (каталог `/macros/resources.json`), перенаправляет `PLATFORMIO_FS_DATA_DIR`
+5. `5_set_fs_data_dir.py` — устанавливает `PROJECT_DATA_DIR` PlatformIO на подготовленный каталог
 
-### Version format
+**Ручной запуск (перед компиляцией, при смене env/набора модулей):**
+- `module_registry_gen.py` — генерирует `src/modules_registry.cpp/.h` под выбранный env (обязательно, см. «Механизм подключения: единый контракт модулей + автогенерация registry»; также автоматически запускается `1_registry_pre_build.py` при каждой сборке)
+- `gen_resources_catalog.py` — собирает `/macros/resources.json` из регистраций resource-bus (автоматически запускается шагом 7b в `4_fs_builder.py`; при ручном запуске без `--src-filter` сканирует только `core_*`)
 
-`MAJOR.MINOR.DATE.BUILD` (e.g., `0.034.20260614_2351.0801`)
+**Пост-скрипты** (после компиляции):
+6. `6_copy_fw.py` — копирует `firmware.bin` → `proj_fwbins/{ENV}-FIRMWARE-{VERSION}.bin`
+7. `7_copy_fs.py` — копирует `littlefs.bin` → `proj_fwbins/{ENV}-FILESYS-{VERSION}.bin`
 
-- `MAJOR` (1 digit) — manual in `version_counter.txt`
-- `MINOR` (3 digits) — manual, auto-incremented on git commit change
+### Формат версии
+
+`MAJOR.MINOR.DATE.BUILD` (например, `0.034.20260614_2351.0801`)
+
+- `MAJOR` (1 цифра) — задаётся вручную в `version_counter.txt`
+- `MINOR` (3 цифры) — задаётся вручную, автоинкремент при смене git-коммита
 - `DATE` — `%Y%m%d_%H%M`
-- `BUILD` (4 digits) — auto-incremented each compilation
+- `BUILD` (4 цифры) — автоинкремент при каждой компиляции
 
-Module versions: independent numeric version per module, incremented when module file content hash changes. Stored in `.module_versions` / `.module_hashes`.
+Версии модулей: независимая числовая версия на модуль, инкрементируется при изменении хеша содержимого файлов модуля. Номер и хеш хранятся в `<module>_version.h`; хеш коммита проекта — в `.version_hashes`.
 
 ### CI/CD
 
-GitHub Actions (`.github/workflows/platformio_ci.yml`):
-- Triggers: push/PR to main/master/dev
-- Matrix builds across 6 targets
-- Caches PlatformIO dependencies
-- Uploads build logs on failure
+GitHub Actions в ядре (CI ограничен **ядром**: компонентные репозитории не клонируются):
 
-### Version files
+- `.github/workflows/platformio_ci.yml` — сборка ядровых прошивок `esp32`, `esp8266`,
+  `esp32cam` на push/PR и `workflow_dispatch` (кэш PlatformIO, явная установка платформ).
+  Env с `module_*`/`device_*` в CI не собираются: их `.ini` в `extra_configs` в чистом
+  клоне отсутствуют (PlatformIO их пропускает), а исходников нет.
+- `.github/workflows/tests-core.yml` — юнит-тесты ядра: job `core-tests`
+  (L1+L2+L3 через `bash tests/scripts/run_core.sh`) на push/PR и job `core-http`
+  (L4, self-hosted с платой, `workflow_dispatch`/тег). Платформы `espressif32` и
+  `espressif8266` ставятся явно, чтобы L3 реально собирал `TestCore32`/`TestCore8266`
+  (без `toolchain-*` в `~/.platformio/packages` сборки помечаются `skip`).
 
-- `version_counter.txt` — MAJOR (line 1), MINOR (line 2)
-- `build_counter.txt` — BUILD number
-- `.last_commit_hash` — tracked by `version_builder.py`
-- `.module_versions` — current module version numbers
-- `.module_hashes` — content hashes per module (for change detection)
-- `src/version.h` — auto-generated C header with all version macros + git info
-- `src/*_version.h` — per-module version headers (e.g., `core_wifi_version.h`)
+### Юнит-тестирование ядра (`tests/`)
 
-### File system version file
+Отдельная система тестирования **только ядра** (`core_*`, `common/`, EERTOS);
+модули/устройства вне скоупа. Уровни:
 
-`_version_fs.json` is generated by `fs_builder.py` and placed in the FS root. Contains:
-- Full firmware version + components
-- Git info (branch, commit, dirty flag, tag)
-- Per-module versions and dates
-- FS statistics (size, used, free, file count, build date)
+- **L1** — host-тесты чистой логики (`env:native`, Unity); для
+  `ParseCVT`/`ApplyCVT` (`core_web/web/GetJson.js`) — Node.js (`node --test`).
+- **L2** — host-тесты с моками (LittleFS, `core_json`, `core_state`, EERTOS).
+- **L3** — compile matrix ядровых env (общий шаг, `tests/compile_matrix/run_matrix.py`).
+  Собираются `TestCore32`/`TestCore8266` («ядро без внешних компонентов», AC-22)
+  из `targets/targets_core.ini` (подключён всегда). Полные `esp32`/`esp8266`/`esp32cam`
+  собирает `platformio_ci.yml`; в CI платформы ставятся явно, поэтому сборки L3
+  выполняются, а не помечаются `skip`.
+- **L4** — HTTP API на реальной плате (pytest); без `DEVICE_HOST` — auto-skip.
 
-## Directory structure
+Запуск:
+
+```bash
+bash tests/scripts/run_core.sh              # L1+L2+L3 (L4 skip без DEVICE_HOST)
+bash tests/core/core_state/run.sh           # один модуль
+bash tests/scripts/run_core.sh --only common
+```
+
+Контракт модульного скрипта: `run.sh` определяет `MODULE`/`ROOT`/`OUT` и вызывает
+`tests/scripts/run_module.sh`; exit code: `0` — зелено, `1` — фейлы, `2` —
+конфигурационная ошибка (нет `pio`, нет `[env:*]`, нечего запускать,
+`--with-device` без `DEVICE_HOST`, для threshold-модулей нет данных покрытия).
+
+Моки централизованы в `tests/core/native/mocks/` (библиотека подключается через
+`lib_extra_dirs`); реальные заголовки ядра подменяются `override_prelude.h`
+(include-guard'ы). Тесты подключают нужные `src/**.cpp` напрямую в свой TU —
+это осознанное отступление от `test_build_src` (в PIO 6.x `src_dir` вне проекта
+не компилируется, а `src` в include-порядке идёт раньше моков). Один native-env
+на модуль. Покрытие (`gcovr`, при наличии) пишется в
+`test_reports/core/<module>/coverage.md`; для `common`/`core_ota`/`core_led`
+порог ≥80% — жёсткий гейт. Отчёты: `test_reports/core/` (gitignored).
+
+Окружение: скрипты сами добавляют `~/.local/bin` (pipx: `pio`/`gcovr`/`pytest`) и
+`~/.platformio/penv/bin` в `PATH`, а интерпретатор Python резолвят как `python3`
+(на Ubuntu `python` не существует). L3 собирает ESP только при наличии
+Linux-тулчейнов в `~/.platformio/packages/`; без них env помечаются `skip`
+(не `fail`) и валидируются в CI, а AC-19 (чистота `modules_registry.cpp`) и
+AC-22 (негативная сборка без ядра) проверяются всегда — тулчейны им не нужны.
+
+Подробности — `tests/core/README.md`, `tests/core/INVENTORY.md`,
+`tests/core/SYSTEM.md`, `tests/core/REPORT.md`.
+
+### Файлы версий
+
+Всё ниже — генерируемые файлы, **не хранятся в git** (правила `.gitignore` ядра):
+
+- `version_counter.txt` — MAJOR (строка 1), MINOR (строка 2)
+- `build_counter.txt` — номер BUILD
+- `.version_hashes` — git-хеши (в т.ч. хеш коммита проекта), отслеживается `2_version_builder.py`
+- `src/version.h` — автогенерируемый C-заголовок со всеми макросами версий + git-информацией
+
+Заголовки версий модулей `src/*_version.h` (например, `core_wifi_version.h`) в git **отслеживаются**: в них `3_module_version_gen.py` хранит номер версии и хеш последнего обработанного коммита.
+
+### Файл версии файловой системы
+
+`_version_fs.json` генерируется `4_fs_builder.py` и помещается в корень FS. Содержит:
+- Полная версия прошивки + компоненты
+- Git-информация (ветка, коммит, флаг dirty, тег)
+- Версии и даты по модулям
+- Статистика FS (размер, занято, свободно, число файлов, дата сборки)
+
+## Структура каталогов
+
+Документация каждого компонента (`module_*`, `device_*`) — в его `AGENTS.md` внутри папки
+компонента (конвенция «всё своё ношу с собой»); корневые документы ядра — `README.md`,
+`TRS.md`, `LAYERS.md`, `BUILD.md`, `TESTING.md`, `INVENTORY.md`.
 
 ```
 avr-fota/
-├── data/                    # FS source files (HTML, configs, images)
-│   ├── page_head.html       # HTML template with <!-- MODULES_RIGHT_COLUMN -->
-│   ├── config_sys.json      # System configuration
-│   ├── config_wifi0-3.json  # Wi-Fi profiles
-│   ├── config_ntp.json      # NTP configuration
-│   ├── secret.json          # HTTP auth credentials
-│   └── ...                  # HTML pages, JS, CSS, images
-├── python/                  # Build scripts
-│   ├── version_builder.py   # Version header generation
-│   ├── module_version_gen.py # Per-module version generation
-│   ├── fs_builder.py        # FS image preparation
-│   ├── gen_page_head.py     # Dynamic page header generation
-│   ├── set_fs_data_dir.py   # FS data directory redirect
-│   ├── copy_fw.py           # Firmware binary copy
-│   └── copy_fs.py           # FS binary copy
-├── src/                     # Source code
-│   ├── main.cpp             # Entry point (setup/loop)
-│   ├── main.h               # Project-wide defines
-│   ├── common.h/cpp         # Utility functions
-│   ├── eertos.h/cpp         # Cooperative task scheduler
-│   ├── FSWebServerLib.h/cpp # Async web server + routing
-│   ├── version.h            # Auto-generated version header
-│   ├── debug.h              # Debug logging macros
-│   ├── StringArray.h        # Linked list utility
-│   ├── TimeLib.h / Time.cpp # Time library fork
-│   ├── ESPAsyncWebServer.h  # Async TCP/HTTP wrapper header
-│   ├── core_wifi/           # Wi-Fi core module
-│   ├── core_ntp/            # NTP core module
-│   ├── core_ota/            # OTA core module
-│   ├── core_editor/         # FS editor core module
-│   ├── core_json/           # JSON utilities core module
-│   ├── core_led/            # LED indication core module
-│   ├── core_terminal/       # Serial terminal core module
-│   ├── module_prog/         # Base programmer module (base class)
-│   ├── module_gpio/         # GPIO control module
-│   ├── module_udp/          # UDP broadcast module
-│   ├── module_otaclient/    # OTA client module
-│   ├── submodule_isp/       # AVR-ISP programmer submodule
-│   ├── submodule_swd/       # STM32 SWD programmer submodule
-│   └── *version.h           # Auto-generated per-module version headers
-├── targets/                 # PlatformIO target configs
-│   ├── targets_example.ini  # Example target definitions
-│   └── targets_user.ini     # User target definitions
-├── web_debug/               # Prepared FS build directory (generated)
-├── proj_fwbins/             # Built firmware + FS binaries (generated)
-├── .pio/                    # PlatformIO build artifacts
-├── partitions.csv           # ESP32 partition table
-├── platformio.ini           # PlatformIO project config
-├── library.json             # Library metadata
-├── .github/workflows/       # CI/CD configs
-└── AGENTS.md                # This file
+├── data/                    # Пустая (заглушка для сборщика FS; веб-файлы в src/core_* /web)
+├── python/                  # Скрипты сборки
+│   ├── 0_esp32_common.py     # Общие флаги размера и таблица разделов для всех ESP32
+│   ├── 1_registry_pre_build.py # Хук регенерации registry (запускает module_registry_gen.py)
+│   ├── 2_version_builder.py  # Генерация заголовка версии
+│   ├── 3_module_version_gen.py # Генерация версий по модулям
+│   ├── 4_fs_builder.py       # Подготовка образа FS
+│   ├── 5_set_fs_data_dir.py  # Перенаправление каталога данных FS
+│   ├── 6_copy_fw.py          # Копирование бинарника прошивки
+│   ├── 7_copy_fs.py          # Копирование бинарника FS
+│   ├── module_registry_gen.py # Автогенерация registry под выбранный env (помощник для 1/build_all)
+│   ├── gen_page_head.py      # Динамическая генерация заголовка страницы (помощник для 4)
+│   ├── gen_resources_catalog.py # Статический каталог ресурсов для module_macros (помощник для 4)
+│   └── build_all.py          # Сборка всех env (ручной оркестратор)
+├── src/                     # Исходный код
+│   ├── common/              # Низкоуровневые утилиты (время + строки + общее)
+│   │   ├── common.h/cpp     # hex2bin, urldecode, formatBytes, checkRange, escapeHtml, escapeJson
+│   │   ├── TimeLib.h/cpp    # Форк библиотеки времени
+│   │   └── StringArray.h    # Утилита связного списка (форк)
+│   ├── main.h/cpp            # Точка входа (setup/loop), общие для проекта define
+│   ├── debug.h / debug_prefix.cpp # Отладочные макросы логирования + DBG_MOD
+│   ├── mod_context.h         # Контекст инициализации модулей (fs, hostname, password)
+│   ├── core_sys/             # Ядро системы: идентичность/аутентификация/конфиг + информация о системе (CLASS_CORE_SYS)
+│   │   ├── core_sys.h/cpp    # CLASS_CORE_SYS: config_sys.json, secret.json, hostname, FS-version
+│   │   ├── common_module.h/cpp # ns_core_sys: isAdminPassValid, identCrcSkip
+│   │   ├── ident_store.h/cpp # Идентичность в NVRAM (имя/серийник)
+│   │   ├── eertos.h/cpp      # Кооперативный планировщик задач
+│   │   └── web/              # Системные страницы: system.html, recover.html, 404.html,
+│   │                         #   config_sys.json, secret.json
+│   ├── core_fs/             # ФС: страница Filesystem + API /fs/* (без редактора, без macros/ресурсов)
+│   │   ├── core_fs.h/cpp    # CLASS_CORE_FS: маршруты, upload/download, версия
+│   │   ├── core_fs_engine.* # обход LittleFS, CRUD, info
+│   │   └── web/filesystem.html
+│   ├── core_web/            # Ядро веб-сервера
+│   │   ├── FSWebServerLib.h/cpp # Асинхронный веб-сервер + маршрутизация (AsyncFSWebServer)
+│   │   ├── common_module.h/cpp # ns_core_web: getContentType
+│   │   └── web/             # Главная страница устройства: index.html, GetJson.js, GetMarkup.js,
+│   │                        #   style.css, page_head.html, page_bottom.html, esp.gif, logo.gif, favicon.ico
+│   ├── ESPAsyncWebServer.h  # Форк библиотеки (в корне src, чтобы -Isrc перекрывал libdeps)
+│   ├── modules_registry.h/cpp # Генерируется под env (не в git, пересоздаётся pre-скриптом сборки)
+│   ├── version.h            # Автогенерируемый заголовок версии (не в git)
+│   ├── core_wifi/           # Ядро Wi-Fi; слоистая структура:
+│   │                        #   core_wifi.h + core_wifi_types.h + core_wifi_led.h
+│   │                        #   + core_wifi.cpp (шаблон) + core_wifi_engine.cpp
+│   │                        #   (+ web/wifi.html, wifi-slot.js, config_wifi0-3.json)
+│   ├── core_ntp/            # Ядро NTP (+ web/ntp.html, config_ntp.json)
+│   ├── core_ota/            # Ядро OTA (+ web/update.html, spark-md5.js)
+│   ├── core_json/           # Ядро утилит JSON
+│   ├── core_led/            # Ядро индикации светодиодом (common_module.h/cpp: ledPatLen, ledPatAt)
+│   ├── core_terminal/       # Ядро последовательного терминала
+│   ├── module_template/     # Шаблон модуля (эталон для создания новых; остаётся в ядре, не клон)
+│   └── module_*/device_*/   # Клоны внешних репозиториев (в dev-копии лежат все компоненты), каждый со
+│                           # своей .git; вне учёта ядра (см. .gitignore). Программатор:
+│                           # src/module_program/{module_prog,submodule_isp,submodule_swd,submodule_rpico};
+│                           # редактор FS: src/module_editor/.
+│   └── *version.h           # Заголовки версий модулей (отслеживаются в git)
+├── targets/                 # Конфиги таргетов PlatformIO
+│   ├── targets_core.ini     # Ядровые env TestCore32/TestCore8266 (подключён всегда)
+│   ├── targets_example.ini  # Примеры таргетов с компонентами (не подключён)
+│   └── targets_user.ini     # Пользовательские определения таргетов (может отсутствовать)
+├── tests/                   # Юнит-тесты ядра (см. раздел «Юнит-тестирование ядра»)
+│   ├── core/<module>/       # run.sh + platformio.ini + test/ (+ http_api/) на модуль
+│   ├── core/native/mocks/   # Централизованные host-моки Arduino/ESP
+│   ├── compile_matrix/      # L3: run_matrix.py, envs.txt, negative_nocore/
+│   └── scripts/             # run_core.sh, run_module.sh, gen_report.py, gen_coverage.py
+├── test_reports/            # JUnit/логи/coverage юнит-тестов (генерируется, gitignored)
+├── web_debug/               # Подготовленный каталог сборки FS (генерируется)
+├── proj_fwbins/             # Собранные бинарники прошивки + FS (генерируется)
+├── .pio/                    # Артефакты сборки PlatformIO
+├── otasyncer-server/        # Главный и единственный репозиторий сервера (отдельный git)
+├── partitions_esp32.csv     # Таблица разделов ESP32
+├── platformio.ini           # Конфиг проекта PlatformIO
+├── library.json             # Метаданные библиотеки
+└── AGENTS.md                # Этот файл
 ```
 
-### Debug macros
+### Отладочные макросы
 
-Each module has a dedicated debug flag and macro:
+У каждого модуля есть отдельный отладочный флаг и макрос:
+- `DEBUG_SYS` → `DEBUGSYS(...)` (`[C_SYS]`)
 - `DEBUG_OTA` → `DEBUGOTA(...)`
 - `DEBUG_NTP` → `DEBUGNTP(...)`
 - `DEBUG_JSON` → `DEBUGJSON(...)`
-- `DEBUG_EDITOR` → `DEBUGEDIT(...)`
+- `DEBUG_EDITOR` → `DEBUGEDITOR(...)` (`[M_EDITOR]`)
 - `DEBUG_LED` → `DEBUGLOGLED(...)`
-- `DEBUGLOG_WIFI` → `DEBUGLOGWIFI(...)`
+- `DEBUG_CORE_WIFI` → `DEBUG_CORE_WIFI(...)` (`[C_WIFI]`)
 - `DEBUG_PROG` → `DEBUGLOGPROG(...)`
 - `DEBUG_ISP` → `DEBUGLOGISP(...)`
 - `DEBUG_SWD` → `DEBUGLOGSWD(...)`
 - `DEBUG_UDP` → `DEBUGUDP(...)`
 - `DEBUG_OTACLIENT` → `DEBUGOTACLIENT(...)`
 - `DEBUG_I2C_MAPPER` → `DEBUGI2CMAPPER(...)`
-- `RELEASE` defined → all debug macros are no-ops
+- Полный актуальный список (включая `DEBUG_VEML7700`, `DEBUG_RDA5807M`, `DEBUG_PROJ_CLOCK`) — `TRS.md`, Приложение A.
+- `RELEASE` определён → все отладочные макросы становятся пустышками
 
-### Key defines
+Все модульные макросы печатают префикс модуля `[C_]/[M_]/[D_]` (например `[C_WIFI]`,
+`[M_UDP]`, `[D_CLOCKMECH]`) в начале каждой строки вывода через общий помощник
+`DBG_MOD` (см. `src/debug.h` и `src/debug_prefix.cpp`). Префикс выводится только
+в начале строки, поэтому паттерн `DEBUGXXX(__FUNCTION__); DEBUGXXX("\r\n");` даёт
+один префикс на строку. `module_macros` и `core_terminal` префиксы не используют.
 
-- `CONNECTION_LED` — GPIO for status LED (default -1 = disabled)
-- `AP_ENABLE_BUTTON` — GPIO for force-AP button (default -1 = disabled)
-- `USE_LITTLEFS` — enable LittleFS filesystem
-- `HIDE_SECRET` — hide secret.json from FS browser
-- `PROGTYPE_ISP` / `PROGTYPE_SWD` — enable programmer submodules
-- `SWDPIN_CLK`, `SWDPIN_DATA` — SWD pin assignment
-- `PIN_MISO`, `PIN_MOSI`, `PIN_SCK`, `PIN_RST` — ISP pin assignment
+### Ключевые define
+
+- `CONNECTION_LED` — GPIO для статусного светодиода (по умолчанию -1 = отключено)
+- `AP_ENABLE_BUTTON` — GPIO для кнопки принудительного AP (по умолчанию -1 = отключено)
+- `USE_LITTLEFS` — включить файловую систему LittleFS
+- `HIDE_SECRET` — скрыть secret.json из браузера FS
+- `PROGTYPE_ISP` / `PROGTYPE_SWD` / `PROGTYPE_RPICO` — включить субмодули программатора (выводятся из `submodule_isp`/`submodule_swd`/`submodule_rpico` в `src_filter`)
+- `SWDPIN_CLK`, `SWDPIN_DATA` — назначение выводов SWD
+- `PIN_MISO`, `PIN_MOSI`, `PIN_SCK`, `PIN_RST` — назначение выводов ISP
+
+## Известные дефекты (требуют исправления)
+
+Незакрытые места, зафиксированные по итогам сессии правок (проверка на
+`esp32_electronica7_rgb_macros`, прошивка 0.082.20260912_2233.1530). Считать их
+списком задач, а не описанием текущего устройства.
+
+1. **`core_*.save` — «функция сохранения» не реализована для ядер (частично).** По правилу
+   «Применение vs сохранение конфига» компонент с resource-bus обязан иметь bus-функцию
+   `save`. Сделано для `device_electronica7_rgb` (`e7.save`), `module_veml7700`
+   (`veml7700.save`), `device_projection_clock` (`proj_clock.save`), а также в ядре
+   `core_ota` (`ota.save`, no-op — сохранять нечего). Компоненты без
+   resource-bus (`module_rgb`, `module_lcd-i2c`, `module_ds3231`,
+   `device_clock-mech`, `device_mech-ring`) **не имеют** ни `regFunc`, ни функции
+   сохранения — их веб-обработчики сохраняют напрямую, из макросов они недоступны.
+   Нужно: при добавлении resource-bus любому компоненту сразу реализовывать
+   `<namespace>.save` (см. `device_electronica7_rgb::saveNow()` как эталон).
+   Масштабирование apply/save на существующие модули — отдельная задача.
+2. **`handleSave` сохраняет весь конфиг целиком.** Если макрос изменил значение в
+   памяти (без persist), а пользователь затем через веб поменял другое поле и нажал
+   Save — макросное значение тоже уйдёт в конфиг. Нужно: сохранять только реально
+   изменённые поля (сравнение с загруженным конфигом). Отмечено в коде
+   `// TODO: уточнить — сохранять только изменённые поля?`. Сделано для
+   `core_wifi` (`/wifi/sysconf`) и `core_ntp`; `core_sys::html_system_Save()` и
+   slot-формы `/api/wifi/slot/N` — открыто.
+3. **Закрыт:** `core_wifi` guard от цикла `esp_wifi_init` проверен на плате 2026-11-17.
+   В `staTick()` при `WIFI_SCAN_FAILED` работает бэкофф (`WIFI_INIT_FAIL_PAUSE_SEC=20`),
+   контролируемый `ESP.restart()` на `WIFI_INIT_FAIL_MAX=5`-й неудаче и отсрочка рестарта
+   в длительных режимах с абсолютным таймаутом `WIFI_INIT_FAIL_DEFER_MAX_SEC=60`. Методика
+   проверки и результаты — ниже, в разделе «Методика проверки `core_wifi` guard».
+4. **`module_macros`: refs после сдвига массива `_files`.** `_files` в heap; при
+   удалении/переименовании записи сдвигаются копированием (`_files[j] = _files[j+1]`).
+   Активный runtime (`chunkRef`/`envRef`/`stateRef`, массив `handlers`) освобождается в
+   `unregisterFile()` **до** сдвига, поэтому висячих Lua-refs нет. Проверять при будущих
+   доработках массового переименования/удаления.
+5. **UI `macros.html` не проверялся в браузере.** Интерактив (перетаскивание
+   `.splitter`, независимость чекбоксов `SEL`/`CUR_EDIT`, `indeterminate` чекбокса
+   «выделить всё», кнопки start/stop) собран, но вживую не тестировался.
+6. **Исправлено:** `desc` заполняется и для остановленных файлов.
+   `module_macros` читает `meta{desc=...}` из `.lua` без запуска живого сценария
+   (`macroReadScenarioMeta`/`refreshFileMeta`) при старте и после сохранения.
+7. **Исправлено:** `config_macros.json` больше не должен получать `created:1`.
+   Причина была в том, что файлы, найденные `reconcileList()` до синхронизации NTP,
+   получали `now()≈1`; условие «переставить дату» проверяло `created == 0` и не
+   срабатывало. Теперь `tickStep()` считает невалидной любую метку меньше
+   `MACRO_CREATED_MIN` (2001-09-09) и после NTP проставляет реальную дату.
+   Старые `created:1` в конфиге будут исправлены при первом тике после NTP и
+   сохранены.
+
+### Методика проверки `core_wifi` guard (`WIFI_SCAN_FAILED` → бэкофф → рестарт)
+
+Цель: убедиться, что при «мёртвом» Wi-Fi-драйвере нет цикла `esp_wifi_init` раз в
+секунду, а есть бэкофф `WIFI_INIT_FAIL_PAUSE_SEC` и контролируемый `ESP.restart()`,
+который не срабатывает в небезопасных режимах. Проверка требует временного
+тестового хука — «естественно» получить `WIFI_SCAN_FAILED` на живой плате нельзя
+(потеря точки доступа даёт «0 сетей», а не отказ драйвера).
+
+**Статус: проверено на плате 2026-11-17** (ESCOP32-D0WDQ6, COM4, сборка с
+`WIFI_GUARD_TEST` + `DEBUG_CORE_WIFI`). Результаты и подробности — в разделе
+«Сессия 2026-11-17: аудит ядра», пункт 1 «Выполнено в коде». Ниже — методика
+(сохранена для повторных проверок).
+
+1. **Тестовый хук (только для отладки, в релиз не коммитить).** В `staTick()`
+   (`core_wifi_engine.cpp`) сразу после `int st = WiFi.scanComplete();` добавить
+   под флагом:
+   ```cpp
+   #if defined(WIFI_GUARD_TEST)
+       st = WIFI_SCAN_FAILED;   // имитация отказа драйвера
+   #endif
+   ```
+   Собрать/прошить с `-D WIFI_GUARD_TEST` (отдельный env или добавить флаг в
+   `build_flags`), оставить serial-монитор на 115200.
+2. **Ожидаемое поведение без режимной отсрочки.** После старта в режиме `normal`:
+   - попытки/ошибки идут не чаще одного раза в ~20 с (`WIFI_INIT_FAIL_PAUSE_SEC`),
+     а не раз в секунду;
+   - на 5-й подряд неудаче — `[C_WIFI] WiFi init failed 5 times. Restarting.` и
+     ребут (виден boot-лог, `Reset reason`);
+   - после рестарта хук снова валит скан — проверяем, что это повторяется
+     предсказуемо, без `Guru Meditation`/watchdog.
+3. **Проверка отсрочки в длительных режимах.** До достижения 5 счётчика перевести
+   систему в небезопасный режим:
+   `GET /state/set?name=system.mode&value=4` (prog; также `3` = fs_update, `2` = ota).
+   Убедиться, что в логе `restart deferred (mode 4)` и рестарта **нет**.
+   Вернуть `GET /state/set?name=system.mode&value=1` (normal) — рестарт происходит.
+4. **Проверка сброса счётчика.** При успешном скане/подключении счётчик
+   сбрасывается: в логе есть `resetWifiFailCounters`, после `GotIP` — `_wifiInitFailCount = 0`.
+   Проверить, что после временного успеха счётчик начинается с 1, а не продолжается.
+5. **После проверки** удалить блок `WIFI_GUARD_TEST` и пересобрать релизную
+   прошивку обоих env. Результат и оставшиеся вопросы (что делать в `test`/`prog`,
+   нужен ли fallback в AP) дописать в этот раздел.
+
+### Проверено и исправлено (для контекста)
+
+- Lua OOM при массовом включении макросов: dirty-пересборка по файлам, не более
+  `MACRO_PARSE_PER_TICK=2` за тик, лимит авто-повторов `MACRO_PARSE_MAX_RETRY=3`
+  (`module_macros_engine.cpp`). Подтверждено на устройстве (heap 124880→72104 без
+  `No memory for interpreter`).
+- `device_electronica7_rgb::loadFont()` кэширует путь+размер файла — нет спама
+  `fopen(...digital7.fnt) failed` при частых apply.
+- Разделение apply/save в `device_electronica7_rgb` + bus-функция `e7.save`.
+  Подтверждено перезагрузками: `set("e7.effect", ...)` не персистится,
+  `call("e7.save")` и веб-`handleSave` персистят.
+- Лимит файлов `MACRO_MAX_FILES` = 40; массив `_files` и реестр обработчиков перенесены в heap
+  (static `.bss` не влезал в DRAM). Бюджет heap модуля `MACRO_HEAP_BUDGET` = 100 КБ,
+  критический порог `MACRO_HEAP_CRIT_PCT` = 95% (кнопка «Валидация макросов» →
+  `/macros/heap`). При достижении лимита `reconcileList()` пишет предупреждение в лог.
+- Исправлен `created:1` у файлов, найденных до NTP: проверка `created <
+  MACRO_CREATED_MIN` (вместо `== 0`) и простановка реальной даты после NTP.
+- Устранён `abort()` при открытии `macros.html`: `handleResources` (позже удалён вместе с
+  рантайм-каталогом) и `handleList`
+  отдавались через `AsyncResponseStream` (без промежуточной `String` и второй копии
+  в `send()`); добавлен guard `doc.overflowed()`. `MACRO_MAX_ENTS` снижен 24 → 8
+  (освободило ~45 КБ heap; heap на старте ~183 КБ против ~137 КБ).
+- JSON-дамп конфига (`[C_JSON]`) в `core_json_engine.cpp` отключён (флаг
+  `JSON_DUMP_LOG`, по умолчанию выключен) — печать всего JSON на 115200 блокировала
+  main-loop.
+- Убрано автоматическое сохранение `config_macros.json` в `tickStep()` (простановка
+  `created` после NTP теперь только в памяти). Сохранение конфига — только по
+  действию пользователя (web/терминал) или явной bus-функции `save`.
+- `core_web/web/GetMarkup.js` больше не перезаписывает `document.body.innerHTML`:
+  фрагмент вставляется на месте тега `<markup>` (`replaceWith`). Раньше полная
+  пересборка body после `window.onload` уничтожала все обработчики, навешанные
+  скриптами страницы (кнопки таблицы, дерево Resources, сплиттер `macros.html`).
+- `module_macros`: размер файла кэшируется в `MacroFile.size` (обновляется при
+  старте, создании и записи); `/macros/list` не открывает файлы на каждый запрос
+  (0.05 с вместо ~0.9 с).
+
+---
+
+## Сессия 2026-11-17: аудит ядра — сделано и что осталось
+
+Аудит `src/core_*` + `src/common` без правок логики модулей. **Решено оставить
+пункты 1–3 ниже на новую сессию** (код не менялся), в этом разделе — план и принятые
+решения.
+
+### Сделано (16 файлов, сборки `esp32`, `esp8266`, `esp32-ds3231` — SUCCESS)
+
+- `core_terminal/ErriezSerialTerminal.h/.cpp`: `_rxBufferIndex` → `uint16_t`
+  (буфер 320 байт, `byte` переполнялся на 255); `isprint((unsigned char)c)`.
+- `core_wifi/core_wifi.cpp` + `core_web/FSWebServerLib.cpp`: `if (!_fs) { _fs->begin(); }`
+  → `if (_fs)` (было разыменование `nullptr`; `LittleFS::begin()` идемпотентен на
+  обеих платформах).
+- `common/common.cpp`: `urldecode()` — `size_t` вместо `byte` (бесконечный цикл на
+  строках > 255 символов), проверка `t + 2 >= length` перед hex-парой.
+- `core_json/core_json_engine.cpp`: `load_jsonDoc()` — лимит размера (1..65535),
+  `malloc(size + 1)`, `'\0'`-терминатор, `deserializeJson(doc, buf, size)` (раньше
+  читалось за границей буфера), проверка `malloc`/`readBytes`.
+- `core_ota/core_ota.cpp/.h/.cpp(engine)`: `updateFileExecute()` отдаёт `500` с текстом
+  ошибки (`Update.errorString()` ESP32 / `getErrorString()` ESP8266) и **не** ребутит при
+  ошибке; состояние upload (`_otaUploadStarted/_otaUploadErrorOccurred/
+  _otaUploadResponseSent/_otaUploadTotalSize`) перенесено из `static` в поля класса;
+  исключён двойной `send()` (ответ из body-хендлера + ответ из POST-хендлера) и ложный
+  «успех» при пустом теле; `ArduinoOTA.onEnd` не делает повторный `fs->end()`;
+  добавлена bus-функция `ota.save` (no-op) — контракт «`res=1` ⇒ `<ns>.save`».
+- `core_state/core_state_engine.cpp`: `asyncComplete()` при переполненной `_doneQueue`
+  сдвигает очередь (самый старый результат отбрасывается, текущий доставляется);
+  `busCoerce()` для `F32` сохраняет дробную часть.
+- `core_wifi/core_wifi.cpp`: `snprintf` вместо `sprintf` (`_strWifiN`, `filename`);
+  `handle_slot_upload()` проверяет `malloc`, `total == 0`, `index + len <= total`;
+  `send_network_configuration_html()` — `_saveIn = -1`, без `wificonf` слот не
+  сохраняется и не применяется.
+- `core_fs/core_fs.cpp/.h`: `new (std::nothrow)`; `create` для `secret.json` → `403`;
+  подвисший upload (оборванный клиент) сбрасывается по чужому запросу/таймауту 60 с,
+  больше не блокирует `/fs/upload` до перезагрузки.
+- `core_sys/eertos.cpp`: `TimerService()` читает/модифицирует слот под
+  `EERTOS_ENTER_CRITICAL_ISR()`; `SetTaskFromISR()` учитывает переполнение в
+  `EertosDropped`.
+- `core_sys/core_sys.cpp`: при включённой auth пароль обязателен и валидируется всегда
+  (`isAdminPassValid`), а не только при изменении.
+- `core_ntp/NTPClientLib.cpp`: `setNtpServerName(char*)` — проверка длины + `strncpy`.
+
+### Статус (обновлено 2026-11-17, вторая половина сессии)
+
+**Выполнено в коде:**
+
+1. **`core_wifi` — отложенный рестарт, таймаут 60 с.** `WIFI_INIT_FAIL_DEFER_MAX_SEC`
+   (`core_wifi_types.h`), поле `_restartDeferredSince` (`core_wifi.h`). В `staTick()`
+   при `_wifiInitFailCount >= WIFI_INIT_FAIL_MAX` и режиме не `normal/init` рестарт
+   откладывается не дольше 60 с, затем `ESP.restart()`. Сброс — при успешном скане и
+   в `onWiFiConnectedGotIP`. **Проверено на плате** (ESCOP32-D0WDQ6, COM4, сборка с
+   `WIFI_GUARD_TEST` + `DEBUG_CORE_WIFI`): после `sys mode prog` в терминале 5-я
+   неудача даёт `restart deferred (mode 4)` без рестарта (6-я и 7-я — тоже), через
+   63 с — `restart deferred timeout, restarting` и `Reset reason: Software reset`.
+   Штатная ветка: при `normal` 5-я неудача даёт `WiFi init failed 5 times. Restarting.`
+   и `Software reset`. Хук в релиз не коммитить.
+   Для проверки добавлена отладочная команда терминала `sys mode [<name|index>]`
+   (`core_sys_terminal.cpp`): без аргумента — текущий режим и список, с аргументом —
+   `core_state.requestMode()`.
+2. **`handleSave` — только изменённые поля.**
+   - `core_wifi/web/wifi.html`: `saveWifiSysConf()` отправляет только «грязные» поля,
+     при их отсутствии — «No changes» без POST.
+   - `core_wifi.cpp::handle_wifi_sysconf_post()`: все ключи опциональны; пишется только
+     изменившееся; без изменений ответ `{"success":true,"changed":false}`.
+   - `core_ntp.cpp::html2ntp_configuration()`: пишет в JSON только отличающиеся поля.
+   - `core_sys.cpp::html_system_Save()` и slot-формы `/api/wifi/slot/N` не менялись.
+   **Проверено на плате** (ESP32-D0WDQ6, COM4, HTTP): POST `/wifi/sysconf` только с
+   `{"aptime":N}` меняет в `config_wifi.json` лишь `aptime`; POST `/ntp.html` с
+   изменённым только `ntpserver0` меняет лишь `ntp0`. Сценарий «macros меняет
+   `busmode` в памяти, затем веб-сохранение другого поля» через HTTP не
+   воспроизводим: смена `wifi.mode` по шине штатно вызывает `wifi.save_mode` и
+   персистит `busmode` сама.
+3. **Терминал модулей.** `module_macros` (коммит `a762a9d`) и `module_veml7700`
+   (коммит `38125b2`) переведены на `TerminalRegisterModule` с новой сигнатурой,
+   ручные `term.addCommand` и `macroTerminalRegister`/`luxTerminalRegister` удалены.
+   У `lux` подкоманд нет (`kLuxCommands = {nullptr}`), `show` не вводился.
+4. **`#elif` в ядре** заменён на `#if` с отрицанием предыдущих условий (41 директива,
+   ~20 файлов, включая `core_web`, `core_json.h`, `core_fs_engine.h`, `core_ntp.h`,
+   `NtpClientLib.h`, `eertos.cpp`). `grep "^\s*#\s*elif"` по `src/core_*`, `src/common`
+   — пусто.
+5. **Сборка FS на Windows.** `python/4_fs_builder.py`: `get_pio_command()` — сначала
+   `shutil.which("pio")`, иначе `sys.executable -m platformio`. Причина `WinError 2`:
+   `pio.exe` лежит в `%USERPROFILE%\.platformio\penv\Scripts`, который не в `PATH`.
+   Предупреждение `WinError 1314` (symlink) безвредно.
+6. **Сборки** `esp32`, `esp8266`, `esp32-ds3231`, `esp32_electronica7_rgb_macros`,
+   `esp32-veml7700` — SUCCESS.
+
+**Инцидент сессии:** скрипт замены `#elif` повредил 12 файлов ядра (включая
+незакоммиченные правки аудита `core_ota.*`, `eertos.cpp`, `NTPClientLib.cpp`).
+Восстановлено реплеем `edit`/`read` из `%APPDATA%`-истории агента (`kilo.db`) и сверено
+с `HEAD`. Для будущих массовых правок: сначала `git stash`/коммит, затем скрипт с
+проверкой баланса `#if`/`#endif` и выводом в `.new`-файл.
+
+**Пуш модулей — закрыто:** все компонентные репозитории и `otasyncer-server`
+синхронизированы с `origin/main` (проверено `git status` 2026-11-19).
+
+**Плата после сессии:** прошита чистым ядром `esp32` (без `WIFI_GUARD_TEST`) с
+отладочными флагами; подключается к Wi-Fi (`192.168.88.123`), NTP синхронизируется,
+перезагрузок нет. Конфиги возвращены к исходным (`aptime=10`, `busmode=0`,
+`ntp0=pool.ntp.org`).
+
+### Не исправлено (низкий приоритет, зафиксировано)
+
+- `core_state::regEnum()` хранит сырые `const char*` из `enumVals` — контракт
+  «строки должны жить вечно»; сейчас все вызовы статические, но хрупко.
+- `applyValue()` для ресурса `*.mode` с **async** write-функцией не вызывает
+  `save_mode` (сейчас все `.mode` sync).
+- **Окружение:** `pio` не в `PATH` при запуске из обычной оболочки; перед сборкой
+  выставлять `$env:PATH = "$env:USERPROFILE\.platformio\penv\Scripts;$env:PATH"`.
+
