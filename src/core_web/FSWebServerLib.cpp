@@ -219,7 +219,13 @@ bool AsyncFSWebServer:: handleFileRead(String path, AsyncWebServerRequest *reque
 			String low = path;
 			low.toLowerCase();
 			const char* cc = nullptr;
-			if (low.endsWith(".css") || low.endsWith(".js") || low.endsWith(".gif") ||
+			// Фрагменты меню/подвала перегенерируются при каждой сборке ФС под
+			// выбранный env — их нельзя кэшировать, иначе после обновления ФС
+			// остаётся старое меню до истечения TTL.
+			bool isMenuFragment = low.endsWith("page_head.html") || low.endsWith("page_bottom.html");
+			if (isMenuFragment) {
+				cc = "no-cache, no-store, must-revalidate";
+			} else if (low.endsWith(".css") || low.endsWith(".js") || low.endsWith(".gif") ||
 			    low.endsWith(".png") || low.endsWith(".ico") || low.endsWith(".svg") ||
 			    low.endsWith(".woff") || low.endsWith(".woff2") || low.endsWith(".jpg")) {
 				cc = "public, max-age=86400";
