@@ -43,3 +43,6 @@ src/modules_defines.h
 /src/submodule_*/
 /src/device_*/
 !/src/module_template/
+
+# Локальные PowerShell-консоли для тестов UART-моста (не коммитятся)
+/test_uart/
