@@ -112,9 +112,10 @@ DEVICE_HOST=http://<ip> bash tests/scripts/run_core.sh --with-device
 
 ## 8. L3 — compile matrix
 
-- `envs.txt`: сейчас обязательные `TestCore32`/`TestCore8266` («ядро без внешних
-  компонентов»); полные `esp32`/`esp8266`/`esp32cam`/`esp32-c3-devkitm-1`
-  исключены ради времени и оставлены закомментированными «на будущее».
+- `envs.txt`: обязательные `TestCore32`/`TestCore8266` («ядро без внешних
+  компонентов»), определены в `targets/targets_core.ini` (подключён всегда).
+  Полные `esp32`/`esp8266`/`esp32cam` собирает `platformio_ci.yml`; env с
+  `module_*`/`device_*` в CI не используются.
 - `run_matrix.py`: сборка env, парсинг RAM/Flash, сверка с `size_limits.json`
   (запас +5%), AC-19 (`modules_registry.cpp` без `#if` и без `module_*`/`device_*`),
   AC-22 (негативная сборка `negative_nocore/` должна падать). Пишет
@@ -141,14 +142,18 @@ DEVICE_HOST=http://<ip> bash tests/scripts/run_core.sh --with-device
 
 `.github/workflows/tests-core.yml`:
 - `core-tests` — L1+L2+L3 на push/PR (`bash tests/scripts/run_core.sh`);
+  платформы ESP ставятся явно, поэтому L3 реально собирает `TestCore32`/`TestCore8266`;
 - `core-http` — L4 по `workflow_dispatch`/тегу на self-hosted runner с платой.
+
+`.github/workflows/platformio_ci.yml` — сборка ядровых прошивок
+`esp32`/`esp8266`/`esp32cam` (push/PR, `workflow_dispatch`).
 
 ## 12. Текущий статус
 
 - L1/L2 — **зелёные** (все 11 модулей, 119 тестов, WSL Ubuntu 24.04).
 - L3 — **зелёный**: AC-19 (чистота `modules_registry.cpp`) и AC-22 (негативная
-  сборка без ядра) проходят; сборки ESP `TestCore32`/`TestCore8266` помечаются
-  `skip` без Linux-тулчейнов и валидируются в CI.
+  сборка без ядра) проходят; сборки ESP `TestCore32`/`TestCore8266` выполняются
+  в CI (платформы ставятся явно), локально без Linux-тулчейнов помечаются `skip`.
 - L4 — auto-skip без `DEVICE_HOST`.
 - `size_limits.json` — пуст (пороги RAM/Flash заполняются после сборки в CI).
 - Детали и журнал работ — в [REPORT.md](REPORT.md).

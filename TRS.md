@@ -781,8 +781,8 @@
 - OPEN-2: `handleSave` сохраняет конфиг целиком; нужно сохранять только реально изменённые поля (в `core_wifi` sysconf и `core_ntp` уже сделано).
 - OPEN-3: **закрыт** — guard от цикла `esp_wifi_init` (`WIFI_SCAN_FAILED` → бэкофф → рестарт) проверен на плате 2026-11-17: бэкофф 20 с, рестарт на 5-й неудаче, отсрочка в длительных режимах ограничена 60 с. Подробности — `AGENTS.md`, «Сессия 2026-11-17: аудит ядра».
 - OPEN-8: `targets/targets_user.ini` закомментирован в `extra_configs` и опционален (может отсутствовать — PlatformIO это допускает); `src/module_rgb/esp32_macrotest.ini` упомянут в `extra_configs`, но файла нет — открыто.
-- OPEN-11: `targets/targets_example.ini` закомментирован в `extra_configs`, поэтому env `TestCore32`/`TestCore8266` локально не определены; L3 (`tests/compile_matrix/run_matrix.py`, AC-22) и часть матрицы `platformio_ci.yml` по ним неработоспособны. Исправление — отдельная сессия.
-- OPEN-12: CI не адаптирован к мульти-репо разделению: `platformio_ci.yml` не клонирует компонентные репозитории, поэтому env с `module_*`/`device_*` не собираются; триггеры только `main`/`master`/`dev`; `tests-core.yml` ни разу не запускался. Адаптация — отдельная сессия.
+- OPEN-11: **закрыт** (2026-11-27) — env `TestCore32`/`TestCore8266` перенесены в `targets/targets_core.ini`, который подключён в `extra_configs` всегда; L3 (`tests/compile_matrix/run_matrix.py`, AC-22) и соответствующие job'ы CI работают в чистом клоне ядра.
+- OPEN-12: **закрыт** (2026-11-27) — CI ограничен ядром: `platformio_ci.yml` собирает `esp32`/`esp8266`/`esp32cam` (без env с `module_*`/`device_*`), `tests-core.yml` ставит платформы ESP и гоняет L1+L2+L3, включая сборку `TestCore32`/`TestCore8266`. Env с внешними компонентами в CI намеренно не собираются: их репозитории в клоне ядра отсутствуют.
 
 > Открытые требования **опциональных** компонентов вынесены в `AGENTS.md`: OPEN-4/OPEN-5 — `src/module_macros/AGENTS.md`; OPEN-7 — `src/module_rgb/AGENTS.md` (ссылки из `module_gpio`, `module_editor`); OPEN-9 — `src/module_program/AGENTS.md`. OPEN-10 **закрыт**: корневой `README.md` дополнен разделами `core_state`/`core_task`/`module_macros`.
 

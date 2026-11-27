@@ -616,16 +616,14 @@ on("wifi.just_connected", function(ev) e7.speed(40) end)
 | `esp8266` | espressif8266 | d1_mini | База для таргетов ESP8266 |
 | `esp32` | espressif32 | upesy_wroom | База для таргетов ESP32 |
 | `esp32cam` | espressif32 | esp32cam | Расширяет esp32 |
-| `TestCore32` | espressif32 | — | «Ядро без внешних компонентов» (`targets/targets_example.ini`), L3/AC-22 |
-| `TestCore8266` | espressif8266 | — | «Ядро без внешних компонентов» (`targets/targets_example.ini`), L3/AC-22 |
+| `TestCore32` | espressif32 | — | «Ядро без внешних компонентов» (`targets/targets_core.ini`), L3/AC-22 |
+| `TestCore8266` | espressif8266 | — | «Ядро без внешних компонентов» (`targets/targets_core.ini`), L3/AC-22 |
 
-Конфиги конкретных таргетов: `targets/targets_example.ini` (примеры) и
-`targets/targets_user.ini` (пользовательские). **На 2026-11-19 оба закомментированы в
-`extra_configs`** (`platformio.ini`): `targets_user.ini` опционален, а `targets_example.ini`
-локально не подключён. Следствие: `TestCore32`/`TestCore8266` определены в
-`targets_example.ini`, но локально **не подключены** — env не определены, поэтому L3 по ним и
-соответствующая часть матрицы `platformio_ci.yml` неработоспособны (открытые проблемы, см.
-`TRS.md` OPEN-11/OPEN-12). Исправление — отдельная сессия.
+Конфиги таргетов: `targets/targets_core.ini` — ядровые env (подключён в
+`extra_configs` **всегда**), `targets/targets_example.ini` — примеры таргетов с
+компонентами (закомментирован), `targets/targets_user.ini` — пользовательские
+(опционален, может отсутствовать). `TestCore32`/`TestCore8266` определены всегда,
+поэтому L3 (`tests/compile_matrix/run_matrix.py`) и CI работают в чистом клоне ядра.
 
 ### Скрипты сборки (`python/`)
 
@@ -665,19 +663,17 @@ pre-скриптами под текущий env; параллельная сб�
 
 ### CI/CD
 
-GitHub Actions в ядре:
+GitHub Actions в ядре (CI ограничен **ядром**: компонентные репозитории не клонируются):
 
-- `.github/workflows/platformio_ci.yml` — сборка firmware для матрицы env, загрузка артефактов.
-  **Не адаптирован к мульти-репо:** workflow не клонирует компонентные репозитории, поэтому env,
-  требующие `module_*`/`device_*`, не собираются; матрица ссылается на `esp32-gpio`,
-  `esp8266-gpio`, `esp32-c3-devkitm-1`, `TestCore32`, `TestCore8266`, которых сейчас нет в
-  `extra_configs`/`targets_example.ini` (см. `TRS.md` OPEN-11/OPEN-12). Триггеры — только
-  `main`/`master`/`dev`; текущая рабочая ветка `add-macros-and-cron` CI не запускает. Последний
-  успешный прогон — 2026-08-21 на `dev`, до разделения на мульти-репо.
+- `.github/workflows/platformio_ci.yml` — сборка ядровых прошивок `esp32`, `esp8266`,
+  `esp32cam` на push/PR и `workflow_dispatch` (кэш PlatformIO, явная установка платформ).
+  Env с `module_*`/`device_*` в CI не собираются: их `.ini` в `extra_configs` в чистом
+  клоне отсутствуют (PlatformIO их пропускает), а исходников нет.
 - `.github/workflows/tests-core.yml` — юнит-тесты ядра: job `core-tests`
   (L1+L2+L3 через `bash tests/scripts/run_core.sh`) на push/PR и job `core-http`
-  (L4, self-hosted с платой, `workflow_dispatch`/тег). На 2026-11-19 workflow ни разу не
-  запускался.
+  (L4, self-hosted с платой, `workflow_dispatch`/тег). Платформы `espressif32` и
+  `espressif8266` ставятся явно, чтобы L3 реально собирал `TestCore32`/`TestCore8266`
+  (без `toolchain-*` в `~/.platformio/packages` сборки помечаются `skip`).
 
 ### Юнит-тестирование ядра (`tests/`)
 
@@ -688,11 +684,10 @@ GitHub Actions в ядре:
   `ParseCVT`/`ApplyCVT` (`core_web/web/GetJson.js`) — Node.js (`node --test`).
 - **L2** — host-тесты с моками (LittleFS, `core_json`, `core_state`, EERTOS).
 - **L3** — compile matrix ядровых env (общий шаг, `tests/compile_matrix/run_matrix.py`).
-  Сейчас собираются только `TestCore32`/`TestCore8266` («ядро без внешних
-  компонентов», AC-22); полные `esp32`/`esp8266`/`esp32cam` намеренно исключены
-  ради времени (в `envs.txt` — закомментированным списком «на будущее»).
-  `targets_example.ini` сейчас закомментирован в `extra_configs`, поэтому локально env
-  не определены (см. `TRS.md` OPEN-11).
+  Собираются `TestCore32`/`TestCore8266` («ядро без внешних компонентов», AC-22)
+  из `targets/targets_core.ini` (подключён всегда). Полные `esp32`/`esp8266`/`esp32cam`
+  собирает `platformio_ci.yml`; в CI платформы ставятся явно, поэтому сборки L3
+  выполняются, а не помечаются `skip`.
 - **L4** — HTTP API на реальной плате (pytest); без `DEVICE_HOST` — auto-skip.
 
 Запуск:
@@ -811,7 +806,8 @@ avr-fota/
 │                           # редактор FS: src/module_editor/.
 │   └── *version.h           # Заголовки версий модулей (отслеживаются в git)
 ├── targets/                 # Конфиги таргетов PlatformIO
-│   ├── targets_example.ini  # Примеры определений таргетов (+ TestCore32/TestCore8266)
+│   ├── targets_core.ini     # Ядровые env TestCore32/TestCore8266 (подключён всегда)
+│   ├── targets_example.ini  # Примеры таргетов с компонентами (не подключён)
 │   └── targets_user.ini     # Пользовательские определения таргетов (может отсутствовать)
 ├── tests/                   # Юнит-тесты ядра (см. раздел «Юнит-тестирование ядра»)
 │   ├── core/<module>/       # run.sh + platformio.ini + test/ (+ http_api/) на модуль

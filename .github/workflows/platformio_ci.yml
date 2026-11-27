@@ -1,22 +1,34 @@
 name: PlatformIO CI
 
+# Сборка ядра без внешних компонентов: module_*/submodule_*/device_* в клоне
+# отсутствуют (это отдельные репозитории), поэтому в матрице только env,
+# определённые в корневом platformio.ini.
+#
+# TestCore32/TestCore8266 здесь не собираются: их проверяет L3 compile matrix
+# в tests-core.yml (env из targets/targets_core.ini).
+
 on:
   push:
     branches: [main, master, dev]
   pull_request:
     branches: [main, master, dev]
+  workflow_dispatch:
 
 jobs:
   build:
     name: Build ${{ matrix.env }}
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
-        env: [esp32cam, esp32-swd, esp32-isp, esp32-gpio, esp8266-gpio, esp32-c3-devkitm-1, TestCore32, TestCore8266]
+        env: [esp32, esp8266, esp32cam]
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
+      with:
+        # Полная история: версии модулей считаются по git-хешам коммитов.
+        fetch-depth: 0
 
     - name: Cache PlatformIO dependencies
       uses: actions/cache@v4
@@ -24,35 +36,30 @@ jobs:
         path: |
           ~/.platformio
           .pio
-        key: ${{ runner.os }}-pio-${{ hashFiles('platformio.ini') }}
+        key: ${{ runner.os }}-pio-${{ hashFiles('platformio.ini', 'targets/*.ini') }}
         restore-keys: |
           ${{ runner.os }}-pio-
 
     - name: Setup Python
       uses: actions/setup-python@v5
       with:
-        python-version: '3.10'
+        python-version: '3.11'
 
-    # Установка PlatformIO и обязательных зависимостей
-    - name: Install Python dependencies
-      run: |
-        pip install platformio
-        pip install intelhex  # Обязательная зависимость для ESP32
-        pip install pyelftools  # Часто требуется для работы с ELF-файлами
+    - name: Install PlatformIO
+      run: pip install --upgrade platformio
 
+    # Платформа ставится явно, чтобы кэш ~/.platformio наполнялся предсказуемо
+    # и сборка не зависела от автоустановки при первом pio run.
     - name: Install ESP32 platform
-      if: matrix.env != 'd1_mini_pro'
+      if: matrix.env != 'esp8266'
       run: pio pkg install --global --platform "platformio/espressif32"
 
     - name: Install ESP8266 platform
-      if: matrix.env == 'd1_mini_pro'
+      if: matrix.env == 'esp8266'
       run: pio pkg install --global --platform "platformio/espressif8266"
 
-    # modules_registry.cpp генерируется под каждый env в отдельности (без #if defined).
-    # Обязательно перегенерировать под собираемый env, иначе линковка упадёт.
-    - name: Regenerate module registry for env
-      run: python python/module_registry_gen.py --env ${{ matrix.env }}
-
+    # src/modules_registry.cpp генерируется под текущий env pre-скриптом
+    # python/1_registry_pre_build.py (без #if defined) — отдельный шаг не нужен.
     - name: Build for ${{ matrix.env }}
       id: build-step
       run: pio run -e ${{ matrix.env }}

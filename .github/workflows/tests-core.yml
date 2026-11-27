@@ -1,5 +1,13 @@
 name: Core unit tests
 
+# Тесты только ядра: core_*, common/, EERTOS. Внешние компоненты
+# (module_*/submodule_*/device_*) в клоне отсутствуют и не нужны.
+#
+# L3 (compile matrix) собирает TestCore32/TestCore8266 из targets/targets_core.ini
+# (подключён по умолчанию) и проверяет AC-19/AC-22. Платформы ESP ставятся
+# заранее: run_matrix.py помечает сборку skip, если в ~/.platformio/packages
+# нет ни одного toolchain-*, т.е. без этого шага L3 не проверил бы сборку.
+
 on:
   push:
     branches: [main, master, dev]
@@ -11,9 +19,24 @@ jobs:
   core-tests:
     name: Core L1+L2+L3
     runs-on: ubuntu-latest
+    timeout-minutes: 90
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          # Полная история: версии модулей считаются по git-хешам коммитов.
+          fetch-depth: 0
+
+      - name: Cache PlatformIO dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.platformio
+            .pio
+          key: ${{ runner.os }}-pio-tests-${{ hashFiles('platformio.ini', 'targets/*.ini') }}
+          restore-keys: |
+            ${{ runner.os }}-pio-tests-
+            ${{ runner.os }}-pio-
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -27,7 +50,14 @@ jobs:
 
       - name: Install tools
         run: |
-          pip install platformio gcovr pytest
+          pip install --upgrade platformio gcovr pytest
+
+      # Нужны для L3: pio run -e TestCore32/TestCore8266 (espressif32/espressif8266).
+      - name: Install ESP32 platform
+        run: pio pkg install --global --platform "platformio/espressif32"
+
+      - name: Install ESP8266 platform
+        run: pio pkg install --global --platform "platformio/espressif8266"
 
       - name: Run core tests (orchestrator)
         run: bash tests/scripts/run_core.sh
@@ -47,6 +77,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -54,7 +86,7 @@ jobs:
           python-version: '3.11'
 
       - name: Install tools
-        run: pip install platformio pytest
+        run: pip install --upgrade platformio pytest
 
       - name: Run core tests with device
         env:

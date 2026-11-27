@@ -107,17 +107,24 @@ L4 без `DEVICE_HOST` автоматически пропускается (exi
 ## L3 (compile matrix)
 
 - `tests/compile_matrix/envs.txt`: обязательные env — `TestCore32`/`TestCore8266`
-  (сборки «ядро без внешних компонентов»). Полные `esp32`/`esp8266`/`esp32cam`/
-  `esp32-c3-devkitm-1` закомментированы «на будущее».
+  (сборки «ядро без внешних компонентов»). Определены в `targets/targets_core.ini`,
+  который подключён в `platformio.ini` всегда, поэтому работают и локально, и в CI.
+- Полные ядровые прошивки `esp32`/`esp8266`/`esp32cam` собираются отдельным
+  workflow `.github/workflows/platformio_ci.yml`. Env с `module_*`/`device_*` в CI
+  не собираются: их репозитории в клоне ядра отсутствуют.
 - AC-19: `src/modules_registry.cpp` (регенерируется под core-env) не содержит
   `#if` и вызовов `module_*`/`device_*`.
 - AC-22: `negative_nocore/` (модуль без ядра) должен падать.
 - Сборка ESP требует Linux-тулчейнов в `~/.platformio/packages/`. Без них
   (`toolchains_available()` == False) env помечаются `skip` (не `fail`) и
   валидируются в CI; AC-19/AC-22 тулчейнов не требуют и проверяются всегда.
+  В CI платформы ставятся явно (`pio pkg install --platform`), поэтому build-кейсы
+  выполняются, а не пропускаются.
 
 ## CI
 
-`.github/workflows/tests-core.yml`:
-- `core-tests` — L1+L2+L3 на push/PR (ровно один вызов оркестратора);
-- `core-http` — L4 по `workflow_dispatch`/тегу на self-hosted runner с платой.
+- `.github/workflows/platformio_ci.yml` — сборка ядровых прошивок (`esp32`,
+  `esp8266`, `esp32cam`) на push/PR и `workflow_dispatch`.
+- `.github/workflows/tests-core.yml`:
+  - `core-tests` — L1+L2+L3 на push/PR (ровно один вызов оркестратора);
+  - `core-http` — L4 по `workflow_dispatch`/тегу на self-hosted runner с платой.
